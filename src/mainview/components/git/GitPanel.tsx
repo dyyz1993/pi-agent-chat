@@ -349,7 +349,6 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const loadingCommitFiles = useGitStore((s) => s.loadingCommitFiles);
   const loadingAction = useGitStore((s) => s.loadingAction);
   const worktrees = useGitStore((s) => s.worktrees);
-  const fetchStatus = useGitStore((s) => s.fetchStatus);
   const fetchDiff = useGitStore((s) => s.fetchDiff);
   const fetchLog = useGitStore((s) => s.fetchLog);
   const toggleCommitExpand = useGitStore((s) => s.toggleCommitExpand);
@@ -358,8 +357,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const unstageFiles = useGitStore((s) => s.unstageFiles);
   const push = useGitStore((s) => s.push);
   const pull = useGitStore((s) => s.pull);
-  const fetchWorktrees = useGitStore((s) => s.fetchWorktrees);
-  const fetchBranches = useGitStore((s) => s.fetchBranches);
+  const refreshAll = useGitStore((s) => s.refreshAll);
 
   const currentPath = useExplorerStore((s) => s.currentPath);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
@@ -384,12 +382,13 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const branchBtnRef = useRef<HTMLButtonElement>(null);
 
   const refresh = useCallback(() => {
-    if (!currentPath || !useGitStore.getState().isGitRepo) return;
-    fetchStatus(currentPath);
-    fetchWorktrees(currentPath);
-    fetchBranches(currentPath);
-    if (commitsExpanded) fetchLog(currentPath);
-  }, [fetchStatus, fetchWorktrees, fetchBranches, fetchLog, currentPath, commitsExpanded]);
+    if (!currentPath) return;
+    refreshAll(currentPath).then(() => {
+      if (commitsExpanded && useGitStore.getState().isGitRepo) {
+        fetchLog(currentPath);
+      }
+    });
+  }, [refreshAll, fetchLog, currentPath, commitsExpanded]);
 
   useEffect(() => {
     refresh();

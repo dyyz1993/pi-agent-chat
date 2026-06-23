@@ -12,12 +12,15 @@ import { useChatStore } from "./stores/use-chat-store";
 import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
 import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDialog";
+import { WelcomePage } from "./components/welcome/WelcomePage";
+import { SshProjectDialog } from "./components/welcome/SshProjectDialog";
 import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./components/LoginPage";
 import { createStartupTrace } from "./lib/startup-monitor";
 import { runRestoreFlow } from "./lib/restore-flow";
+import type { ProjectTab, RecentProject } from "./types";
 
 function App() {
   const { t } = useTranslation("common");
@@ -27,11 +30,13 @@ function App() {
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [sshPickerOpen, setSshPickerOpen] = useState(false);
   const [projectLoading, setProjectLoading] = useState(false);
   const restoredFlag = useAppStore((s) => s.restored);
   const [restoring, setRestoring] = useState(!useAppStore.getState().restored);
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
 
   const [hasToken, setHasToken] = useState(() => !!resolveAuthToken());
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -160,6 +165,39 @@ function App() {
     setProjectLoading(false);
   };
 
+  const activateProjectTab = useCallback(
+    (tab: ProjectTab) => {
+      addProjectTab(tab);
+      const nextTab = useSessionStore.getState().projectTabs.find((item) => item.path === tab.path);
+      useSessionStore.getState().setActiveProject(nextTab?.id ?? tab.id);
+    },
+    [addProjectTab],
+  );
+
+  const handleRemoteProjectOpened = useCallback(
+    (tab: ProjectTab) => {
+      activateProjectTab(tab);
+      addLog(`Loaded remote project: ${tab.name}`);
+    },
+    [activateProjectTab, addLog],
+  );
+
+  const handleSelectRecentProject = useCallback(
+    (project: RecentProject) => {
+      const tabId = project.remote
+        ? `remote-${project.remote.host}-${project.path}`
+        : `proj-${project.path.replace(/\//g, "-")}`;
+      activateProjectTab({
+        id: tabId,
+        name: project.name,
+        path: project.path,
+        runtime: project.runtime,
+        remote: project.remote,
+      });
+    },
+    [activateProjectTab],
+  );
+
   if (!hasToken) {
     return (
       <ErrorBoundary>
@@ -213,11 +251,25 @@ function App() {
   return (
     <ErrorBoundary>
       <>
-        <MainLayout onAddProject={() => setPickerOpen(true)} />
+        {projectTabs.length === 0 ? (
+          <WelcomePage
+            onOpenLocalProject={() => setPickerOpen(true)}
+            onOpenRemoteProject={() => setSshPickerOpen(true)}
+            onSelectRecentProject={handleSelectRecentProject}
+          />
+        ) : (
+          <MainLayout onAddProject={() => setPickerOpen(true)} />
+        )}
         <ProjectPickerDialog
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}
           onSelect={handleSelectProject}
+          onOpenRemoteProject={() => setSshPickerOpen(true)}
+        />
+        <SshProjectDialog
+          open={sshPickerOpen}
+          onClose={() => setSshPickerOpen(false)}
+          onOpened={handleRemoteProjectOpened}
         />
         <DiagnosticPanel />
       </>

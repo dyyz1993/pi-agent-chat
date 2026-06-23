@@ -1,8 +1,9 @@
-import { Plus, X, Settings, MessageCircleQuestion } from "lucide-react";
+import { Plus, X, Settings, MessageCircleQuestion, Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useStatusStore } from "../../stores/use-status-store";
 import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
@@ -34,11 +35,14 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   } | null>(null);
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveProject = useSessionStore((s) => s.setActiveProject);
   const removeProjectTab = useSessionStore((s) => s.removeProjectTab);
   const reorderProjectTabs = useSessionStore((s) => s.reorderProjectTabs);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
+  const lastActiveSessionByProject = useSessionStore((s) => s.lastActiveSessionByProject);
+  const remoteRuntimeBySession = useStatusStore((s) => s.remoteRuntimeBySession);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
   const allPending = useUIDialogStore((s) => s.pending);
 
@@ -272,6 +276,20 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           const sessions = sessionsForTab ?? [];
           const dotClass = resolveDotClass(knowledge, sessions, sessionStatusMap);
           const isActive = activeProjectId === tab.id;
+          const visibleSessionId =
+            (isActive ? activeSessionId : undefined) ??
+            lastActiveSessionByProject[tab.path] ??
+            sessions[0]?.sessionId;
+          const remoteRuntime = visibleSessionId
+            ? remoteRuntimeBySession[visibleSessionId]
+            : undefined;
+          const remoteHost =
+            typeof remoteRuntime?.host === "string" ? remoteRuntime.host : (tab.remote?.host ?? "");
+          const remotePath =
+            typeof remoteRuntime?.remoteCwd === "string"
+              ? remoteRuntime.remoteCwd
+              : (tab.remote?.remotePath ?? "");
+          const isRemoteProject = tab.runtime === "ssh" || Boolean(remoteRuntime?.enabled);
           const isDragSource = dragIndex === index;
           const isPressing = pressingIndex === index;
           const showLeftIndicator = dropIndex === index && dragIndex !== null && dragIndex > index;
@@ -332,6 +350,18 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                       </span>
                     ) : null;
                   })()}
+                </span>
+              )}
+              {isRemoteProject && (
+                <span
+                  data-testid="tab-remote-runtime-indicator"
+                  className="flex-shrink-0 text-status-info"
+                  title={t("remoteRuntimeActive", {
+                    host: remoteHost,
+                    path: remotePath,
+                  })}
+                >
+                  <Server className="h-3 w-3" />
                 </span>
               )}
               <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>

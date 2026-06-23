@@ -406,6 +406,53 @@ export interface AgentMethods {
       configPath: string;
     };
   };
+  "agent.remoteSshGetStatus": {
+    params: { sessionId: string };
+    result: RemoteSshStatus;
+  };
+  "agent.remoteSshConfigure": {
+    params: {
+      sessionId: string;
+      enabled?: boolean;
+      host?: string;
+      remoteCwd?: string;
+      sshArgs?: string[];
+      shell?: string;
+      persist?: boolean;
+    };
+    result: RemoteSshStatus & { ok: boolean; error?: string };
+  };
+  "agent.remoteSshDisable": {
+    params: { sessionId: string; persist?: boolean };
+    result: RemoteSshStatus & { ok: boolean; error?: string };
+  };
+  "agent.remoteSshTestConnection": {
+    params: {
+      sessionId: string;
+      host?: string;
+      remoteCwd?: string;
+      sshArgs?: string[];
+      shell?: string;
+      command?: string;
+    };
+    result: {
+      ok: boolean;
+      exitCode: number | null;
+      stdout: string;
+      stderr: string;
+      error?: string;
+      status: RemoteSshStatus;
+    };
+  };
+  "agent.remoteSshSmokeTest": {
+    params: { sessionId: string; subdir?: string; text?: string };
+    result: {
+      ok: boolean;
+      steps: Array<{ name: string; ok: boolean; detail?: string }>;
+      error?: string;
+      status: RemoteSshStatus;
+    };
+  };
   "agent.setSessionName": {
     params: { sessionId: string; name: string };
     result: { ok: boolean };
@@ -582,6 +629,16 @@ export interface AgentMethods {
       timestamp: string;
     } | null;
   };
+}
+
+export interface RemoteSshStatus {
+  enabled: boolean;
+  configured: boolean;
+  host?: string;
+  remoteCwd?: string;
+  localCwd?: string;
+  sshArgs?: string[];
+  shell?: string;
 }
 
 export interface AgentMessageForUI {

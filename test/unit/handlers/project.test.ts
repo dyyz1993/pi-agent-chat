@@ -22,6 +22,37 @@ const projectMocks = vi.hoisted(() => ({
   mockLinkProject: vi.fn(async () => ({ ok: true })),
   mockUnlinkProject: vi.fn(async () => ({ ok: true })),
   mockGetLinkedProjects: vi.fn(async () => []),
+  mockGetModelFavorites: vi.fn(async () => []),
+  mockToggleModelFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
+  mockCreateDirectory: vi.fn(async (_parentPath: string, folderName: string) => ({
+    ok: true,
+    path: `/tmp/${folderName}`,
+  })),
+  mockListSshProfiles: vi.fn(async () => []),
+  mockGetSshProfile: vi.fn(async () => null),
+  mockUpsertSshProfile: vi.fn(async (profile) => ({
+    id: profile.id ?? "ssh-profile",
+    name: profile.name,
+    host: profile.host,
+    createdAt: 1,
+    updatedAt: 1,
+  })),
+  mockRemoveSshProfile: vi.fn(async () => {}),
+  mockOpenRemoteProject: vi.fn(async () => ({
+    tab: { id: "remote-tab", name: "remote", path: "/tmp/remote", runtime: "ssh" },
+    profile: { id: "ssh-profile", name: "remote", host: "host", createdAt: 1, updatedAt: 1 },
+    remote: {
+      id: "remote-id",
+      name: "remote",
+      runtime: "ssh",
+      profileId: "ssh-profile",
+      host: "host",
+      remotePath: "/remote",
+      localPath: "/tmp/remote",
+      createdAt: 1,
+      lastOpened: 1,
+    },
+  })),
 }));
 const {
   mockScanSessions,
@@ -63,6 +94,18 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
   listFavoriteFolders: projectMocks.mockListFavorites,
   toggleFavoriteFolder: projectMocks.mockToggleFavorite,
   toggleProjectPin: projectMocks.mockTogglePin,
+  getModelFavorites: projectMocks.mockGetModelFavorites,
+  toggleModelFavorite: projectMocks.mockToggleModelFavorite,
+  createDirectory: projectMocks.mockCreateDirectory,
+  listSshProfiles: projectMocks.mockListSshProfiles,
+  getSshProfile: projectMocks.mockGetSshProfile,
+  upsertSshProfile: projectMocks.mockUpsertSshProfile,
+  removeSshProfile: projectMocks.mockRemoveSshProfile,
+  openRemoteProject: projectMocks.mockOpenRemoteProject,
+}));
+
+vi.mock("../../../src/shared/lib/ssh-config", () => ({
+  listDetectedSshHosts: vi.fn(async () => []),
 }));
 
 vi.mock("../../../src/shared/lib/native-dialog", () => ({

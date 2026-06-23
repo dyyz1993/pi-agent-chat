@@ -5,7 +5,7 @@
  * loaded (loadSessionsForProject + setActiveSession), not before. Otherwise
  * the UI flashes an empty state before messages arrive.
  */
-import type { SessionMeta } from "../../shared/modules/project";
+import type { ProjectRuntime, RemoteProjectRef, SessionMeta } from "../../shared/modules/project";
 import type { StartupTrace } from "./startup-monitor";
 import { pickDefaultSessionId } from "../stores/session-selection";
 
@@ -13,6 +13,8 @@ export interface SavedTab {
   id: string;
   name: string;
   path: string;
+  runtime?: ProjectRuntime;
+  remote?: RemoteProjectRef;
 }
 
 export interface RestoreFlowDeps {
@@ -54,10 +56,9 @@ export interface RestoreFlowDeps {
 /**
  * Run the app restore flow.
  *
- * Three paths:
+ * Two restore paths:
  * 1. URL session (`?session=xxx`)
  * 2. Saved tabs from server config
- * 3. Most recent project (fallback)
  *
  * In all paths, `setRestoring(false)` is called only after session data is
  * fully loaded to prevent UI flicker.
@@ -169,7 +170,7 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
       for (const t of savedTabs) {
         const exists = projectTabs.find((pt) => pt.id === t.id);
         if (!exists) {
-          addProjectTab({ id: t.id, name: t.name, path: t.path });
+          addProjectTab({ id: t.id, name: t.name, path: t.path, runtime: t.runtime, remote: t.remote });
         }
       }
 
@@ -227,51 +228,7 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
       return;
     }
 
-    // ── Path 3: Recent projects fallback ──
-    if (isCancelled()) return;
-    trace.mark("recent-projects.begin");
-    const result = (await callApi("project.listRecent", {})) as {
-      projects: Array<{ path: string; name: string; sessionCount: number }>;
-    };
-    const projects = result.projects || [];
-    trace.mark("recent-projects.done", { projectCount: projects.length });
-    if (projects.length === 0) {
-      if (!isCancelled()) setRestoring(false);
-      trace.done("no-projects");
-      return;
-    }
-
-    const first = projects[0];
-    const tabId = `proj-${first.path.replace(/\//g, "-")}`;
-    addProjectTab({ id: tabId, name: first.name, path: first.path });
-    setActiveProject(tabId, { skipAutoSession: true });
-
-    trace.mark("recent-project.sessions.begin", { projectPath: first.path });
-    const sessions = await loadSessionsForProject(first.path);
-    trace.mark("recent-project.sessions.done", {
-      projectPath: first.path,
-      sessionCount: sessions.length,
-    });
-    addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
-
-    if (sessions.length > 0) {
-      const sid = pickDefaultSessionId(sessions, getLastActiveSessionByProject()[first.path]);
-      if (!sid) {
-        trace.mark("recent-project.create-session.begin", { projectPath: first.path });
-        await createNewSession();
-        trace.done("recent-project.create-session.done", { projectPath: first.path });
-        if (!isCancelled()) setRestoring(false);
-        return;
-      }
-      setActiveSession(sid);
-      trace.done("recent-project.session.selected", { sessionId: sid });
-    } else {
-      trace.mark("recent-project.create-session.begin", { projectPath: first.path });
-      await createNewSession();
-      trace.done("recent-project.create-session.done", { projectPath: first.path });
-    }
-
-    // Release restoring AFTER sessions are loaded so UI doesn't flash empty state
+    trace.done("no-open-tabs");
     if (!isCancelled()) setRestoring(false);
   } catch (err) {
     trace.error("restore.failed", err);

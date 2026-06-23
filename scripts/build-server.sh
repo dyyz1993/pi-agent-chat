@@ -29,9 +29,12 @@ npx esbuild "${PROJECT_ROOT}/src/sandbox/sandbox-agent.ts" \
   --format=esm \
   --tree-shaking=false \
   --outfile="${DIST_DIR}/sandbox-agent.js"
-cat "${PROJECT_ROOT}/scripts/agent-path-map.js" "${DIST_DIR}/sandbox-agent.js" > "${DIST_DIR}/sandbox-agent.tmp.js" && mv "${DIST_DIR}/sandbox-agent.tmp.js" "${DIST_DIR}/sandbox-agent.js"
-sed -i '' 's/body\.path = queryPath;/body.path = __mp(queryPath);/g' "${DIST_DIR}/sandbox-agent.js"
-sed -i '' 's/let filePath = decodeURIComponent(url\.pathname\.slice(5));/let filePath = __mp(decodeURIComponent(url.pathname.slice(5)));/g' "${DIST_DIR}/sandbox-agent.js"
+if [[ -f "${PROJECT_ROOT}/scripts/agent-path-map.js" ]]; then
+  cat "${PROJECT_ROOT}/scripts/agent-path-map.js" "${DIST_DIR}/sandbox-agent.js" > "${DIST_DIR}/sandbox-agent.tmp.js"
+  mv "${DIST_DIR}/sandbox-agent.tmp.js" "${DIST_DIR}/sandbox-agent.js"
+  sed -i '' 's/body\.path = queryPath;/body.path = __mp(queryPath);/g' "${DIST_DIR}/sandbox-agent.js"
+  sed -i '' 's/let filePath = decodeURIComponent(url\.pathname\.slice(5));/let filePath = __mp(decodeURIComponent(url.pathname.slice(5)));/g' "${DIST_DIR}/sandbox-agent.js"
+fi
 
 echo "🔧 Building frontend..."
 cd "${PROJECT_ROOT}" && npx vite build

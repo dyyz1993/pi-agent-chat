@@ -75,6 +75,8 @@ import { stopAgentClientOperation } from "./agent-stop-operations";
 // 沙箱模式
 import { SandboxManager } from "../../sandbox/sandbox-manager";
 import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
+import { RemoteSshProvider } from "../../sandbox/providers/ssh";
+import { bootstrapRemoteChild } from "../../sandbox/remote-child-bootstrap";
 import type { ISandboxProvider } from "../../sandbox/types";
 import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 
@@ -261,10 +263,29 @@ function getExtensionArgs(excludeLsp = false): string[] {
     }
     return _extensionArgsNoLspCache;
   }
-  if (_extensionArgsCache === undefined) {
-    _extensionArgsCache = ["--no-extensions", ...discoverExtensionArgs()];
-  }
+  _extensionArgsCache ??= ["--no-extensions", ...discoverExtensionArgs()];
   return _extensionArgsCache;
+}
+
+function getRemoteExtensionArgs(
+  localExtensionsDir: string | undefined,
+  remoteExtensionsDir: string | undefined,
+  excludeLsp = false,
+): string[] {
+  if (!localExtensionsDir || !remoteExtensionsDir || !existsSync(localExtensionsDir)) {
+    return ["--no-extensions"];
+  }
+
+  const localExtensionPaths: string[] = [];
+  scanExtensionDir(localExtensionsDir, localExtensionPaths);
+  const remoteArgs: string[] = [];
+  for (const localExtensionPath of localExtensionPaths) {
+    const relativePath = path.relative(localExtensionsDir, localExtensionPath);
+    const extName = relativePath.split(path.sep)[0] ?? "";
+    if (excludeLsp && SUBAGENT_EXCLUDED_EXTENSIONS.has(extName)) continue;
+    remoteArgs.push("--extension", `${remoteExtensionsDir}/${relativePath.split(path.sep).join("/")}`);
+  }
+  return ["--no-extensions", ...remoteArgs];
 }
 
 // Tier constants and parseTierModel are imported from agent-runtime-config.ts
@@ -314,8 +335,30 @@ export function initSandboxManager(projectsRoot: string): SandboxManager {
       settingsJsonPath: config.sandboxBoxSettingsJson,
       extensionsPath: config.sandboxBoxExtensionsPath,
     });
+  } else if (providerType === "ssh") {
+    provider = new RemoteSshProvider({
+      target: config.remoteSshTarget,
+      port: config.remoteSshPort,
+      keyPath: config.remoteSshKey || undefined,
+      localBasePort: config.remoteLocalBasePort,
+      remoteBridgePort: config.remoteBridgePort,
+      remoteProjectPath: config.remoteProjectPath,
+      remoteAgentDir: config.remoteAgentDir,
+      remotePiCliPath: config.remotePiCliPath,
+      remoteNodePath: config.remoteNodePath,
+      remoteShell: config.remoteShell,
+      remotePiAgentDir: config.remotePiAgentDir || undefined,
+      childNodeOptions: config.remoteChildNodeOptions,
+      bootstrapPiPackage: config.remoteBootstrapPiPackage,
+      localPiPackagePath: path.resolve(config.remoteLocalPiPackagePath),
+      localWorkspacePackagesPath: config.remoteLocalPiWorkspacePackagesPath
+        ? path.resolve(config.remoteLocalPiWorkspacePackagesPath)
+        : undefined,
+    });
   } else {
-    throw new Error(`Unknown sandbox provider: ${providerType}. Only "sandbox-box" is supported.`);
+    throw new Error(
+      `Unknown sandbox provider: ${providerType}. Supported providers: "sandbox-box", "ssh".`,
+    );
   }
 
   globalSandboxManager = new SandboxManager(provider, {
@@ -353,9 +396,15 @@ async function createRpcClient(
   excludeLsp = false,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
+  const useRemoteChild = config.remoteChildEnabled;
+  if (useRemoteChild && (!config.remoteSshTarget || !config.remoteChildProjectPath)) {
+    throw new Error(
+      "REMOTE_CHILD_ENABLED requires REMOTE_SSH_TARGET and REMOTE_CHILD_PROJECT_PATH or REMOTE_PROJECT_PATH",
+    );
+  }
 
   // 沙箱模式：通过 SandboxRpcClient 转发到沙箱容器
-  if (config.sandboxEnabled && globalSandboxManager && userId) {
+  if (!useRemoteChild && config.sandboxEnabled && globalSandboxManager && userId) {
     const sandbox = await globalSandboxManager.getOrCreate(userId);
     const client = new SandboxRpcClient(sandbox.endpoint) as unknown as RpcClientInstance;
     const t1 = performance.now();
@@ -373,14 +422,47 @@ async function createRpcClient(
     mkdirSync(cwd, { recursive: true });
   }
 
-  const args = [...getExtensionArgs(excludeLsp)];
-  if (sessionPath && existsSync(sessionPath)) {
+  const localRemoteChildExtensionsDir =
+    config.remoteChildLocalExtensionsDir || (useRemoteChild ? getBuiltinExtensionsDir() : "");
+  const remoteChildBootstrap =
+    useRemoteChild && config.remoteChildAutoUpload && config.remoteChildLocalBinaryPath
+      ? await bootstrapRemoteChild({
+          target: config.remoteSshTarget,
+          port: config.remoteSshPort,
+          keyPath: config.remoteSshKey || undefined,
+          remoteShell: config.remoteChildShell,
+          remoteRuntimeDir: config.remoteChildRemoteRuntimeDir,
+          localBinaryPath: config.remoteChildLocalBinaryPath,
+          localExtensionsDir: localRemoteChildExtensionsDir,
+          binaryName: config.remoteChildBinaryName,
+        })
+      : undefined;
+  const remoteChildCliPath = remoteChildBootstrap?.remoteBinaryPath ?? config.remoteChildPiCliPath;
+  const remoteChildNodePath = remoteChildBootstrap ? "" : config.remoteChildNodePath;
+  const args = useRemoteChild
+    ? getRemoteExtensionArgs(
+        localRemoteChildExtensionsDir,
+        remoteChildBootstrap?.remoteExtensionsDir,
+        excludeLsp,
+      )
+    : [...getExtensionArgs(excludeLsp)];
+  if (!useRemoteChild && sessionPath && existsSync(sessionPath)) {
     args.push("--session", sessionPath);
   }
 
   perfLog.info("[createRpcClient] spawning CLI", {
     cliPath,
     cwd,
+    remoteChild: useRemoteChild
+      ? {
+          target: config.remoteSshTarget,
+          remoteCwd: config.remoteChildProjectPath,
+          cliPath: remoteChildCliPath,
+          uploaded: remoteChildBootstrap?.uploaded,
+          uploadedExtensions: remoteChildBootstrap?.uploadedExtensions,
+          sha256: remoteChildBootstrap?.sha256.slice(0, 12),
+        }
+      : undefined,
     sessionPath,
     args: args.join(" "),
     excludeLsp,
@@ -399,10 +481,33 @@ async function createRpcClient(
   }
 
   const client = new cachedModule.RpcClient({
-    cliPath,
+    cliPath: useRemoteChild ? remoteChildCliPath : cliPath,
     cwd,
     args,
     env: childEnv,
+    ...(useRemoteChild
+      ? {
+          remoteSsh: {
+            target: config.remoteSshTarget,
+            cwd: config.remoteChildProjectPath,
+            sshArgs: [
+              "-o",
+              "BatchMode=yes",
+              "-o",
+              "ConnectTimeout=8",
+              ...(config.remoteSshPort ? ["-p", String(config.remoteSshPort)] : []),
+              ...(config.remoteSshKey ? ["-i", config.remoteSshKey] : []),
+            ],
+            nodePath: remoteChildNodePath,
+            shell: config.remoteChildShell,
+            env: {
+              ...(config.remotePiAgentDir ? { PI_CODING_AGENT_DIR: config.remotePiAgentDir } : {}),
+              NODE_OPTIONS: config.remoteChildNodeOptions,
+              ...(excludeLsp ? { PI_SKIP_MCP: "1" } : {}),
+            },
+          },
+        }
+      : {}),
   });
   try {
     await client.start();

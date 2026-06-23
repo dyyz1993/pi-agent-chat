@@ -90,9 +90,12 @@ function startPi(): Promise<void> {
     readyResolve = resolve;
     const timeout = setTimeout(() => reject(new Error("pi agent start timeout")), 60_000);
 
-    piProcess = spawn(process.execPath, [CLI_PATH, "--mode", "rpc"], {
+    piProcess = spawn(CLI_PATH, ["--mode", "rpc"], {
       cwd: CWD,
-      env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" },
+      env: {
+        ...process.env,
+        NODE_OPTIONS: process.env.PI_CHILD_NODE_OPTIONS ?? "--max-old-space-size=4096",
+      },
       stdio: ["pipe", "pipe", "pipe"],
     });
 

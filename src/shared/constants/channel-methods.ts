@@ -114,6 +114,15 @@ export const COORDINATOR_METHODS = {
   DELEGATE_SYNC: "session_delegate_sync",
 } as const;
 
+// ---- remote-ssh channel ----
+export const REMOTE_SSH_METHODS = {
+  GET_STATUS: "getStatus",
+  CONFIGURE: "configure",
+  DISABLE: "disable",
+  TEST_CONNECTION: "testConnection",
+  SMOKE_TEST: "smokeTest",
+} as const;
+
 /** All valid channel method names (flat set for O(1) lookup) */
 export const ALL_CHANNEL_METHODS: ReadonlySet<string> = new Set([
   ...Object.values(FILE_REVIEW_METHODS),
@@ -125,6 +134,7 @@ export const ALL_CHANNEL_METHODS: ReadonlySet<string> = new Set([
   ...Object.values(SUPERVISOR_METHODS),
   ...Object.values(RULES_METHODS),
   ...Object.values(COORDINATOR_METHODS),
+  ...Object.values(REMOTE_SSH_METHODS),
 ]);
 
 /** Channel name → valid methods mapping */
@@ -139,4 +149,5 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   supervisor: new Set(Object.values(SUPERVISOR_METHODS)),
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),
+  "remote-ssh": new Set(Object.values(REMOTE_SSH_METHODS)),
 };

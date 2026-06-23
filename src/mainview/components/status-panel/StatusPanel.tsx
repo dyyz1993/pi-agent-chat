@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Zap,
   ShieldCheck,
+  Server,
   ClipboardList,
   Terminal,
   Plug,
@@ -35,6 +36,7 @@ import type { StatusSection } from "../../stores/use-status-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
+import { apiClient } from "../../lib/api-client";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   high: { dot: "bg-status-error", label: "H" },
@@ -79,6 +81,7 @@ export function StatusPanel() {
   const projectTrustLoading = useStatusStore((s) => s.projectTrustLoading);
   const executionSandbox = useStatusStore((s) => s.executionSandbox);
   const executionSandboxLoading = useStatusStore((s) => s.executionSandboxLoading);
+  const setRemoteRuntimeStatus = useStatusStore((s) => s.setRemoteRuntimeStatus);
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
@@ -115,6 +118,12 @@ export function StatusPanel() {
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
   const [showPermissionAdvanced, setShowPermissionAdvanced] = useState(false);
+  const [remoteStatus, setRemoteStatus] = useState<{
+    enabled: boolean;
+    configured: boolean;
+    host?: string;
+    remoteCwd?: string;
+  } | null>(null);
 
   const permissionPresets = [
     {
@@ -169,8 +178,32 @@ export function StatusPanel() {
     }
   }, [activeProjectTab?.path, refreshExecutionSandbox]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeSessionId) {
+      setRemoteStatus(null);
+      return;
+    }
+    apiClient
+      .call("agent.remoteSshGetStatus", { sessionId: activeSessionId })
+      .then((status) => {
+        if (cancelled) return;
+        setRemoteStatus(status);
+        setRemoteRuntimeStatus(activeSessionId, status);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRemoteStatus(null);
+        setRemoteRuntimeStatus(activeSessionId, null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, setRemoteRuntimeStatus]);
+
   const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
     { id: "permission", label: t("permissionMode"), icon: ShieldCheck },
+    { id: "remote", label: t("remoteRuntime"), icon: Server },
     { id: "plan", label: t("planMode"), icon: ClipboardList },
     { id: "shell", label: t("shell"), icon: Terminal },
     { id: "mcp", label: t("mcpTools"), icon: Plug },
@@ -384,6 +417,45 @@ export function StatusPanel() {
                           )}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {id === "remote" && (
+                    <div className="space-y-2 pt-0.5">
+                      <div className="flex items-start gap-1.5 text-[10px] leading-4 text-text-tertiary">
+                        <span
+                          className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                            remoteStatus?.enabled ? "bg-status-success" : "bg-text-tertiary"
+                          }`}
+                        />
+                        <div>
+                          <div className="text-text-secondary">
+                            {remoteStatus?.enabled
+                              ? t("remoteStatusConnected", {
+                                  host: remoteStatus.host ?? "",
+                                })
+                              : t("remoteStatusLocal")}
+                          </div>
+                          <div>{t("remoteRuntimeHint")}</div>
+                        </div>
+                      </div>
+                      <div className="space-y-1 rounded-md border border-border-secondary/60 bg-surface-hover/25 p-2 text-[10px] leading-4">
+                        {remoteStatus?.enabled ? (
+                          <>
+                            <div className="grid grid-cols-[56px_minmax(0,1fr)] gap-x-2 gap-y-1">
+                              <span className="text-text-tertiary">{t("remoteHostLabel")}</span>
+                              <span className="truncate text-text-secondary">
+                                {remoteStatus.host ?? t("notLoaded")}
+                              </span>
+                              <span className="text-text-tertiary">{t("remotePathLabel")}</span>
+                              <span className="truncate font-mono text-text-secondary">
+                                {remoteStatus.remoteCwd ?? t("notLoaded")}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-text-tertiary">{t("remoteConfigureFromProject")}</div>
+                        )}
+                      </div>
                     </div>
                   )}
                   {id === "plan" && (

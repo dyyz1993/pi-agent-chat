@@ -58,6 +58,7 @@
     "test:theme": "bash run-tests.sh run theme",
     "test:settings": "bash run-tests.sh run settings",
     "test:list": "bash run-tests.sh list",
+    "verify:remote-child": "bun tools/verify-remote-child-runtime.ts",
     "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {

@@ -1,4 +1,5 @@
 import type { ChatMessage, ContentBlock, SessionMeta, ProjectTab, SessionStatus } from "../types";
+import type { PersistedTab } from "../../shared/modules/project";
 import type { BashChannelEvent, BashProcess } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
@@ -955,7 +956,13 @@ export function clearSubscriptionState(
 }
 
 export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null) {
-  const persistTabs = tabs.map((t) => ({ id: t.id, name: t.name, path: t.path }));
+  const persistTabs: PersistedTab[] = tabs.map((t) => ({
+    id: t.id,
+    name: t.name,
+    path: t.path,
+    runtime: t.runtime,
+    remote: t.remote,
+  }));
   apiClient.call("project.syncTabs", { tabs: persistTabs, activeTabId }).catch((err) => {
     useAppStore.getState().addLog(`[sub] ${String(err)}`);
   });

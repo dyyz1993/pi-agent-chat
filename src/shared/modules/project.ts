@@ -2,6 +2,53 @@ export interface PersistedTab {
   id: string;
   name: string;
   path: string;
+  runtime?: ProjectRuntime;
+  remote?: RemoteProjectRef;
+}
+
+export type ProjectRuntime = "local" | "ssh";
+
+export interface SshProfile {
+  id: string;
+  name: string;
+  host: string;
+  sshArgs?: string[];
+  shell?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DetectedSshHost {
+  host: string;
+  name: string;
+  source: string;
+  hostName?: string;
+  user?: string;
+  port?: string;
+  identityFile?: string;
+}
+
+export interface SshDirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: true;
+}
+
+export interface RemoteProjectRef {
+  runtime: "ssh";
+  profileId: string;
+  host: string;
+  remotePath: string;
+  localPath: string;
+  shell?: string;
+  sshArgs?: string[];
+}
+
+export interface RemoteProjectRecord extends RemoteProjectRef {
+  id: string;
+  name: string;
+  createdAt: number;
+  lastOpened: number;
 }
 
 /**
@@ -119,6 +166,79 @@ export interface ProjectMethods {
     params: { modelKey: string };
     result: { added: boolean; favorites: string[] };
   };
+  "project.listSshProfiles": {
+    params: {};
+    result: { profiles: SshProfile[] };
+  };
+  "project.listDetectedSshHosts": {
+    params: {};
+    result: { hosts: DetectedSshHost[] };
+  };
+  "project.upsertSshProfile": {
+    params: { id?: string; name: string; host: string; sshArgs?: string[]; shell?: string };
+    result: { profile: SshProfile };
+  };
+  "project.removeSshProfile": {
+    params: { profileId: string };
+    result: { ok: boolean };
+  };
+  "project.testSshProfile": {
+    params: {
+      profileId?: string;
+      host?: string;
+      remotePath?: string;
+      sshArgs?: string[];
+      shell?: string;
+    };
+    result: { ok: boolean; stdout: string; stderr: string; error?: string };
+  };
+  "project.listSshDirectory": {
+    params: {
+      profileId?: string;
+      host?: string;
+      dirPath?: string;
+      sshArgs?: string[];
+      shell?: string;
+    };
+    result: {
+      ok: boolean;
+      path: string;
+      entries: SshDirectoryEntry[];
+      stdout: string;
+      stderr: string;
+      error?: string;
+    };
+  };
+  "project.createSshDirectory": {
+    params: {
+      profileId?: string;
+      host?: string;
+      dirPath: string;
+      sshArgs?: string[];
+      shell?: string;
+    };
+    result: { ok: boolean; path: string; stdout: string; stderr: string; error?: string };
+  };
+  "project.openSshProject": {
+    params: {
+      profileId?: string;
+      name?: string;
+      projectName?: string;
+      profileName?: string;
+      host: string;
+      remotePath: string;
+      sshArgs?: string[];
+      shell?: string;
+    };
+    result: {
+      projectPath: string;
+      name: string;
+      sessionCount: number;
+      tab: PersistedTab;
+      profile: SshProfile;
+      remote: RemoteProjectRecord;
+    };
+  };
 }
 
 export interface RecentProject {
@@ -127,6 +247,8 @@ export interface RecentProject {
   lastOpened: number;
   pinned: boolean;
   sessionCount: number;
+  runtime?: ProjectRuntime;
+  remote?: RemoteProjectRef;
 }
 
 export interface PiProject {

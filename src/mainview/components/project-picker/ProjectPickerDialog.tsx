@@ -15,6 +15,7 @@ import {
   FolderPlus,
   ArrowDownAZ,
   Clock,
+  Server,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -27,6 +28,7 @@ interface ProjectPickerDialogProps {
   open: boolean;
   onClose: () => void;
   onSelect: (path: string, name: string) => void;
+  onOpenRemoteProject?: () => void;
 }
 
 type LeftView = "default" | "browse";
@@ -93,7 +95,12 @@ function splitPath(p: string): { label: string; path: string }[] {
   });
 }
 
-export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDialogProps) {
+export function ProjectPickerDialog({
+  open,
+  onClose,
+  onSelect,
+  onOpenRemoteProject,
+}: ProjectPickerDialogProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileTab, setMobileTab] = useState<"recents" | "favorites" | "browse">("recents");
@@ -343,6 +350,11 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
 
   if (!open) return null;
 
+  const handleOpenRemote = () => {
+    onClose();
+    onOpenRemoteProject?.();
+  };
+
   const renderProjectList = (projects: RecentProject[], mobile?: boolean) => {
     if (loading && projects.length === 0) {
       return (
@@ -587,13 +599,24 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       </div>
 
       <div className="shrink-0 px-4 py-2.5 border-t border-border-secondary dark:border-surface-code">
-        <button
-          onClick={() => navigateTo(homePathRef.current || "/")}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-semantic-accent/20 hover:bg-semantic-accent/30 border border-semantic-accent/30 rounded-lg text-xs text-semantic-accent transition-colors"
-        >
-          <Home className="w-3.5 h-3.5" />
-          {t("picker.browseOtherDirs")}
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={() => navigateTo(homePathRef.current || "/")}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-semantic-accent/20 hover:bg-semantic-accent/30 border border-semantic-accent/30 rounded-lg text-xs text-semantic-accent transition-colors"
+          >
+            <Home className="w-3.5 h-3.5" />
+            {t("picker.browseOtherDirs")}
+          </button>
+          {onOpenRemoteProject && (
+            <button
+              onClick={handleOpenRemote}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-status-info/10 hover:bg-status-info/15 border border-status-info/30 rounded-lg text-xs text-status-info transition-colors"
+            >
+              <Server className="w-3.5 h-3.5" />
+              {t("picker.openRemoteProject")}
+            </button>
+          )}
+        </div>
       </div>
     </>
   );
@@ -750,6 +773,15 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             {t("picker.browse")}
           </button>
         </div>
+        {onOpenRemoteProject && (
+          <button
+            onClick={handleOpenRemote}
+            className="mx-3 mt-2 flex items-center justify-center gap-2 rounded-xl border border-status-info/30 bg-status-info/10 px-4 py-2.5 text-sm font-medium text-status-info active:bg-status-info/15"
+          >
+            <Server className="w-4 h-4" />
+            {t("picker.openRemoteProject")}
+          </button>
+        )}
 
         <div className="flex-1 overflow-y-auto px-3 pb-4 pt-2 flex flex-col min-h-0">
           {mobileTab === "recents" && (

@@ -3,11 +3,21 @@ import { mkdir, readFile, realpath, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 
+const agentMocks = vi.hoisted(() => ({
+  start: vi.fn(async (sessionId: string) => ({ agentId: sessionId, status: "started" as const })),
+  callChannel: vi.fn(async () => ({ ok: true })),
+  stop: vi.fn(async () => true),
+  getRemoteProjectByLocalPath: vi.fn(async () => null),
+}));
+
 vi.mock("../../../src/shared/agent/process-manager", () => ({
   AgentProcessManager: class {
     removeServer = vi.fn();
     updateServer = vi.fn();
     serverCount = vi.fn(() => 1);
+    start = agentMocks.start;
+    callChannel = agentMocks.callChannel;
+    stop = agentMocks.stop;
   },
 }));
 
@@ -16,6 +26,7 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
   setDisabledSkill: vi.fn(async () => []),
   listDisabledPlugins: vi.fn(async () => []),
   setDisabledPlugin: vi.fn(async () => []),
+  getRemoteProjectByLocalPath: agentMocks.getRemoteProjectByLocalPath,
 }));
 
 import { register } from "../../../src/shared/handlers/agent";
@@ -123,5 +134,69 @@ describe("agent project trust handlers", () => {
     expect(JSON.parse(await readFile(written.trustStorePath, "utf-8"))).toEqual({
       decision: false,
     });
+  });
+
+  it("configures remote ssh runtime before returning from agent.start", async () => {
+    const projectPath = join(tempDir, "remote-shadow");
+    const sessionPath = join(tempDir, "session.jsonl");
+    agentMocks.getRemoteProjectByLocalPath.mockResolvedValueOnce({
+      id: "remote-id",
+      name: "remote-project",
+      runtime: "ssh",
+      profileId: "profile-id",
+      host: "xyz-mac",
+      remotePath: "/tmp/remote-project",
+      localPath: projectPath,
+      sshArgs: ["-o", "BatchMode=yes"],
+      shell: "/bin/bash",
+      createdAt: 1,
+      lastOpened: 1,
+    });
+    agentMocks.callChannel.mockResolvedValueOnce({ ok: true, enabled: true, configured: true });
+
+    const start = server.handlers.get("agent.start")!;
+    await expect(
+      start({ sessionId: "session-1", projectPath, sessionPath, forceNewProcess: true }),
+    ).resolves.toEqual({ agentId: "session-1", status: "started" });
+
+    expect(agentMocks.callChannel).toHaveBeenCalledWith("session-1", "remote-ssh", "configure", {
+      enabled: true,
+      host: "xyz-mac",
+      remoteCwd: "/tmp/remote-project",
+      sshArgs: ["-o", "BatchMode=yes"],
+      shell: "/bin/bash",
+      persist: false,
+    });
+    expect(agentMocks.stop).not.toHaveBeenCalled();
+  });
+
+  it("fails agent.start instead of falling back to local tools when remote ssh configure fails", async () => {
+    const projectPath = join(tempDir, "remote-shadow-fail");
+    const sessionPath = join(tempDir, "session-fail.jsonl");
+    agentMocks.getRemoteProjectByLocalPath.mockResolvedValueOnce({
+      id: "remote-id",
+      name: "remote-project",
+      runtime: "ssh",
+      profileId: "profile-id",
+      host: "xyz-mac",
+      remotePath: "/tmp/remote-project",
+      localPath: projectPath,
+      createdAt: 1,
+      lastOpened: 1,
+    });
+    agentMocks.callChannel.mockResolvedValueOnce({
+      ok: false,
+      enabled: false,
+      configured: false,
+      error: "ssh unreachable",
+    });
+
+    const start = server.handlers.get("agent.start")!;
+    await expect(
+      start({ sessionId: "session-fail", projectPath, sessionPath, forceNewProcess: true }),
+    ).rejects.toThrow(
+      "Failed to configure SSH remote runtime for /tmp/remote-project: ssh unreachable",
+    );
+    expect(agentMocks.stop).toHaveBeenCalledWith("session-fail");
   });
 });

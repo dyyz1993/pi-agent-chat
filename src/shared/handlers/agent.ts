@@ -4,7 +4,9 @@ import { dirname } from "node:path";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
+import { REMOTE_SSH_METHODS } from "../constants/channel-methods";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 import {
   getLegacyTrustStorePath,
   getProjectTrustStorePath,
@@ -20,6 +22,7 @@ import {
   setDisabledSkill,
   listDisabledPlugins,
   setDisabledPlugin,
+  getRemoteProjectByLocalPath,
 } from "../lib/project-config";
 
 const log = createLogger("agent");
@@ -134,6 +137,40 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const result = await m.start(params.sessionId, params.projectPath, params.sessionPath, {
       forceNewProcess: params.forceNewProcess,
     });
+    const remoteProject = await getRemoteProjectByLocalPath(params.projectPath);
+    if (remoteProject) {
+      log.info("configuring remote ssh runtime for project", {
+        sessionId: params.sessionId,
+        projectPath: params.projectPath,
+        host: remoteProject.host,
+        remotePath: remoteProject.remotePath,
+      });
+      const remoteConfigureResult = (await withTimeout(
+        m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.CONFIGURE, {
+          enabled: true,
+          host: remoteProject.host,
+          remoteCwd: remoteProject.remotePath,
+          sshArgs: remoteProject.sshArgs,
+          shell: remoteProject.shell,
+          persist: false,
+        }),
+        15_000,
+        "remote ssh configure",
+      )) as R<"agent.remoteSshConfigure">;
+      if (!remoteConfigureResult.ok) {
+        await m.stop(params.sessionId).catch((err: unknown) => {
+          log.warn("failed to stop agent after remote ssh configure failure", {
+            sessionId: params.sessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+        throw new Error(
+          `Failed to configure SSH remote runtime for ${remoteProject.remotePath}: ${
+            remoteConfigureResult.error ?? "unknown error"
+          }`,
+        );
+      }
+    }
     log.info("start result", { result });
     return result;
   });
@@ -403,6 +440,53 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       params.projectPath,
       normalizeExecutionSandboxMode(params.mode),
     );
+  });
+
+  r("agent.remoteSshGetStatus", async (params) => {
+    return withTimeout(
+      m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.GET_STATUS, {}),
+      5_000,
+      "remote ssh status",
+    ) as Promise<R<"agent.remoteSshGetStatus">>;
+  });
+
+  r("agent.remoteSshConfigure", async (params) => {
+    const { sessionId, ...config } = params;
+    return withTimeout(
+      m.callChannel(sessionId, "remote-ssh", REMOTE_SSH_METHODS.CONFIGURE, config),
+      15_000,
+      "remote ssh configure",
+    ) as Promise<R<"agent.remoteSshConfigure">>;
+  });
+
+  r("agent.remoteSshDisable", async (params) => {
+    return withTimeout(
+      m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.DISABLE, {
+        persist: params.persist,
+      }),
+      5_000,
+      "remote ssh disable",
+    ) as Promise<R<"agent.remoteSshDisable">>;
+  });
+
+  r("agent.remoteSshTestConnection", async (params) => {
+    const { sessionId, ...config } = params;
+    return withTimeout(
+      m.callChannel(sessionId, "remote-ssh", REMOTE_SSH_METHODS.TEST_CONNECTION, config),
+      15_000,
+      "remote ssh test connection",
+    ) as Promise<R<"agent.remoteSshTestConnection">>;
+  });
+
+  r("agent.remoteSshSmokeTest", async (params) => {
+    return withTimeout(
+      m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.SMOKE_TEST, {
+        subdir: params.subdir,
+        text: params.text,
+      }),
+      15_000,
+      "remote ssh smoke test",
+    ) as Promise<R<"agent.remoteSshSmokeTest">>;
   });
 
   r("agent.setSessionName", async (params) => {

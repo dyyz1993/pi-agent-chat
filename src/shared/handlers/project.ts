@@ -2,7 +2,9 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { existsSync } from "fs";
+import { execFile } from "child_process";
 import { basename } from "path";
+import { promisify } from "util";
 import { createLogger } from "../lib/logger";
 import {
   addRecentProject,
@@ -21,6 +23,11 @@ import {
   getModelFavorites,
   toggleModelFavorite,
   createDirectory,
+  listSshProfiles,
+  getSshProfile,
+  upsertSshProfile,
+  removeSshProfile,
+  openRemoteProject,
 } from "../lib/project-config";
 import {
   scanSessionsForProject,
@@ -32,9 +39,132 @@ import {
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
 import { getProcessManager } from "./agent";
-import type { SessionStatus } from "../modules/project";
+import type { SessionStatus, SshDirectoryEntry } from "../modules/project";
+import { listDetectedSshHosts } from "../lib/ssh-config";
 
 const log = createLogger("config");
+const execFileAsync = promisify(execFile);
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function joinRemotePath(base: string, name: string): string {
+  const cleanBase = base.trim().replace(/\/+$/, "");
+  const cleanName = name.replace(/^\/+/, "");
+  if (!cleanBase || cleanBase === ".") return cleanName || ".";
+  if (cleanBase === "/") return `/${cleanName}`;
+  return `${cleanBase}/${cleanName}`;
+}
+
+function directoryTarget(path?: string): string {
+  const trimmed = path?.trim();
+  return trimmed ? shellQuote(trimmed) : '"$HOME"';
+}
+
+async function resolveSshConnection(input: {
+  profileId?: string;
+  host?: string;
+  sshArgs?: string[];
+  shell?: string;
+}): Promise<{ host: string; sshArgs?: string[]; shell?: string }> {
+  const profile = input.profileId ? await getSshProfile(input.profileId) : null;
+  return {
+    host: input.host ?? profile?.host ?? "",
+    sshArgs: input.sshArgs ?? profile?.sshArgs,
+    shell: input.shell ?? profile?.shell,
+  };
+}
+
+async function runSshCommand(input: {
+  host: string;
+  command: string;
+  sshArgs?: string[];
+  timeout?: number;
+}): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
+  const host = input.host.trim();
+  if (!host) return { ok: false, stdout: "", stderr: "", error: "SSH host is required" };
+  try {
+    const result = await execFileAsync(
+      "ssh",
+      [
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=8",
+        ...(input.sshArgs ?? []),
+        host,
+        input.command,
+      ],
+      { timeout: input.timeout ?? 15_000, maxBuffer: 1024 * 1024 },
+    );
+    return { ok: true, stdout: result.stdout, stderr: result.stderr };
+  } catch (err) {
+    const e = err as Error & { stdout?: string; stderr?: string };
+    return {
+      ok: false,
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? "",
+      error: e.message,
+    };
+  }
+}
+
+async function testSshConnection(input: {
+  host: string;
+  remotePath?: string;
+  sshArgs?: string[];
+}): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
+  const remotePath = input.remotePath?.trim();
+  const command = remotePath
+    ? `cd ${shellQuote(remotePath)} && printf 'pi-agent-chat-ssh-ok\\n' && pwd`
+    : "printf 'pi-agent-chat-ssh-ok\\n' && pwd";
+  return runSshCommand({ host: input.host, command, sshArgs: input.sshArgs });
+}
+
+async function listSshDirectory(input: {
+  host: string;
+  dirPath?: string;
+  sshArgs?: string[];
+}): Promise<{
+  ok: boolean;
+  path: string;
+  entries: SshDirectoryEntry[];
+  stdout: string;
+  stderr: string;
+  error?: string;
+}> {
+  const command = [
+    `cd ${directoryTarget(input.dirPath)}`,
+    "pwd",
+    "find . -maxdepth 1 -mindepth 1 -type d -print | sed 's#^./##' | sort",
+  ].join(" && ");
+  const result = await runSshCommand({ host: input.host, command, sshArgs: input.sshArgs });
+  if (!result.ok) return { ...result, path: input.dirPath?.trim() ?? "", entries: [] };
+
+  const lines = result.stdout.split(/\r?\n/).filter((line) => line.length > 0);
+  const path = lines[0] ?? input.dirPath?.trim() ?? "";
+  const entries = lines
+    .slice(1)
+    .filter((name) => name !== "." && name !== "..")
+    .map((name) => ({ name, path: joinRemotePath(path, name), isDirectory: true as const }));
+  return { ...result, path, entries };
+}
+
+async function createSshDirectory(input: {
+  host: string;
+  dirPath: string;
+  sshArgs?: string[];
+}): Promise<{ ok: boolean; path: string; stdout: string; stderr: string; error?: string }> {
+  const dirPath = input.dirPath.trim();
+  if (!dirPath) {
+    return { ok: false, path: "", stdout: "", stderr: "", error: "Remote path is required" };
+  }
+  const command = `mkdir -p ${shellQuote(dirPath)} && cd ${shellQuote(dirPath)} && pwd`;
+  const result = await runSshCommand({ host: input.host, command, sshArgs: input.sshArgs });
+  const path = result.stdout.split(/\r?\n/).find((line) => line.length > 0) ?? dirPath;
+  return { ...result, path };
+}
 
 export function register(server: RPCServer, options: HandlerOptions): void {
   const r = createRegister(server);
@@ -214,5 +344,73 @@ export function register(server: RPCServer, options: HandlerOptions): void {
 
   r("project.createDirectory", async (params) => {
     return createDirectory(params.parentPath, params.folderName);
+  });
+
+  r("project.listSshProfiles", async () => {
+    const profiles = await listSshProfiles();
+    return { profiles };
+  });
+
+  r("project.listDetectedSshHosts", async () => {
+    const hosts = await listDetectedSshHosts();
+    return { hosts };
+  });
+
+  r("project.upsertSshProfile", async (params) => {
+    const profile = await upsertSshProfile(params);
+    return { profile };
+  });
+
+  r("project.removeSshProfile", async (params) => {
+    await removeSshProfile(params.profileId);
+    return { ok: true };
+  });
+
+  r("project.testSshProfile", async (params) => {
+    const { host, sshArgs } = await resolveSshConnection(params);
+    return testSshConnection({ host, remotePath: params.remotePath, sshArgs });
+  });
+
+  r("project.listSshDirectory", async (params) => {
+    const { host, sshArgs } = await resolveSshConnection(params);
+    return listSshDirectory({ host, dirPath: params.dirPath, sshArgs });
+  });
+
+  r("project.createSshDirectory", async (params) => {
+    const { host, sshArgs } = await resolveSshConnection(params);
+    return createSshDirectory({ host, dirPath: params.dirPath, sshArgs });
+  });
+
+  r("project.openSshProject", async (params) => {
+    const { host, sshArgs, shell } = await resolveSshConnection(params);
+    const connection = await testSshConnection({ host, remotePath: params.remotePath, sshArgs });
+    if (!connection.ok) {
+      throw new Error(connection.error ?? connection.stderr ?? "SSH connection failed");
+    }
+
+    const opened = await openRemoteProject({
+      profileId: params.profileId,
+      name: params.name,
+      projectName: params.projectName,
+      profileName: params.profileName,
+      host,
+      remotePath: params.remotePath,
+      sshArgs,
+      shell,
+    });
+    const sessions = await scanSessionsForProject(opened.remote.localPath);
+    const sessionCount = sessions.length;
+    await addRecentProject(opened.remote.localPath, opened.remote.name, sessionCount, {
+      runtime: "ssh",
+      remote: opened.remote,
+    });
+    return {
+      projectPath: opened.remote.localPath,
+      name: opened.remote.name,
+      sessionCount,
+      tab: opened.tab,
+      profile: opened.profile,
+      remote: opened.remote,
+    };
   });
 }

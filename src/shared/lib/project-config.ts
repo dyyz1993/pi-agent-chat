@@ -2,8 +2,16 @@ import { readFile, writeFile, mkdir, readdir, copyFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import { join, dirname, basename } from "path";
 import { homedir } from "os";
+import { createHash } from "crypto";
 import { createLogger } from "./logger";
-import type { RecentProject, ConfiguredPath } from "../modules/project";
+import type {
+  RecentProject,
+  ConfiguredPath,
+  ProjectRuntime,
+  RemoteProjectRecord,
+  RemoteProjectRef,
+  SshProfile,
+} from "../modules/project";
 
 const log = createLogger("config");
 
@@ -17,6 +25,8 @@ export interface PersistedTab {
   id: string;
   name: string;
   path: string;
+  runtime?: ProjectRuntime;
+  remote?: RemoteProjectRef;
 }
 
 export interface FavoriteFolder {
@@ -45,6 +55,10 @@ interface ProjectConfig {
   disabledPlugins: Record<string, string[]>;
   /** app-level model favorites (global) */
   modelFavorites: string[];
+  /** reusable SSH connection profiles for opening remote projects */
+  sshProfiles: SshProfile[];
+  /** remote project metadata keyed by local shadow project path */
+  remoteProjects: RemoteProjectRecord[];
 }
 
 function emptyConfig(): ProjectConfig {
@@ -59,6 +73,8 @@ function emptyConfig(): ProjectConfig {
     disabledSkills: [],
     disabledPlugins: {},
     modelFavorites: [],
+    sshProfiles: [],
+    remoteProjects: [],
   };
 }
 
@@ -75,6 +91,8 @@ function parseConfig(raw: string): ProjectConfig {
     disabledSkills: parsed.disabledSkills ?? [],
     disabledPlugins: parsed.disabledPlugins ?? {},
     modelFavorites: parsed.modelFavorites ?? [],
+    sshProfiles: parsed.sshProfiles ?? [],
+    remoteProjects: parsed.remoteProjects ?? [],
   };
 }
 
@@ -90,9 +108,83 @@ function hasUserData(config: ProjectConfig): boolean {
     config.modelFavorites.length > 0 ||
     config.disabledSkills.length > 0 ||
     (config.disabledPlugins && Object.keys(config.disabledPlugins).length > 0) ||
+    config.sshProfiles.length > 0 ||
+    config.remoteProjects.length > 0 ||
     config.openTabs.length > 0 ||
     config.configuredPaths.length > 0
   );
+}
+
+function stableId(input: string): string {
+  return createHash("sha256").update(input).digest("hex").slice(0, 16);
+}
+
+function normalizeSshArgs(sshArgs?: string[]): string[] | undefined {
+  const normalized = (sshArgs ?? []).map((arg) => arg.trim()).filter(Boolean);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeShell(shell?: string): string | undefined {
+  const trimmed = shell?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
+function normalizeHost(host: string): string {
+  return host.trim();
+}
+
+function normalizeRemotePath(remotePath: string): string {
+  const trimmed = remotePath.trim();
+  return trimmed.replace(/\/+$/, "") || "/";
+}
+
+function getRemoteProjectLocalPath(host: string, remotePath: string): string {
+  const key = stableId(`${normalizeHost(host)}\n${normalizeRemotePath(remotePath)}`);
+  return join(CONFIG_DIR, "remote-projects", `ssh-${key}`);
+}
+
+function makeProfileId(host: string, sshArgs?: string[], shell?: string): string {
+  return `ssh-${stableId(`${normalizeHost(host)}\n${(sshArgs ?? []).join("\u0000")}\n${shell ?? ""}`)}`;
+}
+
+function upsertSshProfileInConfig(
+  config: ProjectConfig,
+  input: { id?: string; name?: string; host: string; sshArgs?: string[]; shell?: string },
+): SshProfile {
+  const host = normalizeHost(input.host);
+  const sshArgs = normalizeSshArgs(input.sshArgs);
+  const shell = normalizeShell(input.shell);
+  const id = input.id ?? makeProfileId(host, sshArgs, shell);
+  const now = Date.now();
+  const existing = config.sshProfiles.find((profile) => profile.id === id);
+  const inputName = firstNonEmpty(input.name);
+  if (existing) {
+    existing.name = firstNonEmpty(inputName, existing.name, host);
+    existing.host = host;
+    existing.sshArgs = sshArgs;
+    existing.shell = shell;
+    existing.updatedAt = now;
+    return existing;
+  }
+  const profile: SshProfile = {
+    id,
+    name: firstNonEmpty(inputName, host),
+    host,
+    sshArgs,
+    shell,
+    createdAt: now,
+    updatedAt: now,
+  };
+  config.sshProfiles.unshift(profile);
+  return profile;
 }
 
 async function tryReadFile(filePath: string): Promise<ProjectConfig | null> {
@@ -214,12 +306,15 @@ export async function addRecentProject(
   projectPath: string,
   name: string,
   sessionCount: number,
+  options?: { runtime?: ProjectRuntime; remote?: RemoteProjectRef },
 ): Promise<RecentProject> {
   return loadAndSave((config) => {
     const existing = config.recentProjects.find((p) => p.path === projectPath);
     if (existing) {
       existing.lastOpened = Date.now();
       existing.sessionCount = sessionCount;
+      existing.runtime = options?.runtime;
+      existing.remote = options?.remote;
     } else {
       config.recentProjects.unshift({
         path: projectPath,
@@ -227,11 +322,121 @@ export async function addRecentProject(
         lastOpened: Date.now(),
         pinned: false,
         sessionCount,
+        runtime: options?.runtime,
+        remote: options?.remote,
       });
     }
     config.activeProject = projectPath;
     return existing ?? config.recentProjects[0];
   });
+}
+
+export async function listSshProfiles(): Promise<SshProfile[]> {
+  const config = await load();
+  return config.sshProfiles;
+}
+
+export async function getSshProfile(profileId: string): Promise<SshProfile | null> {
+  const config = await load();
+  return config.sshProfiles.find((profile) => profile.id === profileId) ?? null;
+}
+
+export async function upsertSshProfile(input: {
+  id?: string;
+  name?: string;
+  host: string;
+  sshArgs?: string[];
+  shell?: string;
+}): Promise<SshProfile> {
+  return loadAndSave((config) => upsertSshProfileInConfig(config, input));
+}
+
+export async function removeSshProfile(profileId: string): Promise<void> {
+  return loadAndSave((config) => {
+    config.sshProfiles = config.sshProfiles.filter((profile) => profile.id !== profileId);
+  });
+}
+
+export async function openRemoteProject(input: {
+  profileId?: string;
+  name?: string;
+  projectName?: string;
+  profileName?: string;
+  host: string;
+  remotePath: string;
+  sshArgs?: string[];
+  shell?: string;
+}): Promise<{ profile: SshProfile; remote: RemoteProjectRecord; tab: PersistedTab }> {
+  const host = normalizeHost(input.host);
+  const remotePath = normalizeRemotePath(input.remotePath);
+  if (!host) throw new Error("SSH host is required");
+  if (!remotePath) throw new Error("Remote path is required");
+
+  const localPath = getRemoteProjectLocalPath(host, remotePath);
+  await mkdir(localPath, { recursive: true });
+
+  return loadAndSave((config) => {
+    const profile = upsertSshProfileInConfig(config, {
+      id: input.profileId,
+      name: firstNonEmpty(input.profileName, input.name, host),
+      host,
+      sshArgs: input.sshArgs,
+      shell: input.shell,
+    });
+    const now = Date.now();
+    const projectName = firstNonEmpty(
+      input.projectName,
+      input.name,
+      basename(remotePath),
+      remotePath,
+    );
+    const remoteRef: RemoteProjectRef = {
+      runtime: "ssh",
+      profileId: profile.id,
+      host: profile.host,
+      remotePath,
+      localPath,
+      sshArgs: profile.sshArgs,
+      shell: profile.shell,
+    };
+    const existing = config.remoteProjects.find((project) => project.localPath === localPath);
+    const remote: RemoteProjectRecord =
+      existing ??
+      ({
+        ...remoteRef,
+        id: `remote-${stableId(`${host}\n${remotePath}`)}`,
+        name: projectName,
+        createdAt: now,
+        lastOpened: now,
+      } satisfies RemoteProjectRecord);
+    remote.name = projectName;
+    remote.profileId = profile.id;
+    remote.host = profile.host;
+    remote.remotePath = remotePath;
+    remote.localPath = localPath;
+    remote.sshArgs = profile.sshArgs;
+    remote.shell = profile.shell;
+    remote.lastOpened = now;
+    if (!existing) {
+      config.remoteProjects.unshift(remote);
+    }
+
+    const tab: PersistedTab = {
+      id: `remote-${remote.id}`,
+      name: projectName,
+      path: localPath,
+      runtime: "ssh",
+      remote,
+    };
+    return { profile, remote, tab };
+  });
+}
+
+export async function getRemoteProjectByLocalPath(
+  localPath: string,
+): Promise<RemoteProjectRecord | null> {
+  const config = await load();
+  return config.remoteProjects.find((project) => project.localPath === localPath) ?? null;
 }
 
 export async function removeRecentProject(projectPath: string): Promise<void> {

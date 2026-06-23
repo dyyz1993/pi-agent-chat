@@ -37,10 +37,11 @@ export const config = {
   proxyPublicDomain: process.env.PROXY_PUBLIC_DOMAIN ?? "",
   /** 沙箱模式：启用后 agent 在隔离沙箱中运行 */
   sandboxEnabled: process.env.SANDBOX_ENABLED === "true",
-  /** 沙盒后端类型: local | sandbox-box | cloudflare */
+  /** 沙盒/远程后端类型: local | sandbox-box | ssh | cloudflare */
   sandboxProvider: (process.env.SANDBOX_PROVIDER ?? "local") as
     | "local"
     | "sandbox-box"
+    | "ssh"
     | "cloudflare",
   /** 沙箱基础端口（local provider） */
   sandboxBasePort: parseInt(process.env.SANDBOX_BASE_PORT ?? "3200", 10),
@@ -60,6 +61,71 @@ export const config = {
   sandboxBoxExtensionsPath: process.env.SANDBOX_BOX_EXTENSIONS_PATH ?? "",
   /** 沙箱空闲超时（秒） */
   sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
+  /** 轻量 SSH runtime 连接目标，支持 ~/.ssh/config Host 或 user@host */
+  remoteSshTarget: process.env.REMOTE_SSH_TARGET ?? "",
+  /** 轻量 SSH runtime 端口，不填则使用 ssh config 默认值 */
+  remoteSshPort: process.env.REMOTE_SSH_PORT
+    ? parseInt(process.env.REMOTE_SSH_PORT, 10)
+    : undefined,
+  /** 轻量 SSH runtime 私钥路径，不填则使用 ssh config 默认值 */
+  remoteSshKey: process.env.REMOTE_SSH_KEY ?? "",
+  /** 远端真实项目目录 */
+  remoteProjectPath: process.env.REMOTE_PROJECT_PATH ?? "",
+  /** 远端 bridge/agent bundle 存放目录 */
+  remoteAgentDir: process.env.REMOTE_AGENT_DIR ?? "~/.pi/agent/remote-runtime",
+  /** 远端 pi CLI 路径，可为 pi 或具体 cli.js */
+  remotePiCliPath: process.env.REMOTE_PI_CLI_PATH ?? "pi",
+  /** 远端 node 路径 */
+  remoteNodePath: process.env.REMOTE_NODE_PATH ?? "node",
+  /** 远端启动命令使用的登录 shell 包装；Linux 可设为 bash -lc */
+  remoteShell: process.env.REMOTE_SHELL ?? "zsh -lc",
+  /** 远端 PI_CODING_AGENT_DIR；不填则使用远端 pi 默认值 */
+  remotePiAgentDir: process.env.REMOTE_PI_AGENT_DIR ?? "",
+  /** 远端 bridge 监听端口，仅监听 127.0.0.1 后通过 SSH tunnel 访问 */
+  remoteBridgePort: parseInt(process.env.REMOTE_BRIDGE_PORT ?? "3101", 10),
+  /** 本地 tunnel 基础端口 */
+  remoteLocalBasePort: parseInt(process.env.REMOTE_LOCAL_BASE_PORT ?? "3300", 10),
+  /** 远端 pi 子进程 Node 内存上限，默认偏轻量 */
+  remoteChildNodeOptions: process.env.REMOTE_CHILD_NODE_OPTIONS ?? "--max-old-space-size=1536",
+  /** 远端没有 pi 命令时，是否上传本地 yalc 包到远端私有目录 */
+  remoteBootstrapPiPackage: process.env.REMOTE_BOOTSTRAP_PI_PACKAGE !== "false",
+  /** 本地 pi-coding-agent 包目录，用于 SSH runtime 私有 bootstrap */
+  remoteLocalPiPackagePath:
+    process.env.REMOTE_LOCAL_PI_PACKAGE_PATH ??
+    ".yalc/@dyyz1993/pi-coding-agent",
+  /** 本地 pi monorepo packages 目录；提供时用于同步完整 workspace 包而不是 yalc stub */
+  remoteLocalPiWorkspacePackagesPath:
+    process.env.REMOTE_LOCAL_PI_WORKSPACE_PACKAGES_PATH ?? "",
+  /** Remote child MVP：直接通过 SSH 启动远端 pi --mode rpc，而不是本地 CLI 或 sandbox bridge */
+  remoteChildEnabled: process.env.REMOTE_CHILD_ENABLED === "true",
+  /** Remote child 工作目录；默认复用 REMOTE_PROJECT_PATH */
+  remoteChildProjectPath:
+    process.env.REMOTE_CHILD_PROJECT_PATH ?? process.env.REMOTE_PROJECT_PATH ?? "",
+  /** Remote child CLI 路径；可为可执行 pi，或配合 REMOTE_CHILD_NODE_PATH 指向 cli.js */
+  remoteChildPiCliPath:
+    process.env.REMOTE_CHILD_PI_CLI_PATH ??
+    process.env.REMOTE_PI_CLI_PATH ??
+    "pi",
+  /** Remote child node 路径；设为空字符串表示直接执行 REMOTE_CHILD_PI_CLI_PATH */
+  remoteChildNodePath:
+    process.env.REMOTE_CHILD_NODE_PATH ??
+    process.env.REMOTE_NODE_PATH ??
+    "node",
+  /** Remote child shell wrapper */
+  remoteChildShell:
+    process.env.REMOTE_CHILD_SHELL ?? process.env.REMOTE_SHELL ?? "zsh -lc",
+  /** Remote child 本地单文件二进制；设置后启动前会自动上传到远端版本目录 */
+  remoteChildLocalBinaryPath: process.env.REMOTE_CHILD_LOCAL_BINARY_PATH ?? "",
+  /** Remote child 本地内置 extensions 目录；不填则使用当前 pi 包的 dist/extensions */
+  remoteChildLocalExtensionsDir: process.env.REMOTE_CHILD_LOCAL_EXTENSIONS_DIR ?? "",
+  /** Remote child 远端 runtime 根目录 */
+  remoteChildRemoteRuntimeDir:
+    process.env.REMOTE_CHILD_REMOTE_RUNTIME_DIR ??
+    `${process.env.REMOTE_AGENT_DIR ?? "~/.pi/agent/remote-runtime"}/child`,
+  /** Remote child 远端二进制文件名 */
+  remoteChildBinaryName: process.env.REMOTE_CHILD_BINARY_NAME ?? "pi",
+  /** 是否自动上传本地 remote child 二进制 */
+  remoteChildAutoUpload: process.env.REMOTE_CHILD_AUTO_UPLOAD !== "false",
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {

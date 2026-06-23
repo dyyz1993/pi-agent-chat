@@ -3,6 +3,8 @@
 import type {
   SessionStatus as SharedSessionStatus,
   SessionMeta as SharedSessionMeta,
+  ProjectRuntime as SharedProjectRuntime,
+  RemoteProjectRef as SharedRemoteProjectRef,
 } from "../../shared/modules/project";
 import type { AskUserQuestion } from "../../shared/modules/agent";
 export type SessionStatus = SharedSessionStatus;
@@ -14,6 +16,12 @@ export type {
   MergedProject,
   FavoriteFolder,
   DirectoryEntry,
+  ProjectRuntime,
+  RemoteProjectRef,
+  RemoteProjectRecord,
+  SshProfile,
+  DetectedSshHost,
+  SshDirectoryEntry,
 } from "../../shared/modules/project";
 export type SessionMeta = SharedSessionMeta & {
   sessionStatus?: SessionStatus;
@@ -281,6 +289,8 @@ export type ProjectTab = {
   id: string;
   name: string;
   path: string;
+  runtime?: SharedProjectRuntime;
+  remote?: SharedRemoteProjectRef;
   active?: boolean;
   connected?: boolean;
 };

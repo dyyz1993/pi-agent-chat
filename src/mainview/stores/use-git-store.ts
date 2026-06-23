@@ -113,7 +113,21 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   refreshAll: async (repoPath) => {
-    if (!get().isGitRepo) return;
+    const isGitRepo = await get().checkGitRepo(repoPath);
+    if (!isGitRepo) {
+      set({
+        branch: "",
+        ahead: 0,
+        behind: 0,
+        staged: [],
+        changed: [],
+        untracked: [],
+        branches: [],
+        worktrees: [],
+        commits: [],
+      });
+      return;
+    }
     await Promise.all([
       get().fetchStatus(repoPath),
       get().fetchWorktrees(repoPath),

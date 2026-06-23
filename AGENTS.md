@@ -49,6 +49,12 @@ pi-momo-fork/packages/coding-agent/
 - `yalc push` 后如果 `bun run dev:web` 已经在跑，新创建的 Agent 进程会读取更新后的 `dist/`；已经运行中的 Agent/CLI 进程需要 `agent.reload`、停止后重启 session，或重启 dev server 才会加载新的 extension 代码。
 - 修改底层包后至少验证三层：底层相关单测（例如 `npm test -- extensions/coordinator/handler.test.ts`）、`npm run build && yalc push`、消费项目端口健康检查（默认 `http://localhost:3100/` 和 `http://localhost:5173/`）。
 
+### Remote runtime 架构参考
+
+- 远程 Agent/SSH/server attach 相关设计先读 `docs/architecture/remote-runtime-architecture-comparison.md`。
+- 该文档明确区分 `ssh-command`、`remote-agent-child`、`remote-server` 三种 runtime 边界，并对比 Claude Code `ssh` 与 OpenCode `serve/attach` 的配置、密钥、会话、记忆归属。
+- `docs/workflows/ssh-remote-runtime.md` 是现有 SSH runtime provider 的 smoke/操作文档，不等同于最终远程架构决策；涉及会话历史、memory、plugins、auth proxy 的归属时，以架构对比文档为准。
+
 ### Coordinator 委派索引规则
 
 - `coordinator` 的委派任务索引是父会话感知子任务的持久化入口，存储在父会话目录的 `coordinator-tasks.json`。

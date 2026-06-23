@@ -7,6 +7,7 @@ const log = createLogger("settings");
 
 export type StatusSection =
   | "permission"
+  | "remote"
   | "yolo"
   | "plan"
   | "shell"
@@ -33,6 +34,13 @@ export interface ExecutionSandboxState {
   projectPath: string;
   mode: ExecutionSandboxMode;
   configPath: string;
+}
+
+export interface RemoteRuntimeState {
+  enabled: boolean;
+  configured: boolean;
+  host?: string;
+  remoteCwd?: string;
 }
 
 export interface PluginInfo {
@@ -118,6 +126,7 @@ interface StatusState {
   projectTrustLoading: boolean;
   executionSandbox: ExecutionSandboxState | null;
   executionSandboxLoading: boolean;
+  remoteRuntimeBySession: Record<string, RemoteRuntimeState>;
   /** @deprecated Use permissionProfile === "yolo". */
   yoloEnabled: boolean;
   /** @deprecated Use permissionProfileLoading. */
@@ -140,6 +149,7 @@ interface StatusState {
   refreshProjectTrust: (projectPath: string) => Promise<void>;
   trustCurrentProject: (sessionId: string, projectPath: string, sessionPath?: string) => void;
   refreshExecutionSandbox: (projectPath: string) => Promise<void>;
+  setRemoteRuntimeStatus: (sessionId: string, status: RemoteRuntimeState | null) => void;
   setExecutionSandboxMode: (
     mode: ExecutionSandboxMode,
     options: { sessionId?: string; projectPath?: string; sessionPath?: string },
@@ -171,6 +181,7 @@ export const useStatusStore = create<StatusState>((set) => ({
   projectTrustLoading: false,
   executionSandbox: null,
   executionSandboxLoading: false,
+  remoteRuntimeBySession: {},
   yoloEnabled: false,
   yoloLoading: false,
   planMode: true,
@@ -238,6 +249,16 @@ export const useStatusStore = create<StatusState>((set) => ({
       log.warn("getExecutionSandbox failed", { error: String(err) });
     }
   },
+  setRemoteRuntimeStatus: (sessionId, status) =>
+    set((s) => {
+      const remoteRuntimeBySession = { ...s.remoteRuntimeBySession };
+      if (status) {
+        remoteRuntimeBySession[sessionId] = status;
+      } else {
+        delete remoteRuntimeBySession[sessionId];
+      }
+      return { remoteRuntimeBySession };
+    }),
   setExecutionSandboxMode: (mode, options) => {
     const { sessionId, projectPath, sessionPath } = options;
     const state = useStatusStore.getState();
@@ -433,6 +454,7 @@ export const useStatusStore = create<StatusState>((set) => ({
       permissionProfileLoading: false,
       projectTrust: null,
       projectTrustLoading: false,
+      remoteRuntimeBySession: {},
       yoloEnabled: false,
       yoloLoading: false,
       planMode: true,
@@ -459,10 +481,12 @@ function normalizePermissionProfileName(
 function readPermissionProfileMap(): Record<string, PermissionProfileName> {
   if (typeof localStorage === "undefined") return {};
   try {
-    const parsed = JSON.parse(localStorage.getItem(PERMISSION_PROFILE_BY_SESSION_KEY) ?? "{}");
-    if (!parsed || typeof parsed !== "object") return {};
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(PERMISSION_PROFILE_BY_SESSION_KEY) ?? "{}",
+    );
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const result: Record<string, PermissionProfileName> = {};
-    for (const [sessionId, value] of Object.entries(parsed)) {
+    for (const [sessionId, value] of Object.entries(parsed as Record<string, unknown>)) {
       const normalized = normalizePermissionProfileName(
         typeof value === "string" ? value : undefined,
       );
