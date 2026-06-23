@@ -53,7 +53,8 @@ pi-momo-fork/packages/coding-agent/
 
 - 远程 Agent/SSH/server attach 相关设计先读 `docs/architecture/remote-runtime-architecture-comparison.md`。
 - 该文档明确区分 `ssh-command`、`remote-agent-child`、`remote-server` 三种 runtime 边界，并对比 Claude Code `ssh` 与 OpenCode `serve/attach` 的配置、密钥、会话、记忆归属。
-- `docs/workflows/ssh-remote-runtime.md` 是现有 SSH runtime provider 的 smoke/操作文档，不等同于最终远程架构决策；涉及会话历史、memory、plugins、auth proxy 的归属时，以架构对比文档为准。
+- `docs/workflows/ssh-remote-runtime.md` 是现有 SSH runtime provider 的 smoke/操作文档，也包含当前 SSH 项目 UX 的验收清单和可复制手工测试 prompts。
+- 涉及会话历史、memory、plugins、auth proxy 的归属时，以架构对比文档为准；涉及“现在怎么验证 SSH 项目是否跑通”，以 workflow 文档为准。
 
 ### Coordinator 委派索引规则
 

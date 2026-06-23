@@ -179,6 +179,79 @@ remote command receives it. Prefer absolute remote paths such as
 `/Users/xyz/.pi/agent/remote-runtime-child-verify`, or quote the value when
 testing manually.
 
+## Product Acceptance Checklist
+
+Use this checklist after SSH project opening changes. Follow the project rule:
+prove RPC/runtime behavior first, then verify the browser UI.
+
+### RPC / Runtime First
+
+| Case                    | Action                                                                             | Expected result                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| SSH config discovery    | Call the SSH config/list path or open the SSH dialog with `~/.ssh/config` present. | Saved SSH aliases are shown; selecting an alias fills host, port, user, and identity file. |
+| Connect and browse      | Connect to an SSH alias and list the remote home directory.                        | Directory entries come from the remote host, not the local filesystem.                     |
+| Remote command identity | Run `pwd && hostname && whoami && uname -a` in the opened SSH project.             | Output matches the remote path, remote host/user, and remote OS.                           |
+| Remote file write       | Ask the agent to write a marker file under the selected remote directory.          | The file exists on the remote host; no equivalent local file is required.                  |
+| Extension loading       | Query extension status or run a simple extension-backed command.                   | The uploaded/runtime extension directory is used by the remote child.                      |
+| Memory channel          | Call `memory.list` / `memory.getStatus` in the remote session.                     | Calls return normally against the remote agent dir.                                        |
+| Permission ask          | Trigger a non-whitelisted write or dangerous command.                              | The permission request appears locally, and allow/deny resolves the remote action.         |
+| Git refresh             | Initialize git or create a file in the remote project through the agent.           | When the agent returns to idle, Explorer and Git state refresh without manual page reload. |
+
+### Browser UI Second
+
+| Area                  | Expected result                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Welcome / empty state | The main entry offers local project browsing and SSH remote project opening as separate choices.                                          |
+| SSH project wizard    | The wizard is step-based: choose method, fill/select config, connect, choose/create remote directory, then open.                          |
+| Recent projects       | SSH projects show an SSH badge, remote host, and remote path; local shadow cache paths are not shown as the primary identity.             |
+| Project tab           | The tab name uses the opened remote directory/project name, not only the SSH alias.                                                       |
+| Status panel          | The project remains visibly remote; right-side panels are display/control surfaces, not the primary place to configure a new SSH project. |
+| Failure display       | Failed tool calls fall back to readable Input / Output so the user can inspect the actual remote error.                                   |
+
+### Copyable Manual Prompts
+
+Paste these into a remote SSH project chat when doing a manual UI pass:
+
+```text
+请直接用 bash 执行：pwd && hostname && whoami && uname -a。不要解释，直接执行工具。
+```
+
+```text
+请在当前项目目录创建 pi-agent-remote-smoke.txt，内容是 hello remote，然后用 bash 验证文件存在并输出它的绝对路径。不要解释，直接执行工具。
+```
+
+```text
+请在当前项目目录初始化 Git 仓库（如果已经是 Git 仓库就创建一个新文件 pi-agent-git-refresh.txt），然后告诉我当前 git status 的结果。不要解释，直接执行工具。
+```
+
+```text
+请尝试把 hello 写入 /tmp/pi-agent-remote-permission-smoke.txt，并说明是否触发了权限申请。不要解释，直接执行工具。
+```
+
+```text
+请尝试把 hello 写入 /var/pi-agent-remote-denied-smoke.txt。不要解释，直接执行工具。
+```
+
+## Data Ownership Quick Reference
+
+Current SSH project UX is a remote execution workflow with local UI ownership.
+
+| Data                        | Owner in current SSH UX          | Notes                                                                                                           |
+| --------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Project files               | Remote                           | File tools and bash operate on the selected remote directory.                                                   |
+| Tool execution              | Remote                           | `pwd`, `git`, file writes, hooks, and project commands should see the remote cwd.                               |
+| Browser UI state            | Local                            | Tabs, recent project index, and SSH profiles are app-level local state.                                         |
+| Recent SSH project identity | Local index with remote metadata | Store remote host/path metadata locally; do not show local cache paths as user-facing identity.                 |
+| Model credentials           | Local                            | Do not copy long-lived auth/model credentials to the remote host for personal SSH.                              |
+| Session history             | Runtime-owned                    | For remote-agent-child, the child runtime owns remote session JSONL; local UI can index/open it.                |
+| Memory                      | Runtime-owned                    | Remote child memory follows the remote agent dir; local Codex memories are not automatically mounted or synced. |
+| Project `.pi/settings.json` | Remote project                   | Shared project config belongs beside the remote project and still needs trust/permission boundaries.            |
+| Local app config            | Local                            | `~/.pi-agent-chat/config.json` is only an app index/preference store, not a permission/trust rule store.        |
+
+Do not silently synchronize local memories, sessions, model files, or plugin
+state to the remote host. If a later feature needs synchronization, make it an
+explicit import/sync action with a visible direction and owner.
+
 ## Current Boundary
 
 - This is a runtime backend provider, not the final remote-project UX.

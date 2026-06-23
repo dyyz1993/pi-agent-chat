@@ -218,6 +218,39 @@ Do not blur these modes. In particular:
 - Do not make standalone remote server mode the default for personal SSH; it
   conflicts with "configure models locally once".
 
+## Current SSH UX Boundary
+
+The current product-facing SSH flow is an MVP for opening a remote project from
+the local app. It should behave like this:
+
+```text
+Local app
+  owns: project picker, tabs, recent project index, SSH profiles, model credentials
+  shows: local UI, remote tool cards, remote permission requests
+        |
+        | SSH-managed runtime / transport
+        v
+Remote host
+  owns: selected project files, shell commands, git state, project .pi config
+  runs: remote child or bridge process plus uploaded runtime assets
+```
+
+This means:
+
+- Opening an SSH project is a project-creation/opening flow, not a right-sidebar
+  setting toggle.
+- The user-facing project identity is the remote host plus remote directory; the
+  local shadow/cache path is implementation detail.
+- Local model credentials stay local. Remote hosts should not need API key setup
+  for the personal SSH flow.
+- Remote tools cannot read arbitrary local files unless an explicit sync,
+  mount, proxy, or import feature is added.
+- Local UI indexes can remember remote projects, but permission/trust rules must
+  still follow the project-scoped state rules documented in `AGENTS.md`.
+- Git/explorer panels must refresh from the active runtime after agent actions;
+  they should not depend on a full browser reload to discover a newly initialized
+  repository or changed file tree.
+
 ## Fast Implementation Slice For Remote Agent Child
 
 The fastest useful vertical slice is:
