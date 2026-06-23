@@ -8,6 +8,7 @@ import { useAppStore } from "./use-app-store";
 import { useChatStore } from "./use-chat-store";
 import { useGitStore } from "./use-git-store";
 import { useStatusStore } from "./use-status-store";
+import { formatProjectStartError, getErrorMessage } from "./session-start-error";
 import {
   requestRulesSnapshot,
   setupSubscriptions,
@@ -402,9 +403,11 @@ export function createSetActiveSessionAction({
           })
           .catch((err) => {
             clearAgentStarted(id);
+            const currentTab = get().projectTabs.find((t) => t.id === get().activeProjectId);
+            const errMsg = formatProjectStartError(err, currentTab);
             log.error("agent.start failed", {
               sessionId: id,
-              err: err instanceof Error ? err.message : String(err),
+              err: getErrorMessage(err),
             });
             set((s) => {
               const projectId = s.activeProjectId;
@@ -413,7 +416,7 @@ export function createSetActiveSessionAction({
                 projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
                 projectStartError: {
                   ...s.projectStartError,
-                  [projectId]: err instanceof Error ? err.message : String(err),
+                  [projectId]: errMsg,
                 },
                 sessionReady: { ...s.sessionReady, [id]: false },
                 agentReady: { ...s.agentReady, [id]: false },
@@ -422,11 +425,12 @@ export function createSetActiveSessionAction({
           });
       })
       .catch((err) => {
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const currentTab = get().projectTabs.find((t) => t.id === get().activeProjectId);
+        const errMsg = formatProjectStartError(err, currentTab);
         useAppStore.getState().addLog(`ensureSession failed: ${errMsg}`);
         perfLog.error("[switch] ensureSession FAILED", {
           sessionId: id,
-          error: errMsg,
+          error: getErrorMessage(err),
           totalMs: Math.round(performance.now() - tSwitchStart),
         });
         set((s) => {

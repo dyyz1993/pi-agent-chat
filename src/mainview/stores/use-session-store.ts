@@ -14,6 +14,7 @@ import { useChatNavStore } from "./use-chat-nav-store";
 import { useSubagentStore, clearSubagentToolNames } from "./use-subagent-store";
 import { createFetchInitialStateAction } from "./session-initial-state";
 import { createSetActiveSessionAction } from "./session-active-session";
+import { formatProjectStartError, getErrorMessage } from "./session-start-error";
 import {
   createCreateNewSessionAction,
   createLoadSessionsForProjectAction,
@@ -1048,7 +1049,7 @@ apiClient.onReconnect(() => {
       }
     })
     .catch((err) => {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const errMsg = formatProjectStartError(err, tab);
       useAppStore.getState().addLog(`reconnect agent.start failed: ${errMsg}`);
       useSessionStore.setState((s) => {
         const projectId = s.activeProjectId;
@@ -1057,6 +1058,10 @@ apiClient.onReconnect(() => {
           projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
           projectStartError: { ...s.projectStartError, [projectId]: errMsg },
         };
+      });
+      log.warn("[onReconnect] agent.start failed", {
+        sessionId: activeSessionId,
+        error: getErrorMessage(err),
       });
     });
 

@@ -733,7 +733,9 @@ export function ChatPanel() {
                   <AlertTriangle className="w-8 h-8 text-status-warning" />
                   <div className="text-sm text-text-secondary">{t("sessionStartFailed")}</div>
                   {projectError && (
-                    <div className="text-xs text-text-tertiary break-all">{projectError}</div>
+                    <div className="whitespace-pre-line break-words text-xs text-text-tertiary">
+                      {projectError}
+                    </div>
                   )}
                   <button
                     onClick={retryActiveProject}
