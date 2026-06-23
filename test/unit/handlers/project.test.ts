@@ -502,4 +502,63 @@ describe("project handler", () => {
       expect(mockAddRecent).not.toHaveBeenCalled();
     });
   });
+
+  describe("project.testSshProfile", () => {
+    it("classifies a missing SSH host without shelling out", async () => {
+      const handler = server.handlers.get("project.testSshProfile")!;
+
+      const result = await handler({ host: "" });
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: "SSH host is required",
+        errorCode: "missing-host",
+      });
+      expect(mockExecFile).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      {
+        stderr: "Permission denied (publickey).\n",
+        code: "auth-failed",
+      },
+      {
+        stderr: "ssh: Could not resolve hostname missing-host: nodename nor servname provided\n",
+        code: "host-unreachable",
+      },
+      {
+        stderr: "ssh: connect to host 192.168.1.9 port 22: Operation timed out\n",
+        code: "timeout",
+      },
+      {
+        stderr: "Host key verification failed.\n",
+        code: "host-key",
+      },
+      {
+        stderr: "cd: no such file or directory: /missing/project\n",
+        code: "remote-path",
+      },
+      {
+        stderr: "cd: permission denied: /root/private\n",
+        code: "permission-denied",
+      },
+    ])("classifies SSH failure: $code", async ({ stderr, code }) => {
+      const handler = server.handlers.get("project.testSshProfile")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        const error = new Error("ssh failed") as Error & { stdout?: string; stderr?: string };
+        error.stdout = "";
+        error.stderr = stderr;
+        callback(error);
+      });
+
+      const result = await handler({ host: "xyz-mac", remotePath: "/project" });
+
+      expect(result).toMatchObject({
+        ok: false,
+        stderr,
+        error: stderr.trim(),
+        errorCode: code,
+      });
+    });
+  });
 });

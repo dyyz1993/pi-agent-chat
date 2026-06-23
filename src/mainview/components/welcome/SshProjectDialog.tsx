@@ -16,7 +16,13 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "../../lib/api-client";
-import type { DetectedSshHost, ProjectTab, SshDirectoryEntry, SshProfile } from "../../types";
+import type {
+  DetectedSshHost,
+  ProjectTab,
+  SshConnectionErrorCode,
+  SshDirectoryEntry,
+  SshProfile,
+} from "../../types";
 
 interface SshProjectDialogProps {
   open: boolean;
@@ -75,6 +81,18 @@ function remoteProjectName(path: string): string {
   const normalized = normalizeRemotePath(path);
   if (!normalized || normalized === "/") return normalized;
   return normalized.split("/").filter(Boolean).pop() ?? normalized;
+}
+
+function formatSshError(
+  t: (key: string) => string,
+  input: { error?: string; stderr?: string; errorCode?: SshConnectionErrorCode },
+): string {
+  const summary = input.errorCode
+    ? t(`welcome.remoteError.${input.errorCode}`)
+    : t("welcome.remoteTestFailed");
+  const detail = firstNonEmpty(input.error, input.stderr);
+  if (!detail || detail === summary) return summary;
+  return `${summary}\n${detail}`;
 }
 
 export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogProps) {
@@ -217,7 +235,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
       if (!result.ok) {
         setMessage({
           type: "error",
-          text: firstNonEmpty(result.error, result.stderr) || t("welcome.remoteTestFailed"),
+          text: formatSshError(t, result),
         });
         return;
       }
@@ -250,7 +268,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
       if (!result.ok) {
         setMessage({
           type: "error",
-          text: firstNonEmpty(result.error, result.stderr) || t("welcome.remoteCreateFailed"),
+          text: formatSshError(t, result),
         });
         return;
       }
@@ -282,7 +300,10 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
       onClose();
     } catch (err) {
       setStep("directory");
-      setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+      setMessage({
+        type: "error",
+        text: `${t("welcome.remoteOpenFailed")}\n${err instanceof Error ? err.message : String(err)}`,
+      });
     } finally {
       setBusy(null);
     }
@@ -717,7 +738,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                     }`}
                   >
                     {message.type === "ok" && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
-                    <span className="min-w-0 break-words">{message.text}</span>
+                    <span className="min-w-0 whitespace-pre-wrap break-words">{message.text}</span>
                   </div>
                 )}
               </div>

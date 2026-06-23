@@ -34,6 +34,24 @@ export interface SshDirectoryEntry {
   isDirectory: true;
 }
 
+export type SshConnectionErrorCode =
+  | "missing-host"
+  | "auth-failed"
+  | "timeout"
+  | "host-unreachable"
+  | "host-key"
+  | "remote-path"
+  | "permission-denied"
+  | "command-failed";
+
+export interface SshCommandResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  error?: string;
+  errorCode?: SshConnectionErrorCode;
+}
+
 export interface RemoteProjectRef {
   runtime: "ssh";
   profileId: string;
@@ -56,12 +74,7 @@ export interface RemoteProjectRecord extends RemoteProjectRef {
  * server handler 负责把进程池内部的 "stopped" 映射成 "idle" 再返回。
  * 不允许 "stopped" 出现在前端（前端用颜色/角标区分 idle/stopped 没意义）。
  */
-export type SessionStatus =
-  | "idle"
-  | "streaming"
-  | "compacting"
-  | "permission"
-  | "retrying";
+export type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
 
 export interface ProjectMethods {
   "project.open": {
@@ -190,7 +203,7 @@ export interface ProjectMethods {
       sshArgs?: string[];
       shell?: string;
     };
-    result: { ok: boolean; stdout: string; stderr: string; error?: string };
+    result: SshCommandResult;
   };
   "project.listSshDirectory": {
     params: {
@@ -207,6 +220,7 @@ export interface ProjectMethods {
       stdout: string;
       stderr: string;
       error?: string;
+      errorCode?: SshConnectionErrorCode;
     };
   };
   "project.createSshDirectory": {
@@ -217,7 +231,7 @@ export interface ProjectMethods {
       sshArgs?: string[];
       shell?: string;
     };
-    result: { ok: boolean; path: string; stdout: string; stderr: string; error?: string };
+    result: SshCommandResult & { path: string };
   };
   "project.openSshProject": {
     params: {

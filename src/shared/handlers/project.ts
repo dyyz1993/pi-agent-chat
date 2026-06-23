@@ -39,7 +39,12 @@ import {
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
 import { getProcessManager } from "./agent";
-import type { SessionStatus, SshDirectoryEntry } from "../modules/project";
+import type {
+  SessionStatus,
+  SshCommandResult,
+  SshConnectionErrorCode,
+  SshDirectoryEntry,
+} from "../modules/project";
 import { listDetectedSshHosts } from "../lib/ssh-config";
 
 const log = createLogger("config");
@@ -62,6 +67,35 @@ function directoryTarget(path?: string): string {
   return trimmed ? shellQuote(trimmed) : '"$HOME"';
 }
 
+function classifySshError(message: string): SshConnectionErrorCode {
+  const text = message.toLowerCase();
+  if (text.includes("ssh host is required")) return "missing-host";
+  if (text.includes("publickey") || text.includes("authentication failed")) return "auth-failed";
+  if (text.includes("operation timed out") || text.includes("connect timeout")) return "timeout";
+  if (
+    text.includes("could not resolve hostname") ||
+    text.includes("name or service not known") ||
+    text.includes("no route to host") ||
+    text.includes("network is unreachable") ||
+    text.includes("connection refused")
+  ) {
+    return "host-unreachable";
+  }
+  if (
+    text.includes("host key verification failed") ||
+    text.includes("remote host identification")
+  ) {
+    return "host-key";
+  }
+  if (text.includes("no such file or directory") || text.includes("not a directory")) {
+    return "remote-path";
+  }
+  if (text.includes("operation not permitted") || text.includes("permission denied")) {
+    return "permission-denied";
+  }
+  return "command-failed";
+}
+
 async function resolveSshConnection(input: {
   profileId?: string;
   host?: string;
@@ -81,9 +115,18 @@ async function runSshCommand(input: {
   command: string;
   sshArgs?: string[];
   timeout?: number;
-}): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
+}): Promise<SshCommandResult> {
   const host = input.host.trim();
-  if (!host) return { ok: false, stdout: "", stderr: "", error: "SSH host is required" };
+  if (!host) {
+    const error = "SSH host is required";
+    return {
+      ok: false,
+      stdout: "",
+      stderr: "",
+      error,
+      errorCode: classifySshError(error),
+    };
+  }
   try {
     const result = await execFileAsync(
       "ssh",
@@ -102,11 +145,13 @@ async function runSshCommand(input: {
   } catch (err) {
     const e = err as Error & { stdout?: string; stderr?: string };
     const stderr = e.stderr ?? "";
+    const error = stderr.trim() || e.message;
     return {
       ok: false,
       stdout: e.stdout ?? "",
       stderr,
-      error: stderr.trim() || e.message,
+      error,
+      errorCode: classifySshError(error),
     };
   }
 }
@@ -115,7 +160,7 @@ async function testSshConnection(input: {
   host: string;
   remotePath?: string;
   sshArgs?: string[];
-}): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
+}): Promise<SshCommandResult> {
   const remotePath = input.remotePath?.trim();
   const command = remotePath
     ? `cd ${shellQuote(remotePath)} && printf 'pi-agent-chat-ssh-ok\\n' && pwd`

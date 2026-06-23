@@ -22,6 +22,7 @@ export type {
   SshProfile,
   DetectedSshHost,
   SshDirectoryEntry,
+  SshConnectionErrorCode,
 } from "../../shared/modules/project";
 export type SessionMeta = SharedSessionMeta & {
   sessionStatus?: SessionStatus;
