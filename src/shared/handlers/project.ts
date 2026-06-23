@@ -101,11 +101,12 @@ async function runSshCommand(input: {
     return { ok: true, stdout: result.stdout, stderr: result.stderr };
   } catch (err) {
     const e = err as Error & { stdout?: string; stderr?: string };
+    const stderr = e.stderr ?? "";
     return {
       ok: false,
       stdout: e.stdout ?? "",
-      stderr: e.stderr ?? "",
-      error: e.message,
+      stderr,
+      error: stderr.trim() || e.message,
     };
   }
 }

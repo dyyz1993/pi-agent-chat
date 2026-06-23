@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const projectMocks = vi.hoisted(() => ({
+  mockExecFile: vi.fn(),
   mockScanSessions: vi.fn(async () => []),
   mockScanAllProjects: vi.fn(async () => []),
   mockListPiProjects: vi.fn(async () => []),
@@ -55,6 +56,7 @@ const projectMocks = vi.hoisted(() => ({
   })),
 }));
 const {
+  mockExecFile,
   mockScanSessions,
   mockScanAllProjects,
   mockListPiProjects,
@@ -71,6 +73,13 @@ const {
   mockUnlinkProject,
   mockGetLinkedProjects,
 } = projectMocks;
+
+vi.mock("child_process", () => ({
+  default: {
+    execFile: projectMocks.mockExecFile,
+  },
+  execFile: projectMocks.mockExecFile,
+}));
 
 vi.mock("../../../src/shared/lib/session-scanner", () => ({
   scanSessionsForProject: projectMocks.mockScanSessions,
@@ -135,6 +144,9 @@ describe("project handler", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExecFile.mockImplementation((_command, _args, _options, callback) => {
+      callback(null, { stdout: "", stderr: "" });
+    });
     server = createMockServer();
     register(
       server as unknown as Parameters<typeof register>[0],
@@ -389,6 +401,105 @@ describe("project handler", () => {
 
       expect(result).toEqual({ projects: [{ id: "x" }] });
       expect(mockGetLinkedProjects).toHaveBeenCalledWith("/root");
+    });
+  });
+
+  describe("project.openSshProject", () => {
+    it("opens a remote project only after SSH test succeeds and stores remote metadata", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "pi-agent-chat-ssh-ok\n/Users/xyz/project\n",
+          stderr: "",
+        });
+      });
+      projectMocks.mockOpenRemoteProject.mockResolvedValueOnce({
+        tab: {
+          id: "remote-tab",
+          name: "project",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          runtime: "ssh",
+        },
+        profile: {
+          id: "ssh-profile",
+          name: "xyz-mac",
+          host: "xyz-mac",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        remote: {
+          id: "remote-id",
+          name: "project",
+          runtime: "ssh",
+          profileId: "ssh-profile",
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          createdAt: 1,
+          lastOpened: 2,
+        },
+      });
+      mockScanSessions.mockResolvedValueOnce([{ sessionId: "s1" }, { sessionId: "s2" }]);
+
+      const result = await handler({
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/project",
+        projectName: "project",
+        profileName: "xyz-mac",
+      });
+
+      expect(result).toMatchObject({
+        projectPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+        name: "project",
+        sessionCount: 2,
+        remote: {
+          runtime: "ssh",
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+        },
+      });
+      expect(projectMocks.mockOpenRemoteProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          projectName: "project",
+          profileName: "xyz-mac",
+        }),
+      );
+      expect(mockAddRecent).toHaveBeenCalledWith(
+        "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+        "project",
+        2,
+        expect.objectContaining({
+          runtime: "ssh",
+          remote: expect.objectContaining({
+            host: "xyz-mac",
+            remotePath: "/Users/xyz/project",
+          }),
+        }),
+      );
+    });
+
+    it("does not create a remote project or recent item when SSH test fails", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        const error = new Error("ssh failed") as Error & { stdout?: string; stderr?: string };
+        error.stdout = "";
+        error.stderr = "Permission denied (publickey).";
+        callback(error);
+      });
+
+      await expect(
+        handler({
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          projectName: "project",
+          profileName: "xyz-mac",
+        }),
+      ).rejects.toThrow("Permission denied");
+
+      expect(projectMocks.mockOpenRemoteProject).not.toHaveBeenCalled();
+      expect(mockAddRecent).not.toHaveBeenCalled();
     });
   });
 });
