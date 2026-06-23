@@ -68,7 +68,9 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
     updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
     restoreContextFromHistory: (sessionId: string) => void;
+    scheduleWorkspaceResourceRefresh: (sessionId: string) => void;
   }
+  const scheduleWorkspaceResourceRefresh = vi.fn();
   const useSessionStore = create<MockSessionState>(() => ({
     sessionsByProject: {},
     activeSessionId: null,
@@ -103,6 +105,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
       }));
     },
     restoreContextFromHistory: () => {},
+    scheduleWorkspaceResourceRefresh,
   }));
   return { useSessionStore, clearAgentStarted: () => {} };
 });
@@ -233,6 +236,7 @@ beforeEach(() => {
     sessionStatusMap: {},
     sessionsByProject: {},
   });
+  useSessionStore.getState().scheduleWorkspaceResourceRefresh = vi.fn();
   Object.keys(toolCallNameMap).forEach((k) => delete toolCallNameMap[k]);
   (useUIDialogStore.getState as ReturnType<typeof vi.fn>).mockClear();
 });
@@ -597,6 +601,7 @@ describe("tool_execution_end", () => {
     const block = getToolExecBlock();
     expect(block!.status).toBe("done");
     expect(block!.output).toBe("hello\n");
+    expect(useSessionStore.getState().scheduleWorkspaceResourceRefresh).toHaveBeenCalledWith(SID);
   });
 
   it("sets status=error when isError=true", () => {

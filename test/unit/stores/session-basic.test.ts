@@ -203,6 +203,108 @@ describe("useSessionStore - basic state", () => {
     expect(mockGitRefreshAll).toHaveBeenCalledWith("/repo");
   });
 
+  it("refreshes active workspace resources when explicitly scheduled", () => {
+    vi.useFakeTimers();
+    const session = {
+      sessionId: "sess-1",
+      name: "Session 1",
+      sessionPath: "/sessions/sess-1.jsonl",
+      projectPath: "/repo",
+      parentSessionPath: null,
+      delegateParentSessionId: null,
+      delegateType: null,
+      messageCount: 0,
+      firstMessage: "",
+      createdAt: 1,
+      updatedAt: 1,
+      status: "idle" as const,
+    };
+
+    useSessionStore.setState({
+      activeSessionId: "sess-1",
+      activeProjectId: "tab-1",
+      projectTabs: [{ id: "tab-1", name: "repo", path: "/repo" }],
+      sessionsByProject: { "/repo": [session] },
+    });
+
+    useSessionStore.getState().scheduleWorkspaceResourceRefresh("sess-1");
+    vi.advanceTimersByTime(300);
+
+    expect(mockListRootDir).toHaveBeenCalledTimes(1);
+    expect(mockGitRefreshAll).toHaveBeenCalledWith("/repo");
+  });
+
+  it("does not refresh workspace resources for an inactive session", () => {
+    vi.useFakeTimers();
+    useSessionStore.setState({
+      activeSessionId: "active-session",
+      activeProjectId: "tab-1",
+      projectTabs: [{ id: "tab-1", name: "repo", path: "/repo" }],
+      sessionsByProject: {
+        "/repo": [
+          {
+            sessionId: "inactive-session",
+            name: "Inactive",
+            sessionPath: "/sessions/inactive.jsonl",
+            projectPath: "/repo",
+            parentSessionPath: null,
+            delegateParentSessionId: null,
+            delegateType: null,
+            messageCount: 0,
+            firstMessage: "",
+            createdAt: 1,
+            updatedAt: 1,
+            status: "idle" as const,
+          },
+        ],
+      },
+    });
+
+    useSessionStore.getState().scheduleWorkspaceResourceRefresh("inactive-session");
+    vi.advanceTimersByTime(300);
+
+    expect(mockListRootDir).not.toHaveBeenCalled();
+    expect(mockGitRefreshAll).not.toHaveBeenCalled();
+  });
+
+  it("debounces repeated workspace resource refresh requests per session", () => {
+    vi.useFakeTimers();
+    const session = {
+      sessionId: "sess-1",
+      name: "Session 1",
+      sessionPath: "/sessions/sess-1.jsonl",
+      projectPath: "/repo",
+      parentSessionPath: null,
+      delegateParentSessionId: null,
+      delegateType: null,
+      messageCount: 0,
+      firstMessage: "",
+      createdAt: 1,
+      updatedAt: 1,
+      status: "idle" as const,
+    };
+
+    useSessionStore.setState({
+      activeSessionId: "sess-1",
+      activeProjectId: "tab-1",
+      projectTabs: [{ id: "tab-1", name: "repo", path: "/repo" }],
+      sessionsByProject: { "/repo": [session] },
+    });
+
+    useSessionStore.getState().scheduleWorkspaceResourceRefresh("sess-1");
+    vi.advanceTimersByTime(200);
+    useSessionStore.getState().scheduleWorkspaceResourceRefresh("sess-1");
+    vi.advanceTimersByTime(299);
+
+    expect(mockListRootDir).not.toHaveBeenCalled();
+    expect(mockGitRefreshAll).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+
+    expect(mockListRootDir).toHaveBeenCalledTimes(1);
+    expect(mockGitRefreshAll).toHaveBeenCalledTimes(1);
+  });
+
   it("updateSessionStatus handles multiple sessions independently", () => {
     useSessionStore.getState().updateSessionStatus("s1", "streaming");
     useSessionStore.getState().updateSessionStatus("s2", "compacting");

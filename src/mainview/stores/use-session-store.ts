@@ -185,6 +185,7 @@ interface SessionState {
   restoreContextFromHistory: (sessionId: string) => void;
   fetchInitialState: (sessionId: string) => void;
   fetchModelState: (sessionId: string) => void;
+  scheduleWorkspaceResourceRefresh: (sessionId: string) => void;
   refreshSessionResources: (sessionId: string) => void;
   setCurrentModel: (provider: string, modelId: string) => void;
   setThinkingLevel: (level: string) => void;
@@ -608,7 +609,7 @@ export const useSessionStore = create<SessionState>()(
         }));
 
         if (status === "idle" && previousStatus !== "idle") {
-          scheduleWorkspaceResourceRefresh(get, sessionId);
+          get().scheduleWorkspaceResourceRefresh(sessionId);
         }
 
         const existing = _statusWatchdogs.get(sessionId);
@@ -707,6 +708,10 @@ export const useSessionStore = create<SessionState>()(
             set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
           })
           .catch(() => {});
+      },
+
+      scheduleWorkspaceResourceRefresh: (sessionId) => {
+        scheduleWorkspaceResourceRefresh(get, sessionId);
       },
 
       refreshSessionResources: (sessionId) => {

@@ -11,8 +11,6 @@ import { useRetryStore } from "../stores/use-retry-store";
 import { useUIDialogStore } from "../stores/use-ui-dialog-store";
 import { useChangeReviewStore } from "../stores/use-change-review-store";
 import { useCompactionStore } from "../stores/use-compaction-store";
-import { useGitStore } from "../stores/use-git-store";
-import { useLayoutStore } from "../layouts/use-layout-store";
 import { notificationGateway } from "./notification-gateway";
 import { apiClient } from "./api-client";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
@@ -41,30 +39,6 @@ export const toolCallArgsMap: Record<string, string> = {};
 const compactionDeferredSessions = new Set<string>();
 const compactionCompletionTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const MIN_COMPACTION_RUNNING_CARD_MS = 1800;
-
-function scheduleVisibleGitRefresh(): void {
-  const layout = useLayoutStore.getState();
-  if (layout.statusPanel === "hidden" || layout.activePanelTab !== "git") return;
-
-  const session = useSessionStore.getState();
-  const activeTab = session.projectTabs.find((tab) => tab.id === session.activeProjectId);
-  if (!activeTab?.path) return;
-
-  setTimeout(() => {
-    const latestLayout = useLayoutStore.getState();
-    const latestSession = useSessionStore.getState();
-    const latestTab = latestSession.projectTabs.find(
-      (tab) => tab.id === latestSession.activeProjectId,
-    );
-    if (
-      latestLayout.statusPanel !== "hidden" &&
-      latestLayout.activePanelTab === "git" &&
-      latestTab?.path === activeTab.path
-    ) {
-      useGitStore.getState().refreshAll(activeTab.path);
-    }
-  }, 600);
-}
 
 function clearCompactionCompletionTimer(sessionId: string): void {
   const timer = compactionCompletionTimers.get(sessionId);
@@ -1132,7 +1106,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "tool_execution_end") {
-    scheduleVisibleGitRefresh();
+    storeGet().scheduleWorkspaceResourceRefresh(sessionId);
     flushNow();
     const toolCallId = event.toolCallId;
     setToolActive(sessionId, toolCallId, false);
