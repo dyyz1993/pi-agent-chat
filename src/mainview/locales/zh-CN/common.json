@@ -112,6 +112,7 @@
   "welcome.remoteError.timeout": "SSH 连接超时，请检查主机地址、端口和网络。",
   "welcome.remoteError.host-unreachable": "无法连接到 SSH 主机，请检查主机名、IP 或端口。",
   "welcome.remoteError.host-key": "SSH 主机密钥校验失败，请先在终端确认该主机是否可信。",
+  "welcome.remoteError.ssh-config": "SSH 配置无效，请检查 ~/.ssh/config、私钥路径和 SSH 参数。",
   "welcome.remoteError.remote-path": "远端目录不存在或不是目录，请选择其他路径。",
   "welcome.remoteError.permission-denied": "远端目录权限不足，请选择有权限访问的目录。",
   "welcome.remoteError.command-failed": "远端命令执行失败，请查看下方原始错误。",

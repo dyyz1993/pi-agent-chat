@@ -40,6 +40,7 @@ export type SshConnectionErrorCode =
   | "timeout"
   | "host-unreachable"
   | "host-key"
+  | "ssh-config"
   | "remote-path"
   | "permission-denied"
   | "command-failed";

@@ -46,6 +46,7 @@ import type {
   SshDirectoryEntry,
 } from "../modules/project";
 import { listDetectedSshHosts } from "../lib/ssh-config";
+import { classifySshErrorMessage } from "../lib/ssh-error-classification";
 
 const log = createLogger("config");
 const execFileAsync = promisify(execFile);
@@ -68,32 +69,19 @@ function directoryTarget(path?: string): string {
 }
 
 function classifySshError(message: string): SshConnectionErrorCode {
-  const text = message.toLowerCase();
-  if (text.includes("ssh host is required")) return "missing-host";
-  if (text.includes("publickey") || text.includes("authentication failed")) return "auth-failed";
-  if (text.includes("operation timed out") || text.includes("connect timeout")) return "timeout";
-  if (
-    text.includes("could not resolve hostname") ||
-    text.includes("name or service not known") ||
-    text.includes("no route to host") ||
-    text.includes("network is unreachable") ||
-    text.includes("connection refused")
-  ) {
-    return "host-unreachable";
+  return classifySshErrorMessage(message);
+}
+
+class SshConnectionError extends Error {
+  readonly errorCode: SshConnectionErrorCode;
+  readonly stderr?: string;
+
+  constructor(result: SshCommandResult) {
+    super(result.error ?? result.stderr ?? "SSH connection failed");
+    this.name = "SshConnectionError";
+    this.errorCode = result.errorCode ?? classifySshError(this.message);
+    this.stderr = result.stderr;
   }
-  if (
-    text.includes("host key verification failed") ||
-    text.includes("remote host identification")
-  ) {
-    return "host-key";
-  }
-  if (text.includes("no such file or directory") || text.includes("not a directory")) {
-    return "remote-path";
-  }
-  if (text.includes("operation not permitted") || text.includes("permission denied")) {
-    return "permission-denied";
-  }
-  return "command-failed";
 }
 
 async function resolveSshConnection(input: {
@@ -431,7 +419,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     const { host, sshArgs, shell } = await resolveSshConnection(params);
     const connection = await testSshConnection({ host, remotePath: params.remotePath, sshArgs });
     if (!connection.ok) {
-      throw new Error(connection.error ?? connection.stderr ?? "SSH connection failed");
+      throw new SshConnectionError(connection);
     }
 
     const opened = await openRemoteProject({

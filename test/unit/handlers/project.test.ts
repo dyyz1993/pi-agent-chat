@@ -501,6 +501,32 @@ describe("project handler", () => {
       expect(projectMocks.mockOpenRemoteProject).not.toHaveBeenCalled();
       expect(mockAddRecent).not.toHaveBeenCalled();
     });
+
+    it("preserves the remote-path error when the selected remote directory was deleted", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        const error = new Error("ssh failed") as Error & { stdout?: string; stderr?: string };
+        error.stdout = "";
+        error.stderr = "cd: no such file or directory: /Users/xyz/deleted-project\n";
+        callback(error);
+      });
+
+      await expect(
+        handler({
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/deleted-project",
+          projectName: "deleted-project",
+          profileName: "xyz-mac",
+        }),
+      ).rejects.toMatchObject({
+        name: "SshConnectionError",
+        message: "cd: no such file or directory: /Users/xyz/deleted-project",
+        errorCode: "remote-path",
+      });
+
+      expect(projectMocks.mockOpenRemoteProject).not.toHaveBeenCalled();
+      expect(mockAddRecent).not.toHaveBeenCalled();
+    });
   });
 
   describe("project.testSshProfile", () => {
@@ -533,6 +559,10 @@ describe("project handler", () => {
       {
         stderr: "Host key verification failed.\n",
         code: "host-key",
+      },
+      {
+        stderr: "Bad configuration option: usekeychain\n",
+        code: "ssh-config",
       },
       {
         stderr: "cd: no such file or directory: /missing/project\n",

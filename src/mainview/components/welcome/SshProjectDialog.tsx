@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { classifySshErrorMessage } from "../../../shared/lib/ssh-error-classification";
 import { apiClient } from "../../lib/api-client";
 import type {
   DetectedSshHost,
@@ -93,6 +94,20 @@ function formatSshError(
   const detail = firstNonEmpty(input.error, input.stderr);
   if (!detail || detail === summary) return summary;
   return `${summary}\n${detail}`;
+}
+
+function formatThrownSshError(t: (key: string) => string, err: unknown): string {
+  const candidate = err as { message?: unknown; errorCode?: unknown; stderr?: unknown };
+  const message = err instanceof Error ? err.message : String(err);
+  const errorCode =
+    typeof candidate.errorCode === "string"
+      ? (candidate.errorCode as SshConnectionErrorCode)
+      : classifySshErrorMessage(message);
+  return formatSshError(t, {
+    error: message,
+    stderr: typeof candidate.stderr === "string" ? candidate.stderr : undefined,
+    errorCode,
+  });
 }
 
 export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogProps) {
@@ -302,7 +317,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
       setStep("directory");
       setMessage({
         type: "error",
-        text: `${t("welcome.remoteOpenFailed")}\n${err instanceof Error ? err.message : String(err)}`,
+        text: `${t("welcome.remoteOpenFailed")}\n${formatThrownSshError(t, err)}`,
       });
     } finally {
       setBusy(null);

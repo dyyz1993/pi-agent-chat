@@ -112,6 +112,7 @@
   "welcome.remoteError.timeout": "SSH connection timed out. Check the host, port, and network.",
   "welcome.remoteError.host-unreachable": "Cannot reach the SSH host. Check the host name, IP, or port.",
   "welcome.remoteError.host-key": "SSH host key verification failed. Confirm this host in a terminal first.",
+  "welcome.remoteError.ssh-config": "SSH configuration is invalid. Check ~/.ssh/config, private key paths, and SSH options.",
   "welcome.remoteError.remote-path": "The remote directory does not exist or is not a directory.",
   "welcome.remoteError.permission-denied": "Permission denied on the remote directory. Choose a path you can access.",
   "welcome.remoteError.command-failed": "The remote command failed. See the raw error below.",
