@@ -2,9 +2,10 @@ import { useState, useCallback, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  Cable,
+  CloudCog,
   Zap,
   ShieldCheck,
-  Server,
   ClipboardList,
   Terminal,
   Plug,
@@ -37,6 +38,7 @@ import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
+import type { RemoteProjectRef } from "../../../shared/modules/project";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   high: { dot: "bg-status-error", label: "H" },
@@ -124,6 +126,13 @@ export function StatusPanel() {
     host?: string;
     remoteCwd?: string;
   } | null>(null);
+  const [recoveredRemoteRef, setRecoveredRemoteRef] = useState<RemoteProjectRef | null>(null);
+  const activeRemoteRef = activeProjectTab?.remote ?? recoveredRemoteRef;
+  const activeSshRuntimeKind =
+    activeRemoteRef?.sshRuntimeKind ?? (remoteStatus?.enabled ? "ssh-command" : "remote-agent-child");
+  const displayRemoteEnabled = Boolean(activeRemoteRef ?? remoteStatus?.enabled ?? activeProjectTab?.runtime === "ssh");
+  const displayRemoteHost = activeRemoteRef?.host ?? remoteStatus?.host;
+  const displayRemotePath = activeRemoteRef?.remotePath ?? remoteStatus?.remoteCwd ?? activeProjectTab?.path;
 
   const permissionPresets = [
     {
@@ -201,9 +210,40 @@ export function StatusPanel() {
     };
   }, [activeSessionId, setRemoteRuntimeStatus]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setRecoveredRemoteRef(null);
+
+    if (!activeProjectTab?.path || activeProjectTab.remote) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    apiClient
+      .call("project.listRecent", {})
+      .then((result) => {
+        if (cancelled) return;
+        const recovered =
+          result.projects.find((project) => project.path === activeProjectTab.path)?.remote ?? null;
+        setRecoveredRemoteRef(recovered);
+      })
+      .catch(() => {
+        if (!cancelled) setRecoveredRemoteRef(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectTab?.path, activeProjectTab?.remote]);
+
   const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
     { id: "permission", label: t("permissionMode"), icon: ShieldCheck },
-    { id: "remote", label: t("remoteRuntime"), icon: Server },
+    {
+      id: "remote",
+      label: t("remoteRuntime"),
+      icon: activeSshRuntimeKind === "ssh-command" ? Cable : CloudCog,
+    },
     { id: "plan", label: t("planMode"), icon: ClipboardList },
     { id: "shell", label: t("shell"), icon: Terminal },
     { id: "mcp", label: t("mcpTools"), icon: Plug },
@@ -424,31 +464,43 @@ export function StatusPanel() {
                       <div className="flex items-start gap-1.5 text-[10px] leading-4 text-text-tertiary">
                         <span
                           className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
-                            remoteStatus?.enabled ? "bg-status-success" : "bg-text-tertiary"
+                            displayRemoteEnabled ? "bg-status-success" : "bg-text-tertiary"
                           }`}
                         />
                         <div>
                           <div className="text-text-secondary">
-                            {remoteStatus?.enabled
+                            {displayRemoteEnabled
                               ? t("remoteStatusConnected", {
-                                  host: remoteStatus.host ?? "",
+                                  host: displayRemoteHost ?? "",
                                 })
                               : t("remoteStatusLocal")}
                           </div>
-                          <div>{t("remoteRuntimeHint")}</div>
+                          <div>
+                            {activeRemoteRef
+                              ? activeSshRuntimeKind === "ssh-command"
+                                ? t("remoteRuntimeHintQuick")
+                                : t("remoteRuntimeHintStandard")
+                              : t("remoteRuntimeHint")}
+                          </div>
                         </div>
                       </div>
                       <div className="space-y-1 rounded-md border border-border-secondary/60 bg-surface-hover/25 p-2 text-[10px] leading-4">
-                        {remoteStatus?.enabled ? (
+                        {displayRemoteEnabled ? (
                           <>
                             <div className="grid grid-cols-[56px_minmax(0,1fr)] gap-x-2 gap-y-1">
+                              <span className="text-text-tertiary">{t("remoteModeLabel")}</span>
+                              <span className="truncate text-text-secondary">
+                                {activeSshRuntimeKind === "ssh-command"
+                                  ? t("remoteModeQuick")
+                                  : t("remoteModeStandard")}
+                              </span>
                               <span className="text-text-tertiary">{t("remoteHostLabel")}</span>
                               <span className="truncate text-text-secondary">
-                                {remoteStatus.host ?? t("notLoaded")}
+                                {displayRemoteHost ?? t("notLoaded")}
                               </span>
                               <span className="text-text-tertiary">{t("remotePathLabel")}</span>
                               <span className="truncate font-mono text-text-secondary">
-                                {remoteStatus.remoteCwd ?? t("notLoaded")}
+                                {displayRemotePath ?? t("notLoaded")}
                               </span>
                             </div>
                           </>

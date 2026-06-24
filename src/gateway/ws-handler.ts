@@ -56,10 +56,14 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
 
     const wsTransport = {
       send: async (message: unknown): Promise<void> => {
-        if (ws.readyState !== WebSocket.OPEN) {
-          throw new Error("WebSocket not open");
-        }
         const msg = message as Record<string, unknown>;
+        if (ws.readyState !== WebSocket.OPEN) {
+          log.debug("[ws-out] stale client: dropping message", {
+            type: msg.type,
+            id: msg.id,
+          });
+          return;
+        }
 
         // Backpressure: if send buffer is backing up, handle by message type
         if (ws.bufferedAmount > BACKPRESSURE_THRESHOLD) {
@@ -77,6 +81,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
             };
             setTimeout(check, 10);
           });
+          if (ws.readyState !== WebSocket.OPEN) {
+            log.debug("[ws-out] stale client after backpressure: dropping message", {
+              type: msg.type,
+              id: msg.id,
+            });
+            return;
+          }
         }
 
         // Log all outgoing messages (requests, responses, events)

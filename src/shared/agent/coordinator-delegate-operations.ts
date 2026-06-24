@@ -3,6 +3,7 @@ import * as path from "path";
 
 import type { CoordinatorMethodCall } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
+import { getRemoteProjectByPath } from "../lib/project-config";
 import {
   canManageDelegateChild,
   canSendDelegateMessage,
@@ -107,11 +108,14 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
   const newSessionId =
     options.sessionIdFactory?.() ??
     `${options.sessionIdPrefix}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const parentProjectPath =
+    (await normalizeDelegateProjectPath(parent.info.projectPath)) ?? parent.info.projectPath;
+  const rawProjectPath = await normalizeDelegateProjectPath(options.rawProjectPath);
   const { projectPath, sessionPath } = resolveDelegateSessionPaths({
-    parentProjectPath: parent.info.projectPath,
+    parentProjectPath,
     parentSessionPath: parent.info.sessionPath,
     newSessionId,
-    rawProjectPath: options.rawProjectPath,
+    rawProjectPath,
   });
 
   try {
@@ -147,6 +151,12 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
     createdAt,
     startResult,
   };
+}
+
+async function normalizeDelegateProjectPath(projectPath?: string): Promise<string | undefined> {
+  if (!projectPath) return undefined;
+  const remoteProject = await getRemoteProjectByPath(projectPath).catch(() => null);
+  return remoteProject?.localPath ?? projectPath;
 }
 
 // ---------------------------------------------------------------------------

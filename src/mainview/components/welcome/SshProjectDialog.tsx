@@ -1,28 +1,33 @@
 import {
+  Cable,
   Check,
   CheckCircle2,
   ChevronDown,
+  CloudCog,
   Folder,
   FolderOpen,
   FolderPlus,
   KeyRound,
   Loader2,
   Search,
-  Server,
   Settings2,
   UploadCloud,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { classifySshErrorMessage } from "../../../shared/lib/ssh-error-classification";
 import { apiClient } from "../../lib/api-client";
 import type {
   DetectedSshHost,
   ProjectTab,
+  RemoteResourceSyncPreview,
+  RemoteSyncResourceType,
   SshConnectionErrorCode,
   SshDirectoryEntry,
   SshProfile,
+  SshRuntimeKind,
 } from "../../types";
 
 interface SshProjectDialogProps {
@@ -31,9 +36,30 @@ interface SshProjectDialogProps {
   onOpened: (tab: ProjectTab) => void;
 }
 
-type WizardStep = "method" | "config" | "directory" | "opening";
+type WizardStep = "method" | "config" | "resources" | "directory" | "opening";
 
-const stepOrder: WizardStep[] = ["method", "config", "directory", "opening"];
+const stepOrder: WizardStep[] = ["method", "config", "resources", "directory", "opening"];
+const REMOTE_SYNC_RESOURCES: Array<{
+  type: RemoteSyncResourceType;
+  labelKey: string;
+  hintKey: string;
+}> = [
+  {
+    type: "skills",
+    labelKey: "welcome.remoteSyncSkills",
+    hintKey: "welcome.remoteSyncSkillsHint",
+  },
+  {
+    type: "agents",
+    labelKey: "welcome.remoteSyncAgents",
+    hintKey: "welcome.remoteSyncAgentsHint",
+  },
+  {
+    type: "rules",
+    labelKey: "welcome.remoteSyncRules",
+    hintKey: "welcome.remoteSyncRulesHint",
+  },
+];
 
 function DetailItem({ label, value }: { label: string; value?: string }) {
   return (
@@ -43,6 +69,27 @@ function DetailItem({ label, value }: { label: string; value?: string }) {
       </div>
       <div className="mt-1 truncate font-mono text-sm text-text-primary">{value ?? "-"}</div>
     </div>
+  );
+}
+
+function RuntimeMethodIcon({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: "info" | "warning" | "muted";
+}) {
+  const toneClass =
+    tone === "info"
+      ? "border-status-info/45 bg-status-info/10 text-status-info"
+      : tone === "warning"
+        ? "border-status-warning/45 bg-status-warning/10 text-status-warning"
+        : "border-border-secondary bg-surface-hover/40 text-text-tertiary";
+
+  return (
+    <span className={`flex h-10 w-10 items-center justify-center rounded-md border ${toneClass}`}>
+      {children}
+    </span>
   );
 }
 
@@ -57,8 +104,12 @@ function firstNonEmpty(...values: Array<string | undefined>): string {
 function normalizeRemotePath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) return "";
+  if (trimmed === "~") return "~";
+  if (trimmed.startsWith("~/")) return `~/${trimmed.slice(2).replace(/\/+$/, "")}`;
   if (trimmed === "/") return "/";
-  return trimmed.replace(/\/+$/, "");
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  if (withoutTrailingSlash.startsWith("/")) return withoutTrailingSlash;
+  return `/${withoutTrailingSlash.replace(/^\/+/, "")}`;
 }
 
 function joinRemotePath(base: string, name: string): string {
@@ -82,6 +133,18 @@ function remoteProjectName(path: string): string {
   const normalized = normalizeRemotePath(path);
   if (!normalized || normalized === "/") return normalized;
   return normalized.split("/").filter(Boolean).pop() ?? normalized;
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function formatSshError(
@@ -122,19 +185,57 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
   const [port, setPort] = useState("");
   const [user, setUser] = useState("");
   const [identityFile, setIdentityFile] = useState("");
+  const [sshRuntimeKind, setSshRuntimeKind] = useState<SshRuntimeKind>("remote-agent-child");
+  const [syncResourcesEnabled, setSyncResourcesEnabled] = useState(true);
+  const [selectedSyncResourceTypes, setSelectedSyncResourceTypes] = useState<
+    RemoteSyncResourceType[]
+  >(["skills", "agents", "rules"]);
   const [remotePath, setRemotePath] = useState("");
   const [browsePath, setBrowsePath] = useState("");
   const [entries, setEntries] = useState<SshDirectoryEntry[]>([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [busy, setBusy] = useState<"list" | "create" | "open" | null>(null);
+  const [syncPreviewBusy, setSyncPreviewBusy] = useState(false);
+  const [syncPreview, setSyncPreview] = useState<RemoteResourceSyncPreview | null>(null);
+  const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === profileId) ?? null,
+    [profiles, profileId],
+  );
+
+  const selectedDetected = useMemo(
+    () => detectedHosts.find((item) => item.host === sshAlias) ?? null,
+    [detectedHosts, sshAlias],
+  );
+
+  const connectionSelectValue = profileId
+    ? `profile:${profileId}`
+    : sshAlias
+      ? `ssh:${sshAlias}`
+      : "";
+  const connectionHost = firstNonEmpty(selectedProfile?.host, sshAlias, host);
+  const connectionTitle =
+    firstNonEmpty(sshAlias, selectedProfile?.name, name, host) || t("welcome.remoteManual");
+  const canConnect = connectionHost.length > 0 && !busy;
+  const canOpen = normalizeRemotePath(remotePath).length > 0 && canConnect;
+  const showResourceSync = sshRuntimeKind === "remote-agent-child";
+  const syncResourceCount = selectedSyncResourceTypes.length;
+  const visibleStepOrder = useMemo(
+    () => (showResourceSync ? stepOrder : stepOrder.filter((item) => item !== "resources")),
+    [showResourceSync],
+  );
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setStep("method");
     setMessage(null);
+    setSyncPreview(null);
+    setSyncPreviewError(null);
+    setSyncPreviewBusy(false);
     Promise.all([
       apiClient.call("project.listSshProfiles", {}),
       apiClient.call("project.listDetectedSshHosts", {}),
@@ -163,26 +264,48 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     };
   }, [open]);
 
-  const selectedProfile = useMemo(
-    () => profiles.find((profile) => profile.id === profileId) ?? null,
-    [profiles, profileId],
-  );
-
-  const selectedDetected = useMemo(
-    () => detectedHosts.find((item) => item.host === sshAlias) ?? null,
-    [detectedHosts, sshAlias],
-  );
-
-  const connectionSelectValue = profileId
-    ? `profile:${profileId}`
-    : sshAlias
-      ? `ssh:${sshAlias}`
-      : "";
-  const connectionHost = firstNonEmpty(selectedProfile?.host, sshAlias, host);
-  const connectionTitle =
-    firstNonEmpty(sshAlias, selectedProfile?.name, name, host) || t("welcome.remoteManual");
-  const canConnect = connectionHost.length > 0 && !busy;
-  const canOpen = normalizeRemotePath(remotePath).length > 0 && canConnect;
+  useEffect(() => {
+    if (step !== "resources" || !showResourceSync || !syncResourcesEnabled) {
+      setSyncPreview(null);
+      setSyncPreviewError(null);
+      setSyncPreviewBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setSyncPreviewBusy(true);
+    setSyncPreviewError(null);
+    apiClient
+      .call("project.previewRemoteResourceSync", {
+        profileId: selectedProfile?.id,
+        host: connectionHost,
+        remotePath,
+        resourceTypes: selectedSyncResourceTypes,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setSyncPreview(result);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSyncPreview(null);
+        setSyncPreviewError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setSyncPreviewBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    connectionHost,
+    profileId,
+    remotePath,
+    selectedProfile?.id,
+    selectedSyncResourceTypes,
+    showResourceSync,
+    step,
+    syncResourcesEnabled,
+  ]);
 
   function applyDetectedHost(detected: DetectedSshHost) {
     setProfileId("");
@@ -235,7 +358,16 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     return args.length > 0 ? args : undefined;
   };
 
-  const browseRemoteDirectory = async (dirPath?: string) => {
+  const toggleSyncResourceType = (type: RemoteSyncResourceType) => {
+    setSelectedSyncResourceTypes((current) =>
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type],
+    );
+  };
+
+  const browseRemoteDirectory = async (
+    dirPath?: string,
+    nextStep: WizardStep = "directory",
+  ) => {
     if (!canConnect) return;
     setBusy("list");
     setMessage(null);
@@ -257,7 +389,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
       setBrowsePath(result.path);
       setRemotePath(result.path);
       setEntries(result.entries as SshDirectoryEntry[]);
-      setStep("directory");
+      setStep(nextStep);
       setMessage({ type: "ok", text: t("welcome.remoteTestOk") });
     } catch (err) {
       setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
@@ -308,6 +440,14 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
         profileName: firstNonEmpty(name, connectionTitle),
         host: connectionHost,
         remotePath: normalizeRemotePath(remotePath),
+        sshRuntimeKind,
+        remoteResourceSync:
+          sshRuntimeKind === "remote-agent-child"
+            ? {
+                enabled: syncResourcesEnabled,
+                resourceTypes: selectedSyncResourceTypes,
+              }
+            : { enabled: false },
         sshArgs: buildSshArgs(),
         shell: selectedProfile?.shell,
       });
@@ -325,8 +465,8 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
   };
 
   const renderStepBadge = (target: WizardStep, label: string, hint: string, index: number) => {
-    const currentIndex = stepOrder.indexOf(step);
-    const targetIndex = stepOrder.indexOf(target);
+    const currentIndex = visibleStepOrder.indexOf(step);
+    const targetIndex = visibleStepOrder.indexOf(target);
     const done = targetIndex < currentIndex;
     const active = target === step;
     return (
@@ -400,17 +540,24 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                 t("welcome.remoteStepConnectionHint"),
                 2,
               )}
+              {showResourceSync &&
+                renderStepBadge(
+                  "resources",
+                  t("welcome.remoteStepResources"),
+                  t("welcome.remoteStepResourcesHint"),
+                  3,
+                )}
               {renderStepBadge(
                 "directory",
                 t("welcome.remoteStepDirectory"),
                 t("welcome.remoteStepDirectoryHint"),
-                3,
+                showResourceSync ? 4 : 3,
               )}
               {renderStepBadge(
                 "opening",
                 t("welcome.remoteStepConnect"),
                 t("welcome.remoteStepConnectHint"),
-                4,
+                showResourceSync ? 5 : 4,
               )}
             </div>
           </aside>
@@ -428,18 +575,41 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         {t("welcome.remoteStepMethodHint")}
                       </p>
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-3">
                       <button
                         type="button"
-                        onClick={() => setStep("config")}
+                        onClick={() => {
+                          setSshRuntimeKind("remote-agent-child");
+                          setStep("config");
+                        }}
                         className="min-h-44 rounded-lg border border-status-info/50 bg-status-info/10 p-5 text-left transition hover:border-status-info"
                       >
-                        <span className="flex h-11 w-11 items-center justify-center rounded-md bg-status-info text-white">
-                          <Server className="h-6 w-6" />
-                        </span>
-                        <div className="mt-6 text-xl font-semibold text-text-primary">SSH</div>
+                        <RuntimeMethodIcon tone="info">
+                          <CloudCog className="h-5 w-5 stroke-[1.8]" />
+                        </RuntimeMethodIcon>
+                        <div className="mt-6 text-xl font-semibold text-text-primary">
+                          {t("welcome.remoteStandardSshTitle")}
+                        </div>
                         <div className="mt-2 text-sm leading-5 text-text-secondary">
-                          {t("welcome.remoteSshMethodHint")}
+                          {t("welcome.remoteStandardSshHint")}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSshRuntimeKind("ssh-command");
+                          setStep("config");
+                        }}
+                        className="min-h-44 rounded-lg border border-border-secondary bg-bg-primary/60 p-5 text-left transition hover:border-status-warning/70 hover:bg-status-warning/5"
+                      >
+                        <RuntimeMethodIcon tone="warning">
+                          <Cable className="h-5 w-5 stroke-[1.8]" />
+                        </RuntimeMethodIcon>
+                        <div className="mt-6 text-xl font-semibold text-text-primary">
+                          {t("welcome.remoteQuickSandboxTitle")}
+                        </div>
+                        <div className="mt-2 text-sm leading-5 text-text-secondary">
+                          {t("welcome.remoteQuickSandboxHint")}
                         </div>
                       </button>
                       <button
@@ -447,9 +617,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         disabled
                         className="min-h-44 rounded-lg border border-border-secondary bg-bg-primary/50 p-5 text-left opacity-60"
                       >
-                        <span className="flex h-11 w-11 items-center justify-center rounded-md border border-border-secondary text-text-tertiary">
-                          <UploadCloud className="h-6 w-6" />
-                        </span>
+                        <RuntimeMethodIcon tone="muted">
+                          <UploadCloud className="h-5 w-5 stroke-[1.8]" />
+                        </RuntimeMethodIcon>
                         <div className="mt-6 text-xl font-semibold text-text-secondary">Docker</div>
                         <div className="mt-2 text-sm leading-5 text-text-tertiary">
                           {t("welcome.remoteDockerComingSoon")}
@@ -462,8 +632,18 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                 {step === "config" && (
                   <section className="rounded-lg border border-border-secondary bg-bg-elevated p-5">
                     <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-md border border-status-info/30 bg-status-info/10 text-status-info">
-                        <Server className="h-5 w-5" />
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-md border ${
+                          sshRuntimeKind === "ssh-command"
+                            ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
+                            : "border-status-info/30 bg-status-info/10 text-status-info"
+                        }`}
+                      >
+                        {sshRuntimeKind === "ssh-command" ? (
+                          <Cable className="h-5 w-5" />
+                        ) : (
+                          <CloudCog className="h-5 w-5" />
+                        )}
                       </span>
                       <div>
                         <h3 className="text-base font-semibold text-text-primary">
@@ -626,6 +806,144 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                   </section>
                 )}
 
+                {step === "resources" && showResourceSync && (
+                  <section className="rounded-lg border border-border-secondary bg-bg-elevated">
+                    <div className="flex items-start gap-3 border-b border-border-secondary px-5 py-4">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-status-info/30 bg-status-info/10 text-status-info">
+                        <UploadCloud className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold text-text-primary">
+                          {t("welcome.remoteStepResources")}
+                        </h3>
+                        <p className="mt-0.5 text-sm leading-5 text-text-secondary">
+                          {t("welcome.remoteStepResourcesHint")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 px-5 py-4">
+                      <div className="rounded-md border border-border-secondary bg-bg-primary/70 p-4">
+                        <label className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={syncResourcesEnabled}
+                            onChange={(event) => setSyncResourcesEnabled(event.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-border-secondary bg-bg-primary accent-semantic-accent"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-text-primary">
+                              {t("welcome.remoteSyncTitle")}
+                            </span>
+                            <span className="mt-1 block text-xs leading-5 text-text-secondary">
+                              {t("welcome.remoteSyncHint")}
+                            </span>
+                          </span>
+                        </label>
+
+                        <div
+                          className={`mt-4 grid gap-2 md:grid-cols-3 ${syncResourcesEnabled ? "" : "opacity-50"}`}
+                        >
+                          {REMOTE_SYNC_RESOURCES.map((resource) => (
+                            (() => {
+                              const resourcePreview = syncPreview?.resources.find(
+                                (item) => item.type === resource.type,
+                              );
+                              const selected = selectedSyncResourceTypes.includes(resource.type);
+                              return (
+                                <label
+                                  key={resource.type}
+                                  className="flex min-h-28 cursor-pointer items-start gap-3 rounded-md border border-border-secondary bg-bg-elevated px-3 py-3"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    disabled={!syncResourcesEnabled}
+                                    onChange={() => toggleSyncResourceType(resource.type)}
+                                    className="mt-0.5 h-4 w-4 rounded border-border-secondary bg-bg-primary accent-semantic-accent"
+                                  />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-sm font-medium text-text-primary">
+                                      {t(resource.labelKey)}
+                                    </span>
+                                    <span className="mt-1 block text-xs leading-4 text-text-tertiary">
+                                      {t(resource.hintKey)}
+                                    </span>
+                                    {syncResourcesEnabled && selected && (
+                                      <span className="mt-3 block rounded border border-border-secondary bg-bg-primary/70 px-2 py-2">
+                                        <span className="flex items-center justify-between gap-2 text-xs">
+                                          <span className="text-text-tertiary">
+                                            {syncPreviewBusy
+                                              ? t("welcome.remoteSyncPreviewLoading")
+                                              : t("welcome.remoteSyncPreviewFiles")}
+                                          </span>
+                                          <span className="font-mono text-text-primary">
+                                            {resourcePreview
+                                              ? `${resourcePreview.files} / ${formatBytes(resourcePreview.bytes)}`
+                                              : "-"}
+                                          </span>
+                                        </span>
+                                        <span className="mt-2 block space-y-1">
+                                          {(resourcePreview?.sources ?? []).length > 0 ? (
+                                            resourcePreview?.sources.slice(0, 3).map((source) => (
+                                              <span
+                                                key={source}
+                                                title={source}
+                                                className="block truncate font-mono text-[11px] leading-4 text-text-secondary"
+                                              >
+                                                {source}
+                                              </span>
+                                            ))
+                                          ) : (
+                                            <span className="block text-[11px] leading-4 text-text-tertiary">
+                                              {syncPreviewBusy
+                                                ? t("welcome.remoteSyncPreviewLoading")
+                                                : t("welcome.remoteSyncNoSources")}
+                                            </span>
+                                          )}
+                                          {(resourcePreview?.sources.length ?? 0) > 3 && (
+                                            <span className="block text-[11px] leading-4 text-text-tertiary">
+                                              {t("welcome.remoteSyncMoreSources", {
+                                                count: (resourcePreview?.sources.length ?? 0) - 3,
+                                              })}
+                                            </span>
+                                          )}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
+                              );
+                            })()
+                          ))}
+                        </div>
+
+                        {syncResourcesEnabled && syncResourceCount === 0 && (
+                          <div className="mt-3 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs leading-5 text-status-warning">
+                            {t("welcome.remoteSyncEmptyWarning")}
+                          </div>
+                        )}
+                        {syncResourcesEnabled && syncPreviewError && (
+                          <div className="mt-3 rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2 text-xs leading-5 text-status-error">
+                            {syncPreviewError}
+                          </div>
+                        )}
+                        {syncResourcesEnabled && syncPreview && syncPreview.blocked.length > 0 && (
+                          <div className="mt-3 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs leading-5 text-status-warning">
+                            {t("welcome.remoteSyncBlockedSummary", {
+                              count: syncPreview.blocked.length,
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-md border border-border-secondary bg-bg-primary/60 px-4 py-3 text-xs leading-5 text-text-tertiary">
+                        {t("welcome.remoteSyncUnsupportedHint")}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
                 {step === "directory" && (
                   <section className="rounded-lg border border-border-secondary bg-bg-elevated">
                     <div className="flex items-start gap-3 border-b border-border-secondary px-5 py-4">
@@ -720,6 +1038,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         ))
                       )}
                     </div>
+
                   </section>
                 )}
 
@@ -744,97 +1063,125 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                   </section>
                 )}
 
-                {message && (
-                  <div
-                    className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
-                      message.type === "ok"
-                        ? "border-status-success/40 bg-status-success/10 text-status-success"
-                        : "border-status-error/40 bg-status-error/10 text-status-error"
-                    }`}
-                  >
-                    {message.type === "ok" && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
-                    <span className="min-w-0 whitespace-pre-wrap break-words">{message.text}</span>
-                  </div>
-                )}
               </div>
             </div>
           </main>
         </div>
 
         <footer
-          className="flex items-center justify-end gap-2 border-t border-border-secondary bg-bg-elevated px-6 py-4"
+          className="flex items-start justify-between gap-3 border-t border-border-secondary bg-bg-elevated px-6 py-4"
           style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
         >
-          {step === "method" && (
-            <>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+          <div className="min-h-10 min-w-0 flex-1">
+            {message && (
+              <div
+                className={`inline-flex max-w-full items-start gap-2 rounded-md border px-3 py-2 text-sm ${
+                  message.type === "ok"
+                    ? "border-status-success/40 bg-status-success/10 text-status-success"
+                    : "border-status-error/40 bg-status-error/10 text-status-error"
+                }`}
               >
-                {t("cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep("config")}
-                className="rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90"
-              >
-                {t("next")}
-              </button>
-            </>
-          )}
+                {message.type === "ok" && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
+                <span className="min-w-0 whitespace-pre-wrap break-words">{message.text}</span>
+              </div>
+            )}
+          </div>
 
-          {step === "config" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setStep("method")}
-                className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-              >
-                {t("back")}
-              </button>
-              <button
-                type="button"
-                onClick={() => browseRemoteDirectory()}
-                disabled={!canConnect || busy === "list"}
-                className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {busy === "list" && <Loader2 className="h-4 w-4 animate-spin" />}
-                {t("welcome.remoteConnectAndBrowse")}
-              </button>
-            </>
-          )}
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            {step === "method" && (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("config")}
+                  className="rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90"
+                >
+                  {t("next")}
+                </button>
+              </>
+            )}
 
-          {step === "directory" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setStep("config")}
-                className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-              >
-                {t("back")}
-              </button>
-              <button
-                type="button"
-                onClick={handleOpen}
-                disabled={!canOpen || busy !== null}
-                className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t("welcome.remoteSelectDirectory")}
-              </button>
-            </>
-          )}
+            {step === "config" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep("method")}
+                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                >
+                  {t("back")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    browseRemoteDirectory(undefined, showResourceSync ? "resources" : "directory")
+                  }
+                  disabled={!canConnect || busy === "list"}
+                  className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy === "list" && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {showResourceSync
+                    ? t("welcome.remoteConnectAndConfigure")
+                    : t("welcome.remoteConnectAndBrowse")}
+                </button>
+              </>
+            )}
 
-          {step === "opening" && (
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white opacity-70"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t("welcome.remoteOpening")}
-            </button>
-          )}
+            {step === "resources" && showResourceSync && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep("config")}
+                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                >
+                  {t("back")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("directory")}
+                  className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90"
+                >
+                  {t("next")}
+                </button>
+              </>
+            )}
+
+            {step === "directory" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep(showResourceSync ? "resources" : "config")}
+                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                >
+                  {t("back")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpen}
+                  disabled={!canOpen || busy !== null}
+                  className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t("welcome.remoteSelectDirectory")}
+                </button>
+              </>
+            )}
+
+            {step === "opening" && (
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white opacity-70"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("welcome.remoteOpening")}
+              </button>
+            )}
+          </div>
         </footer>
       </div>
     </div>

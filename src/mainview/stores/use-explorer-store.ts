@@ -238,8 +238,6 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     useChatOverlayStore.getState().openFile();
 
     try {
-      const mode = useAppStore.getState().mode;
-
       if (preview.isImage) {
         preview.imageUrl = getFileUrl(node.path);
       } else if (preview.isText) {
@@ -250,20 +248,9 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
           return;
         }
 
-        let text: string;
-        if (mode === "desktop") {
-          // Desktop: read file via RPC (file:// blocked by webview)
-          const res = await apiClient.call("file.readFile", { path: node.path });
-          text = res.content;
-          preview.mimeType = "text/plain";
-        } else {
-          // Web: fetch via HTTP file server
-          const url = getFileUrl(node.path);
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          text = await res.text();
-          preview.mimeType = res.headers.get("content-type") ?? "text/plain";
-        }
+        const res = await apiClient.call("file.readFile", { path: node.path });
+        const text = res.content;
+        preview.mimeType = "text/plain";
         preview.content = text;
         preview.totalLines = (text.match(/\n/g) ?? []).length + 1;
       } else {

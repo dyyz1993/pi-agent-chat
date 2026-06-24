@@ -10,7 +10,7 @@ export type PanelTabId =
   | "supervisor"
   | "agent"
   | "rpc"
-  | "memory"
+  | "learning"
   | "rules"
   | "permissions"
   | "hooks"
@@ -29,7 +29,7 @@ export const PANEL_TABS: PanelTab[] = [
   { id: "supervisor", label: "守护" },
   { id: "agent", label: "Agent" },
   { id: "rpc", label: "RPC" },
-  { id: "memory", label: "记忆" },
+  { id: "learning", label: "Learning" },
   { id: "rules", label: "Rules" },
   { id: "permissions", label: "Permissions" },
   { id: "hooks", label: "Hooks" },

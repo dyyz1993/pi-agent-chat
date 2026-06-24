@@ -3,7 +3,7 @@ import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { PreviewCard, type PreviewDetails } from "../preview";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
-import { formatFilePath } from "../../../lib/format-path";
+import { formatToolHeaderPath, useKnownProjectRoots } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -17,6 +17,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
   blockId?: string;
 }) {
   const details = block.details as PreviewDetails | undefined;
+  const projectRoots = useKnownProjectRoots();
 
   if (!details || details.status === "error" || details.status === "not_found") {
     const isRunning = block.status === "running";
@@ -44,7 +45,9 @@ export const PreviewRenderer = memo(function PreviewRenderer({
         <ToolCardHeader
           toolName="preview"
           status={isRunning ? "running" : isError ? "error" : "done"}
-          description={filePath ? formatFilePath(filePath) : block.args || block.toolName}
+          description={
+            filePath ? formatToolHeaderPath(filePath, projectRoots) : block.args || block.toolName
+          }
           mono
           rtl
           startedAt={block.startedAt}

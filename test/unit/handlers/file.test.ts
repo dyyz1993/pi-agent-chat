@@ -4,6 +4,24 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
+const mocks = vi.hoisted(() => ({
+  listRemoteProjects: vi.fn(),
+}));
+
+vi.mock("../../../src/shared/lib/project-config", () => ({
+  listRemoteProjects: mocks.listRemoteProjects,
+}));
+
+type BunLike = {
+  spawnSync?: (cmd: unknown[], options?: unknown) => {
+    exitCode: number;
+    stdout: Buffer;
+    stderr: Buffer;
+  };
+};
+const bunRuntime = ((globalThis as { Bun?: BunLike }).Bun ??= {});
+const originalSpawnSync = bunRuntime.spawnSync;
+
 import { register } from "../../../src/shared/handlers/file";
 import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
@@ -13,6 +31,8 @@ describe("file handler", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mocks.listRemoteProjects.mockResolvedValue([]);
+    bunRuntime.spawnSync = originalSpawnSync;
     server = createMockServer();
     register(server as unknown as Parameters<typeof register>[0], {} as Parameters<typeof register>[1]);
     tempDir = join(tmpdir(), `file-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -21,6 +41,7 @@ describe("file handler", () => {
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
+    bunRuntime.spawnSync = originalSpawnSync;
   });
 
   describe("file.readFile", () => {
@@ -215,6 +236,69 @@ describe("file handler", () => {
       };
 
       expect(result.entries).toEqual([]);
+    });
+
+    it("lists remote entries for SSH shadow project paths", async () => {
+      mocks.listRemoteProjects.mockResolvedValue([
+        {
+          id: "remote-demo",
+          name: "demo1",
+          runtime: "ssh",
+          sshRuntimeKind: "remote-agent-child",
+          profileId: "profile-1",
+          host: "devbox",
+          remotePath: "/Users/xyz/Projects/demo1",
+          localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-demo",
+          sshArgs: ["-p", "2222"],
+          createdAt: 1,
+          lastOpened: 1,
+        },
+      ]);
+      bunRuntime.spawnSync = ((cmd: unknown[]) => {
+        const args = (Array.isArray(cmd) ? cmd : []) as string[];
+        const command = args.at(-1) ?? "";
+        expect(args).toContain("devbox");
+        expect(args).toContain("2222");
+        expect(command).toContain("python3 -c");
+        expect(command).toContain("'/Users/xyz/Projects/demo1'");
+        return {
+          exitCode: 0,
+          stdout: Buffer.from(
+            JSON.stringify({
+              basePath: "/Users/xyz/Projects/demo1",
+              entries: [
+                {
+                  name: "pi-agent-app",
+                  path: "/Users/xyz/Projects/demo1/pi-agent-app",
+                  type: "directory",
+                  size: 128,
+                  isIgnored: false,
+                },
+              ],
+            }),
+          ),
+          stderr: Buffer.alloc(0),
+        };
+      }) as NonNullable<BunLike["spawnSync"]>;
+
+      const handler = server.handlers.get("file.listDir")!;
+      const result = (await handler({
+        path: "/Users/me/.pi-agent-chat/remote-projects/ssh-demo",
+      })) as {
+        basePath: string;
+        entries: Array<{ name: string; path: string; type: string }>;
+      };
+
+      expect(result.basePath).toBe("/Users/xyz/Projects/demo1");
+      expect(result.entries).toEqual([
+        {
+          name: "pi-agent-app",
+          path: "/Users/xyz/Projects/demo1/pi-agent-app",
+          type: "directory",
+          size: 128,
+          isIgnored: false,
+        },
+      ]);
     });
   });
 });

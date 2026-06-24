@@ -1,4 +1,4 @@
-import { formatFilePath } from "./format-path";
+import { formatFilePath, formatToolHeaderPath } from "./format-path";
 import { parseToolArgs } from "../utils/parse-tool-args";
 
 const MAX_DESC_LEN = 120;
@@ -72,7 +72,7 @@ export function getToolArgsDescription(
 
   // 3. Generic fallbacks by field priority
   if (command) return truncate(command);
-  if (path) return truncate(formatFilePath(path));
+  if (path) return formatToolHeaderPath(path);
   if (pattern) return truncate(pattern);
   if (url) return truncate(url);
 

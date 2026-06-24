@@ -125,6 +125,8 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
+import { useExplorerStore } from "../../../src/mainview/stores/use-explorer-store";
+import { useGitStore } from "../../../src/mainview/stores/use-git-store";
 import { setupSubscriptions } from "../../../src/mainview/stores/session-subscriptions";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
 
@@ -152,6 +154,17 @@ function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(useExplorerStore.getState).mockReturnValue({
+    setCurrentPath: vi.fn(),
+    listRootDir: vi.fn(),
+  });
+  vi.mocked(useGitStore.getState).mockReturnValue({
+    checkGitRepo: vi.fn().mockResolvedValue(false),
+    fetchWorktrees: vi.fn(),
+    fetchStatus: vi.fn(),
+    fetchBranches: vi.fn(),
+    clearDiff: vi.fn(),
+  });
   useSessionStore.setState({
     sessionsByProject: {},
     activeSessionId: null,
@@ -193,6 +206,43 @@ describe("addProjectTab", () => {
     const state = useSessionStore.getState();
     expect(state.projectTabs).toHaveLength(1);
     expect(state.activeProjectId).toBe("tab-a");
+  });
+
+  it("merges remote metadata into an existing tab with the same path", () => {
+    const localPath = "/Users/me/.pi-agent-chat/remote-projects/ssh-44444";
+    const remoteTab: ProjectTab = {
+      id: "remote-44444",
+      name: "44444",
+      path: localPath,
+      runtime: "ssh",
+      remote: {
+        runtime: "ssh",
+        sshRuntimeKind: "remote-agent-child",
+        profileId: "profile-1",
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/Projects/44444",
+        localPath,
+      },
+    };
+
+    useSessionStore.getState().addProjectTab({
+      id: "local-shadow",
+      name: "44444",
+      path: localPath,
+    });
+    useSessionStore.getState().addProjectTab(remoteTab);
+
+    const state = useSessionStore.getState();
+    expect(state.projectTabs).toHaveLength(1);
+    expect(state.activeProjectId).toBe("local-shadow");
+    expect(state.projectTabs[0]).toMatchObject({
+      id: "local-shadow",
+      runtime: "ssh",
+      remote: {
+        remotePath: "/Users/xyz/Projects/44444",
+        sshRuntimeKind: "remote-agent-child",
+      },
+    });
   });
 
   it("adds multiple tabs with different paths", () => {
@@ -305,6 +355,53 @@ describe("reorderProjectTabs", () => {
 
     const tabs = useSessionStore.getState().projectTabs;
     expect(tabs[0].id).toBe("tab-a");
+  });
+});
+
+describe("setActiveProject", () => {
+  it("uses the remote workspace path for explorer and git operations", async () => {
+    const localPath = "/Users/me/.pi-agent-chat/remote-projects/ssh-demo";
+    const remotePath = "/Users/xyz/Projects/demo1";
+    const remoteTab: ProjectTab = {
+      id: "remote-demo",
+      name: "demo1",
+      path: localPath,
+      runtime: "ssh",
+      remote: {
+        runtime: "ssh",
+        sshRuntimeKind: "remote-agent-child",
+        profileId: "profile-1",
+        host: "xyz-mac",
+        remotePath,
+        localPath,
+      },
+    };
+    const explorer = { setCurrentPath: vi.fn(), listRootDir: vi.fn() };
+    const git = {
+      checkGitRepo: vi.fn().mockResolvedValue(false),
+      fetchWorktrees: vi.fn(),
+      fetchStatus: vi.fn(),
+      fetchBranches: vi.fn(),
+      clearDiff: vi.fn(),
+    };
+    vi.mocked(useExplorerStore.getState).mockReturnValue(explorer);
+    vi.mocked(useGitStore.getState).mockReturnValue(git);
+
+    useSessionStore.setState({
+      projectTabs: [remoteTab],
+      activeProjectId: null,
+      activeSessionId: null,
+      sessionsByProject: {},
+    });
+
+    useSessionStore.getState().setActiveProject("remote-demo", { skipAutoSession: true });
+
+    expect(explorer.setCurrentPath).toHaveBeenCalledWith(remotePath);
+    expect(git.checkGitRepo).toHaveBeenCalledWith(remotePath);
+    expect(mockedCall).not.toHaveBeenCalledWith(
+      "project.scanSessions",
+      expect.objectContaining({ projectPath: remotePath }),
+    );
   });
 });
 

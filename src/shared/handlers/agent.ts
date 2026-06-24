@@ -17,6 +17,7 @@ import {
   writeProjectExecutionSandbox,
   normalizeExecutionSandboxMode,
 } from "../lib/execution-sandbox-config";
+import { getRemoteProjectSshRuntimeKind } from "../agent/remote-runtime-selection";
 import {
   listDisabledSkills,
   setDisabledSkill,
@@ -37,6 +38,11 @@ function getManager(): AgentProcessManager {
 }
 
 type TrustFile = Record<string, boolean | null | undefined>;
+
+interface ProjectTrustSubject {
+  requestProjectPath: string;
+  trustProjectPath: string;
+}
 
 function readTrustFile(path: string): TrustFile {
   if (!existsSync(path)) return {};
@@ -105,6 +111,27 @@ function readProjectTrustEntry(
   return legacyEntry ? { ...legacyEntry, trustStorePath: legacyTrustStorePath } : null;
 }
 
+function remoteTrustProjectPath(remoteProject: {
+  host: string;
+  remotePath: string;
+}): string {
+  const hostSegment = encodeURIComponent(remoteProject.host);
+  const remotePath = `/${remoteProject.remotePath.replace(/^\/+/, "")}`.replace(/\/+$/, "") || "/";
+  return normalizeProjectPath(`/__pi_remote__/ssh/${hostSegment}${remotePath}`);
+}
+
+async function resolveProjectTrustSubject(projectPath: string): Promise<ProjectTrustSubject> {
+  const requestProjectPath = normalizeProjectPath(projectPath);
+  const remoteProject = await getRemoteProjectByLocalPath(requestProjectPath).catch(() => null);
+  if (!remoteProject) {
+    return { requestProjectPath, trustProjectPath: requestProjectPath };
+  }
+  return {
+    requestProjectPath,
+    trustProjectPath: remoteTrustProjectPath(remoteProject),
+  };
+}
+
 export function getProcessManager(): AgentProcessManager | null {
   return manager;
 }
@@ -138,7 +165,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       forceNewProcess: params.forceNewProcess,
     });
     const remoteProject = await getRemoteProjectByLocalPath(params.projectPath);
-    if (remoteProject) {
+    if (remoteProject && getRemoteProjectSshRuntimeKind(remoteProject) === "ssh-command") {
       log.info("configuring remote ssh runtime for project", {
         sessionId: params.sessionId,
         projectPath: params.projectPath,
@@ -405,28 +432,32 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getProjectTrust", async (params) => {
-    const projectPath = normalizeProjectPath(params.projectPath);
-    const entry = readProjectTrustEntry(projectPath);
+    const { requestProjectPath, trustProjectPath } = await resolveProjectTrustSubject(
+      params.projectPath,
+    );
+    const entry = readProjectTrustEntry(trustProjectPath);
     return {
-      projectPath,
+      projectPath: requestProjectPath,
       trusted: entry?.decision === true,
       decision: entry?.decision ?? null,
       decisionPath: entry?.path,
-      trustStorePath: entry?.trustStorePath ?? getProjectTrustStorePath(projectPath),
+      trustStorePath: entry?.trustStorePath ?? getProjectTrustStorePath(trustProjectPath),
     };
   });
 
   r("agent.setProjectTrust", async (params) => {
-    const projectPath = normalizeProjectPath(params.projectPath);
-    const trustStorePath = getProjectTrustStorePath(projectPath);
+    const { requestProjectPath, trustProjectPath } = await resolveProjectTrustSubject(
+      params.projectPath,
+    );
+    const trustStorePath = getProjectTrustStorePath(trustProjectPath);
     const data = readTrustFile(trustStorePath);
     data.decision = params.trusted;
     writeTrustFile(trustStorePath, data);
     return {
-      projectPath,
+      projectPath: requestProjectPath,
       trusted: params.trusted,
       decision: params.trusted,
-      decisionPath: projectPath,
+      decisionPath: trustProjectPath,
       trustStorePath,
     };
   });

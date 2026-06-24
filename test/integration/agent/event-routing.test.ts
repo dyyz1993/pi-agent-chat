@@ -85,6 +85,24 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe("agent event routing", () => {
+  it("routes learning channel data to the learning handler", () => {
+    const handleLearningChannelData = vi.fn();
+    const options = makeOptions({
+      event: {
+        type: "channel_data",
+        name: "learning",
+        data: { type: "learning.snapshot", snapshot: { version: 1 } },
+      } as unknown as AgentEvent,
+    });
+
+    handleAgentEventOperation({ ...options, handleLearningChannelData });
+
+    expect(handleLearningChannelData).toHaveBeenCalledWith(
+      "sess-1",
+      expect.objectContaining({ name: "learning" }),
+    );
+  });
+
   it("routes notify extension UI requests without adding them to held chat events", async () => {
     const broadcastEvent = vi.fn().mockResolvedValue(undefined);
     const emitAgentEvent = vi.fn().mockResolvedValue(undefined);

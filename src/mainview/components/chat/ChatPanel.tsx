@@ -775,7 +775,6 @@ export function ChatPanel() {
             <>
               {!goalMode && <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />}
               <QueueCards sessionId={activeSessionId} />
-              <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
             </>
           )}
         </div>
@@ -808,6 +807,10 @@ export function ChatPanel() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        <ProjectRuntimePendingRequests
+          activeSessionId={isViewingSubagent ? null : activeSessionId}
+          placement="composerOverlay"
+        />
         {!isViewingSubagent ? (
           (!sessionReady || !agentReady) && !projectFailed ? (
             <div className="flex-1 flex items-center justify-center gap-2 py-2">

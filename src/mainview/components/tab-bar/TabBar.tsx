@@ -1,4 +1,4 @@
-import { Plus, X, Settings, MessageCircleQuestion, Server } from "lucide-react";
+import { Cable, CloudCog, Plus, X, Settings, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -22,8 +22,56 @@ function getProjectPendingCount(
 
 const LONG_PRESS_MS = 800;
 const MOVE_THRESHOLD = 5;
+const TAB_NAME_MAX_CHARS = 32;
+const TAB_NAME_OMISSION = "***";
+const TAB_NAME_BOUNDARY_RE = /[-_.\s/]/;
 
 const logger = createLogger("session");
+
+function isRemoteProjectLocalPath(projectPath: string): boolean {
+  return /\/\.pi-agent-chat\/remote-projects\/ssh-[^/]+$/.test(projectPath);
+}
+
+function clipPrefixAtBoundary(value: string, budget: number): string {
+  if (value.length <= budget) return value;
+  const minBoundary = Math.max(4, Math.floor(budget * 0.55));
+  for (let i = budget; i >= minBoundary; i--) {
+    if (TAB_NAME_BOUNDARY_RE.test(value[i] ?? "")) {
+      return value.slice(0, i);
+    }
+  }
+  return value.slice(0, budget);
+}
+
+function clipSuffixAtBoundary(value: string, budget: number): string {
+  if (value.length <= budget) return value;
+  const start = value.length - budget;
+  const maxBoundary = Math.min(value.length - 4, start + Math.floor(budget * 0.45));
+  for (let i = start; i <= maxBoundary; i++) {
+    if (TAB_NAME_BOUNDARY_RE.test(value[i] ?? "")) {
+      return value.slice(i);
+    }
+  }
+  return value.slice(start);
+}
+
+export function formatTabName(name: string, maxChars = TAB_NAME_MAX_CHARS): string {
+  const value = name.trim();
+  if (value.length <= maxChars) return value;
+  if (maxChars <= TAB_NAME_OMISSION.length) return TAB_NAME_OMISSION.slice(0, maxChars);
+
+  const contentBudget = maxChars - TAB_NAME_OMISSION.length;
+  const suffixBudget = Math.ceil(contentBudget * 0.48);
+  const prefixBudget = contentBudget - suffixBudget;
+  const prefix = clipPrefixAtBoundary(value, prefixBudget);
+  const suffix = clipSuffixAtBoundary(value, suffixBudget);
+  const boundaryResult = `${prefix}${TAB_NAME_OMISSION}${suffix}`;
+  if (prefix && suffix && boundaryResult.length <= maxChars) {
+    return boundaryResult;
+  }
+
+  return `${value.slice(0, prefixBudget)}${TAB_NAME_OMISSION}${value.slice(value.length - suffixBudget)}`;
+}
 
 export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const { t } = useTranslation("sidebar");
@@ -289,9 +337,31 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             typeof remoteRuntime?.remoteCwd === "string"
               ? remoteRuntime.remoteCwd
               : (tab.remote?.remotePath ?? "");
-          const isRemoteProject = tab.runtime === "ssh" || Boolean(remoteRuntime?.enabled);
+          const isRemoteProject =
+            tab.runtime === "ssh" ||
+            Boolean(tab.remote) ||
+            Boolean(remoteRuntime?.enabled) ||
+            isRemoteProjectLocalPath(tab.path);
+          const remoteRuntimeKind =
+            tab.remote?.sshRuntimeKind ?? (remoteRuntime?.enabled ? "ssh-command" : "remote-agent-child");
+          const RemoteRuntimeIcon = remoteRuntimeKind === "ssh-command" ? Cable : CloudCog;
+          const remoteRuntimeTitle =
+            remoteHost || remotePath
+              ? t(
+                  remoteRuntimeKind === "ssh-command"
+                    ? "remoteRuntimeActiveQuick"
+                    : "remoteRuntimeActiveStandard",
+                  {
+                    host: remoteHost,
+                    path: remotePath,
+                  },
+                )
+              : remoteRuntimeKind === "ssh-command"
+                ? t("remoteRuntimeQuick")
+                : t("remoteRuntimeStandard");
           const isDragSource = dragIndex === index;
           const isPressing = pressingIndex === index;
+          const displayName = formatTabName(tab.name);
           const showLeftIndicator = dropIndex === index && dragIndex !== null && dragIndex > index;
           const showRightIndicator =
             dropIndex === index &&
@@ -312,6 +382,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               }}
               role="tab"
               tabIndex={0}
+              title={tab.name}
+              aria-label={tab.name}
               aria-selected={isActive}
               onClick={() => handleTabClick(tab.id)}
               onKeyDown={(e) => {
@@ -355,16 +427,21 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               {isRemoteProject && (
                 <span
                   data-testid="tab-remote-runtime-indicator"
-                  className="flex-shrink-0 text-status-info"
-                  title={t("remoteRuntimeActive", {
-                    host: remoteHost,
-                    path: remotePath,
-                  })}
+                  data-runtime-kind={remoteRuntimeKind}
+                  className={`inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded border px-1 ${
+                    remoteRuntimeKind === "ssh-command"
+                      ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
+                      : "border-status-info/30 bg-status-info/10 text-status-info"
+                  }`}
+                  title={remoteRuntimeTitle}
+                  aria-label={remoteRuntimeTitle}
                 >
-                  <Server className="h-3 w-3" />
+                  <RemoteRuntimeIcon className="h-3.5 w-3.5" />
                 </span>
               )}
-              <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>
+              <span className="min-w-[60px] max-w-[220px] whitespace-nowrap overflow-hidden">
+                {displayName}
+              </span>
               <button
                 data-testid={`tab-close-${index}`}
                 onClick={(e) => handleCloseClick(e, tab.id)}

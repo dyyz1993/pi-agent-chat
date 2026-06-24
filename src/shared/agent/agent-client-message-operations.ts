@@ -259,7 +259,7 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
     });
   }
 
-  const totalCount = filteredMessages.length;
+  let totalCount = filteredMessages.length;
   const limit = options.pagination?.limit;
   const afterEntryId = options.pagination?.afterEntryId;
   const cursorMissing =
@@ -279,12 +279,15 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
 
   const totalMs = Math.round(performance.now() - t0);
 
-  if (managed && managed.info.status === "streaming") {
+  const useCliMemoryAsPrimarySource = accumulator.allMessages.length === 0;
+  const shouldMergeCliMemory =
+    !!managed && (managed.info.status === "streaming" || useCliMemoryAsPrimarySource);
+  if (managed && shouldMergeCliMemory) {
     try {
       const memResult = await withTimeout(
         managed.client.getMessages(),
         5_000,
-        "getMessages (streaming merge)",
+        "getMessages (CLI memory merge)",
       );
       if (Array.isArray(memResult) && memResult.length > 0) {
         const jsonlEntryIds = new Set(
@@ -334,7 +337,10 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
           if (eid) jsonlEntryIds.add(eid);
           jsonlMessageSignatures.add(normalizedMessageSignature(m));
         }
-        perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
+        if (useCliMemoryAsPrimarySource) {
+          totalCount = Math.max(totalCount, slicedMessages.length);
+        }
+        perfLog.info("[getFullMessages] memory merge: added from CLI memory", {
           sessionId: options.sessionId,
           addedCount: addedFromMemory,
           messageCount: slicedMessages.length,

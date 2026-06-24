@@ -701,7 +701,7 @@ export class SessionMessageReader {
     const customEntries = filterCustomEntriesToBranch(allCustomEntries, pathIds);
 
     // Apply pagination to filtered results.
-    const totalCount = filteredMessages.length;
+    let totalCount = filteredMessages.length;
     const paginationResult = applyPagination(filteredMessages, options ?? {});
     const slicedMessages = paginationResult.messages;
     const hasMore = paginationResult.hasMore;
@@ -710,13 +710,17 @@ export class SessionMessageReader {
     const totalMs = Math.round(performance.now() - t0);
 
     // When streaming, JSONL may be incomplete (e.g. toolResult not persisted yet).
-    // Merge in-memory messages from CLI to supplement the JSONL data.
-    if (managed && managed.info.status === "streaming") {
+    // For remote child runtimes, local JSONL can also remain empty while the
+    // active runtime is the authoritative message owner.
+    const useCliMemoryAsPrimarySource = allMessages.length === 0;
+    const shouldMergeCliMemory =
+      !!managed && (managed.info.status === "streaming" || useCliMemoryAsPrimarySource);
+    if (managed && shouldMergeCliMemory) {
       try {
         const memResult = await withTimeout(
           managed.client.getMessages(),
           5_000,
-          "getMessages (streaming merge)",
+          "getMessages (CLI memory merge)",
         );
         if (Array.isArray(memResult) && memResult.length > 0) {
           const jsonlEntryIds = new Set(allMessages.map((m) => m.entryId).filter(Boolean));
@@ -804,7 +808,10 @@ export class SessionMessageReader {
             slicedMessages.push(m as unknown as AgentMessageForUI);
             if (eid) jsonlEntryIds.add(eid);
           }
-          perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
+          if (useCliMemoryAsPrimarySource) {
+            totalCount = Math.max(totalCount, slicedMessages.length);
+          }
+          perfLog.info("[getFullMessages] memory merge: added from CLI memory", {
             sessionId,
             mergedCount: slicedMessages.length,
           });

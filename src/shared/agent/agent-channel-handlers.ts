@@ -7,6 +7,7 @@ import { createLogger } from "../lib/logger";
 import {
   applyBashBackgroundToolState,
   buildLspLogData,
+  createLearningBroadcast,
   createMemoryBroadcast,
   deriveLspState,
   type CachedLspState,
@@ -279,6 +280,26 @@ export async function handleMemoryChannelDataOperation(options: {
   log.info("Memory channel data", { sessionId: options.sessionId, type: eventType });
 
   const broadcast = createMemoryBroadcast(options.sessionId, data, (options.now ?? Date.now)());
+  if (broadcast) {
+    await options.broadcastEvent(broadcast.name, broadcast.payload, {
+      sessionId: options.sessionId,
+    });
+  }
+}
+
+export async function handleLearningChannelDataOperation(options: {
+  sessionId: string;
+  channelMsg: ChannelDataEvent;
+  broadcastEvent: BroadcastEvent;
+  now?: () => number;
+}): Promise<void> {
+  const data = options.channelMsg.data as Record<string, unknown> | undefined;
+  if (!data) return;
+
+  const eventType = data.type as string;
+  log.info("Learning channel data", { sessionId: options.sessionId, type: eventType });
+
+  const broadcast = createLearningBroadcast(options.sessionId, data, (options.now ?? Date.now)());
   if (broadcast) {
     await options.broadcastEvent(broadcast.name, broadcast.payload, {
       sessionId: options.sessionId,

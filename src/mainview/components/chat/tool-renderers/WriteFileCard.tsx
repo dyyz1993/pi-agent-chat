@@ -1,5 +1,4 @@
 import { memo, useMemo, useRef, useEffect } from "react";
-import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
@@ -7,12 +6,16 @@ import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { CopyButton } from "../CopyButton";
 import { InlineCodeViewer } from "./InlineCodeViewer";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
-import { LspDiagnosticList } from "../primitives/LspDiagnosticList";
 import type { LspDiagnosticFile } from "../primitives/LspDiagnosticList";
 import { InlineDiffViewer } from "./InlineDiffViewer";
-import { formatFilePath } from "../../../lib/format-path";
+import {
+  formatFilePath,
+  formatToolHeaderPath,
+  useKnownProjectRoots,
+} from "../../../lib/format-path";
 import { parseUnifiedDiff } from "../../../lib/diff-utils";
 import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
+import { ContextReferenceCard, type ContextReference } from "../ContextReferenceCard";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -117,6 +120,7 @@ export const WriteFileCard = memo(function WriteFileCard({
   const isEdit = isEditTool(block);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation("chat");
+  const projectRoots = useKnownProjectRoots();
 
   const [collapsed, setCollapsed] = useAutoCollapse(isRunning);
 
@@ -131,11 +135,28 @@ export const WriteFileCard = memo(function WriteFileCard({
     }
   }, [fileContent, isRunning]);
 
-  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || block.toolName;
+  const displayPath = filePath
+    ? formatToolHeaderPath(filePath, projectRoots)
+    : block.args?.slice(0, 80) || block.toolName;
   const isMd = isMarkdownFile(filePath);
   const hasContent = (fileContent ?? "").length > 0;
 
   const lspDetails = isLspDiagnosticData(block.details) ? block.details : null;
+  const lspReferences: ContextReference[] =
+    lspDetails?.files?.map((file, index) => {
+      const issueCount = file.issues.length;
+      const firstIssue = file.issues[0];
+      return {
+        id: `lsp:${file.filePath}:${index}`,
+        kind: "lsp",
+        title: formatFilePath(file.filePath),
+        subtitle: `${issueCount} issue${issueCount === 1 ? "" : "s"}${firstIssue ? ` · L${firstIssue.line}` : ""}`,
+        path: file.filePath,
+        line: firstIssue?.line,
+        status: file.issues.some((issue) => issue.severity === 1) ? "error" : "warning",
+        detail: file.summary,
+      };
+    }) ?? [];
   const editDetails = isEdit ? (isEditToolDetails(block.details) ? block.details : null) : null;
   const diffData = useMemo(() => {
     if (!editDetails?.diff) return null;
@@ -240,32 +261,9 @@ export const WriteFileCard = memo(function WriteFileCard({
           )}
 
           {lspDetails && lspDetails.files && lspDetails.files.length > 0 && (
-            <details className="group border-t border-status-warning/30">
-              <summary className="px-3 py-1 text-[11px] text-status-warning cursor-pointer hover:text-status-warning select-none flex items-center gap-1.5">
-                <svg
-                  className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M4.5 3l3 3-3 3" />
-                </svg>
-                <AlertTriangle className="w-3 h-3 shrink-0" />
-                <span>{t("lspDiagnostics")}</span>
-                <span className="text-status-warning/80 ml-1">
-                  {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0)} issue
-                  {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0) !== 1 ? "s" : ""}
-                </span>
-              </summary>
-              <div className="px-3 pb-2 pt-1">
-                <LspDiagnosticList
-                  files={lspDetails.files}
-                  formatPaths={false}
-                  issueTextClass="text-[11px]"
-                />
-              </div>
-            </details>
+            <div className="border-t border-border-secondary/30">
+              <ContextReferenceCard references={lspReferences} />
+            </div>
           )}
         </>
       )}

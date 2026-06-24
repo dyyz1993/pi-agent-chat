@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyBashBackgroundToolState,
   buildLspLogData,
+  createLearningBroadcast,
   createMemoryBroadcast,
   deriveLspState,
 } from "../../../src/shared/agent/agent-channel-state";
@@ -112,5 +113,29 @@ describe("agent channel state helpers", () => {
     });
 
     expect(createMemoryBroadcast("sess-1", { type: "unknown" }, 789)).toBeNull();
+  });
+
+  it("maps learning channel events to broadcast names and payloads", () => {
+    const snapshot = { version: 1, overview: { pendingCandidates: 1 } };
+    const run = { id: "run-1", status: "completed" };
+    const candidate = { id: "candidate-1", status: "pending" };
+
+    expect(
+      createLearningBroadcast("sess-1", { type: "learning.snapshot", snapshot }, 123),
+    ).toEqual({
+      name: "learning.snapshot",
+      payload: { sessionId: "sess-1", snapshot, timestamp: 123 },
+    });
+    expect(createLearningBroadcast("sess-1", { type: "learning.run", run }, 456)).toEqual({
+      name: "learning.run",
+      payload: { sessionId: "sess-1", run, timestamp: 456 },
+    });
+    expect(
+      createLearningBroadcast("sess-1", { type: "learning.candidate", candidate }, 789),
+    ).toEqual({
+      name: "learning.candidate",
+      payload: { sessionId: "sess-1", candidate, timestamp: 789 },
+    });
+    expect(createLearningBroadcast("sess-1", { type: "unknown" }, 111)).toBeNull();
   });
 });

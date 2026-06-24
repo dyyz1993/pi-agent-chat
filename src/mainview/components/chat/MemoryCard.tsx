@@ -17,8 +17,14 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { formatFilePath } from "../../lib/format-path";
 import { getCustomTypeIcon } from "./tool-icon-map";
-import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary, parseSnippetToEntries } from "./memory-config";
+import {
+  ENTRY_TYPE_KEYS,
+  getMemoryConfig,
+  getMemorySummary,
+  parseSnippetToEntries,
+} from "./memory-config";
 import { formatDuration } from "./primitives/formatDuration";
+import { ContextReferenceCard, type ContextReference } from "./ContextReferenceCard";
 import {
   CHAT_COMPACT_BLOCK_CLASS,
   CHAT_COMPACT_ROW_BUTTON_BASE_CLASS,
@@ -84,7 +90,9 @@ function PrefetchSearchingDetail({ data }: { data: unknown }) {
 
   return (
     <div className="px-3 pb-2 text-[11px] space-y-2">
-      <div className={`flex items-center gap-1.5 ${timedOut ? "text-status-warning" : "text-status-info"}`}>
+      <div
+        className={`flex items-center gap-1.5 ${timedOut ? "text-status-warning" : "text-status-info"}`}
+      >
         {timedOut ? (
           <AlertCircle className="w-3 h-3 shrink-0" />
         ) : (
@@ -364,6 +372,14 @@ function PrefetchResultDetail({
     : [];
 
   const hasMemory = snippet || selectedFiles.length > 0;
+  const selectedFileReferences: ContextReference[] = selectedFiles.map((file, index) => ({
+    id: `memory-file:${file}:${index}`,
+    kind: "memory",
+    title: file.split("/").pop() || file,
+    subtitle: formatFilePath(file),
+    path: file,
+    status: "used",
+  }));
 
   const memoryCount = snippet ? (snippet.match(/^###/gm)?.length ?? 1) : selectedFiles.length;
   const tokenCount = injectedBytes > 0 ? Math.round(injectedBytes / 4) : 0;
@@ -530,19 +546,7 @@ function PrefetchResultDetail({
               <div className="text-text-tertiary flex items-center gap-1">
                 {t("sourceFiles", { count: selectedFiles.length })}
               </div>
-              {selectedFiles.map((f) => {
-                return (
-                  <div
-                    key={f}
-                    className="flex items-center gap-1.5 pl-2 py-0.5 text-text-secondary truncate"
-                  >
-                    <FileText className="w-2.5 h-2.5 text-status-info/70 shrink-0" />
-                    <span className="truncate" title={f}>
-                      {formatFilePath(f)}
-                    </span>
-                  </div>
-                );
-              })}
+              <ContextReferenceCard references={selectedFileReferences} />
             </div>
           )}
 

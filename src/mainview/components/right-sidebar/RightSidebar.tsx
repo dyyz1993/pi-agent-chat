@@ -22,7 +22,7 @@ import { SupervisorPanel } from "../supervisor-panel/SupervisorPanel";
 import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
-import { MemoryPanel } from "../memory-panel/MemoryPanel";
+import { LearningPanel } from "../learning-panel/LearningPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
 import { PermissionsPanel } from "../permissions-panel/PermissionsPanel";
 import { HooksPanel } from "../hooks-panel/HooksPanel";
@@ -43,7 +43,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   supervisor: ShieldCheck,
   agent: Bot,
   rpc: Terminal,
-  memory: Brain,
+  learning: Brain,
   rules: Shield,
   permissions: KeyRound,
   hooks: ListChecks,
@@ -150,8 +150,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <AgentPanel />;
       case "rpc":
         return <RpcPanel />;
-      case "memory":
-        return <MemoryPanel />;
+      case "learning":
+        return <LearningPanel />;
       case "rules":
         return <RulesPanel />;
       case "permissions":

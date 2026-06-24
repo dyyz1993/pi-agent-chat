@@ -1,8 +1,16 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { buildScpArgs, buildSshArgs, shQuote, shRemotePath } from "./providers/ssh";
 
 export interface RemoteChildBootstrapOptions {
@@ -136,6 +144,86 @@ export function buildRemoteChildInstallCommand(options: {
 
 function wrapRemoteShell(remoteShell: string, command: string): string {
   return `${remoteShell} ${shQuote(command)}`;
+}
+
+function normalizeRemotePlatform(value: string): string {
+  const lower = value.trim().toLowerCase();
+  if (lower === "darwin") return "darwin";
+  if (lower === "linux") return "linux";
+  return lower;
+}
+
+function normalizeRemoteArch(value: string): string {
+  const lower = value.trim().toLowerCase();
+  if (lower === "x86_64" || lower === "amd64") return "x64";
+  if (lower === "aarch64") return "arm64";
+  return lower;
+}
+
+export function getRemoteChildBinaryCandidates(options: {
+  cliPath: string;
+  remotePlatform?: string;
+  remoteArch?: string;
+}): string[] {
+  const resolvedCliPath = existsSync(options.cliPath) ? realpathSync(options.cliPath) : options.cliPath;
+  const distDir = dirname(resolvedCliPath);
+  const platform = options.remotePlatform ? normalizeRemotePlatform(options.remotePlatform) : "";
+  const arch = options.remoteArch ? normalizeRemoteArch(options.remoteArch) : "";
+  const names = platform
+    ? [
+        arch ? `pi-${platform}-${arch}` : "",
+        platform && arch === "x64" ? `pi-${platform}-x86_64` : "",
+        platform && arch === "arm64" ? `pi-${platform}-aarch64` : "",
+      ].filter(Boolean)
+    : ["pi"];
+  return Array.from(new Set(names.map((name) => join(distDir, name))));
+}
+
+export async function detectRemoteSystem(options: {
+  target: string;
+  port?: number;
+  keyPath?: string;
+  remoteShell: string;
+}): Promise<{ platform: string; arch: string }> {
+  const output = await exec(
+    "ssh",
+    [
+      ...buildSshArgs({
+        target: options.target,
+        port: options.port,
+        keyPath: options.keyPath,
+      }),
+      wrapRemoteShell(options.remoteShell, "uname -s && uname -m"),
+    ],
+    15_000,
+  );
+  const [platform = "", arch = ""] = output.split(/\r?\n/).filter(Boolean);
+  return { platform, arch };
+}
+
+export async function resolveRemoteChildLocalBinaryPath(options: {
+  explicitPath?: string;
+  cliPath: string;
+  target: string;
+  port?: number;
+  keyPath?: string;
+  remoteShell: string;
+}): Promise<string> {
+  if (options.explicitPath) return options.explicitPath;
+  let remoteSystem: { platform: string; arch: string } | null = null;
+  try {
+    remoteSystem = await detectRemoteSystem(options);
+  } catch {
+    remoteSystem = null;
+  }
+  const candidates = getRemoteChildBinaryCandidates({
+    cliPath: options.cliPath,
+    remotePlatform: remoteSystem?.platform,
+    remoteArch: remoteSystem?.arch,
+  });
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found) return found;
+  return "";
 }
 
 export async function bootstrapRemoteChild(

@@ -1,5 +1,6 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
+import type { ProjectTab } from "../../../src/mainview/types";
 
 const sessionStoreState: Record<string, unknown> = {};
 const uiDialogStoreState: Record<string, unknown> = {};
@@ -30,10 +31,10 @@ vi.mock("../../../src/mainview/components/settings/SettingsPanel", () => ({
   ),
 }));
 
-import { TabBar } from "../../../src/mainview/components/tab-bar/TabBar";
+import { TabBar, formatTabName } from "../../../src/mainview/components/tab-bar/TabBar";
 
 function setupStore(overrides: {
-  tabs?: { id: string; name: string; path: string }[];
+  tabs?: ProjectTab[];
   sessionsByProject?: Record<string, { sessionId: string; name: string }[]>;
   statusMap?: Record<string, string>;
   activeProjectId?: string;
@@ -48,6 +49,8 @@ function setupStore(overrides: {
     sessionsByProject: overrides.sessionsByProject ?? {},
     sessionStatusMap: overrides.statusMap ?? {},
     activeProjectId: overrides.activeProjectId ?? overrides.tabs?.[0]?.id ?? "",
+    activeSessionId: "",
+    lastActiveSessionByProject: {},
     setActiveProject: vi.fn(),
     removeProjectTab: vi.fn(),
     reorderProjectTabs: vi.fn(),
@@ -81,6 +84,27 @@ function getBadgeTextForTab(tabName: string): string | null {
 describe("TabBar permission icon badge", () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it("middle-truncates long project names while preserving the tail", () => {
+    const displayName = formatTabName("pi-agent-remote-ui-create-1782223074368");
+
+    expect(displayName).toBe("pi-agent-remote***-1782223074368");
+    expect(displayName.length).toBeLessThanOrEqual(32);
+  });
+
+  it("keeps the full project name in tab metadata when the label is shortened", () => {
+    const longName = "pi-agent-remote-ui-create-1782223074368";
+    setupStore({
+      tabs: [{ id: "long", name: longName, path: "/long" }],
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const tab = screen.getByRole("tab", { name: longName });
+    expect(tab).toHaveAttribute("title", longName);
+    expect(tab).toHaveTextContent("pi-agent-remote***-1782223074368");
+    expect(tab).not.toHaveTextContent(longName);
   });
 
   it("shows no permission icon when no sessions have permission status", () => {
@@ -231,5 +255,80 @@ describe("TabBar permission icon badge", () => {
       if (el.contains(icon as Element)) iconContainerIndex = i;
     }
     expect(iconContainerIndex).toBeGreaterThan(dotIndex);
+  });
+
+  it("shows a cloud runtime indicator for standard SSH tabs before sessions load", () => {
+    setupStore({
+      tabs: [
+        {
+          id: "remote-standard",
+          name: "Remote Standard",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-standard/project",
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            sshRuntimeKind: "remote-agent-child",
+            profileId: "profile-standard",
+            host: "ssh-box",
+            remotePath: "/srv/project",
+            localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-standard/project",
+          },
+        },
+      ],
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const indicator = screen.getByTestId("tab-remote-runtime-indicator");
+    expect(indicator.getAttribute("data-runtime-kind")).toBe("remote-agent-child");
+    expect(indicator.className).toContain("text-status-info");
+    expect(indicator.querySelector("svg.lucide-cloud-cog")).not.toBeNull();
+  });
+
+  it("shows a cable runtime indicator for quick SSH sandbox tabs before sessions load", () => {
+    setupStore({
+      tabs: [
+        {
+          id: "remote-quick",
+          name: "Remote Quick",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-quick/project",
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            sshRuntimeKind: "ssh-command",
+            profileId: "profile-quick",
+            host: "ssh-box",
+            remotePath: "/tmp/project",
+            localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-quick/project",
+          },
+        },
+      ],
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const indicator = screen.getByTestId("tab-remote-runtime-indicator");
+    expect(indicator.getAttribute("data-runtime-kind")).toBe("ssh-command");
+    expect(indicator.className).toContain("text-status-warning");
+    expect(indicator.querySelector("svg.lucide-cable")).not.toBeNull();
+  });
+
+  it("shows a standard SSH indicator for legacy remote-project local paths", () => {
+    setupStore({
+      tabs: [
+        {
+          id: "legacy-remote",
+          name: "Legacy Remote",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-legacy",
+        },
+      ],
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const indicator = screen.getByTestId("tab-remote-runtime-indicator");
+    expect(indicator.getAttribute("data-runtime-kind")).toBe("remote-agent-child");
+    expect(indicator.className).toContain("text-status-info");
+    expect(indicator.querySelector("svg.lucide-cloud-cog")).not.toBeNull();
   });
 });

@@ -4,7 +4,15 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { homedir, tmpdir } from "os";
 import { join } from "path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getRemoteProjectByPath: vi.fn(),
+}));
+
+vi.mock("../../../src/shared/lib/project-config", () => ({
+  getRemoteProjectByPath: mocks.getRemoteProjectByPath,
+}));
 
 import {
   handleCoordinatorDelegateOperation,
@@ -27,6 +35,10 @@ function makeManaged(status = "idle", sessionPath = "/tmp/child.jsonl") {
 }
 
 describe("coordinator delegate operations", () => {
+  beforeEach(() => {
+    mocks.getRemoteProjectByPath.mockResolvedValue(null);
+  });
+
   it("starts coordinator delegates, tracks parent child state, sends prompt, and broadcasts creation", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pi-delegate-create-"));
     const parentSessionPath = join(dir, "parent.jsonl");
@@ -196,6 +208,92 @@ describe("coordinator delegate operations", () => {
     } finally {
       rmSync(targetSessionDir, { recursive: true, force: true });
     }
+  });
+
+  it("maps SSH remote project paths back to the local shadow project for delegate sessions", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-remote-parent-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const localShadowPath = "/Users/me/.pi-agent-chat/remote-projects/ssh-demo";
+    const remotePath = "/Users/xyz/Projects/demo1";
+    const remoteRecord = {
+      id: "remote-demo",
+      name: "demo1",
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-1",
+      host: "xyz-mac",
+      remotePath,
+      localPath: localShadowPath,
+      createdAt: 1,
+      lastOpened: 1,
+    };
+    mocks.getRemoteProjectByPath.mockImplementation(async (projectPath: string) =>
+      projectPath === remotePath || projectPath === localShadowPath ? remoteRecord : null,
+    );
+    const parentChildMap = new Map<string, Set<string>>();
+    const delegateCreatedAt = new Map<string, number>();
+    const delegateReplyCount = new Map<string, number>();
+    const start = vi.fn().mockResolvedValue({ status: "started" });
+    const setSessionName = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn();
+    const broadcastEvent = vi.fn().mockResolvedValue(undefined);
+
+    await handleCoordinatorDelegateOperation({
+      parentSessionId: "parent",
+      msg: {
+        __call: "session_delegate",
+        task: "inspect remote repo",
+        title: "Inspect Remote",
+        projectPath: remotePath,
+      },
+      getActiveManaged: () => ({
+        info: {
+          status: "idle",
+          sessionPath: parentSessionPath,
+          projectPath: localShadowPath,
+        },
+      }),
+      start,
+      setSessionName,
+      send,
+      broadcastEvent,
+      parentChildMap,
+      delegateCreatedAt,
+      delegateReplyCount,
+      now: () => 3000,
+      sessionIdFactory: () => "child-remote",
+    });
+
+    const childSessionPath = join(dir, "child-remote.jsonl");
+    expect(start).toHaveBeenCalledWith("child-remote", localShadowPath, childSessionPath, {
+      forceNewProcess: true,
+    });
+    expect(send).toHaveBeenCalledWith(
+      "child-remote",
+      expect.stringContaining(`- 项目路径: ${localShadowPath}`),
+    );
+    expect(broadcastEvent).toHaveBeenCalledWith(
+      "coordinator.session_created",
+      expect.objectContaining({
+        session: expect.objectContaining({
+          projectPath: localShadowPath,
+          sessionPath: childSessionPath,
+        }),
+      }),
+      { parentSessionId: "parent" },
+    );
+
+    const childJsonl = readFileSync(childSessionPath, "utf-8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(childJsonl[0]).toMatchObject({
+      type: "session",
+      id: "child-remote",
+      cwd: localShadowPath,
+      delegateParentSessionId: "parent",
+    });
   });
 
   it("rejects coordinator delegates when the parent session is missing", async () => {

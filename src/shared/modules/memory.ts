@@ -16,6 +16,10 @@ export interface MemoryMethods {
     params: { filePath: string };
     result: { content: string; size: number };
   };
+  "memory.deleteFile": {
+    params: { filePath: string };
+    result: { ok: boolean };
+  };
   "memory.remember": {
     params: { projectPath: string; sessionId: string; messageIds: string[]; content: string };
     result: { ok: boolean };

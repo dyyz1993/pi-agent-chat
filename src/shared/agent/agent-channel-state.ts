@@ -121,3 +121,30 @@ export function createMemoryBroadcast(
   }
   return null;
 }
+
+export function createLearningBroadcast(
+  sessionId: string,
+  data: Record<string, unknown>,
+  timestamp: number,
+): MemoryBroadcast | null {
+  const eventType = data.type;
+  if (eventType === "learning.snapshot") {
+    return {
+      name: "learning.snapshot",
+      payload: { sessionId, snapshot: data.snapshot, timestamp },
+    };
+  }
+  if (eventType === "learning.run") {
+    return {
+      name: "learning.run",
+      payload: { sessionId, run: data.run, timestamp },
+    };
+  }
+  if (eventType === "learning.candidate") {
+    return {
+      name: "learning.candidate",
+      payload: { sessionId, candidate: data.candidate, timestamp },
+    };
+  }
+  return null;
+}

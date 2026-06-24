@@ -79,6 +79,39 @@ export default tseslint.config(
       }],
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-console': ['error', { allow: ['warn', 'error'] }],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'alert',
+          message: 'Use an in-app confirmation or notification UI instead of system alert().',
+        },
+        {
+          name: 'confirm',
+          message: 'Use an in-app confirmation UI instead of system confirm().',
+        },
+        {
+          name: 'prompt',
+          message: 'Use an in-app input UI instead of system prompt().',
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'window',
+          property: 'alert',
+          message: 'Use an in-app confirmation or notification UI instead of window.alert().',
+        },
+        {
+          object: 'window',
+          property: 'confirm',
+          message: 'Use an in-app confirmation UI instead of window.confirm().',
+        },
+        {
+          object: 'window',
+          property: 'prompt',
+          message: 'Use an in-app input UI instead of window.prompt().',
+        },
+      ],
 
       // RPC 规范规则（严格模式，全部 error）
       'rpc/no-bare-method': 'error',

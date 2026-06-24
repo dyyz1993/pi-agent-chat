@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({
+  listRemoteProjects: vi.fn(),
+}));
+
+vi.mock("../../../src/shared/lib/project-config", () => ({
+  listRemoteProjects: mocks.listRemoteProjects,
+}));
+
 const mockFn = vi.fn<(args: string[]) => string>(() => "");
 type BunLike = {
   spawnSync?: (cmd: unknown[], options?: unknown) => {
@@ -34,7 +42,9 @@ describe("git handler", () => {
   });
 
   beforeEach(() => {
+    mocks.listRemoteProjects.mockResolvedValue([]);
     mockFn.mockImplementation((args) => {
+      if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
       if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return REPO_PATH;
       return "";
     });
@@ -48,6 +58,7 @@ describe("git handler", () => {
   describe("git.status", () => {
     it("parses branch, staged, changed, untracked files", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "status") {
           return [
@@ -86,6 +97,7 @@ describe("git handler", () => {
 
     it("returns unknown branch when branch line is unparseable", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "status") return "HEAD detached at abc1234\n";
         if (args[0] === "diff") return "";
@@ -97,11 +109,92 @@ describe("git handler", () => {
       expect(result.ahead).toBe(0);
       expect(result.behind).toBe(0);
     });
+
+    it("runs git status on the remote path for SSH shadow projects", async () => {
+      mocks.listRemoteProjects.mockResolvedValue([
+        {
+          id: "remote-1",
+          name: "remote-app",
+          runtime: "ssh",
+          profileId: "profile-1",
+          host: "devbox",
+          remotePath: "/srv/remote app",
+          localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-1",
+          sshArgs: ["-p", "2222"],
+          createdAt: 1,
+          lastOpened: 1,
+        },
+      ]);
+      mockFn.mockImplementation((args) => {
+        if (args[0] !== "-o") return "";
+        const command = args.at(-1) ?? "";
+        expect(args).toContain("devbox");
+        expect(args).toContain("2222");
+        if (command.includes("'rev-parse' '--is-inside-work-tree'")) return "true";
+        if (command.includes("'rev-parse' '--show-toplevel'")) return "/srv/remote app";
+        if (command.includes("'status' '--porcelain=v1' '--branch'")) {
+          return "## main\n?? remote.txt";
+        }
+        if (command.includes("'diff' '--cached' '--numstat'")) return "";
+        if (command.includes("'diff' '--numstat'")) return "";
+        return "";
+      });
+
+      const handler = server.handlers.get("git.status")!;
+      const result = (await handler({
+        repoPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-1",
+      })) as Record<string, unknown>;
+
+      expect(result.branch).toBe("main");
+      expect(result.untracked).toEqual(["remote.txt"]);
+      expect(
+        mockFn.mock.calls.some(([args]) => (args.at(-1) ?? "").includes("cd '/srv/remote app'")),
+      ).toBe(true);
+    });
+
+    it("runs git status on remote subpaths returned by the file explorer", async () => {
+      mocks.listRemoteProjects.mockResolvedValue([
+        {
+          id: "remote-1",
+          name: "remote-app",
+          runtime: "ssh",
+          profileId: "profile-1",
+          host: "devbox",
+          remotePath: "/srv/remote app",
+          localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-1",
+          createdAt: 1,
+          lastOpened: 1,
+        },
+      ]);
+      mockFn.mockImplementation((args) => {
+        if (args[0] !== "-o") return "";
+        const command = args.at(-1) ?? "";
+        if (command.includes("'rev-parse' '--is-inside-work-tree'")) return "true";
+        if (command.includes("'rev-parse' '--show-toplevel'")) return "/srv/remote app/pi-agent-app";
+        if (command.includes("'status' '--porcelain=v1' '--branch'")) return "## main\n";
+        if (command.includes("'diff' '--cached' '--numstat'")) return "";
+        if (command.includes("'diff' '--numstat'")) return "";
+        return "";
+      });
+
+      const handler = server.handlers.get("git.status")!;
+      const result = (await handler({
+        repoPath: "/srv/remote app/pi-agent-app",
+      })) as Record<string, unknown>;
+
+      expect(result.branch).toBe("main");
+      expect(
+        mockFn.mock.calls.some(([args]) =>
+          (args.at(-1) ?? "").includes("cd '/srv/remote app/pi-agent-app'"),
+        ),
+      ).toBe(true);
+    });
   });
 
   describe("git.diff", () => {
     it("returns diff for unstaged file", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "diff" && !args.includes("--cached")) return "diff content here";
         if (args[0] === "show") return "old content";
@@ -121,6 +214,7 @@ describe("git handler", () => {
 
     it("returns diff for staged file", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "diff" && args.includes("--cached")) return "staged diff";
         if (args[0] === "show") return "old content";
@@ -141,6 +235,7 @@ describe("git handler", () => {
   describe("git.log", () => {
     it("parses commit log entries", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "log") {
           return [
@@ -165,6 +260,7 @@ describe("git handler", () => {
 
     it("respects maxCount parameter", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "log") {
           expect(args.find((a) => a.startsWith("--max-count="))).toBe("--max-count=10");
@@ -181,6 +277,7 @@ describe("git handler", () => {
   describe("git.commitFiles", () => {
     it("parses files changed in a commit", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "diff-tree") {
           return "M\tsrc/foo.ts\nA\tsrc/new.ts\nD\tsrc/old.ts";
@@ -203,6 +300,7 @@ describe("git handler", () => {
   describe("git.branches", () => {
     it("parses branch list with current and remote markers", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "branch") {
           return "* main\n  develop\n  remotes/origin/main";
@@ -258,6 +356,7 @@ describe("git handler", () => {
   describe("git.commit", () => {
     it("parses commit hash from output", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return REPO_PATH;
         if (args[0] === "commit") return "[main abc1234] my commit message\n1 file changed";
         if (args[0] === "rev-parse" && args[1] === "abc1234")
@@ -295,6 +394,7 @@ describe("git handler", () => {
   describe("git.worktreeList", () => {
     it("parses porcelain worktree output", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "worktree") {
           return [
@@ -325,6 +425,7 @@ describe("git handler", () => {
   describe("git.worktreeAdd", () => {
     it("returns new worktree info", async () => {
       mockFn.mockImplementation((args) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
         if (args[0] === "rev-parse") return "/projects/my-repo";
         if (args[0] === "worktree" && args[1] === "add") return "";
         return "";

@@ -1,12 +1,12 @@
 import { memo } from "react";
-import { Zap, CheckCircle2, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineCodeViewer } from "./InlineCodeViewer";
-import { formatFilePath } from "../../../lib/format-path";
+import { formatToolHeaderPath, useKnownProjectRoots } from "../../../lib/format-path";
 import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
+import { ContextReferenceCard, type ContextReference } from "../ContextReferenceCard";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -19,6 +19,7 @@ interface MatchedRuleDetail {
   title: string;
   severity: string;
   matchedGlob: string;
+  source?: string;
   status?: RuleMatchStatus;
   /** @deprecated Use status instead */
   alreadyLoaded?: boolean;
@@ -51,6 +52,7 @@ export const ReadFileCard = memo(function ReadFileCard({
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const { t } = useTranslation("chat");
+  const projectRoots = useKnownProjectRoots();
 
   const [collapsed, setCollapsed] = useAutoCollapse(isRunning);
 
@@ -62,7 +64,9 @@ export const ReadFileCard = memo(function ReadFileCard({
     logger.warn("Failed to parse read file args", { error: String(e) });
   }
 
-  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || block.toolName;
+  const displayPath = filePath
+    ? formatToolHeaderPath(filePath, projectRoots)
+    : block.args?.slice(0, 80) || block.toolName;
 
   const headerStatus = isRunning
     ? ("running" as const)
@@ -72,11 +76,19 @@ export const ReadFileCard = memo(function ReadFileCard({
 
   const rulesData = isRulesMatchedData(block.details) ? block.details : null;
 
-  // Compute overall status across all rules
-  const ruleStatuses = rulesData?.rulesMatched?.map(getRuleStatus) ?? [];
-  const allAlreadyLoaded =
-    ruleStatuses.length > 0 && ruleStatuses.every((s) => s === "already_loaded");
-  const anyReloaded = ruleStatuses.some((s) => s === "reloaded");
+  const ruleReferences: ContextReference[] =
+    rulesData?.rulesMatched?.map((rule, index) => {
+      const status = getRuleStatus(rule);
+      return {
+        id: `rule:${rule.name}:${index}`,
+        kind: "rule",
+        title: rule.title,
+        subtitle: rule.matchedGlob,
+        path: rule.source,
+        status,
+        detail: rule.name,
+      };
+    }) ?? [];
 
   return (
     <div
@@ -124,76 +136,9 @@ export const ReadFileCard = memo(function ReadFileCard({
           </details>
 
           {rulesData && rulesData.rulesMatched && rulesData.rulesMatched.length > 0 && (
-            <details className="group border-t border-semantic-accent/30">
-              <summary className="px-3 py-1 text-[11px] text-semantic-accent cursor-pointer hover:text-semantic-accent select-none flex items-center gap-1.5">
-                <svg
-                  className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M4.5 3l3 3-3 3" />
-                </svg>
-                {allAlreadyLoaded ? (
-                  <>
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>{t("readFile.rulesAlreadyLoaded", "Rules already loaded")}</span>
-                  </>
-                ) : anyReloaded ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 shrink-0" />
-                    <span>{t("readFile.rulesReloaded", "Rules reloaded")}</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-3 h-3 shrink-0" />
-                    <span>{t("readFile.rulesLoaded")}</span>
-                  </>
-                )}
-                <span className="text-semantic-accent/80 ml-1">
-                  {rulesData.rulesMatched.length} rule
-                  {rulesData.rulesMatched.length !== 1 ? "s" : ""}
-                </span>
-              </summary>
-              <div className="px-3 pb-2">
-                {rulesData.rulesMatched.map((rule) => {
-                  const status = getRuleStatus(rule);
-                  return (
-                    <div
-                      key={rule.name}
-                      className="border-b last:border-b-0 border-semantic-accent/20 py-1 flex items-center gap-1.5"
-                    >
-                      {status === "already_loaded" ? (
-                        <CheckCircle2 className="w-3 h-3 shrink-0 text-text-tertiary" />
-                      ) : status === "reloaded" ? (
-                        <RefreshCw className="w-3 h-3 shrink-0 text-status-warning" />
-                      ) : (
-                        <Zap className="w-3 h-3 shrink-0 text-semantic-accent" />
-                      )}
-                      <span
-                        className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-status-error" : rule.severity === "high" ? "text-status-warning" : status === "already_loaded" ? "text-text-tertiary" : "text-semantic-accent"}`}
-                      >
-                        {rule.title}
-                      </span>
-                      <span className="text-[11px] text-text-tertiary font-mono">
-                        {rule.matchedGlob}
-                      </span>
-                      {status === "already_loaded" && (
-                        <span className="text-[10px] text-text-tertiary italic ml-auto">
-                          {t("readFile.alreadyLoaded", "loaded")}
-                        </span>
-                      )}
-                      {status === "reloaded" && (
-                        <span className="text-[10px] text-status-warning ml-auto">
-                          {t("readFile.reloaded", "reloaded")}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
+            <div className="border-t border-border-secondary/30">
+              <ContextReferenceCard references={ruleReferences} />
+            </div>
           )}
         </>
       )}

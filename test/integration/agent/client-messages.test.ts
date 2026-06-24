@@ -128,6 +128,35 @@ describe("agent client message operations", () => {
     ]);
   });
 
+  it("uses idle active runtime messages when local JSONL has no messages", async () => {
+    writeFileSync(sessionPath, "");
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([
+          { role: "user", content: [{ type: "text", text: "remote prompt" }] },
+          { role: "assistant", content: [{ type: "text", text: "remote answer" }] },
+        ]),
+      },
+      info: {
+        status: "idle",
+        sessionPath,
+      },
+    };
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+    });
+
+    expect(result.totalCount).toBe(2);
+    expect(result.messages.map((m) => (m as { role?: string }).role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+  });
+
   it("does not duplicate persisted assistant and tool results during streaming memory merge", async () => {
     writeFileSync(
       sessionPath,

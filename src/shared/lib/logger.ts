@@ -31,6 +31,7 @@ export type LogModule =
   | "sandbox-local"
   | "sandbox-box"
   | "sandbox-cf"
+  | "remote-ssh"
   | "change-review"
   | "sandbox-channel"
   | "project-config"

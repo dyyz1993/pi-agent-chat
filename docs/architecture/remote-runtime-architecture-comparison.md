@@ -245,11 +245,61 @@ This means:
   for the personal SSH flow.
 - Remote tools cannot read arbitrary local files unless an explicit sync,
   mount, proxy, or import feature is added.
+- If Standard SSH needs local user resources, use Remote Resource Sync. The MVP
+  syncs only low-risk resource folders (`skills`, `agents`, `rules`) from the
+  local pi agent dir into a managed remote agent root, then starts the remote
+  child with `PI_CODING_AGENT_DIR` pointing at that managed root. It does not
+  copy local model credentials, sessions, memory, plugins, MCP config, hooks, or
+  arbitrary absolute local paths.
 - Local UI indexes can remember remote projects, but permission/trust rules must
   still follow the project-scoped state rules documented in `AGENTS.md`.
 - Git/explorer panels must refresh from the active runtime after agent actions;
   they should not depend on a full browser reload to discover a newly initialized
   repository or changed file tree.
+
+## Remote Resource Sync MVP
+
+Remote Resource Sync is an install/import step, not a path-mapping layer. The
+remote child must never receive local filesystem paths for skills, agents, or
+rules. Instead, pi creates a filtered bundle and installs it into:
+
+```text
+<REMOTE_SYNC_AGENT_DIR>
+  skills/
+  agents/
+  rules/
+  .remote-resource-sync/manifest.json
+```
+
+Default location:
+
+```text
+REMOTE_RESOURCE_SYNC_REMOTE_AGENT_DIR
+  ?? <REMOTE_CHILD_REMOTE_RUNTIME_DIR>/agent-resources
+```
+
+The remote child then starts with:
+
+```text
+PI_CODING_AGENT_DIR=<REMOTE_SYNC_AGENT_DIR>
+```
+
+MVP sync policy:
+
+| Resource          | Default | Reason                                                                 |
+| ----------------- | ------- | ---------------------------------------------------------------------- |
+| `skills/`         | Sync    | Low-risk reusable instructions; needed for consistent Standard SSH UX. |
+| `agents/`         | Sync    | Low-risk agent definitions, useful for delegated workflows.            |
+| `rules/`          | Sync    | Low-risk instruction/rule files.                                       |
+| `memory/`         | No      | May contain private, stale, or local-only user knowledge.              |
+| `plugins/`        | No      | Executable code; needs trust and per-plugin policy.                    |
+| MCP config/hooks  | No      | Can execute commands or contain env/token references.                  |
+| model credentials | Never   | Long-lived keys must stay local and use the auth/model proxy.          |
+
+The sync manifest records the hash, included resource counts, and blocked
+entries. The copier skips symlinks, `.env`, private-key-looking files,
+`auth.json`, `oauth.json`, and `models.json`. A matching manifest hash means the
+remote managed root is already current and upload can be skipped.
 
 ## Fast Implementation Slice For Remote Agent Child
 
@@ -269,17 +319,22 @@ The fastest useful vertical slice is:
 
 Remote-agent-child MVP must prove these cases before UI polish:
 
-| Area        | Validation                                                                               |
-| ----------- | ---------------------------------------------------------------------------------------- |
-| Connection  | SSH child starts, RPC ping/state works, stop cleans up.                                  |
-| Chat        | Send "reply OK"; assistant response streams and finishes.                                |
-| Files       | Write a marker file; verify it exists on the remote host, not local shadow state.        |
-| Bash        | Run `pwd && hostname`; output matches remote cwd/host.                                   |
-| Sessions    | Remote session JSONL is created under the remote agent dir.                              |
-| Permissions | Remote permission request appears in local UI; allow/deny response resumes remote child. |
-| Hooks       | Remote project `.pi/hooks` runs with remote cwd.                                         |
-| Auth        | Remote host has no long-lived model key; model calls succeed via local proxy.            |
-| Disconnect  | SSH drop or remote crash reports a clear ended/disconnected state.                       |
+| Area        | Validation                                                                                                                        |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Connection  | SSH child starts, RPC ping/state works, stop cleans up.                                                                           |
+| Chat        | Send "reply OK"; assistant response streams and finishes.                                                                         |
+| Files       | Write a marker file; verify it exists on the remote host, not local shadow state.                                                 |
+| Bash        | Run `pwd && hostname`; output matches remote cwd/host.                                                                            |
+| Sessions    | Remote session JSONL is created under the remote agent dir.                                                                       |
+| Skills      | Remote `PI_CODING_AGENT_DIR` skills and project skills load; local-only sentinels do not.                                         |
+| Agents      | Remote `PI_CODING_AGENT_DIR` agents load; local-only agent paths do not leak.                                                     |
+| Sync        | Remote Resource Sync installs local `skills/agents/rules` into a managed remote agent root without copying credentials or memory. |
+| Memory      | Remote-child memory reads/writes are rooted under the remote agent dir.                                                           |
+| Permissions | Remote permission request appears in local UI; allow/deny response resumes remote child.                                          |
+| Hooks       | Remote project `.pi/hooks` runs with remote cwd.                                                                                  |
+| Auth        | Remote host has no long-lived model key; model calls succeed via local proxy.                                                     |
+| Disconnect  | SSH drop or remote crash reports a clear ended/disconnected state.                                                                |
+| Fallback    | `ssh-command` quick fallback hides local memory, skills, agents, and learning resources.                                          |
 
 ## Verified Remote Smokes
 
@@ -289,11 +344,23 @@ The current SSH child smoke verified:
 - bootstrap uploads the executable and `dist/extensions`,
 - remote `pi --mode rpc` starts through SSH stdio,
 - selected extensions load from the remote extension directory,
+- `getSkills` and `getAgents` can see remote sentinel resources under the
+  remote `PI_CODING_AGENT_DIR`,
+- local-only sentinel skills, agents, and local resource paths are absent,
 - `memory.list` and `memory.getStatus` work against the remote agent memory
-  root.
+  root,
+- `getSystemPrompt` names the remote cwd and hides local-only resource paths,
 - two remote RPC children can start concurrently against the same uploaded
   runtime, each with its own `PI_CODING_AGENT_DIR`; both can load extensions,
   run `bash pwd`, and call the memory channel.
+
+The current `ssh-command` fallback smoke verified:
+
+- local user/project skills are not exposed in quick fallback mode,
+- local memory and learning sedimentation channels are disabled or unavailable,
+- the system prompt can mention the remote cwd without leaking local agent
+  resource paths,
+- direct `pwd && hostname` over SSH still proves the selected remote identity.
 
 The current service/attach smoke verified:
 

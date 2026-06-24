@@ -171,6 +171,271 @@ describe("listRecentProjects", () => {
   });
 });
 
+describe("openRemoteProject runtime kind", () => {
+  it("defaults new SSH projects to standard remote-agent-child", async () => {
+    const { openRemoteProject } = await import("../../../src/shared/lib/project-config");
+
+    const opened = await openRemoteProject({
+      host: "xyz-mac",
+      remotePath: "/tmp/pi-agent-standard",
+      projectName: "pi-agent-standard",
+    });
+
+    expect(opened.remote.sshRuntimeKind).toBe("remote-agent-child");
+    expect(opened.tab.remote?.sshRuntimeKind).toBe("remote-agent-child");
+  });
+
+  it("persists explicit quick sandbox SSH projects", async () => {
+    const { getRemoteProjectByLocalPath, openRemoteProject } = await import(
+      "../../../src/shared/lib/project-config"
+    );
+
+    const opened = await openRemoteProject({
+      host: "xyz-mac",
+      remotePath: "/tmp/pi-agent-quick",
+      projectName: "pi-agent-quick",
+      sshRuntimeKind: "ssh-command",
+    });
+    const stored = await getRemoteProjectByLocalPath(opened.remote.localPath);
+
+    expect(opened.remote.sshRuntimeKind).toBe("ssh-command");
+    expect(stored).toMatchObject({
+      sshRuntimeKind: "ssh-command",
+    });
+  });
+
+  it("persists per-project remote resource sync selection", async () => {
+    const { getRemoteProjectByLocalPath, openRemoteProject } = await import(
+      "../../../src/shared/lib/project-config"
+    );
+
+    const opened = await openRemoteProject({
+      host: "xyz-mac",
+      remotePath: "/tmp/pi-agent-resource-sync",
+      projectName: "pi-agent-resource-sync",
+      sshRuntimeKind: "remote-agent-child",
+      remoteResourceSync: {
+        enabled: true,
+        resourceTypes: ["skills", "rules"],
+      },
+    });
+    const stored = await getRemoteProjectByLocalPath(opened.remote.localPath);
+
+    expect(opened.remote.remoteResourceSync).toEqual({
+      enabled: true,
+      resourceTypes: ["skills", "rules"],
+    });
+    expect(opened.tab.remote?.remoteResourceSync).toEqual({
+      enabled: true,
+      resourceTypes: ["skills", "rules"],
+    });
+    expect(stored?.remoteResourceSync).toEqual({
+      enabled: true,
+      resourceTypes: ["skills", "rules"],
+    });
+  });
+});
+
+describe("getRemoteProjectByPath", () => {
+  it("finds SSH remote projects by local shadow path, remote path, and remote child path", async () => {
+    const localPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-path-lookup");
+    const remotePath = "/Users/xyz/Projects/demo1";
+
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          remoteProjects: [
+            {
+              id: "remote-path-lookup",
+              runtime: "ssh",
+              sshRuntimeKind: "remote-agent-child",
+              profileId: "ssh-profile",
+              host: "xyz-mac",
+              remotePath,
+              localPath,
+              name: "demo1",
+              createdAt: 90,
+              lastOpened: 100,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { getRemoteProjectByPath } = await import("../../../src/shared/lib/project-config");
+
+    await expect(getRemoteProjectByPath(localPath)).resolves.toMatchObject({
+      id: "remote-path-lookup",
+    });
+    await expect(getRemoteProjectByPath(remotePath)).resolves.toMatchObject({
+      id: "remote-path-lookup",
+    });
+    await expect(getRemoteProjectByPath(`${remotePath}/pi-agent-app`)).resolves.toMatchObject({
+      id: "remote-path-lookup",
+    });
+  });
+});
+
+describe("restoreOpenTabs", () => {
+  it("hydrates legacy SSH tabs from remote project records", async () => {
+    const localPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-legacy-tab");
+
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          openTabs: [
+            {
+              id: `proj-${localPath.replace(/\//g, "-")}`,
+              name: "ssh-legacy-tab",
+              path: localPath,
+            },
+          ],
+          activeTabId: `proj-${localPath.replace(/\//g, "-")}`,
+          remoteProjects: [
+            {
+              id: "remote-legacy-tab",
+              runtime: "ssh",
+              sshRuntimeKind: "remote-agent-child",
+              profileId: "ssh-profile",
+              host: "xyz-mac",
+              remotePath: "/Users/xyz/Projects/44444",
+              localPath,
+              name: "44444",
+              createdAt: 90,
+              lastOpened: 100,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { restoreOpenTabs } = await import("../../../src/shared/lib/project-config");
+    const restored = await restoreOpenTabs();
+
+    expect(restored).toMatchObject({
+      activeTabId: "remote-remote-legacy-tab",
+      tabs: [
+        {
+          id: "remote-remote-legacy-tab",
+          name: "44444",
+          path: localPath,
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            sshRuntimeKind: "remote-agent-child",
+            host: "xyz-mac",
+            remotePath: "/Users/xyz/Projects/44444",
+            localPath,
+          },
+        },
+      ],
+    });
+  });
+
+  it("filters orphan SSH shadow tabs without remote metadata", async () => {
+    const orphanLocalPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-orphan-tab");
+
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          openTabs: [
+            {
+              id: "orphan",
+              name: "orphan",
+              path: orphanLocalPath,
+            },
+            {
+              id: "local",
+              name: "local",
+              path: "/Users/xuyingzhou/Project/local",
+            },
+          ],
+          activeTabId: "orphan",
+          remoteProjects: [],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { restoreOpenTabs } = await import("../../../src/shared/lib/project-config");
+    const restored = await restoreOpenTabs();
+
+    expect(restored).toEqual({
+      activeTabId: "local",
+      tabs: [
+        {
+          id: "local",
+          name: "local",
+          path: "/Users/xuyingzhou/Project/local",
+        },
+      ],
+    });
+  });
+});
+
+describe("syncOpenTabs", () => {
+  it("hydrates SSH shadow tabs before persisting them", async () => {
+    const localPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-sync-tab");
+    const legacyTabId = `proj-${localPath.replace(/\//g, "-")}`;
+
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          remoteProjects: [
+            {
+              id: "remote-sync-tab",
+              runtime: "ssh",
+              sshRuntimeKind: "remote-agent-child",
+              profileId: "ssh-profile",
+              host: "xyz-mac",
+              remotePath: "/Users/xyz/Projects/44444",
+              localPath,
+              name: "44444",
+              createdAt: 90,
+              lastOpened: 100,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { restoreOpenTabs, syncOpenTabs } = await import(
+      "../../../src/shared/lib/project-config"
+    );
+    await syncOpenTabs([{ id: legacyTabId, name: "44444", path: localPath }], legacyTabId);
+
+    const restored = await restoreOpenTabs();
+    expect(restored).toMatchObject({
+      activeTabId: "remote-remote-sync-tab",
+      tabs: [
+        {
+          id: "remote-remote-sync-tab",
+          runtime: "ssh",
+          remote: {
+            remotePath: "/Users/xyz/Projects/44444",
+            sshRuntimeKind: "remote-agent-child",
+          },
+        },
+      ],
+    });
+  });
+});
+
 describe("setDisabledPlugin", () => {
   it("adds a plugin to disabled list", async () => {
     const { setDisabledPlugin } = await import("../../../src/shared/lib/project-config");

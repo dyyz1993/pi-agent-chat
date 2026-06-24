@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createLogger } from "../../shared/lib/logger";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
+import { useNotificationStore } from "./use-notification-store";
 
 const log = createLogger("tier");
 
@@ -95,6 +96,11 @@ export const useTierStore = create<TierState>()((set, get) => ({
         models: Record<string, string>;
       };
       set({ globalDefaults: result.models });
+      get().setSessionTierModels(sessionId, result.models);
+      const currentModel = useSessionStore.getState().currentModel;
+      if (currentModel) {
+        get().syncTierFromModel(sessionId, currentModel.provider, currentModel.id);
+      }
       log.info("fetched tier config as global defaults", { models: result.models });
     } catch (err) {
       log.warn("failed to fetch tier config", {
@@ -110,8 +116,8 @@ export const useTierStore = create<TierState>()((set, get) => ({
         sessionId,
         tier,
       });
-      get().setSessionCurrentTier(sessionId, tier);
-      const model = result as { provider: string; id: string };
+      const model = result as { provider: string; id: string; tier?: TierKey };
+      get().setSessionCurrentTier(sessionId, model.tier ?? tier);
       useSessionStore.getState().setCurrentModel(model.provider ?? "", model.id ?? "");
       log.info("switched to tier", { tier, resolved: model });
 
@@ -120,6 +126,11 @@ export const useTierStore = create<TierState>()((set, get) => ({
       log.warn("tier switch failed, staying on current model", {
         tier,
         error: err instanceof Error ? err.message : String(err),
+      });
+      useNotificationStore.getState().push({
+        message: `模型档位切换失败：${err instanceof Error ? err.message : String(err)}`,
+        level: "error",
+        sessionId,
       });
     } finally {
       set({ switching: false });

@@ -9,6 +9,7 @@
 import { resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
+import { getPiAgentDir } from "../shared/lib/pi-agent-paths";
 
 const log = createLogger("gateway");
 
@@ -29,6 +30,7 @@ const READ_ONLY_ROOTS = [
   resolve(process.env.HOME ?? "", ".claude", "hooks"),
   resolve(process.env.HOME ?? "", ".pi", "agent", "settings.json"),
   resolve(process.env.HOME ?? "", ".pi", "agent", "hooks"),
+  resolve(getPiAgentDir(), "projects"),
 ];
 
 let cachedAllowedRoots: string[] | null = null;

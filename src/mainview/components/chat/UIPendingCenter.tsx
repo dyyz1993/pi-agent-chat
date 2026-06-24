@@ -662,8 +662,10 @@ export function UIPendingCenter() {
 
 export function ProjectRuntimePendingRequests({
   activeSessionId,
+  placement = "inline",
 }: {
   activeSessionId: string | null;
+  placement?: "inline" | "composerOverlay";
 }) {
   const { t } = useTranslation("chat");
   const allPending = useUIDialogStore((s) => s.pending);
@@ -688,10 +690,17 @@ export function ProjectRuntimePendingRequests({
 
   const [primary, ...secondary] = sessionPending;
   const shouldAvoidRightOverlay = statusPanel === "visible" && breakpoint !== "mobile";
+  const isComposerOverlay = placement === "composerOverlay";
+  const rootClassName = isComposerOverlay
+    ? "pointer-events-none absolute inset-x-0 bottom-full z-30 px-3 pb-2"
+    : "px-3 py-1.5 flex-shrink-0";
+  const bodyMaxHeightClassName = isComposerOverlay
+    ? "max-h-[min(440px,54dvh)]"
+    : "max-h-[min(560px,66vh)]";
 
   return (
     <div
-      className="px-3 py-1.5 flex-shrink-0"
+      className={rootClassName}
       aria-live="polite"
       style={
         shouldAvoidRightOverlay ? { paddingRight: `calc(0.75rem + ${statusWidth}px)` } : undefined
@@ -700,7 +709,8 @@ export function ProjectRuntimePendingRequests({
       <div
         data-ui-request-id={primary.requestId}
         data-ui-dock-request-id={primary.requestId}
-        className="overflow-hidden rounded-lg border border-status-warning/20 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
+        data-placement={placement}
+        className="pointer-events-auto overflow-hidden rounded-lg border border-status-warning/25 bg-bg-elevated/95 shadow-xl shadow-black/10 ring-1 ring-border-primary/35 backdrop-blur-md dark:bg-surface-dim/95"
       >
         <div className="flex items-center gap-2 border-b border-border-secondary/45 px-2.5 py-1.5">
           <span className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[11px] font-semibold text-status-warning">
@@ -714,7 +724,7 @@ export function ProjectRuntimePendingRequests({
             {sessionPending.length}
           </span>
         </div>
-        <div className="max-h-[min(560px,66vh)] overflow-y-auto px-2.5 py-2">
+        <div className={`${bodyMaxHeightClassName} overflow-y-auto px-2.5 py-2`}>
           <PanelCard req={primary} />
         </div>
         {secondary.length > 0 && (

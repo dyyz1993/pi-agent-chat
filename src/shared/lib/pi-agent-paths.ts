@@ -83,12 +83,19 @@ function sanitizeBasename(path: string): string {
 
 export function isPathInsideUserMemoryDir(path: string): boolean {
   const memoryBase = resolve(getUserMemoryDir());
+  const projectStateBase = resolve(join(getPiAgentDir(), "projects"));
   const resolvedPath = resolve(path);
-  return (
+  const insideUserMemory =
     resolvedPath === memoryBase ||
     resolvedPath.startsWith(`${memoryBase}/`) ||
-    resolvedPath.startsWith(`${memoryBase}\\`)
-  );
+    resolvedPath.startsWith(`${memoryBase}\\`);
+  const insideProjectMemory =
+    resolvedPath.startsWith(`${projectStateBase}/`) ||
+    resolvedPath.startsWith(`${projectStateBase}\\`);
+  const projectRelative = resolvedPath.slice(projectStateBase.length).replace(/^[/\\]/, "");
+  const projectSegments = projectRelative.split(/[/\\]/);
+  const isProjectMemoryPath = projectSegments.length >= 2 && projectSegments[1] === "memory";
+  return insideUserMemory || (insideProjectMemory && isProjectMemoryPath);
 }
 
 export function hasPiAgentDir(): boolean {

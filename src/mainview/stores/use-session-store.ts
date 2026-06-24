@@ -36,6 +36,7 @@ import {
 import { useSessionTodoStore } from "./use-session-todo-store";
 import { useSessionQueueStore } from "./use-session-queue-store";
 import { pickDefaultSessionId } from "./session-selection";
+import { getProjectWorkspacePath } from "../lib/project-workspace-path";
 
 const log = createLogger("session");
 const perfLog = createLogger("session-perf");
@@ -70,7 +71,18 @@ function findSessionProjectPath(state: SessionState, sessionId: string): string 
 
 function getActiveTabPath(state: SessionState): string | null {
   const tab = state.projectTabs.find((item) => item.id === state.activeProjectId);
-  return tab?.path ?? null;
+  return getProjectWorkspacePath(tab) || null;
+}
+
+function mergeProjectTab(existing: ProjectTab, incoming: ProjectTab): ProjectTab {
+  return {
+    ...existing,
+    ...incoming,
+    id: existing.id,
+    runtime: incoming.runtime ?? existing.runtime,
+    remote: incoming.remote ?? existing.remote,
+    connected: incoming.connected ?? existing.connected,
+  };
 }
 
 function scheduleWorkspaceResourceRefresh(getState: () => SessionState, sessionId: string): void {
@@ -249,10 +261,13 @@ export const useSessionStore = create<SessionState>()(
 
       addProjectTab: (tab) =>
         set((s) => {
-          const exists = s.projectTabs.find((t) => t.path === tab.path);
+          const exists = s.projectTabs.find((t) => t.path === tab.path || t.id === tab.id);
           if (exists) {
-            syncTabsToBackend(s.projectTabs, exists.id);
-            return { activeProjectId: exists.id };
+            const next = s.projectTabs.map((existing) =>
+              existing.id === exists.id ? mergeProjectTab(existing, tab) : existing,
+            );
+            syncTabsToBackend(next, exists.id);
+            return { projectTabs: next, activeProjectId: exists.id };
           }
           const next = [...s.projectTabs, tab];
           syncTabsToBackend(next, tab.id);
@@ -324,17 +339,18 @@ export const useSessionStore = create<SessionState>()(
         syncTabsToBackend(tabs, id);
         const tab = tabs.find((t) => t.id === id);
         if (!tab) return;
+        const workspacePath = getProjectWorkspacePath(tab);
 
         const explorer = useExplorerStore.getState();
-        explorer.setCurrentPath(tab.path);
+        explorer.setCurrentPath(workspacePath);
         explorer.listRootDir();
 
         const gitStore = useGitStore.getState();
-        gitStore.checkGitRepo(tab.path).then((isGit) => {
+        gitStore.checkGitRepo(workspacePath).then((isGit) => {
           if (!isGit || version !== get()._projectVersion) return;
-          gitStore.fetchWorktrees(tab.path);
-          gitStore.fetchStatus(tab.path);
-          gitStore.fetchBranches(tab.path);
+          gitStore.fetchWorktrees(workspacePath);
+          gitStore.fetchStatus(workspacePath);
+          gitStore.fetchBranches(workspacePath);
         });
 
         if (!skipAutoSession) {

@@ -80,6 +80,16 @@ export const MEMORY_METHODS = {
   ADD_RULE: "memory.addRule",
 } as const;
 
+// ---- learning channel ----
+export const LEARNING_METHODS = {
+  GET_SNAPSHOT: "learning.getSnapshot",
+  SET_CONFIG: "learning.setConfig",
+  LIST_CANDIDATES: "learning.listCandidates",
+  APPROVE_CANDIDATE: "learning.approveCandidate",
+  REJECT_CANDIDATE: "learning.rejectCandidate",
+  RUN_CURATOR: "learning.runCurator",
+} as const;
+
 // ---- supervisor channel ----
 export const SUPERVISOR_METHODS = {
   GET_STATUS: "getStatus",
@@ -131,6 +141,7 @@ export const ALL_CHANNEL_METHODS: ReadonlySet<string> = new Set([
   ...Object.values(HOOKS_METHODS),
   ...Object.values(LSP_METHODS),
   ...Object.values(MEMORY_METHODS),
+  ...Object.values(LEARNING_METHODS),
   ...Object.values(SUPERVISOR_METHODS),
   ...Object.values(RULES_METHODS),
   ...Object.values(COORDINATOR_METHODS),
@@ -146,6 +157,7 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   hooks: new Set(Object.values(HOOKS_METHODS)),
   lsp: new Set(Object.values(LSP_METHODS)),
   memory: new Set(Object.values(MEMORY_METHODS)),
+  learning: new Set(Object.values(LEARNING_METHODS)),
   supervisor: new Set(Object.values(SUPERVISOR_METHODS)),
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),

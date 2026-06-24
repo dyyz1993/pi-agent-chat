@@ -7,6 +7,27 @@ export interface PersistedTab {
 }
 
 export type ProjectRuntime = "local" | "ssh";
+export type SshRuntimeKind = "remote-agent-child" | "ssh-command";
+export type RemoteSyncResourceType = "skills" | "agents" | "rules";
+
+export interface RemoteResourceSyncConfig {
+  enabled?: boolean;
+  resourceTypes?: RemoteSyncResourceType[];
+}
+
+export interface RemoteResourceSyncPreview {
+  resources: Array<{
+    type: RemoteSyncResourceType;
+    files: number;
+    bytes: number;
+    sources: string[];
+  }>;
+  blocked: Array<{
+    path: string;
+    reason: string;
+  }>;
+  hash: string;
+}
 
 export interface SshProfile {
   id: string;
@@ -55,12 +76,14 @@ export interface SshCommandResult {
 
 export interface RemoteProjectRef {
   runtime: "ssh";
+  sshRuntimeKind?: SshRuntimeKind;
   profileId: string;
   host: string;
   remotePath: string;
   localPath: string;
   shell?: string;
   sshArgs?: string[];
+  remoteResourceSync?: RemoteResourceSyncConfig;
 }
 
 export interface RemoteProjectRecord extends RemoteProjectRef {
@@ -234,6 +257,15 @@ export interface ProjectMethods {
     };
     result: SshCommandResult & { path: string };
   };
+  "project.previewRemoteResourceSync": {
+    params: {
+      profileId?: string;
+      host?: string;
+      remotePath?: string;
+      resourceTypes?: RemoteSyncResourceType[];
+    };
+    result: RemoteResourceSyncPreview;
+  };
   "project.openSshProject": {
     params: {
       profileId?: string;
@@ -242,6 +274,8 @@ export interface ProjectMethods {
       profileName?: string;
       host: string;
       remotePath: string;
+      sshRuntimeKind?: SshRuntimeKind;
+      remoteResourceSync?: RemoteResourceSyncConfig;
       sshArgs?: string[];
       shell?: string;
     };

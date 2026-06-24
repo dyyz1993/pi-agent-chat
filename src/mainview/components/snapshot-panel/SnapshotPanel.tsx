@@ -23,6 +23,12 @@ import { formatFilePath } from "../../lib/format-path";
 
 const log = createLogger("snapshot");
 
+type PendingSnapshotAction = {
+  type: "rollback" | "unrevert";
+  snapId: string;
+  message: string;
+};
+
 export function SnapshotPanel() {
   const { t } = useTranslation("snapshot");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
@@ -33,6 +39,7 @@ export function SnapshotPanel() {
   const pushNotification = useNotificationStore((s) => s.push);
   const [rollingBackId, setRollingBackId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingSnapshotAction | null>(null);
 
   const sessionId = activeSessionId ?? "";
   const loading = useSnapshotStore((s) => s.loadingBySession[sessionId] ?? false);
@@ -51,14 +58,12 @@ export function SnapshotPanel() {
   const handleRollback = useCallback(
     async (snapId: string) => {
       if (!sessionId) return;
-      if (!window.confirm(t("confirmRollback"))) {
-        return;
-      }
       setRollingBackId(snapId);
       try {
         const result = await rollback(sessionId, snapId);
         if (result.ok) {
           pushNotification({ message: t("rollbackSuccess"), level: "info" });
+          setPendingAction(null);
         } else {
           pushNotification({
             message: result.error
@@ -84,14 +89,12 @@ export function SnapshotPanel() {
   const handleUnrevert = useCallback(
     async (snapId: string) => {
       if (!sessionId) return;
-      if (!window.confirm(t("confirmUnrevert"))) {
-        return;
-      }
       setRollingBackId(snapId);
       try {
         const result = await unrevert(sessionId, snapId);
         if (result.ok) {
           pushNotification({ message: t("unrevertSuccess"), level: "info" });
+          setPendingAction(null);
         } else {
           pushNotification({
             message: result.error
@@ -114,6 +117,29 @@ export function SnapshotPanel() {
     [sessionId, unrevert, pushNotification, t],
   );
 
+  const requestRollback = useCallback(
+    (snapId: string) => {
+      setPendingAction({ type: "rollback", snapId, message: t("confirmRollback") });
+    },
+    [t],
+  );
+
+  const requestUnrevert = useCallback(
+    (snapId: string) => {
+      setPendingAction({ type: "unrevert", snapId, message: t("confirmUnrevert") });
+    },
+    [t],
+  );
+
+  const confirmPendingAction = useCallback(() => {
+    if (!pendingAction) return;
+    if (pendingAction.type === "rollback") {
+      void handleRollback(pendingAction.snapId);
+    } else {
+      void handleUnrevert(pendingAction.snapId);
+    }
+  }, [handleRollback, handleUnrevert, pendingAction]);
+
   return (
     <div className="flex flex-col h-full">
       <PanelHeader
@@ -133,6 +159,31 @@ export function SnapshotPanel() {
       />
 
       <div className="flex-1 overflow-y-auto">
+        {pendingAction && (
+          <div className="mx-3 mt-2 rounded border border-status-warning/30 bg-status-warning/5 px-2 py-1.5">
+            <div className="text-[10px] font-medium text-status-warning">
+              {pendingAction.message}
+            </div>
+            <div className="mt-1.5 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={confirmPendingAction}
+                disabled={rollingBackId === pendingAction.snapId}
+                className="h-6 rounded bg-status-warning/10 px-2 text-[10px] text-status-warning transition-colors hover:bg-status-warning/15 disabled:cursor-wait disabled:opacity-60"
+              >
+                {pendingAction.type === "rollback" ? t("rollbackToSnapshot") : t("cancelRollback")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                disabled={Boolean(rollingBackId)}
+                className="h-6 rounded bg-surface-hover/35 px-2 text-[10px] text-text-tertiary transition-colors hover:bg-surface-hover/70 disabled:opacity-60"
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </div>
+        )}
         {loading && <SkeletonState />}
 
         {!loading && !sessionId && <EmptyState />}
@@ -149,8 +200,8 @@ export function SnapshotPanel() {
               isRollingBack={rollingBackId === snap.id}
               rollbackDisabled={rollingBackId !== null}
               onToggleExpand={toggleExpand}
-              onRollback={handleRollback}
-              onUnrevert={handleUnrevert}
+              onRollback={requestRollback}
+              onUnrevert={requestUnrevert}
               isLatest={idx === 0}
             />
           ))}

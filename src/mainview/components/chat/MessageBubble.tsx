@@ -13,12 +13,10 @@ import { getRegisteredTags, getRenderer } from "./special-block-registry";
 import "./special-block-renderers";
 import { ContentBlockRenderer } from "./ContentBlockRenderer";
 import { MessageMetaFooter } from "./MessageMetaFooter";
+import { stripContextReferenceTags } from "./ContextReferenceCard";
+import { stripHookInterventionTags } from "./HookInterventionCard";
 import { getBlockBorderColor, getDefaultBorderColor } from "./block-border";
-import {
-  MEMORY_HIDDEN_IN_CHAT,
-  isLspCustomType,
-  isLspVisibleInChat,
-} from "./lsp-constants";
+import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./lsp-constants";
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
 
@@ -116,7 +114,7 @@ export const MessageBubble = memo(function MessageBubble({
     }
     return content
       .map((b) => {
-        if (b.type === "text") return b.text;
+        if (b.type === "text") return stripHookInterventionTags(stripContextReferenceTags(b.text));
         if (b.type === "thinking") return `Thinking:\n${b.thinking}`;
         if (b.type === "toolCall") return `[Tool: ${b.name}] ${b.input}`;
         if (b.type === "toolResult")
@@ -256,10 +254,7 @@ export const MessageBubble = memo(function MessageBubble({
       )}
 
       {expandedImage && (
-        <ImageViewerOverlay
-          src={expandedImage}
-          onClose={() => setExpandedImage(null)}
-        />
+        <ImageViewerOverlay src={expandedImage} onClose={() => setExpandedImage(null)} />
       )}
     </div>
   );

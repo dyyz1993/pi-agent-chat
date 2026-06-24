@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, readdir, copyFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
-import { join, dirname, basename } from "path";
+import { join, dirname, basename, resolve } from "path";
 import { homedir } from "os";
 import { createHash } from "crypto";
 import { createLogger } from "./logger";
@@ -10,6 +10,9 @@ import type {
   ProjectRuntime,
   RemoteProjectRecord,
   RemoteProjectRef,
+  RemoteResourceSyncConfig,
+  RemoteSyncResourceType,
+  SshRuntimeKind,
   SshProfile,
 } from "../modules/project";
 
@@ -78,6 +81,21 @@ function emptyConfig(): ProjectConfig {
   };
 }
 
+const REMOTE_RESOURCE_TYPES = new Set<RemoteSyncResourceType>(["skills", "agents", "rules"]);
+
+function normalizeRemoteResourceSyncConfig(
+  input?: RemoteResourceSyncConfig,
+): RemoteResourceSyncConfig | undefined {
+  if (!input) return undefined;
+  const normalized: RemoteResourceSyncConfig = {
+    enabled: input.enabled !== false,
+  };
+  if (Array.isArray(input.resourceTypes)) {
+    normalized.resourceTypes = input.resourceTypes.filter((type) => REMOTE_RESOURCE_TYPES.has(type));
+  }
+  return normalized;
+}
+
 function parseConfig(raw: string): ProjectConfig {
   const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
   return {
@@ -127,6 +145,10 @@ function normalizeSshArgs(sshArgs?: string[]): string[] | undefined {
 function normalizeShell(shell?: string): string | undefined {
   const trimmed = shell?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeSshRuntimeKind(kind?: string): SshRuntimeKind {
+  return kind === "ssh-command" ? "ssh-command" : "remote-agent-child";
 }
 
 function firstNonEmpty(...values: Array<string | undefined>): string {
@@ -326,6 +348,35 @@ function hydrateRecentProjects(config: ProjectConfig): RecentProject[] {
   });
 }
 
+function hydrateTabs(config: ProjectConfig, tabs: PersistedTab[]): PersistedTab[] {
+  const remoteByLocalPath = new Map(
+    config.remoteProjects.map((remote) => [remote.localPath, remote]),
+  );
+
+  return tabs.flatMap((tab) => {
+    const remoteRecord = remoteByLocalPath.get(tab.path);
+    const remote = tab.remote ?? remoteRecord;
+    if (!remote) {
+      return isRemoteProjectLocalPath(tab.path) ? [] : [tab];
+    }
+
+    const wasLegacyRemote = tab.runtime !== "ssh" || !tab.remote;
+    return [
+      {
+        ...tab,
+        id: tab.id.startsWith("proj-") && remoteRecord ? `remote-${remoteRecord.id}` : tab.id,
+        name: wasLegacyRemote && remoteRecord ? remoteRecord.name : tab.name,
+        runtime: "ssh",
+        remote,
+      },
+    ];
+  });
+}
+
+function hydrateOpenTabs(config: ProjectConfig): PersistedTab[] {
+  return hydrateTabs(config, config.openTabs);
+}
+
 function isRemoteProjectLocalPath(projectPath: string): boolean {
   return projectPath.startsWith(join(CONFIG_DIR, "remote-projects", "ssh-"));
 }
@@ -392,6 +443,8 @@ export async function openRemoteProject(input: {
   profileName?: string;
   host: string;
   remotePath: string;
+  sshRuntimeKind?: SshRuntimeKind;
+  remoteResourceSync?: RemoteResourceSyncConfig;
   sshArgs?: string[];
   shell?: string;
 }): Promise<{ profile: SshProfile; remote: RemoteProjectRecord; tab: PersistedTab }> {
@@ -420,12 +473,14 @@ export async function openRemoteProject(input: {
     );
     const remoteRef: RemoteProjectRef = {
       runtime: "ssh",
+      sshRuntimeKind: normalizeSshRuntimeKind(input.sshRuntimeKind),
       profileId: profile.id,
       host: profile.host,
       remotePath,
       localPath,
       sshArgs: profile.sshArgs,
       shell: profile.shell,
+      remoteResourceSync: normalizeRemoteResourceSyncConfig(input.remoteResourceSync),
     };
     const existing = config.remoteProjects.find((project) => project.localPath === localPath);
     const remote: RemoteProjectRecord =
@@ -441,9 +496,11 @@ export async function openRemoteProject(input: {
     remote.profileId = profile.id;
     remote.host = profile.host;
     remote.remotePath = remotePath;
+    remote.sshRuntimeKind = normalizeSshRuntimeKind(input.sshRuntimeKind);
     remote.localPath = localPath;
     remote.sshArgs = profile.sshArgs;
     remote.shell = profile.shell;
+    remote.remoteResourceSync = normalizeRemoteResourceSyncConfig(input.remoteResourceSync);
     remote.lastOpened = now;
     if (!existing) {
       config.remoteProjects.unshift(remote);
@@ -465,6 +522,35 @@ export async function getRemoteProjectByLocalPath(
 ): Promise<RemoteProjectRecord | null> {
   const config = await load();
   return config.remoteProjects.find((project) => project.localPath === localPath) ?? null;
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.length > 1 ? value.replace(/\/+$/, "") : value;
+}
+
+function isSameOrChildPath(basePath: string, candidatePath: string): boolean {
+  const base = stripTrailingSlash(basePath);
+  const candidate = stripTrailingSlash(candidatePath);
+  return candidate === base || candidate.startsWith(`${base}/`);
+}
+
+export async function getRemoteProjectByPath(
+  projectPath: string,
+): Promise<RemoteProjectRecord | null> {
+  const config = await load();
+  const resolvedProjectPath = resolve(projectPath);
+  return (
+    config.remoteProjects.find(
+      (project) =>
+        isSameOrChildPath(resolve(project.localPath), resolvedProjectPath) ||
+        isSameOrChildPath(project.remotePath, projectPath),
+    ) ?? null
+  );
+}
+
+export async function listRemoteProjects(): Promise<RemoteProjectRecord[]> {
+  const config = await load();
+  return [...config.remoteProjects];
 }
 
 export async function removeRecentProject(projectPath: string): Promise<void> {
@@ -510,8 +596,15 @@ export async function syncOpenTabs(
   activeTabId: string | null,
 ): Promise<void> {
   return loadAndSave((config) => {
-    config.openTabs = tabs;
-    config.activeTabId = activeTabId;
+    const activePath = tabs.find((tab) => tab.id === activeTabId)?.path;
+    const hydratedTabs = hydrateTabs(config, tabs);
+    const hydratedActiveId = hydratedTabs.some((tab) => tab.id === activeTabId)
+      ? activeTabId
+      : (activePath
+          ? (hydratedTabs.find((tab) => tab.path === activePath)?.id ?? null)
+          : null);
+    config.openTabs = hydratedTabs;
+    config.activeTabId = hydratedActiveId ?? hydratedTabs[0]?.id ?? null;
   });
 }
 
@@ -520,7 +613,11 @@ export async function restoreOpenTabs(): Promise<{
   activeTabId: string | null;
 }> {
   const config = await load();
-  return { tabs: config.openTabs, activeTabId: config.activeTabId };
+  const tabs = hydrateOpenTabs(config);
+  const activeTabId = tabs.some((tab) => tab.id === config.activeTabId)
+    ? config.activeTabId
+    : (tabs[0]?.id ?? null);
+  return { tabs, activeTabId };
 }
 
 export async function pinSession(sessionId: string): Promise<string[]> {

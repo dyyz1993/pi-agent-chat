@@ -77,8 +77,8 @@ export const config = {
   remotePiCliPath: process.env.REMOTE_PI_CLI_PATH ?? "pi",
   /** 远端 node 路径 */
   remoteNodePath: process.env.REMOTE_NODE_PATH ?? "node",
-  /** 远端启动命令使用的登录 shell 包装；Linux 可设为 bash -lc */
-  remoteShell: process.env.REMOTE_SHELL ?? "zsh -lc",
+  /** 远端启动命令使用的 shell 包装；默认使用 POSIX sh，避免要求远端安装 zsh */
+  remoteShell: process.env.REMOTE_SHELL ?? "sh -lc",
   /** 远端 PI_CODING_AGENT_DIR；不填则使用远端 pi 默认值 */
   remotePiAgentDir: process.env.REMOTE_PI_AGENT_DIR ?? "",
   /** 远端 bridge 监听端口，仅监听 127.0.0.1 后通过 SSH tunnel 访问 */
@@ -113,7 +113,7 @@ export const config = {
     "node",
   /** Remote child shell wrapper */
   remoteChildShell:
-    process.env.REMOTE_CHILD_SHELL ?? process.env.REMOTE_SHELL ?? "zsh -lc",
+    process.env.REMOTE_CHILD_SHELL ?? process.env.REMOTE_SHELL ?? "sh -lc",
   /** Remote child 本地单文件二进制；设置后启动前会自动上传到远端版本目录 */
   remoteChildLocalBinaryPath: process.env.REMOTE_CHILD_LOCAL_BINARY_PATH ?? "",
   /** Remote child 本地内置 extensions 目录；不填则使用当前 pi 包的 dist/extensions */
@@ -126,6 +126,12 @@ export const config = {
   remoteChildBinaryName: process.env.REMOTE_CHILD_BINARY_NAME ?? "pi",
   /** 是否自动上传本地 remote child 二进制 */
   remoteChildAutoUpload: process.env.REMOTE_CHILD_AUTO_UPLOAD !== "false",
+  /** Standard SSH 启动前是否同步本地低风险资源（skills/agents/rules）到远端 managed agent dir */
+  remoteResourceSyncEnabled: process.env.REMOTE_RESOURCE_SYNC !== "false",
+  /** 本地资源同步源，默认使用 PI_CODING_AGENT_DIR 或 ~/.pi/agent */
+  remoteResourceSyncLocalAgentDir: process.env.REMOTE_RESOURCE_SYNC_LOCAL_AGENT_DIR ?? "",
+  /** 远端 managed PI_CODING_AGENT_DIR；不填则使用 REMOTE_CHILD_REMOTE_RUNTIME_DIR/agent-resources */
+  remoteResourceSyncRemoteAgentDir: process.env.REMOTE_RESOURCE_SYNC_REMOTE_AGENT_DIR ?? "",
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {

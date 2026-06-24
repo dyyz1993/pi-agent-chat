@@ -2,9 +2,9 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { MemoryFile, MemoryStatusResult } from "../modules/memory";
-import { readdir, readFile, stat } from "fs/promises";
+import { readdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
+import { basename, dirname, join } from "path";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
@@ -30,6 +30,30 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
     if (key) frontmatter[key] = value;
   }
   return { frontmatter, body };
+}
+
+async function removeMemoryIndexEntry(filePath: string): Promise<void> {
+  const entrypointPath = join(dirname(filePath), "MEMORY.md");
+  if (!existsSync(entrypointPath)) return;
+
+  const filename = basename(filePath);
+  const content = await readFile(entrypointPath, "utf-8");
+  const filtered = content
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      return !(
+        trimmed.includes(`](${filename})`) ||
+        trimmed.includes(`](./${filename})`) ||
+        trimmed.includes(`](${filePath})`)
+      );
+    })
+    .join("\n");
+
+  if (filtered !== content) {
+    await writeFile(entrypointPath, filtered.endsWith("\n") ? filtered : `${filtered}\n`, "utf-8");
+  }
 }
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
@@ -119,6 +143,27 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const content = await readFile(params.filePath, "utf-8");
     const s = await stat(params.filePath);
     return { content, size: s.size };
+  });
+
+  r("memory.deleteFile", async (params) => {
+    if (!isPathInsideUserMemoryDir(params.filePath)) {
+      throw new Error("Path outside memory directory");
+    }
+    if (basename(params.filePath) === "MEMORY.md") {
+      throw new Error("Cannot delete memory index");
+    }
+    if (!params.filePath.endsWith(".md")) {
+      throw new Error("Only markdown memory files can be deleted");
+    }
+
+    const s = await stat(params.filePath);
+    if (!s.isFile()) {
+      throw new Error("Memory path is not a file");
+    }
+
+    await unlink(params.filePath);
+    await removeMemoryIndexEntry(params.filePath);
+    return { ok: true };
   });
 
   r("memory.remember", async (params) => {

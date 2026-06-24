@@ -1,10 +1,12 @@
-import { dirname, basename, join } from "node:path";
-import { existsSync } from "node:fs";
+import { dirname, basename, join, posix, resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { GitFileChange } from "../modules/git";
 import { createLogger } from "../lib/logger";
+import type { RemoteProjectRecord } from "../modules/project";
+import { listRemoteProjects } from "../lib/project-config";
 
 const log = createLogger("git");
 
@@ -17,20 +19,100 @@ const EMPTY_STATUS = {
   behind: 0,
 };
 
-function hasGitDir(cwd: string): boolean {
-  return existsSync(join(cwd, ".git"));
+type GitTarget =
+  | { kind: "local"; cwd: string }
+  | { kind: "ssh"; cwd: string; remote: RemoteProjectRecord };
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function execGit(args: string[], cwd: string, allowNonZero = false): string {
-  const proc = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+function stripTrailingSlash(value: string): string {
+  return value.length > 1 ? value.replace(/\/+$/, "") : value;
+}
+
+function relativeIfInside(basePath: string, candidatePath: string): string | null {
+  const base = stripTrailingSlash(basePath);
+  const candidate = stripTrailingSlash(candidatePath);
+  if (candidate === base) return "";
+  const prefix = `${base}/`;
+  return candidate.startsWith(prefix) ? candidate.slice(prefix.length) : null;
+}
+
+function runSshCommand(remote: RemoteProjectRecord, command: string, allowNonZero = false): string {
+  const proc = Bun.spawnSync(
+    [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      ...(remote.sshArgs ?? []),
+      remote.host,
+      command,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (proc.exitCode !== 0 && !allowNonZero) {
+    throw new Error(proc.stderr.toString().trim() || "ssh command failed");
+  }
+  return proc.stdout.toString();
+}
+
+async function resolveGitTarget(repoPath: string): Promise<GitTarget> {
+  const localPath = resolve(repoPath);
+  const remoteProjects = await listRemoteProjects().catch(() => []);
+  for (const remote of remoteProjects) {
+    const localSuffix = relativeIfInside(resolve(remote.localPath), localPath);
+    if (localSuffix !== null) {
+      return {
+        kind: "ssh",
+        cwd: localSuffix ? posix.join(remote.remotePath, localSuffix) : remote.remotePath,
+        remote,
+      };
+    }
+    const remoteSuffix = relativeIfInside(remote.remotePath, repoPath);
+    if (remoteSuffix !== null) {
+      return { kind: "ssh", cwd: repoPath, remote };
+    }
+  }
+  return { kind: "local", cwd: localPath };
+}
+
+function execGit(args: string[], target: GitTarget, allowNonZero = false): string {
+  if (target.kind === "ssh") {
+    const command = `cd ${shellQuote(target.cwd)} && git ${args.map(shellQuote).join(" ")}`;
+    return runSshCommand(target.remote, command, allowNonZero);
+  }
+  const proc = Bun.spawnSync(["git", ...args], {
+    cwd: target.cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   if (proc.exitCode !== 0 && !allowNonZero) {
     throw new Error(proc.stderr.toString().trim() || `git ${args[0]} failed`);
   }
   return proc.stdout.toString();
 }
 
-function getRepoRoot(cwd: string): string {
-  return execGit(["rev-parse", "--show-toplevel"], cwd).trim();
+function isGitRepo(target: GitTarget): boolean {
+  try {
+    return execGit(["rev-parse", "--is-inside-work-tree"], target, true).trim() === "true";
+  } catch {
+    return false;
+  }
+}
+
+function getRepoRoot(target: GitTarget): string {
+  return execGit(["rev-parse", "--show-toplevel"], target).trim();
+}
+
+function readWorktreeFile(target: GitTarget, repoRoot: string, filePath: string): string {
+  if (target.kind === "ssh") {
+    const command = `cd ${shellQuote(repoRoot)} && cat -- ${shellQuote(filePath)}`;
+    return runSshCommand(target.remote, command);
+  }
+  return readFileSync(join(repoRoot, filePath), "utf8");
 }
 
 function parseStatus(output: string): {
@@ -78,13 +160,14 @@ function parseStatus(output: string): {
 }
 
 function getNumStats(
+  target: GitTarget,
   repoRoot: string,
   staged: boolean,
 ): Map<string, { additions: number; deletions: number }> {
   const stats = new Map<string, { additions: number; deletions: number }>();
   try {
     const args = staged ? ["diff", "--cached", "--numstat"] : ["diff", "--numstat"];
-    const output = execGit(args, repoRoot, true);
+    const output = execGit(args, { ...target, cwd: repoRoot }, true);
     for (const line of output.split("\n")) {
       if (!line.trim()) continue;
       const [additions, deletions, ...pathParts] = line.split("\t");
@@ -106,13 +189,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
   r("git.checkRepo", async (params) => {
-    return { isGitRepo: hasGitDir(params.repoPath) };
+    const target = await resolveGitTarget(params.repoPath);
+    return { isGitRepo: isGitRepo(target) };
   });
 
   r("git.status", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { ...EMPTY_STATUS };
-    const repoRoot = getRepoRoot(params.repoPath);
-    const output = execGit(["status", "--porcelain=v1", "--branch"], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { ...EMPTY_STATUS };
+    const repoRoot = getRepoRoot(target);
+    const repoTarget = { ...target, cwd: repoRoot };
+    const output = execGit(["status", "--porcelain=v1", "--branch"], repoTarget);
     const lines = output.split("\n");
 
     // Parse branch info from first line
@@ -128,8 +214,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { staged, changed, untracked } = parseStatus(lines.slice(1).join("\n"));
 
     // Get line stats for staged and changed files
-    const stagedStats = getNumStats(repoRoot, true);
-    const changedStats = getNumStats(repoRoot, false);
+    const stagedStats = getNumStats(repoTarget, repoRoot, true);
+    const changedStats = getNumStats(repoTarget, repoRoot, false);
 
     // Merge stats into file changes
     for (const f of staged) {
@@ -151,17 +237,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.diff", async (params) => {
-    if (!hasGitDir(params.repoPath))
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target))
       return { filePath: params.filePath, diff: "", oldContent: "", newContent: "" };
-    const repoRoot = getRepoRoot(params.repoPath);
+    const repoRoot = getRepoRoot(target);
+    const repoTarget = { ...target, cwd: repoRoot };
     let diff = "";
     if (params.staged) {
-      diff = execGit(["diff", "--cached", "--", params.filePath], repoRoot);
+      diff = execGit(["diff", "--cached", "--", params.filePath], repoTarget);
     } else {
-      diff = execGit(["diff", "--", params.filePath], repoRoot);
+      diff = execGit(["diff", "--", params.filePath], repoTarget);
       if (!diff) {
         try {
-          diff = execGit(["diff", "--no-index", "/dev/null", params.filePath], repoRoot, true);
+          diff = execGit(["diff", "--no-index", "/dev/null", params.filePath], repoTarget, true);
         } catch (e) {
           log.debug("git.diff: --no-index fallback failed", {
             filePath: params.filePath,
@@ -175,14 +263,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     let oldContent = "";
     let newContent = "";
     try {
-      oldContent = execGit(["show", `HEAD:${params.filePath}`], repoRoot);
+      oldContent = execGit(["show", `HEAD:${params.filePath}`], repoTarget);
     } catch {
       log.debug("git.diff: no old content (new file)", { filePath: params.filePath });
     }
     try {
-      const { readFile } = await import("fs/promises");
-      const { join } = await import("path");
-      newContent = (await readFile(join(repoRoot, params.filePath))).toString();
+      newContent = readWorktreeFile(repoTarget, repoRoot, params.filePath);
     } catch {
       log.debug("git.diff: no new content (deleted file)", { filePath: params.filePath });
     }
@@ -191,12 +277,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.log", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { commits: [] };
-    const repoRoot = getRepoRoot(params.repoPath);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { commits: [] };
+    const repoRoot = getRepoRoot(target);
     const count = params.maxCount ?? 50;
     const output = execGit(
       ["log", `--max-count=${count}`, "--pretty=format:%H|%h|%s|%an|%aI"],
-      repoRoot,
+      { ...target, cwd: repoRoot },
     );
 
     const commits = output
@@ -211,11 +298,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.commitFiles", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { files: [] };
-    const repoRoot = getRepoRoot(params.repoPath);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { files: [] };
+    const repoRoot = getRepoRoot(target);
     const output = execGit(
       ["diff-tree", "--no-commit-id", "--name-status", "-r", params.hash],
-      repoRoot,
+      { ...target, cwd: repoRoot },
     );
 
     const statusMap: Record<string, GitFileChange["status"]> = {
@@ -240,18 +328,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.commitFileDiff", async (params) => {
-    if (!hasGitDir(params.repoPath))
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target))
       return { filePath: params.filePath, diff: "", oldContent: "", newContent: "" };
-    const repoRoot = getRepoRoot(params.repoPath);
+    const repoRoot = getRepoRoot(target);
+    const repoTarget = { ...target, cwd: repoRoot };
     const { hash, filePath } = params;
 
     // Get the diff for this file in this commit
-    const diff = execGit(["diff", `${hash}^..${hash}`, "--", filePath], repoRoot, true);
+    const diff = execGit(["diff", `${hash}^..${hash}`, "--", filePath], repoTarget, true);
 
     // Get old content (parent commit version)
     let oldContent = "";
     try {
-      oldContent = execGit(["show", `${hash}^:${filePath}`], repoRoot);
+      oldContent = execGit(["show", `${hash}^:${filePath}`], repoTarget);
     } catch {
       log.debug("git.commitFileDiff: no old content (file added in commit)", { hash, filePath });
     }
@@ -259,7 +349,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     // Get new content (this commit version)
     let newContent = "";
     try {
-      newContent = execGit(["show", `${hash}:${filePath}`], repoRoot);
+      newContent = execGit(["show", `${hash}:${filePath}`], repoTarget);
     } catch {
       log.debug("git.commitFileDiff: no new content (file deleted in commit)", { hash, filePath });
     }
@@ -268,9 +358,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.branches", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { branches: [] };
-    const repoRoot = getRepoRoot(params.repoPath);
-    const output = execGit(["branch", "-a", "--no-color"], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { branches: [] };
+    const repoRoot = getRepoRoot(target);
+    const output = execGit(["branch", "-a", "--no-color"], { ...target, cwd: repoRoot });
     const branches = output
       .split("\n")
       .filter(Boolean)
@@ -284,58 +375,66 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.checkout", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { ok: false };
-    const repoRoot = getRepoRoot(params.repoPath);
-    execGit(["checkout", params.branch], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { ok: false };
+    const repoRoot = getRepoRoot(target);
+    execGit(["checkout", params.branch], { ...target, cwd: repoRoot });
     return { ok: true };
   });
 
   r("git.add", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { ok: false };
-    const repoRoot = getRepoRoot(params.repoPath);
-    execGit(["add", ...params.paths], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { ok: false };
+    const repoRoot = getRepoRoot(target);
+    execGit(["add", ...params.paths], { ...target, cwd: repoRoot });
     return { ok: true };
   });
 
   r("git.reset", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { ok: false };
-    const repoRoot = getRepoRoot(params.repoPath);
-    execGit(["reset", "HEAD", "--", ...params.paths], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { ok: false };
+    const repoRoot = getRepoRoot(target);
+    execGit(["reset", "HEAD", "--", ...params.paths], { ...target, cwd: repoRoot });
     return { ok: true };
   });
 
   r("git.commit", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { hash: "", shortHash: "" };
-    const repoRoot = getRepoRoot(params.repoPath);
-    const output = execGit(["commit", "-m", params.message], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { hash: "", shortHash: "" };
+    const repoRoot = getRepoRoot(target);
+    const repoTarget = { ...target, cwd: repoRoot };
+    const output = execGit(["commit", "-m", params.message], repoTarget);
     // Extract hash from output like "[main abc1234] message"
     const hashMatch = output.match(/\[[\w\-/.]+\s+([0-9a-f]{7,40})\]/);
     const shortHash = hashMatch?.[1] ?? "";
     let hash = "";
     if (shortHash) {
-      hash = execGit(["rev-parse", shortHash], repoRoot).trim();
+      hash = execGit(["rev-parse", shortHash], repoTarget).trim();
     }
     return { hash, shortHash };
   });
 
   r("git.push", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { ok: false };
-    const repoRoot = getRepoRoot(params.repoPath);
-    execGit(["push"], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { ok: false };
+    const repoRoot = getRepoRoot(target);
+    execGit(["push"], { ...target, cwd: repoRoot });
     return { ok: true };
   });
 
   r("git.pull", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { ok: false };
-    const repoRoot = getRepoRoot(params.repoPath);
-    execGit(["pull"], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { ok: false };
+    const repoRoot = getRepoRoot(target);
+    execGit(["pull"], { ...target, cwd: repoRoot });
     return { ok: true };
   });
 
   r("git.worktreeList", async (params) => {
-    if (!hasGitDir(params.repoPath)) return { worktrees: [] };
-    const repoRoot = getRepoRoot(params.repoPath);
-    const output = execGit(["worktree", "list", "--porcelain"], repoRoot);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) return { worktrees: [] };
+    const repoRoot = getRepoRoot(target);
+    const output = execGit(["worktree", "list", "--porcelain"], { ...target, cwd: repoRoot });
     const worktrees: { path: string; branch: string; isMain: boolean }[] = [];
     let current: Partial<(typeof worktrees)[0]> = {};
 
@@ -370,15 +469,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.worktreeAdd", async (params) => {
-    if (!hasGitDir(params.repoPath)) throw new Error("Not a git repository");
-    const repoRoot = getRepoRoot(params.repoPath);
-    const repoDir = dirname(repoRoot);
-    const newDir = join(repoDir, `${basename(repoRoot)}-${params.branch}`);
+    const target = await resolveGitTarget(params.repoPath);
+    if (!isGitRepo(target)) throw new Error("Not a git repository");
+    const repoRoot = getRepoRoot(target);
+    const repoDir = target.kind === "ssh" ? posix.dirname(repoRoot) : dirname(repoRoot);
+    const repoName = target.kind === "ssh" ? posix.basename(repoRoot) : basename(repoRoot);
+    const newDir =
+      target.kind === "ssh"
+        ? posix.join(repoDir, `${repoName}-${params.branch}`)
+        : join(repoDir, `${repoName}-${params.branch}`);
     const args = ["worktree", "add", newDir, "-b", params.branch];
     if (params.sourceBranch) {
       args.push(params.sourceBranch);
     }
-    execGit(args, repoRoot);
+    execGit(args, { ...target, cwd: repoRoot });
     return {
       worktree: {
         path: newDir,

@@ -143,6 +143,7 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
   handleLspChannelData: (sessionId: string, event: ChannelDataEvent) => void;
   handleRulesChannelData: (sessionId: string, event: ChannelDataEvent) => void;
   handleMemoryChannelData: (sessionId: string, event: ChannelDataEvent) => void;
+  handleLearningChannelData?: (sessionId: string, event: ChannelDataEvent) => void;
   handleSupervisorChannelData: (sessionId: string, event: ChannelDataEvent) => void;
   now?: () => number;
 }): void {
@@ -157,6 +158,7 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
     if (ch.name === "lsp") return options.handleLspChannelData(options.sessionId, ch);
     if (ch.name === "rules-engine") return options.handleRulesChannelData(options.sessionId, ch);
     if (ch.name === "memory") return options.handleMemoryChannelData(options.sessionId, ch);
+    if (ch.name === "learning") return options.handleLearningChannelData?.(options.sessionId, ch);
     if (ch.name === "supervisor") {
       return options.handleSupervisorChannelData(options.sessionId, ch);
     }

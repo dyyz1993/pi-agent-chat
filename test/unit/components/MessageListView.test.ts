@@ -29,6 +29,8 @@ describe("MessageListView message processing", () => {
         customMessage("mem-search", "memory_prefetch_result"),
         customMessage("mem-save", "memory_extract"),
         customMessage("mem-organize", "memory_dream"),
+        customMessage("mem-created", "memory_created"),
+        customMessage("mem-failed", "memory_failed"),
         userMessage("visible"),
       ],
       false,

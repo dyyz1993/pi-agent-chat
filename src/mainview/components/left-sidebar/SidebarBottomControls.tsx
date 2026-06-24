@@ -14,6 +14,7 @@ import {
   Zap,
   Target,
   Settings2,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -111,9 +112,11 @@ export function SidebarBottomControls() {
   const worktrees = useGitStore((s) => s.worktrees);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees);
+  const refreshGitAll = useGitStore((s) => s.refreshAll);
   const addWorktreeAction = useGitStore((s) => s.addWorktree);
 
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceRefreshing, setWorkspaceRefreshing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranch, setNewBranch] = useState("");
   const [sourceBranch, setSourceBranch] = useState("");
@@ -159,12 +162,26 @@ export function SidebarBottomControls() {
       : currentWorkspace.branch
     : t("notLoaded");
   const workspacePath = currentWorkspace?.path ?? "";
+  const workspaceDisplayName = currentTab?.remote ? currentTab.name : workspaceName;
+  const workspaceDisplayPath = currentTab?.remote
+    ? `${currentTab.remote.host}:${currentTab.remote.remotePath}`
+    : workspacePath;
 
   useEffect(() => {
     if (activeTabPath && isGitRepo) {
       fetchWorktrees(activeTabPath);
     }
   }, [activeTabPath, fetchWorktrees, isGitRepo]);
+
+  const refreshWorkspaceGit = useCallback(async () => {
+    if (!activeTabPath || workspaceRefreshing) return;
+    setWorkspaceRefreshing(true);
+    try {
+      await refreshGitAll(activeTabPath);
+    } finally {
+      setWorkspaceRefreshing(false);
+    }
+  }, [activeTabPath, refreshGitAll, workspaceRefreshing]);
 
   useEffect(() => {
     if (!agentOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
@@ -507,20 +524,32 @@ export function SidebarBottomControls() {
 
       <div className="relative" ref={workspaceRef}>
         {!isGitRepo ? (
-          <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary">
+          <button
+            type="button"
+            onClick={() => void refreshWorkspaceGit()}
+            disabled={!activeTabPath || workspaceRefreshing}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-50 disabled:cursor-wait"
+            title="Refresh Git status"
+            aria-label="Refresh Git status"
+          >
             <FolderTree className="w-3 h-3 shrink-0" />
             <div className="flex flex-col min-w-0 flex-1 text-left">
               <span className="truncate">{t("notGitRepo")}</span>
               <span className="text-[10px] text-text-tertiary truncate">
-                {activeTabPath.split("/").pop()}
+                {workspaceDisplayPath || activeTabPath.split("/").pop()}
               </span>
             </div>
-          </div>
+            <RefreshCw
+              className={`w-3 h-3 shrink-0 ${workspaceRefreshing ? "animate-spin" : ""}`}
+            />
+          </button>
         ) : (
           <button
             onClick={() => {
-              setWorkspaceOpen(!workspaceOpen);
+              const nextOpen = !workspaceOpen;
+              setWorkspaceOpen(nextOpen);
               setThinkingOpen(false);
+              if (nextOpen) void refreshWorkspaceGit();
             }}
             disabled={!activeSessionId || !agentReady}
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
@@ -529,8 +558,10 @@ export function SidebarBottomControls() {
           >
             <FolderTree className="w-3 h-3 shrink-0 text-text-tertiary" />
             <div className="flex flex-col min-w-0 flex-1 text-left">
-              <span className="truncate">{workspaceName}</span>
-              <span className="text-[10px] text-text-tertiary truncate">{workspacePath}</span>
+              <span className="truncate">{workspaceDisplayName}</span>
+              <span className="text-[10px] text-text-tertiary truncate">
+                {workspaceDisplayPath}
+              </span>
             </div>
             <ChevronDown
               className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`}

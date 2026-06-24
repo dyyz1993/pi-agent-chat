@@ -12,6 +12,7 @@ import { register as todo } from "./todo";
 import { register as bash } from "./bash";
 import { register as lsp } from "./lsp";
 import { register as memory } from "./memory";
+import { register as learning } from "./learning";
 import { register as rules } from "./rules";
 import { register as hooks } from "./hooks";
 import { register as snapshot } from "./snapshot";
@@ -35,6 +36,7 @@ export const handlerMap: Record<string, RegisterFn> = {
   bash,
   lsp,
   memory,
+  learning,
   rules,
   hooks,
   snapshot,

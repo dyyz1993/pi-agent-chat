@@ -1,9 +1,9 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import { existsSync } from "fs";
+import { existsSync, rmSync } from "fs";
 import { execFile } from "child_process";
-import { basename } from "path";
+import { basename, join } from "path";
 import { promisify } from "util";
 import { createLogger } from "../lib/logger";
 import {
@@ -28,6 +28,7 @@ import {
   upsertSshProfile,
   removeSshProfile,
   openRemoteProject,
+  listRemoteProjects,
 } from "../lib/project-config";
 import {
   scanSessionsForProject,
@@ -39,24 +40,51 @@ import {
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
 import { getProcessManager } from "./agent";
+import { config } from "../../server-config";
+import {
+  getRemoteProjectSshRuntimeKind,
+  splitSshArgsForRemoteChild,
+} from "../agent/remote-runtime-selection";
+import {
+  collectRemoteSyncSources,
+  resolveRemoteSyncedAgentDir,
+  stageRemoteResourceSync,
+  syncRemoteAgentResources,
+} from "../../sandbox/remote-resource-sync";
+import type { RemoteResourceSyncSource } from "../../sandbox/remote-resource-sync";
 import type {
   SessionStatus,
+  RemoteSyncResourceType,
   SshCommandResult,
   SshConnectionErrorCode,
   SshDirectoryEntry,
+  RemoteResourceSyncPreview,
 } from "../modules/project";
 import { listDetectedSshHosts } from "../lib/ssh-config";
 import { classifySshErrorMessage } from "../lib/ssh-error-classification";
+import { getProjectUserStateDir } from "../lib/pi-agent-paths";
 
 const log = createLogger("config");
 const execFileAsync = promisify(execFile);
+const REMOTE_RESOURCE_TYPES = new Set<RemoteSyncResourceType>(["skills", "agents", "rules"]);
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function normalizeRemoteDirectoryPath(path?: string): string {
+  const trimmed = path?.trim();
+  if (!trimmed) return "";
+  if (trimmed === "~") return "~";
+  if (trimmed.startsWith("~/")) return `~/${trimmed.slice(2).replace(/\/+$/, "")}`;
+  if (trimmed === "/") return "/";
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  if (withoutTrailingSlash.startsWith("/")) return withoutTrailingSlash;
+  return `/${withoutTrailingSlash.replace(/^\/+/, "")}`;
+}
+
 function joinRemotePath(base: string, name: string): string {
-  const cleanBase = base.trim().replace(/\/+$/, "");
+  const cleanBase = normalizeRemoteDirectoryPath(base);
   const cleanName = name.replace(/^\/+/, "");
   if (!cleanBase || cleanBase === ".") return cleanName || ".";
   if (cleanBase === "/") return `/${cleanName}`;
@@ -64,12 +92,93 @@ function joinRemotePath(base: string, name: string): string {
 }
 
 function directoryTarget(path?: string): string {
-  const trimmed = path?.trim();
-  return trimmed ? shellQuote(trimmed) : '"$HOME"';
+  const normalized = normalizeRemoteDirectoryPath(path);
+  if (!normalized || normalized === "~") return '"$HOME"';
+  if (normalized.startsWith("~/")) {
+    const suffix = normalized.slice(2);
+    return suffix ? `"$HOME"/${shellQuote(suffix)}` : '"$HOME"';
+  }
+  return shellQuote(normalized);
 }
 
 function classifySshError(message: string): SshConnectionErrorCode {
   return classifySshErrorMessage(message);
+}
+
+function normalizeRemoteResourceTypes(input?: RemoteSyncResourceType[]): RemoteSyncResourceType[] {
+  return (input ?? []).filter((type): type is RemoteSyncResourceType =>
+    REMOTE_RESOURCE_TYPES.has(type),
+  );
+}
+
+function getProjectRemoteResourceExtraSources(
+  projectPath: string,
+  resourceTypes?: RemoteSyncResourceType[],
+): RemoteResourceSyncSource[] {
+  const effectiveTypes = resourceTypes ?? ["skills", "agents", "rules"];
+  if (!effectiveTypes.includes("skills")) return [];
+  const projectSkillsDir = join(getProjectUserStateDir(projectPath), "skills");
+  return existsSync(projectSkillsDir) ? [{ type: "skills", localPath: projectSkillsDir }] : [];
+}
+
+async function findRemoteProjectLocalPath(input: {
+  host?: string;
+  remotePath?: string;
+}): Promise<string | null> {
+  const host = input.host?.trim();
+  const remotePath = normalizeRemoteDirectoryPath(input.remotePath);
+  if (!host || !remotePath) return null;
+  const projects = await listRemoteProjects().catch(() => []);
+  return (
+    projects.find(
+      (project) =>
+        project.host === host &&
+        normalizeRemoteDirectoryPath(project.remotePath) === remotePath,
+    )?.localPath ?? null
+  );
+}
+
+async function previewRemoteResourceSync(input: {
+  host?: string;
+  remotePath?: string;
+  resourceTypes?: RemoteSyncResourceType[];
+}): Promise<RemoteResourceSyncPreview> {
+  const resourceTypes = normalizeRemoteResourceTypes(input.resourceTypes);
+  if (Array.isArray(input.resourceTypes) && resourceTypes.length === 0) {
+    return { resources: [], blocked: [], hash: "" };
+  }
+  const effectiveResourceTypes =
+    resourceTypes.length > 0 ? resourceTypes : (["skills", "agents", "rules"] satisfies RemoteSyncResourceType[]);
+
+  const projectLocalPath = await findRemoteProjectLocalPath(input);
+  const extraSources = projectLocalPath
+    ? getProjectRemoteResourceExtraSources(projectLocalPath, effectiveResourceTypes)
+    : [];
+  const options = {
+    localAgentDir: config.remoteResourceSyncLocalAgentDir || undefined,
+    resourceTypes: effectiveResourceTypes,
+    extraSources,
+  };
+  const sources = collectRemoteSyncSources(options);
+  const staged = stageRemoteResourceSync(options);
+  try {
+    const byType = new Map(staged.manifest.resources.map((resource) => [resource.type, resource]));
+    return {
+      hash: staged.manifest.hash,
+      blocked: staged.manifest.blocked,
+      resources: effectiveResourceTypes.map((type) => {
+        const resource = byType.get(type);
+        return {
+          type,
+          files: resource?.files ?? 0,
+          bytes: resource?.bytes ?? 0,
+          sources: sources.filter((source) => source.type === type).map((source) => source.localPath),
+        };
+      }),
+    };
+  } finally {
+    rmSync(staged.stagingDir, { recursive: true, force: true });
+  }
 }
 
 class SshConnectionError extends Error {
@@ -149,9 +258,9 @@ async function testSshConnection(input: {
   remotePath?: string;
   sshArgs?: string[];
 }): Promise<SshCommandResult> {
-  const remotePath = input.remotePath?.trim();
+  const remotePath = normalizeRemoteDirectoryPath(input.remotePath);
   const command = remotePath
-    ? `cd ${shellQuote(remotePath)} && printf 'pi-agent-chat-ssh-ok\\n' && pwd`
+    ? `cd ${directoryTarget(remotePath)} && printf 'pi-agent-chat-ssh-ok\\n' && pwd`
     : "printf 'pi-agent-chat-ssh-ok\\n' && pwd";
   return runSshCommand({ host: input.host, command, sshArgs: input.sshArgs });
 }
@@ -174,7 +283,9 @@ async function listSshDirectory(input: {
     "find . -maxdepth 1 -mindepth 1 -type d -print | sed 's#^./##' | sort",
   ].join(" && ");
   const result = await runSshCommand({ host: input.host, command, sshArgs: input.sshArgs });
-  if (!result.ok) return { ...result, path: input.dirPath?.trim() ?? "", entries: [] };
+  if (!result.ok) {
+    return { ...result, path: normalizeRemoteDirectoryPath(input.dirPath), entries: [] };
+  }
 
   const lines = result.stdout.split(/\r?\n/).filter((line) => line.length > 0);
   const path = lines[0] ?? input.dirPath?.trim() ?? "";
@@ -190,7 +301,7 @@ async function createSshDirectory(input: {
   dirPath: string;
   sshArgs?: string[];
 }): Promise<{ ok: boolean; path: string; stdout: string; stderr: string; error?: string }> {
-  const dirPath = input.dirPath.trim();
+  const dirPath = normalizeRemoteDirectoryPath(input.dirPath);
   if (!dirPath) {
     return { ok: false, path: "", stdout: "", stderr: "", error: "Remote path is required" };
   }
@@ -415,6 +526,15 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     return createSshDirectory({ host, dirPath: params.dirPath, sshArgs });
   });
 
+  r("project.previewRemoteResourceSync", async (params) => {
+    const { host } = await resolveSshConnection(params);
+    return previewRemoteResourceSync({
+      host,
+      remotePath: params.remotePath,
+      resourceTypes: params.resourceTypes,
+    });
+  });
+
   r("project.openSshProject", async (params) => {
     const { host, sshArgs, shell } = await resolveSshConnection(params);
     const connection = await testSshConnection({ host, remotePath: params.remotePath, sshArgs });
@@ -429,9 +549,61 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       profileName: params.profileName,
       host,
       remotePath: params.remotePath,
+      sshRuntimeKind: params.sshRuntimeKind,
+      remoteResourceSync: params.remoteResourceSync,
       sshArgs,
       shell,
     });
+    const selectedResourceTypes = normalizeRemoteResourceTypes(
+      params.remoteResourceSync?.resourceTypes,
+    );
+    const hasExplicitResourceTypes = Array.isArray(params.remoteResourceSync?.resourceTypes);
+    const shouldSyncRemoteResources =
+      getRemoteProjectSshRuntimeKind(opened.remote) === "remote-agent-child" &&
+      (params.remoteResourceSync?.enabled ?? config.remoteResourceSyncEnabled) &&
+      (!hasExplicitResourceTypes || selectedResourceTypes.length > 0);
+    if (shouldSyncRemoteResources) {
+      const remoteConnection = splitSshArgsForRemoteChild({
+        target: opened.remote.host,
+        sshArgs: opened.remote.sshArgs,
+      });
+      try {
+        const syncResult = await syncRemoteAgentResources({
+          target: remoteConnection.target,
+          port: remoteConnection.port,
+          keyPath: remoteConnection.keyPath,
+          remoteShell: opened.remote.shell ?? config.remoteChildShell,
+          remoteAgentDir: resolveRemoteSyncedAgentDir({
+            remoteResourceAgentDir: config.remoteResourceSyncRemoteAgentDir || undefined,
+            remoteChildRemoteRuntimeDir: config.remoteChildRemoteRuntimeDir,
+          }),
+          localAgentDir: config.remoteResourceSyncLocalAgentDir || undefined,
+          resourceTypes: selectedResourceTypes.length > 0 ? selectedResourceTypes : undefined,
+          extraSources: getProjectRemoteResourceExtraSources(
+            opened.remote.localPath,
+            selectedResourceTypes.length > 0 ? selectedResourceTypes : undefined,
+          ),
+        });
+        log.info("synced local resources for SSH remote project", {
+          host: opened.remote.host,
+          remotePath: opened.remote.remotePath,
+          remoteAgentDir: syncResult.remoteAgentDir,
+          uploaded: syncResult.uploaded,
+          hash: syncResult.hash.slice(0, 12),
+          resources: syncResult.resources.map((resource) => ({
+            type: resource.type,
+            files: resource.files,
+          })),
+          blocked: syncResult.blocked.length,
+        });
+      } catch (err) {
+        log.warn("skipping optional SSH remote resource sync after failure", {
+          host: opened.remote.host,
+          remotePath: opened.remote.remotePath,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     const sessions = await scanSessionsForProject(opened.remote.localPath);
     const sessionCount = sessions.length;
     await addRecentProject(opened.remote.localPath, opened.remote.name, sessionCount, {

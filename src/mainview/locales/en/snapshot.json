@@ -11,6 +11,7 @@
   "noSnapshotsYet": "No snapshots yet",
   "noSnapshotsHint": "Snapshots are created automatically after agent tool executions",
   "cancelRollback": "Cancel rollback",
+  "cancel": "Cancel",
   "rollbackToSnapshot": "Rollback to this snapshot",
   "fileChanges": "File Changes",
   "latest": "Latest",

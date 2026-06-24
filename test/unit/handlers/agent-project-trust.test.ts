@@ -136,13 +136,81 @@ describe("agent project trust handlers", () => {
     });
   });
 
-  it("configures remote ssh runtime before returning from agent.start", async () => {
+  it("stores SSH remote-child trust under the remote project identity", async () => {
+    const projectPath = join(tempDir, "remote-shadow");
+    await mkdir(projectPath, { recursive: true });
+    const canonicalProjectPath = await realpath(projectPath);
+    agentMocks.getRemoteProjectByLocalPath.mockResolvedValue({
+      id: "remote-id",
+      name: "remote-project",
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-id",
+      host: "xyz-mac",
+      remotePath: "/Users/xyz/project",
+      localPath: canonicalProjectPath,
+      createdAt: 1,
+      lastOpened: 1,
+    });
+
+    const setTrust = server.handlers.get("agent.setProjectTrust")!;
+    const getTrust = server.handlers.get("agent.getProjectTrust")!;
+
+    const written = (await setTrust({ projectPath, trusted: true })) as {
+      projectPath: string;
+      decisionPath: string;
+      trustStorePath: string;
+    };
+
+    expect(written.projectPath).toBe(canonicalProjectPath);
+    expect(written.decisionPath).toBe("/__pi_remote__/ssh/xyz-mac/Users/xyz/project");
+    expect(written.trustStorePath).toContain(join(process.env.PI_CODING_AGENT_DIR!, "projects"));
+    expect(written.trustStorePath).not.toContain("remote-shadow");
+    expect(JSON.parse(await readFile(written.trustStorePath, "utf-8"))).toEqual({
+      decision: true,
+    });
+
+    await expect(getTrust({ projectPath })).resolves.toMatchObject({
+      projectPath: canonicalProjectPath,
+      trusted: true,
+      decision: true,
+      decisionPath: "/__pi_remote__/ssh/xyz-mac/Users/xyz/project",
+      trustStorePath: written.trustStorePath,
+    });
+  });
+
+  it("does not configure tool-proxy channel for standard SSH remote-child projects", async () => {
+    const projectPath = join(tempDir, "remote-standard-shadow");
+    const sessionPath = join(tempDir, "session-standard.jsonl");
+    agentMocks.getRemoteProjectByLocalPath.mockResolvedValueOnce({
+      id: "remote-id",
+      name: "remote-project",
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-id",
+      host: "xyz-mac",
+      remotePath: "/tmp/remote-project",
+      localPath: projectPath,
+      createdAt: 1,
+      lastOpened: 1,
+    });
+
+    const start = server.handlers.get("agent.start")!;
+    await expect(
+      start({ sessionId: "session-standard", projectPath, sessionPath, forceNewProcess: true }),
+    ).resolves.toEqual({ agentId: "session-standard", status: "started" });
+
+    expect(agentMocks.callChannel).not.toHaveBeenCalled();
+  });
+
+  it("configures quick sandbox remote ssh runtime before returning from agent.start", async () => {
     const projectPath = join(tempDir, "remote-shadow");
     const sessionPath = join(tempDir, "session.jsonl");
     agentMocks.getRemoteProjectByLocalPath.mockResolvedValueOnce({
       id: "remote-id",
       name: "remote-project",
       runtime: "ssh",
+      sshRuntimeKind: "ssh-command",
       profileId: "profile-id",
       host: "xyz-mac",
       remotePath: "/tmp/remote-project",
@@ -177,6 +245,7 @@ describe("agent project trust handlers", () => {
       id: "remote-id",
       name: "remote-project",
       runtime: "ssh",
+      sshRuntimeKind: "ssh-command",
       profileId: "profile-id",
       host: "xyz-mac",
       remotePath: "/tmp/remote-project",

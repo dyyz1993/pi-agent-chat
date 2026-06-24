@@ -1,11 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import type { BashProcess } from "../../../src/shared/modules/bash";
+import type { ProjectTab } from "../../../src/mainview/types";
+import type { RemoteProjectRef } from "../../../src/shared/modules/project";
 
 let mockProcesses: BashProcess[] = [];
 let mockBackgroundedIds: Set<string> = new Set();
 let mockPermissionProfile = "normal";
 const mockSetPermissionProfile = vi.fn();
+let mockProjectTabs: ProjectTab[] = [];
+let mockActiveProjectId: string | null = null;
+let mockSessionsByProject: Record<string, unknown[]> = {};
+const mockSetRemoteRuntimeStatus = vi.fn();
+const mockApiClient = vi.hoisted(() => ({
+  call: vi.fn((method: string) => {
+    if (method === "bash.readLog") {
+      return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
+    }
+    if (method === "project.listRecent") {
+      return Promise.resolve({ projects: [] });
+    }
+    return Promise.resolve(undefined);
+  }),
+}));
+const mockApiCall = mockApiClient.call;
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -17,12 +35,7 @@ vi.mock("react-dom", () => ({
 
 vi.mock("../../../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: vi.fn((method: string) => {
-      if (method === "bash.readLog") {
-        return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
-      }
-      return Promise.resolve(undefined);
-    }),
+    call: mockApiClient.call,
     subscribe: vi.fn(() => Promise.resolve("sub-id")),
     unsubscribe: vi.fn(),
     onReconnect: () => {},
@@ -52,12 +65,20 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
       permissionProfile: mockPermissionProfile,
       permissionProfileLoading: false,
       setPermissionProfile: mockSetPermissionProfile,
+      projectTrust: { trusted: true },
+      projectTrustLoading: false,
+      trustCurrentProject: vi.fn(),
+      executionSandbox: { mode: "off" },
+      executionSandboxLoading: false,
+      refreshExecutionSandbox: vi.fn(),
+      setExecutionSandboxMode: vi.fn(),
       yoloEnabled: false,
       plugins: [],
       skills: [],
       expandedSkill: null,
       expandedPlugin: null,
       expandedMcpServer: null,
+      setRemoteRuntimeStatus: mockSetRemoteRuntimeStatus,
       toggleYolo: vi.fn(),
       toggleSkillExpanded: vi.fn(),
       toggleSkillEnabled: vi.fn(),
@@ -76,6 +97,9 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
     (selector?: (s: Record<string, unknown>) => unknown) => {
       const state = {
         activeSessionId: "test-session",
+        projectTabs: mockProjectTabs,
+        activeProjectId: mockActiveProjectId,
+        sessionsByProject: mockSessionsByProject,
         refreshSessionResources: vi.fn(),
       };
       return selector ? selector(state) : state;
@@ -129,6 +153,18 @@ describe("StatusPanel shell section", () => {
     mockBackgroundedIds = new Set();
     mockPermissionProfile = "normal";
     mockCollapsedSections = new Set();
+    mockProjectTabs = [];
+    mockActiveProjectId = null;
+    mockSessionsByProject = {};
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "bash.readLog") {
+        return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
+      }
+      if (method === "project.listRecent") {
+        return Promise.resolve({ projects: [] });
+      }
+      return Promise.resolve(undefined);
+    });
     vi.clearAllMocks();
   });
 
@@ -203,12 +239,138 @@ describe("StatusPanel shell section", () => {
   });
 });
 
+describe("StatusPanel remote section", () => {
+  beforeEach(() => {
+    mockProcesses = [];
+    mockBackgroundedIds = new Set();
+    mockPermissionProfile = "normal";
+    mockCollapsedSections = new Set();
+    mockProjectTabs = [];
+    mockActiveProjectId = null;
+    mockSessionsByProject = {};
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "project.listRecent") {
+        return Promise.resolve({ projects: [] });
+      }
+      return Promise.resolve(undefined);
+    });
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows Standard SSH from the active remote project tab", () => {
+    const remote: RemoteProjectRef = {
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-1",
+      host: "xyz-mac",
+      remotePath: "/Users/xyz/Projects/44444",
+      localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-xyz",
+    };
+    mockProjectTabs = [
+      {
+        id: "remote-tab",
+        name: "44444",
+        path: remote.localPath,
+        runtime: "ssh",
+        remote,
+      },
+    ];
+    mockActiveProjectId = "remote-tab";
+
+    const { container } = render(<StatusPanel />);
+
+    expect(container.textContent).toContain("remoteStatusConnected");
+    expect(container.textContent).toContain("xyz-mac");
+    expect(container.textContent).toContain("remoteModeStandard");
+    expect(container.textContent).toContain("/Users/xyz/Projects/44444");
+    expect(container.textContent).not.toContain("remoteStatusLocal");
+  });
+
+  it("recovers remote project metadata from recent projects when a persisted tab is stale", async () => {
+    const remote: RemoteProjectRef = {
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-1",
+      host: "xyz-mac",
+      remotePath: "/Users/xyz/Projects/44444",
+      localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-xyz",
+    };
+    mockProjectTabs = [
+      {
+        id: "remote-tab",
+        name: "44444",
+        path: remote.localPath,
+        runtime: "ssh",
+      },
+    ];
+    mockActiveProjectId = "remote-tab";
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "project.listRecent") {
+        return Promise.resolve({
+          projects: [{ path: remote.localPath, name: "44444", remote }],
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { container } = render(<StatusPanel />);
+
+    await waitFor(() => {
+      expect(container.textContent).toContain("xyz-mac");
+    });
+    expect(container.textContent).toContain("remoteModeStandard");
+    expect(container.textContent).not.toContain("remoteStatusLocal");
+  });
+
+  it("shows Quick Sandbox when the remote tab uses ssh-command", () => {
+    const remote: RemoteProjectRef = {
+      runtime: "ssh",
+      sshRuntimeKind: "ssh-command",
+      profileId: "profile-1",
+      host: "xyz-mac",
+      remotePath: "/Users/xyz/Projects/44444",
+      localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-xyz",
+    };
+    mockProjectTabs = [
+      {
+        id: "remote-tab",
+        name: "44444",
+        path: remote.localPath,
+        runtime: "ssh",
+        remote,
+      },
+    ];
+    mockActiveProjectId = "remote-tab";
+
+    const { container } = render(<StatusPanel />);
+
+    expect(container.textContent).toContain("remoteModeQuick");
+    expect(container.textContent).not.toContain("remoteStatusLocal");
+  });
+});
+
 describe("StatusPanel permission section", () => {
   beforeEach(() => {
     mockProcesses = [];
     mockBackgroundedIds = new Set();
     mockPermissionProfile = "normal";
     mockCollapsedSections = new Set();
+    mockProjectTabs = [];
+    mockActiveProjectId = null;
+    mockSessionsByProject = {};
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "bash.readLog") {
+        return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
+      }
+      if (method === "project.listRecent") {
+        return Promise.resolve({ projects: [] });
+      }
+      return Promise.resolve(undefined);
+    });
     vi.clearAllMocks();
   });
 

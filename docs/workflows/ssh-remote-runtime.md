@@ -58,7 +58,7 @@ const provider = new RemoteSshProvider({
   remoteAgentDir: '~/.pi/agent/remote-runtime-smoke',
   remotePiCliPath: 'pi',
   remoteNodePath: 'node',
-  remoteShell: 'zsh -lc',
+  remoteShell: 'sh -lc',
   remotePiAgentDir: '~/.pi/agent-remote-smoke',
   childNodeOptions: '--max-old-space-size=1024',
   bootstrapPiPackage: true,
@@ -102,7 +102,7 @@ import { RemoteSshProvider } from "./src/sandbox/providers/ssh.ts";
     remoteAgentDir: "~/.pi/agent/remote-runtime-service-smoke",
     remotePiCliPath: "/Users/xyz/.pi/agent/remote-runtime-smoke-onefile/pi",
     remoteNodePath: "node",
-    remoteShell: "zsh -lc",
+    remoteShell: "sh -lc",
     remotePiAgentDir: "/Users/xyz/.pi/agent-remote-service-smoke",
     childNodeOptions: "--max-old-space-size=1024",
     bootstrapPiPackage: false,
@@ -134,7 +134,7 @@ values equal the remote project path.
 
 ## Remote Child Runtime Smoke
 
-This smoke validates the lighter SSH child-runtime path directly through
+This smoke validates the standard SSH child-runtime path directly through
 `RpcClient`. It bootstraps a local child binary plus the extension directory to
 the remote host, starts multiple remote child processes, and verifies the core
 runtime before any browser UI checks.
@@ -144,7 +144,19 @@ Build the fork child binary first, or reuse an existing local binary:
 ```bash
 cd /Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent
 npm run build
+bun build --compile --target=bun-darwin-x64 \
+  ./dist/bun/cli.js ./src/utils/image-resize-worker.ts \
+  --outfile dist/pi-darwin-x64
+bun build --compile --target=bun-linux-x64 \
+  ./dist/bun/cli.js ./src/utils/image-resize-worker.ts \
+  --outfile dist/pi-linux-x64
 ```
+
+Use a binary matching the remote host architecture. For `xyz-mac` on x86_64
+Darwin, use `dist/pi-darwin-x64`. For Linux x86_64 hosts, use
+`dist/pi-linux-x64`. The app must not upload the generic local `dist/pi` when
+the remote OS/arch is known, because that file may belong to the local machine's
+platform.
 
 Run the remote child verifier from the app repo:
 
@@ -152,10 +164,10 @@ Run the remote child verifier from the app repo:
 npm run verify:remote-child -- \
   --target xyz-mac \
   --remote-project /tmp/pi-agent-remote-child-project \
-  --binary /tmp/pi-remote-child-smoke-darwin-x64 \
+  --binary /Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/pi-darwin-x64 \
   --extensions /Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/extensions \
-  --remote-runtime-dir /Users/xyz/.pi/agent/remote-runtime-child-verify \
-  --remote-agent-dir /Users/xyz/.pi/agent-remote-child-verify \
+  --remote-runtime-dir /tmp/pi-agent-remote-runtime-child-verify \
+  --remote-agent-dir /tmp/pi-agent-remote-child-agent-dir \
   --concurrency 2
 ```
 
@@ -166,18 +178,94 @@ The command checks:
 - two concurrent remote child clients
 - `getState`
 - `getExtensions`
+- `getSkills`
+- `getAgents`
 - remote `bash("pwd")`
 - `memory.list`
 - `memory.getStatus`
+- `getSystemPrompt`
 
 Expected output includes `"ok": true`, a remote binary path under
 `remote-runtime-child-verify/children/<hash>/pi`, a remote extensions directory,
-and both clients reporting the remote project path.
+and both clients reporting the remote project path. It must also report:
+
+- `"runtimeKind": "remote-agent-child"`
+- `"remoteResourcesVisible": true`
+- `"localResourcesVisible": false`
+- a remote sentinel skill loaded from the remote `PI_CODING_AGENT_DIR`
+- a remote sentinel agent loaded from the remote `PI_CODING_AGENT_DIR`
+- memory directories under the remote agent dir
+- no local-only sentinel skill, agent dir, or local path leaked into the system
+  prompt
+
+## Remote Resource Sync Smoke
+
+Standard SSH can sync local low-risk resources into a managed remote agent root
+before the remote child starts. This is controlled by:
+
+```bash
+REMOTE_RESOURCE_SYNC=true              # default
+REMOTE_RESOURCE_SYNC_LOCAL_AGENT_DIR=  # optional; defaults to PI_CODING_AGENT_DIR or ~/.pi/agent
+REMOTE_RESOURCE_SYNC_REMOTE_AGENT_DIR= # optional; defaults to REMOTE_CHILD_REMOTE_RUNTIME_DIR/agent-resources
+```
+
+The synced remote root becomes the remote child `PI_CODING_AGENT_DIR`.
+
+Expected managed layout:
+
+```text
+<REMOTE_SYNC_AGENT_DIR>/
+  skills/
+  agents/
+  rules/
+  .remote-resource-sync/manifest.json
+```
+
+Acceptance:
+
+- local `skills/`, `agents/`, and `rules/` are installed under
+  `<REMOTE_SYNC_AGENT_DIR>`;
+- `.remote-resource-sync/manifest.json` records the bundle hash, included
+  resource counts, and blocked entries;
+- symlinks, `.env`, private-key-looking files, `auth.json`, `oauth.json`, and
+  `models.json` are skipped;
+- model credentials still stay local and model calls go through the local model
+  proxy;
+- memory, sessions, plugins, MCP config, and hooks are not copied by this MVP;
+- `ssh-command` quick sandbox mode does not run this sync and still hides local
+  skills/memory/agents.
 
 Avoid unquoted `~` in CLI arguments. The local shell may expand it before the
 remote command receives it. Prefer absolute remote paths such as
 `/Users/xyz/.pi/agent/remote-runtime-child-verify`, or quote the value when
 testing manually.
+
+## SSH Command Fallback Smoke
+
+`ssh-command` is the quick sandbox/fallback mode. It forwards selected tool
+operations to the remote shell, but the local runtime must not expose local
+memory, skills, agents, or plugin-owned learning state as if they were remote
+resources.
+
+Run this smoke only after the remote-child verifier passes:
+
+1. Start the local runtime with `PI_RUNTIME_KIND=ssh-command`,
+   `PI_REMOTE_SSH_TOOL_PROXY=1`, `PI_REMOTE_SSH_HOST=<host>`, and
+   `PI_REMOTE_SSH_CWD=<remote-project>`.
+2. Seed a local-only sentinel skill under a temporary `PI_CODING_AGENT_DIR`.
+3. Query `getSkills`, `getSystemPrompt`, `memory.list`, and the learning
+   channel.
+4. Run `ssh <host> 'cd <remote-project> && pwd && hostname'` as a direct remote
+   identity check.
+
+Expected result:
+
+- `getSkills` returns no user/project local sentinel skills.
+- `getSystemPrompt` mentions the remote cwd but not the local agent dir.
+- `memory.list` is empty or disabled for this runtime.
+- learning/skill sedimentation is unavailable or disabled for this runtime.
+- direct `pwd && hostname` output matches the selected SSH host and remote
+  project.
 
 ## Product Acceptance Checklist
 
@@ -193,7 +281,9 @@ prove RPC/runtime behavior first, then verify the browser UI.
 | Remote command identity | Run `pwd && hostname && whoami && uname -a` in the opened SSH project.             | Output matches the remote path, remote host/user, and remote OS.                           |
 | Remote file write       | Ask the agent to write a marker file under the selected remote directory.          | The file exists on the remote host; no equivalent local file is required.                  |
 | Extension loading       | Query extension status or run a simple extension-backed command.                   | The uploaded/runtime extension directory is used by the remote child.                      |
-| Memory channel          | Call `memory.list` / `memory.getStatus` in the remote session.                     | Calls return normally against the remote agent dir.                                        |
+| Remote skills/agents    | Run the remote-child verifier sentinel check.                                      | Remote `PI_CODING_AGENT_DIR` skills and agents are visible; local sentinels are absent.    |
+| Memory channel          | Call `memory.list` / `memory.getStatus` in the remote session.                     | Calls return normally against the remote agent dir, not a local memory path.               |
+| Quick fallback boundary | Run the `ssh-command` fallback smoke.                                              | Local memory/skill/agent/learning resources are not exposed in fallback mode.              |
 | Permission ask          | Trigger a non-whitelisted write or dangerous command.                              | The permission request appears locally, and allow/deny resolves the remote action.         |
 | Git refresh             | Initialize git or create a file in the remote project through the agent.           | When the agent returns to idle, Explorer and Git state refresh without manual page reload. |
 

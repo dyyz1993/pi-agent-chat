@@ -4,6 +4,7 @@ import type { CachedLspState } from "./agent-channel-state";
 import { handleAgentEventOperation } from "./agent-event-routing";
 import {
   handleBashChannelDataOperation,
+  handleLearningChannelDataOperation,
   handleLspChannelDataOperation,
   handleMemoryChannelDataOperation,
   handleRulesChannelDataOperation,
@@ -38,6 +39,7 @@ export interface AgentChannelHandlerAdapter {
   handleLspChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleRulesChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleMemoryChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
+  handleLearningChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
 }
 
 export function createAgentChannelHandlerAdapter<TManaged extends ChannelManagedClient>(deps: {
@@ -77,6 +79,7 @@ export function createAgentChannelHandlerAdapter<TManaged extends ChannelManaged
         handleLspChannelData: adapter.handleLspChannelData,
         handleRulesChannelData: adapter.handleRulesChannelData,
         handleMemoryChannelData: adapter.handleMemoryChannelData,
+        handleLearningChannelData: adapter.handleLearningChannelData,
         handleSupervisorChannelData: adapter.handleSupervisorChannelData,
       });
     },
@@ -141,6 +144,13 @@ export function createAgentChannelHandlerAdapter<TManaged extends ChannelManaged
     },
     async handleMemoryChannelData(sessionId, channelMsg) {
       await handleMemoryChannelDataOperation({
+        sessionId,
+        channelMsg,
+        broadcastEvent: deps.broadcastEvent,
+      });
+    },
+    async handleLearningChannelData(sessionId, channelMsg) {
+      await handleLearningChannelDataOperation({
         sessionId,
         channelMsg,
         broadcastEvent: deps.broadcastEvent,

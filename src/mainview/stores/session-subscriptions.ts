@@ -12,6 +12,7 @@ import { useBashStore, handleBashEvent } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
 import { useRulesStore } from "./use-rules-store";
 import { useMemoryStore } from "./use-memory-store";
+import { useLearningStore } from "./use-learning-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSupervisorStore } from "./use-supervisor-store";
@@ -718,6 +719,39 @@ export function setupSubscriptions(
         ),
       );
     }
+
+    trackSub(
+      apiClient.subscribe(
+        "learning.snapshot",
+        (payload) => {
+          if (payload.sessionId !== id) return;
+          useLearningStore.getState().applySnapshot(id, payload.snapshot);
+        },
+        { sessionId: id },
+      ),
+    );
+
+    trackSub(
+      apiClient.subscribe(
+        "learning.run",
+        (payload) => {
+          if (payload.sessionId !== id) return;
+          useLearningStore.getState().applyRun(id, payload.run);
+        },
+        { sessionId: id },
+      ),
+    );
+
+    trackSub(
+      apiClient.subscribe(
+        "learning.candidate",
+        (payload) => {
+          if (payload.sessionId !== id) return;
+          useLearningStore.getState().applyCandidate(id, payload.candidate);
+        },
+        { sessionId: id },
+      ),
+    );
   }
 
   if (!supervisorSubscriptions[id]) {
@@ -902,6 +936,7 @@ export function cleanupSessionHeavy(sessionId: string): void {
   useTurnStore.getState().clearSessionUI(sessionId);
   useChatNavStore.getState().clearSessionUI(sessionId);
   useMemoryStore.getState().clearSession(sessionId);
+  useLearningStore.getState().clearSession(sessionId);
   useRulesStore.getState().clearSession(sessionId);
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);

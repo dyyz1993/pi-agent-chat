@@ -796,6 +796,29 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(document.querySelector('[data-ui-request-id="r1"]')).toBeInTheDocument();
   });
 
+  it("can dock active-session requests above the composer instead of in document flow", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "composer-r1",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Composer dock request",
+        message: "Confirm from composer overlay",
+      }),
+    ];
+
+    setupProject();
+    const { container } = render(
+      <ProjectRuntimePendingRequests activeSessionId="sess-1" placement="composerOverlay" />,
+    );
+
+    const dock = document.querySelector('[data-ui-dock-request-id="composer-r1"]');
+    expect(dock).toHaveAttribute("data-placement", "composerOverlay");
+    expect(dock).toHaveClass("pointer-events-auto");
+    expect(container.firstElementChild).toHaveClass("absolute", "bottom-full", "z-30");
+    expect(screen.getByText("Composer dock request")).toBeInTheDocument();
+  });
+
   it("renders custom hook confirm and cancel labels in the runtime action area", () => {
     currentPending = [
       makeRequest({

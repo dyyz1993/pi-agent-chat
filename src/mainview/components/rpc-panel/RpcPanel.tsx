@@ -17,6 +17,11 @@ const DIR_COLORS = {
   response: "text-semantic-agent",
 };
 
+function stringifyPayload(payload: unknown): string {
+  const value = JSON.stringify(payload, null, 2);
+  return value ?? String(payload);
+}
+
 function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   const { t } = useTranslation("debug");
   const { copied, copy } = useClipboard(2000, { showToast: true });
@@ -29,8 +34,8 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
     minute: "2-digit",
     second: "2-digit",
   });
-  const fullPayload = JSON.stringify(entry.payload, null, 2);
-  const truncated = JSON.stringify(entry.payload).slice(0, 200);
+  const fullPayload = stringifyPayload(entry.payload);
+  const truncated = fullPayload.replace(/\s+/g, " ").slice(0, 200);
 
   const handleCopy = useCallback(() => {
     copy(fullPayload);

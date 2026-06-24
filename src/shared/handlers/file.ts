@@ -4,12 +4,93 @@ import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { readdir, stat, writeFile, readFile, mkdir, rename, rm, cp } from "fs/promises";
 import { existsSync, watch, statSync } from "fs";
-import { join, dirname, resolve } from "path";
+import { join, dirname, resolve, posix } from "path";
 import { createLogger } from "../lib/logger";
+import type { RemoteProjectRecord } from "../modules/project";
+import { listRemoteProjects } from "../lib/project-config";
 
 const log = createLogger("file");
 
 const DEBOUNCE_MS = 800;
+
+type FileTarget =
+  | { kind: "local"; path: string }
+  | { kind: "ssh"; path: string; remote: RemoteProjectRecord };
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.length > 1 ? value.replace(/\/+$/, "") : value;
+}
+
+function relativeIfInside(basePath: string, candidatePath: string): string | null {
+  const base = stripTrailingSlash(basePath);
+  const candidate = stripTrailingSlash(candidatePath);
+  if (candidate === base) return "";
+  const prefix = `${base}/`;
+  return candidate.startsWith(prefix) ? candidate.slice(prefix.length) : null;
+}
+
+async function resolveFileTarget(inputPath: string | undefined): Promise<FileTarget> {
+  const rawPath = inputPath ?? process.cwd();
+  const localPath = resolve(rawPath);
+  const remoteProjects = await listRemoteProjects().catch(() => []);
+  for (const remote of remoteProjects) {
+    const localSuffix = relativeIfInside(resolve(remote.localPath), localPath);
+    if (localSuffix !== null) {
+      return {
+        kind: "ssh",
+        path: localSuffix ? posix.join(remote.remotePath, localSuffix) : remote.remotePath,
+        remote,
+      };
+    }
+    const remoteSuffix = relativeIfInside(remote.remotePath, rawPath);
+    if (remoteSuffix !== null) {
+      return { kind: "ssh", path: rawPath, remote };
+    }
+  }
+  return { kind: "local", path: localPath };
+}
+
+function runSshCommand(
+  remote: RemoteProjectRecord,
+  command: string,
+  options?: { allowNonZero?: boolean; stdin?: string },
+): { stdout: string; stderr: string; exitCode: number } {
+  const proc = Bun.spawnSync(
+    [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      ...(remote.sshArgs ?? []),
+      remote.host,
+      command,
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: options?.stdin ? Buffer.from(options.stdin) : undefined,
+    },
+  );
+  const stdout = proc.stdout.toString();
+  const stderr = proc.stderr.toString();
+  if (proc.exitCode !== 0 && !options?.allowNonZero) {
+    throw new Error(stderr.trim() || "ssh command failed");
+  }
+  return { stdout, stderr, exitCode: proc.exitCode ?? 0 };
+}
+
+function remoteDirname(filePath: string): string {
+  return posix.dirname(filePath);
+}
+
+function remoteJoin(...parts: string[]): string {
+  return posix.join(...parts);
+}
 
 const watcherState = new WeakMap<
   RPCServer,
@@ -198,8 +279,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("file.listDir", async (params) => {
-    const basePath = resolve(params.path || process.cwd());
-    startFileWatcher(server, basePath);
+    const target = await resolveFileTarget(params.path);
+    const basePath = target.path;
+    if (target.kind === "local") {
+      startFileWatcher(server, basePath);
+    } else {
+      stopFileWatcher(server);
+    }
     const entries: {
       name: string;
       path: string;
@@ -208,6 +294,31 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       isIgnored?: boolean;
     }[] = [];
     try {
+      if (target.kind === "ssh") {
+        const code = [
+          "import json, os, sys",
+          "base = sys.argv[1]",
+          "items = []",
+          "for name in os.listdir(base):",
+          "    if name == '.git':",
+          "        continue",
+          "    path = os.path.join(base, name)",
+          "    try:",
+          "        st = os.stat(path)",
+          "        is_dir = os.path.isdir(path)",
+          "        items.append({'name': name, 'path': path, 'type': 'directory' if is_dir else 'file', 'size': st.st_size, 'isIgnored': False})",
+          "    except Exception:",
+          "        items.append({'name': name, 'path': path, 'type': 'file', 'isIgnored': False})",
+          "items.sort(key=lambda item: (item['type'] != 'directory', item['name'].lower()))",
+          "print(json.dumps({'entries': items, 'basePath': base}))",
+        ].join("\n");
+        const result = runSshCommand(
+          target.remote,
+          `python3 -c ${shellQuote(code)} ${shellQuote(basePath)}`,
+        );
+        const parsed = JSON.parse(result.stdout) as { entries?: typeof entries; basePath?: string };
+        return { entries: parsed.entries ?? [], basePath: parsed.basePath ?? basePath };
+      }
       const files = await readdir(basePath, { withFileTypes: true });
       const sorted = sortEntries(files);
       const watcherState = getWatcherState(server);
@@ -247,52 +358,103 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("file.createFile", async (params) => {
-    const filePath = join(params.dirPath, params.name);
+    const dirTarget = await resolveFileTarget(params.dirPath);
+    const filePath =
+      dirTarget.kind === "ssh" ? remoteJoin(dirTarget.path, params.name) : join(dirTarget.path, params.name);
+    if (dirTarget.kind === "ssh") {
+      runSshCommand(dirTarget.remote, `: > ${shellQuote(filePath)}`);
+      return { path: filePath };
+    }
     await writeFile(filePath, "");
     return { path: filePath };
   });
 
   r("file.createDir", async (params) => {
-    const dirPath = join(params.dirPath, params.name);
+    const parentTarget = await resolveFileTarget(params.dirPath);
+    const dirPath =
+      parentTarget.kind === "ssh"
+        ? remoteJoin(parentTarget.path, params.name)
+        : join(parentTarget.path, params.name);
+    if (parentTarget.kind === "ssh") {
+      runSshCommand(parentTarget.remote, `mkdir -p ${shellQuote(dirPath)}`);
+      return { path: dirPath };
+    }
     await mkdir(dirPath, { recursive: true });
     return { path: dirPath };
   });
 
   r("file.rename", async (params) => {
-    const newPath = join(dirname(params.oldPath), params.newName);
-    await rename(params.oldPath, newPath);
+    const oldTarget = await resolveFileTarget(params.oldPath);
+    const newPath =
+      oldTarget.kind === "ssh"
+        ? remoteJoin(remoteDirname(oldTarget.path), params.newName)
+        : join(dirname(oldTarget.path), params.newName);
+    if (oldTarget.kind === "ssh") {
+      runSshCommand(oldTarget.remote, `mv -- ${shellQuote(oldTarget.path)} ${shellQuote(newPath)}`);
+      return { newPath };
+    }
+    await rename(oldTarget.path, newPath);
     return { newPath };
   });
 
   r("file.delete", async (params) => {
-    await rm(params.path, { recursive: true, force: true });
+    const target = await resolveFileTarget(params.path);
+    if (target.kind === "ssh") {
+      runSshCommand(target.remote, `rm -rf -- ${shellQuote(target.path)}`);
+      return { ok: true };
+    }
+    await rm(target.path, { recursive: true, force: true });
     return { ok: true };
   });
 
   r("file.copy", async (params) => {
-    const { srcPath, destDir } = params;
-    const name = srcPath.split("/").pop() ?? srcPath;
-    const destPath = join(destDir, name);
-    await cp(srcPath, destPath, { recursive: true });
+    const srcTarget = await resolveFileTarget(params.srcPath);
+    const destTarget = await resolveFileTarget(params.destDir);
+    const name = srcTarget.path.split("/").pop() ?? srcTarget.path;
+    const destPath =
+      destTarget.kind === "ssh" ? remoteJoin(destTarget.path, name) : join(destTarget.path, name);
+    if (srcTarget.kind === "ssh" || destTarget.kind === "ssh") {
+      if (srcTarget.kind !== "ssh" || destTarget.kind !== "ssh" || srcTarget.remote.id !== destTarget.remote.id) {
+        throw new Error("Copy between local and remote projects is not supported here");
+      }
+      runSshCommand(srcTarget.remote, `cp -R -- ${shellQuote(srcTarget.path)} ${shellQuote(destPath)}`);
+      return { path: destPath };
+    }
+    await cp(srcTarget.path, destPath, { recursive: true });
     return { path: destPath };
   });
 
   r("file.readFile", async (params) => {
-    const filePath = resolve(params.path);
+    const target = await resolveFileTarget(params.path);
+    if (target.kind === "ssh") {
+      const result = runSshCommand(target.remote, `cat -- ${shellQuote(target.path)}`);
+      return { content: result.stdout, size: Buffer.byteLength(result.stdout) };
+    }
+    const filePath = target.path;
     const content = await readFile(filePath);
     return { content: content.toString(), size: content.length };
   });
 
   r("file.writeFile", async (params) => {
-    const filePath = resolve(params.path);
-    await writeFile(filePath, params.content, "utf-8");
+    const target = await resolveFileTarget(params.path);
+    const filePath = target.path;
+    if (target.kind === "ssh") {
+      runSshCommand(target.remote, `cat > ${shellQuote(filePath)}`, { stdin: params.content });
+      log.info("Remote file written", { path: filePath, host: target.remote.host });
+      return { ok: true };
+    }
     log.info("File written", { path: filePath });
+    await writeFile(filePath, params.content, "utf-8");
     return { ok: true };
   });
 
   r("file.editFile", async (params) => {
-    const filePath = resolve(params.path);
-    const content = await readFile(filePath, "utf-8");
+    const target = await resolveFileTarget(params.path);
+    const filePath = target.path;
+    const content =
+      target.kind === "ssh"
+        ? runSshCommand(target.remote, `cat -- ${shellQuote(filePath)}`).stdout
+        : await readFile(filePath, "utf-8");
 
     let newContent = content;
     for (const edit of params.edits) {
@@ -303,6 +465,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       newContent = newContent.replace(edit.oldText, edit.newText);
     }
 
+    if (target.kind === "ssh") {
+      runSshCommand(target.remote, `cat > ${shellQuote(filePath)}`, { stdin: newContent });
+      log.info("Remote file edited", { path: filePath, editsCount: params.edits.length });
+      return { ok: true };
+    }
     await writeFile(filePath, newContent, "utf-8");
     log.info("File edited", { path: filePath, editsCount: params.edits.length });
     return { ok: true };

@@ -16,6 +16,7 @@ vi.mock("../../../src/shared/handlers/agent", () => ({
 
 import { register as registerMemory } from "../../../src/shared/handlers/memory";
 import { createMockServer, type MockServer } from "../../helpers/mock-server";
+import { getProjectUserStateDir } from "../../../src/shared/lib/pi-agent-paths";
 
 type MemoryFile = {
   filename: string;
@@ -399,6 +400,10 @@ describe("memory RPC handler", () => {
     await mkdir(memoryDir, { recursive: true });
     const safeFile = join(memoryDir, "safe.md");
     await writeFile(safeFile, "safe content");
+    const projectMemoryDir = join(getProjectUserStateDir("/safe/project"), "memory");
+    await mkdir(projectMemoryDir, { recursive: true });
+    const projectMemoryFile = join(projectMemoryDir, "MEMORY.md");
+    await writeFile(projectMemoryFile, "# Project Memory");
     const outsideFile = join(tempDir, "outside.md");
     await writeFile(outsideFile, "outside content");
 
@@ -406,9 +411,50 @@ describe("memory RPC handler", () => {
     await expect(handler({ filePath: safeFile })).resolves.toMatchObject({
       content: "safe content",
     });
+    await expect(handler({ filePath: projectMemoryFile })).resolves.toMatchObject({
+      content: "# Project Memory",
+    });
     await expect(handler({ filePath: outsideFile })).rejects.toThrow(
       "Path outside memory directory",
     );
+  });
+
+  it("deletes memory files and removes their MEMORY.md index entry", async () => {
+    const projectMemoryDir = join(getProjectUserStateDir("/delete/project"), "memory");
+    await mkdir(projectMemoryDir, { recursive: true });
+    const memoryFile = join(projectMemoryDir, "wrong-memory.md");
+    const indexFile = join(projectMemoryDir, "MEMORY.md");
+    await writeFile(memoryFile, "---\ntype: project\n---\nwrong content");
+    await writeFile(
+      indexFile,
+      "# Project Memory\n\n- [Wrong memory](wrong-memory.md) - stale\n- [Keep](keep.md) - useful\n",
+    );
+
+    const handler = server.handlers.get("memory.deleteFile")!;
+    await expect(handler({ filePath: memoryFile })).resolves.toEqual({ ok: true });
+
+    expect(existsSync(memoryFile)).toBe(false);
+    expect(await readFile(indexFile, "utf-8")).toBe(
+      "# Project Memory\n\n- [Keep](keep.md) - useful\n",
+    );
+  });
+
+  it("does not delete MEMORY.md or files outside memory roots", async () => {
+    const projectMemoryDir = join(getProjectUserStateDir("/delete/project"), "memory");
+    await mkdir(projectMemoryDir, { recursive: true });
+    const indexFile = join(projectMemoryDir, "MEMORY.md");
+    const outsideFile = join(tempDir, "outside.md");
+    await writeFile(indexFile, "# Project Memory");
+    await writeFile(outsideFile, "outside");
+
+    const handler = server.handlers.get("memory.deleteFile")!;
+
+    await expect(handler({ filePath: indexFile })).rejects.toThrow("Cannot delete memory index");
+    await expect(handler({ filePath: outsideFile })).rejects.toThrow(
+      "Path outside memory directory",
+    );
+    expect(existsSync(indexFile)).toBe(true);
+    expect(existsSync(outsideFile)).toBe(true);
   });
 });
 

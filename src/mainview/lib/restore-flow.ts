@@ -74,7 +74,6 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
     setActiveProject,
     setActiveSession,
     createNewSession,
-    getProjectTabs,
     getLastActiveSessionByProject,
     loadSessionMessages,
     log,
@@ -166,12 +165,8 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
     });
 
     if (savedTabs && savedTabs.length > 0) {
-      const projectTabs = getProjectTabs();
       for (const t of savedTabs) {
-        const exists = projectTabs.find((pt) => pt.id === t.id);
-        if (!exists) {
-          addProjectTab({ id: t.id, name: t.name, path: t.path, runtime: t.runtime, remote: t.remote });
-        }
+        addProjectTab({ id: t.id, name: t.name, path: t.path, runtime: t.runtime, remote: t.remote });
       }
 
       const targetId =

@@ -8,6 +8,7 @@ import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
+import type { LearningCandidate, LearningRun, LearningSnapshot } from "../modules/learning";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 import { classifyExtensionUiRequest } from "./agent-event-lifecycle";
@@ -112,6 +113,10 @@ export class AgentEventHandler {
       }
       if (ch.name === "memory") {
         this.handleMemoryChannelData(sessionId, ch);
+        return;
+      }
+      if (ch.name === "learning") {
+        this.handleLearningChannelData(sessionId, ch);
         return;
       }
       if (ch.name === "supervisor") {
@@ -520,6 +525,37 @@ export class AgentEventHandler {
       await this.deps.broadcastEvent(
         `memory.${eventType}`,
         { sessionId, ...data, timestamp: Date.now() },
+        { sessionId },
+      );
+    }
+  }
+
+  async handleLearningChannelData(
+    sessionId: string,
+    channelMsg: ChannelDataEvent,
+  ): Promise<void> {
+    const data = channelMsg.data as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const eventType = data.type as string;
+    log.info("Learning channel data", { sessionId, type: eventType });
+
+    if (eventType === "learning.snapshot") {
+      await this.deps.broadcastEvent(
+        "learning.snapshot",
+        { sessionId, snapshot: data.snapshot as LearningSnapshot, timestamp: Date.now() },
+        { sessionId },
+      );
+    } else if (eventType === "learning.run") {
+      await this.deps.broadcastEvent(
+        "learning.run",
+        { sessionId, run: data.run as LearningRun, timestamp: Date.now() },
+        { sessionId },
+      );
+    } else if (eventType === "learning.candidate") {
+      await this.deps.broadcastEvent(
+        "learning.candidate",
+        { sessionId, candidate: data.candidate as LearningCandidate, timestamp: Date.now() },
         { sessionId },
       );
     }

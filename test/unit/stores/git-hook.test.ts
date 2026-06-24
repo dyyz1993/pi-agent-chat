@@ -186,6 +186,37 @@ describe("useGitStore", () => {
     expect(useGitStore.getState().worktrees).toEqual(worktrees);
   });
 
+  it("refreshAll re-detects a repository after git init and hydrates git state", async () => {
+    useGitStore.setState({
+      isGitRepo: false,
+      branch: "",
+      worktrees: [],
+      branches: [],
+    });
+    const worktrees = [{ path: REPO, branch: "main", isMain: true }];
+    const branches = [{ name: "main", isCurrent: true, isRemote: false }];
+    mockCall
+      .mockResolvedValueOnce({ isGitRepo: true })
+      .mockResolvedValueOnce({
+        branch: "main",
+        ahead: 0,
+        behind: 0,
+        staged: [],
+        changed: [],
+        untracked: [],
+      })
+      .mockResolvedValueOnce({ worktrees })
+      .mockResolvedValueOnce({ branches });
+
+    await useGitStore.getState().refreshAll(REPO);
+
+    expect(mockCall).toHaveBeenCalledWith("git.checkRepo", { repoPath: REPO });
+    expect(useGitStore.getState().isGitRepo).toBe(true);
+    expect(useGitStore.getState().branch).toBe("main");
+    expect(useGitStore.getState().worktrees).toEqual(worktrees);
+    expect(useGitStore.getState().branches).toEqual(branches);
+  });
+
   it("addWorktree success appends new worktree", async () => {
     const newWt = { path: "/wt2", branch: "feat2", isMain: false };
     mockCall

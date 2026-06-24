@@ -248,12 +248,7 @@ describe("Session Ready Lifecycle", () => {
       });
       expect(startResp.error).toBeUndefined();
 
-      await sendRPC(ws, "agent.send", {
-        sessionId,
-        content: "echo hello",
-      });
-
-      const agentStartEvent = await waitForEvent(
+      const agentStartEventPromise = waitForEvent(
         ws,
         "agent.event",
         (msg) => {
@@ -263,6 +258,12 @@ describe("Session Ready Lifecycle", () => {
         },
         10000,
       );
+      await sendRPC(ws, "agent.send", {
+        sessionId,
+        content: "echo hello",
+      });
+
+      const agentStartEvent = await agentStartEventPromise;
       expect(agentStartEvent).toBeDefined();
 
       await sendRPC(ws, "agent.stop", { sessionId });

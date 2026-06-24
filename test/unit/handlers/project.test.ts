@@ -29,6 +29,37 @@ const projectMocks = vi.hoisted(() => ({
     ok: true,
     path: `/tmp/${folderName}`,
   })),
+  mockSyncRemoteAgentResources: vi.fn(async () => ({
+    remoteAgentDir: "~/.pi/agent/remote-runtime/child/agent-resources",
+    hash: "abcdef0123456789",
+    uploaded: true,
+    resources: [{ type: "skills", hash: "hash", files: 1, bytes: 10 }],
+    blocked: [],
+  })),
+  mockCollectRemoteSyncSources: vi.fn(() => [
+    { type: "skills", localPath: "/local/.pi/agent/skills" },
+    { type: "skills", localPath: "/local/.agents/skills" },
+    { type: "agents", localPath: "/local/.pi/agent/agents" },
+  ]),
+  mockStageRemoteResourceSync: vi.fn(() => ({
+    stagingDir: "/tmp/pi-remote-resource-sync-test-staging",
+    hasResources: true,
+    manifest: {
+      schemaVersion: "remote-resource-sync/v1",
+      managedBy: "pi-agent-chat",
+      generatedAt: "2026-06-24T00:00:00.000Z",
+      localAgentDir: "/local/.pi/agent",
+      hash: "preview-hash",
+      resources: [
+        { type: "skills", hash: "skills-hash", files: 3, bytes: 1234 },
+        { type: "agents", hash: "agents-hash", files: 2, bytes: 456 },
+      ],
+      blocked: [{ path: "/local/.agents/skills/private/.env", reason: "blocked sensitive filename" }],
+    },
+  })),
+  mockResolveRemoteSyncedAgentDir: vi.fn(
+    () => "~/.pi/agent/remote-runtime/child/agent-resources",
+  ),
   mockListSshProfiles: vi.fn(async () => []),
   mockGetSshProfile: vi.fn(async () => null),
   mockUpsertSshProfile: vi.fn(async (profile) => ({
@@ -39,6 +70,7 @@ const projectMocks = vi.hoisted(() => ({
     updatedAt: 1,
   })),
   mockRemoveSshProfile: vi.fn(async () => {}),
+  mockListRemoteProjects: vi.fn(async () => []),
   mockOpenRemoteProject: vi.fn(async () => ({
     tab: { id: "remote-tab", name: "remote", path: "/tmp/remote", runtime: "ssh" },
     profile: { id: "ssh-profile", name: "remote", host: "host", createdAt: 1, updatedAt: 1 },
@@ -72,6 +104,7 @@ const {
   mockLinkProject,
   mockUnlinkProject,
   mockGetLinkedProjects,
+  mockSyncRemoteAgentResources,
 } = projectMocks;
 
 vi.mock("child_process", () => ({
@@ -111,6 +144,7 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
   upsertSshProfile: projectMocks.mockUpsertSshProfile,
   removeSshProfile: projectMocks.mockRemoveSshProfile,
   openRemoteProject: projectMocks.mockOpenRemoteProject,
+  listRemoteProjects: projectMocks.mockListRemoteProjects,
 }));
 
 vi.mock("../../../src/shared/lib/ssh-config", () => ({
@@ -125,6 +159,13 @@ vi.mock("../../../src/shared/lib/linked-projects-config", () => ({
   linkProject: projectMocks.mockLinkProject,
   unlinkProject: projectMocks.mockUnlinkProject,
   getLinkedProjects: projectMocks.mockGetLinkedProjects,
+}));
+
+vi.mock("../../../src/sandbox/remote-resource-sync", () => ({
+  collectRemoteSyncSources: projectMocks.mockCollectRemoteSyncSources,
+  stageRemoteResourceSync: projectMocks.mockStageRemoteResourceSync,
+  syncRemoteAgentResources: projectMocks.mockSyncRemoteAgentResources,
+  resolveRemoteSyncedAgentDir: projectMocks.mockResolveRemoteSyncedAgentDir,
 }));
 
 const fakeProcessManager = {
@@ -404,6 +445,97 @@ describe("project handler", () => {
     });
   });
 
+  describe("project.listSshDirectory", () => {
+    it("returns absolute child paths when browsing the remote root", async () => {
+      const handler = server.handlers.get("project.listSshDirectory")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "/\nroot\nvar\n",
+          stderr: "",
+        });
+      });
+
+      const result = await handler({ host: "xyz-mac", dirPath: "/" });
+
+      expect(result).toMatchObject({
+        ok: true,
+        path: "/",
+        entries: [
+          { name: "root", path: "/root", isDirectory: true },
+          { name: "var", path: "/var", isDirectory: true },
+        ],
+      });
+    });
+
+    it("normalizes bare directory input to an absolute remote path before cd", async () => {
+      const handler = server.handlers.get("project.listSshDirectory")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "/var\nlog\n",
+          stderr: "",
+        });
+      });
+
+      await handler({ host: "xyz-mac", dirPath: "var" });
+
+      const args = mockExecFile.mock.calls[0][1] as string[];
+      expect(args.at(-1)).toContain("cd '/var'");
+      expect(args.at(-1)).not.toContain("cd 'var'");
+    });
+
+    it("expands home-style remote paths without relying on quoted tilde expansion", async () => {
+      const handler = server.handlers.get("project.listSshDirectory")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "/root/projects\napp\n",
+          stderr: "",
+        });
+      });
+
+      await handler({ host: "xyz-mac", dirPath: "~/projects" });
+
+      const args = mockExecFile.mock.calls[0][1] as string[];
+      expect(args.at(-1)).toContain('cd "$HOME"/');
+      expect(args.at(-1)).toContain("'projects'");
+    });
+  });
+
+  describe("project.previewRemoteResourceSync", () => {
+    it("returns counts, source paths, and blocked entries for selected resource types", async () => {
+      const handler = server.handlers.get("project.previewRemoteResourceSync")!;
+
+      const result = await handler({
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/project",
+        resourceTypes: ["skills", "agents"],
+      });
+
+      expect(result).toEqual({
+        hash: "preview-hash",
+        blocked: [
+          {
+            path: "/local/.agents/skills/private/.env",
+            reason: "blocked sensitive filename",
+          },
+        ],
+        resources: [
+          {
+            type: "skills",
+            files: 3,
+            bytes: 1234,
+            sources: ["/local/.pi/agent/skills", "/local/.agents/skills"],
+          },
+          {
+            type: "agents",
+            files: 2,
+            bytes: 456,
+            sources: ["/local/.pi/agent/agents"],
+          },
+        ],
+      });
+    });
+  });
+
   describe("project.openSshProject", () => {
     it("opens a remote project only after SSH test succeeds and stores remote metadata", async () => {
       const handler = server.handlers.get("project.openSshProject")!;
@@ -446,6 +578,7 @@ describe("project handler", () => {
         remotePath: "/Users/xyz/project",
         projectName: "project",
         profileName: "xyz-mac",
+        sshRuntimeKind: "remote-agent-child",
       });
 
       expect(result).toMatchObject({
@@ -464,6 +597,7 @@ describe("project handler", () => {
           remotePath: "/Users/xyz/project",
           projectName: "project",
           profileName: "xyz-mac",
+          sshRuntimeKind: "remote-agent-child",
         }),
       );
       expect(mockAddRecent).toHaveBeenCalledWith(
@@ -478,6 +612,237 @@ describe("project handler", () => {
           }),
         }),
       );
+      expect(mockSyncRemoteAgentResources).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: "xyz-mac",
+          remoteAgentDir: "~/.pi/agent/remote-runtime/child/agent-resources",
+          remoteShell: "sh -lc",
+        }),
+      );
+    });
+
+    it("does not sync local resources for the quick ssh-command runtime", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "pi-agent-chat-ssh-ok\n/Users/xyz/project\n",
+          stderr: "",
+        });
+      });
+      projectMocks.mockOpenRemoteProject.mockResolvedValueOnce({
+        tab: {
+          id: "remote-tab",
+          name: "project",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          runtime: "ssh",
+        },
+        profile: {
+          id: "ssh-profile",
+          name: "xyz-mac",
+          host: "xyz-mac",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        remote: {
+          id: "remote-id",
+          name: "project",
+          runtime: "ssh",
+          sshRuntimeKind: "ssh-command",
+          profileId: "ssh-profile",
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          createdAt: 1,
+          lastOpened: 2,
+        },
+      });
+
+      await handler({
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/project",
+        projectName: "project",
+        profileName: "xyz-mac",
+        sshRuntimeKind: "ssh-command",
+      });
+
+      expect(mockSyncRemoteAgentResources).not.toHaveBeenCalled();
+    });
+
+    it("syncs only the selected remote resource types for standard SSH runtime", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "pi-agent-chat-ssh-ok\n/Users/xyz/project\n",
+          stderr: "",
+        });
+      });
+      projectMocks.mockOpenRemoteProject.mockResolvedValueOnce({
+        tab: {
+          id: "remote-tab",
+          name: "project",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          runtime: "ssh",
+        },
+        profile: {
+          id: "ssh-profile",
+          name: "xyz-mac",
+          host: "xyz-mac",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        remote: {
+          id: "remote-id",
+          name: "project",
+          runtime: "ssh",
+          sshRuntimeKind: "remote-agent-child",
+          profileId: "ssh-profile",
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          createdAt: 1,
+          lastOpened: 2,
+        },
+      });
+
+      await handler({
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/project",
+        projectName: "project",
+        profileName: "xyz-mac",
+        sshRuntimeKind: "remote-agent-child",
+        remoteResourceSync: {
+          enabled: true,
+          resourceTypes: ["skills", "rules"],
+        },
+      });
+
+      expect(projectMocks.mockOpenRemoteProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remoteResourceSync: {
+            enabled: true,
+            resourceTypes: ["skills", "rules"],
+          },
+        }),
+      );
+      expect(mockSyncRemoteAgentResources).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: "xyz-mac",
+          resourceTypes: ["skills", "rules"],
+          extraSources: expect.any(Array),
+        }),
+      );
+    });
+
+    it("skips resource sync when standard SSH runtime has no selected resource types", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "pi-agent-chat-ssh-ok\n/Users/xyz/project\n",
+          stderr: "",
+        });
+      });
+      projectMocks.mockOpenRemoteProject.mockResolvedValueOnce({
+        tab: {
+          id: "remote-tab",
+          name: "project",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          runtime: "ssh",
+        },
+        profile: {
+          id: "ssh-profile",
+          name: "xyz-mac",
+          host: "xyz-mac",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        remote: {
+          id: "remote-id",
+          name: "project",
+          runtime: "ssh",
+          sshRuntimeKind: "remote-agent-child",
+          profileId: "ssh-profile",
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          createdAt: 1,
+          lastOpened: 2,
+        },
+      });
+
+      await handler({
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/project",
+        projectName: "project",
+        profileName: "xyz-mac",
+        sshRuntimeKind: "remote-agent-child",
+        remoteResourceSync: {
+          enabled: true,
+          resourceTypes: [],
+        },
+      });
+
+      expect(mockSyncRemoteAgentResources).not.toHaveBeenCalled();
+    });
+
+    it("opens the remote project even when optional resource sync fails", async () => {
+      const handler = server.handlers.get("project.openSshProject")!;
+      mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: "pi-agent-chat-ssh-ok\n/Users/xyz/project\n",
+          stderr: "",
+        });
+      });
+      projectMocks.mockOpenRemoteProject.mockResolvedValueOnce({
+        tab: {
+          id: "remote-tab",
+          name: "project",
+          path: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          runtime: "ssh",
+        },
+        profile: {
+          id: "ssh-profile",
+          name: "xyz-mac",
+          host: "xyz-mac",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        remote: {
+          id: "remote-id",
+          name: "project",
+          runtime: "ssh",
+          sshRuntimeKind: "remote-agent-child",
+          profileId: "ssh-profile",
+          host: "xyz-mac",
+          remotePath: "/Users/xyz/project",
+          localPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+          createdAt: 1,
+          lastOpened: 2,
+        },
+      });
+      mockSyncRemoteAgentResources.mockRejectedValueOnce(
+        new Error("remote tar command not found"),
+      );
+
+      const result = await handler({
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/project",
+        projectName: "project",
+        profileName: "xyz-mac",
+        sshRuntimeKind: "remote-agent-child",
+        remoteResourceSync: {
+          enabled: true,
+          resourceTypes: ["skills"],
+        },
+      });
+
+      expect(result).toMatchObject({
+        projectPath: "/Users/xuyingzhou/.pi-agent-chat/remote-projects/ssh-abcd/project",
+        remote: {
+          runtime: "ssh",
+          remotePath: "/Users/xyz/project",
+        },
+      });
+      expect(mockAddRecent).toHaveBeenCalled();
     });
 
     it("does not create a remote project or recent item when SSH test fails", async () => {
@@ -571,6 +936,10 @@ describe("project handler", () => {
       {
         stderr: "cd: permission denied: /root/private\n",
         code: "permission-denied",
+      },
+      {
+        stderr: "bash: line 1: zsh: command not found\n",
+        code: "command-failed",
       },
     ])("classifies SSH failure: $code", async ({ stderr, code }) => {
       const handler = server.handlers.get("project.testSshProfile")!;

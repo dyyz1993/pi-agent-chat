@@ -16,12 +16,14 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
 }));
 
 const mockSetCurrentModel = vi.fn();
+let mockCurrentModel: { provider: string; id: string } | null = null;
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => ({
       setCurrentModel: mockSetCurrentModel,
+      currentModel: mockCurrentModel,
     }),
   },
 }));
@@ -33,6 +35,7 @@ const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockCurrentModel = null;
   useTierStore.setState({ globalDefaults: {}, dataBySession: {}, switching: false });
 });
 
@@ -165,6 +168,26 @@ describe("fetchTierConfig", () => {
       pro: "a/sonnet",
       max: "a/opus",
     });
+  });
+
+  it("fetches tier models into the current session and syncs current tier", async () => {
+    mockCurrentModel = { provider: "deepseek", id: "deepseek-v4-flash" };
+    mockedCall.mockResolvedValueOnce({
+      models: {
+        fast: "deepseek/deepseek-v4-flash",
+        pro: "deepseek/deepseek-v4-pro",
+        max: "deepseek/deepseek-v4-pro",
+      },
+    });
+
+    await useTierStore.getState().fetchTierConfig("sess-1");
+
+    expect(useTierStore.getState().getTierModels("sess-1")).toEqual({
+      fast: "deepseek/deepseek-v4-flash",
+      pro: "deepseek/deepseek-v4-pro",
+      max: "deepseek/deepseek-v4-pro",
+    });
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
   });
 
   it("keeps globalDefaults unchanged on failure", async () => {

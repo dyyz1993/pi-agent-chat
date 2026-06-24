@@ -10,6 +10,7 @@ import type { TodoMethods, TodoEvents } from "./modules/todo";
 import type { BashMethods, BashEvents } from "./modules/bash";
 import type { LspMethods, LspEvents } from "./modules/lsp";
 import type { MemoryMethods, MemoryEvents } from "./modules/memory";
+import type { LearningMethods, LearningEvents } from "./modules/learning";
 import type { RulesMethods, RulesEvents } from "./modules/rules";
 import type { HooksMethods, HooksEvents } from "./modules/hooks";
 import type { SnapshotMethods } from "./modules/snapshot";
@@ -31,6 +32,7 @@ export interface RPCMethods
     BashMethods,
     LspMethods,
     MemoryMethods,
+    LearningMethods,
     RulesMethods,
     HooksMethods,
     SnapshotMethods,
@@ -48,6 +50,7 @@ export interface RPCEvents
     RulesEvents,
     HooksEvents,
     MemoryEvents,
+    LearningEvents,
     FileEvents,
     CoordinatorEvents,
     SupervisorEvents {}

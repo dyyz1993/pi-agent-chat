@@ -76,9 +76,21 @@ describe("pi-agent-paths", () => {
   it("expands tilde paths and validates memory containment", () => {
     process.env.PI_CODING_AGENT_DIR = expandTildePath("~/custom-pi-agent");
     const memoryDir = getUserMemoryDir();
+    const projectMemoryDir = join(getProjectUserStateDir("/Users/foo/project"), "memory");
 
     expect(memoryDir).toContain("custom-pi-agent");
     expect(isPathInsideUserMemoryDir(join(memoryDir, "project", "note.md"))).toBe(true);
+    expect(isPathInsideUserMemoryDir(join(projectMemoryDir, "MEMORY.md"))).toBe(true);
     expect(isPathInsideUserMemoryDir(join(memoryDir, "..", "outside.md"))).toBe(false);
+    expect(
+      isPathInsideUserMemoryDir(
+        join(getProjectUserStateDir("/Users/foo/project"), "learning", "config.json"),
+      ),
+    ).toBe(false);
+    expect(
+      isPathInsideUserMemoryDir(
+        join(getProjectUserStateDir("/Users/foo/project"), "learning", "memory", "note.md"),
+      ),
+    ).toBe(false);
   });
 });

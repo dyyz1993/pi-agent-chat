@@ -44,6 +44,9 @@ export function classifySshErrorMessage(message: string): SshConnectionErrorCode
   ) {
     return "ssh-config";
   }
+  if (text.includes("command not found")) {
+    return "command-failed";
+  }
   if (text.includes("no such file or directory") || text.includes("not a directory")) {
     return "remote-path";
   }

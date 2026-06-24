@@ -87,13 +87,14 @@ export function getBuiltinExtensionsDir(): string {
   return getBuiltinExtensionsDirForCliPath(config.piCliPath);
 }
 
-export function discoverExtensionArgs(): string[] {
+export function discoverExtensionArgs(options?: { includeUser?: boolean }): string[] {
   const extensionPaths: string[] = [];
+  const includeUser = options?.includeUser ?? true;
 
   const userExtDir = config.piExtensionsDir;
-  if (existsSync(userExtDir)) {
+  if (includeUser && existsSync(userExtDir)) {
     scanExtensionDir(userExtDir, extensionPaths);
-  } else {
+  } else if (includeUser) {
     log.warn("Global extensions directory not found", { extDir: userExtDir });
   }
 
