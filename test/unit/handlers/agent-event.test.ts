@@ -1083,6 +1083,31 @@ describe("agent_end cleanup", () => {
     expect(Object.keys(useSessionQueueStore.getState().queueBySession)).toHaveLength(1);
   });
 
+  it("appends an inline error card when the agent ends without assistant content", () => {
+    setMessages([
+      {
+        id: "user-empty-turn",
+        role: "user",
+        content: [{ type: "text", text: "hello?" }],
+        timestamp: Date.now() - 1,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs).toHaveLength(2);
+    expect(msgs[1].role).toBe("error");
+    expect(msgs[1].stopReason).toBe("empty_response");
+    expect(msgs[1].content).toEqual([
+      {
+        type: "text",
+        text: expect.stringContaining("Agent 未返回有效响应"),
+      },
+    ]);
+  });
+
   it("closes running tool blocks when the agent ends without a tool end event", () => {
     setMessages([
       {

@@ -138,22 +138,6 @@ function prepareMessagesForStore(
   return nextMsgs;
 }
 
-function hasRenderableMessageContent(message: ChatMessage): boolean {
-  return message.content.some((block) => {
-    if (block.type === "text") return block.text.trim().length > 0;
-    if (block.type === "thinking") return block.thinking.trim().length > 0;
-    return true;
-  });
-}
-
-function hasAssistantContentAfterMessage(messages: ChatMessage[], messageId: string): boolean {
-  const startIndex = messages.findIndex((msg) => msg.id === messageId);
-  if (startIndex < 0) return false;
-  return messages
-    .slice(startIndex + 1)
-    .some((msg) => msg.role === "assistant" && hasRenderableMessageContent(msg));
-}
-
 function sameToolCallIds(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -470,31 +454,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     writeDraft(sessionId, "");
 
     let sentImages: ImageContent[] = [];
-    let userMsgId: string | null = null;
-
-    const scheduleEmptyTurnCheck = () => {
-      if (!userMsgId) return;
-      const EMPTY_TURN_CHECK_MS = 30_000;
-      const checkSessionId = sessionId;
-      const checkUserMsgId = userMsgId;
-      setTimeout(() => {
-        const chat = get();
-        const msgs = chat.messagesBySession[checkSessionId] || [];
-        const hasAssistant = hasAssistantContentAfterMessage(msgs, checkUserMsgId);
-        if (!hasAssistant) {
-          const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
-          const isStillStreaming =
-            status === "streaming" || status === "compacting" || status === "retrying";
-          if (!isStillStreaming) {
-            useNotificationStore.getState().push({
-              message: "Agent 未返回任何响应，请检查模型配置或重试",
-              level: "error",
-              sessionId: checkSessionId,
-            });
-          }
-        }
-      }, EMPTY_TURN_CHECK_MS);
-    };
 
     try {
       sentImages = get().pendingImages;
@@ -515,7 +474,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         timestamp: Date.now(),
         _local: true,
       };
-      userMsgId = userMsg.id;
       set((s) => {
         const existing = s.messagesBySession[sessionId] || [];
         return {
@@ -534,7 +492,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await sendAgentMessageWithTimeout(sessionId, text, sentImages);
       perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
       set({ isStreaming: false });
-      scheduleEmptyTurnCheck();
     } catch (err) {
       let finalErr = err;
       if (isAgentNotStartedError(finalErr, sessionId)) {

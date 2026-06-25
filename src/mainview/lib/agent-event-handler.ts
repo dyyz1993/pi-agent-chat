@@ -249,6 +249,24 @@ function isErrorStopReason(stopReason: string | null | undefined): boolean {
   return stopReason === "error";
 }
 
+function buildEmptyTurnErrorMessage(afterMessage?: ChatMessage): ChatMessage {
+  return {
+    id: `error_empty_turn_${Date.now()}`,
+    role: "error",
+    content: [
+      {
+        type: "text",
+        text:
+          "Agent 未返回有效响应\n" +
+          "本轮 Agent 已结束，但没有产生可展示的 assistant 内容。可能是模型/API 返回为空、模型配置错误、网络中断，或进程在生成前退出。",
+      },
+    ],
+    timestamp: Math.max(Date.now(), (afterMessage?.timestamp ?? 0) + 1),
+    stopReason: "empty_response",
+    isStreaming: false,
+  };
+}
+
 function hasAssistantContentSinceLastUser(messages: ChatMessage[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -552,6 +570,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
 
       if (lastIsUser) {
+        chat.setMessagesForSession(sessionId, [
+          ...currentMsgs,
+          buildEmptyTurnErrorMessage(lastMsg),
+        ]);
         notificationGateway.emit({
           type: "session_error",
           sessionId,
