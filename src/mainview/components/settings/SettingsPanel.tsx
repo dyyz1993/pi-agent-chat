@@ -1,4 +1,13 @@
-import { useEffect, useCallback, useState, type ComponentType, type ReactNode } from "react";
+import {
+  useEffect,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
@@ -9,6 +18,7 @@ import {
   SlidersHorizontal,
   Target,
   Trophy,
+  X,
   Zap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -23,8 +33,9 @@ import { apiClient } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
-import { Button, ModalDialog } from "../primitives";
+import { Button, IconButton } from "../primitives";
 import { UsagePanel } from "../usage-panel/UsagePanel";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 import {
   getProxyStatus,
   refreshProxyStatus,
@@ -102,6 +113,8 @@ type TierSaveMessage = {
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const { t } = useTranslation("settings");
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<SettingsTabId>("display");
   const settings = useSettingsStore();
   const toggle = useSettingsStore((s) => s.toggle);
@@ -478,38 +491,33 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     usage: usageContent,
   };
 
-  return (
-    <ModalDialog
-      title={t("title")}
-      onClose={onClose}
-      closeLabel={t("close")}
-      size="lg"
-      className="w-[min(960px,calc(100vw-1rem))] max-w-none max-sm:max-h-[calc(100vh-1rem)]"
-      bodyClassName="min-h-0 overflow-hidden p-0"
-      footerClassName="flex-wrap justify-between gap-2 bg-surface-dim/50 dark:bg-surface-dim/30"
-      footer={
-        <>
-          <Button
-            size="md"
-            variant="ghost"
-            onClick={() => {
-              reset();
-              resetRetryConfig();
-              persistRetry(RETRY_DEFAULTS);
-            }}
-            leadingIcon={<RotateCcw className="w-3.5 h-3.5" />}
-          >
-            {t("reset")}
-          </Button>
-          <Button size="md" variant="primary" onClick={onClose}>
-            {t("close")}
-          </Button>
-        </>
-      }
+  useFocusTrap(panelRef, { onEscape: onClose });
+
+  const panel = (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      data-testid="settings-panel"
+      className="fixed inset-0 z-modal flex flex-col overflow-hidden bg-bg-primary text-text-primary"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <div className="shrink-0 border-b border-border-secondary bg-bg-primary/50 p-2 sm:w-44 sm:border-b-0 sm:border-r">
-          <div className="flex gap-1 overflow-x-auto scrollbar-none sm:flex-col sm:overflow-visible">
+      <div
+        className="flex min-h-[56px] shrink-0 items-center gap-3 border-b border-border-secondary bg-bg-elevated/95 px-3 sm:px-5"
+        style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
+      >
+        <h2 id={titleId} className="min-w-0 flex-1 truncate text-sm font-semibold">
+          {t("title")}
+        </h2>
+        <IconButton label={t("close")} size="md" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </IconButton>
+      </div>
+
+      <div className="min-h-0 flex-1 bg-bg-primary md:flex">
+        <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 md:w-56 md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-3 lg:w-64">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none md:flex-col md:overflow-visible">
             {SETTINGS_TABS.map((tab) => {
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
@@ -518,9 +526,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors sm:min-h-0 sm:min-w-0 ${
+                  className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors md:min-w-0 ${
                     selected
-                      ? "bg-semantic-accent/10 text-semantic-accent"
+                      ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
                       : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
                   }`}
                 >
@@ -532,12 +540,37 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               );
             })}
           </div>
-        </div>
+        </aside>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">{contentByTab[activeTab]}</div>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div className="w-full max-w-7xl px-3 py-4 sm:px-5 md:px-8 md:py-6">
+            {contentByTab[activeTab]}
+          </div>
+        </main>
       </div>
-    </ModalDialog>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border-secondary bg-bg-elevated/95 px-3 py-3 sm:px-5">
+        <Button
+          size="md"
+          variant="ghost"
+          onClick={() => {
+            reset();
+            resetRetryConfig();
+            persistRetry(RETRY_DEFAULTS);
+          }}
+          leadingIcon={<RotateCcw className="h-3.5 w-3.5" />}
+        >
+          {t("reset")}
+        </Button>
+        <Button size="md" variant="primary" onClick={onClose}>
+          {t("close")}
+        </Button>
+      </div>
+    </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(panel, document.body);
 }
 
 function SettingsSection({
@@ -550,7 +583,7 @@ function SettingsSection({
   flush?: boolean;
 }) {
   return (
-    <div className={flush ? "space-y-3" : "mx-auto max-w-2xl space-y-3"}>
+    <div className={flush ? "space-y-3" : "max-w-3xl space-y-3"}>
       <div>
         <SectionHeader>{title}</SectionHeader>
       </div>
