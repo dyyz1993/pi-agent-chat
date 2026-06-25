@@ -32,7 +32,7 @@ export const ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
   memory_inject: {
     icon: ArrowDownToLine,
     color: "text-blue-400",
-    label: "注入记忆",
+    label: "注入 Memory",
   },
   memory_extract: {
     icon: Save,
@@ -227,12 +227,21 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
     }
     case "memory_inject": {
       const bytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
+      const originalBytes = typeof d.originalBytes === "number" ? d.originalBytes : 0;
       const files = Array.isArray(d.selectedFiles) ? (d.selectedFiles as string[]) : [];
+      const alreadyInjected = d.alreadyInjected === true || d.skipped === true;
       const parts = [
         files.length > 0 ? `${files.length}个文件` : "",
-        bytes > 0 ? `约${Math.round(bytes / 4)} tokens` : "",
+        (alreadyInjected ? originalBytes : bytes) > 0
+          ? `约${Math.round((alreadyInjected ? originalBytes : bytes) / 4)} tokens`
+          : "",
       ].filter(Boolean);
-      return parts.length > 0 ? `已注入到模型上下文 · ${parts.join(" · ")}` : "已注入到模型上下文";
+      if (alreadyInjected) {
+        return parts.length > 0
+          ? `已识别 Memory，本会话已注入过 · ${parts.join(" · ")}`
+          : "已识别 Memory，本会话已注入过";
+      }
+      return parts.length > 0 ? `已注入 Memory 到模型上下文 · ${parts.join(" · ")}` : "已注入 Memory 到模型上下文";
     }
     case "memory_extract": {
       type FileEntry = { filename: string; name: string; description: string };

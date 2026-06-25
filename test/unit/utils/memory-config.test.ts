@@ -123,6 +123,18 @@ describe("getMemorySummary - regression for other types", () => {
     expect(getMemorySummary("memory_updated", { files: [{}, {}] })).toBe("2 个文件");
   });
 
+  it("memory_inject with alreadyInjected=true returns reuse summary", () => {
+    expect(
+      getMemorySummary("memory_inject", {
+        alreadyInjected: true,
+        skipped: true,
+        selectedFiles: ["a.md", "b.md"],
+        injectedBytes: 0,
+        originalBytes: 435,
+      }),
+    ).toBe("已识别 Memory，本会话已注入过 · 2个文件 · 约109 tokens");
+  });
+
   it("memory_update_failed with reason returns reason", () => {
     expect(getMemorySummary("memory_update_failed", { reason: "disk full" })).toBe("disk full");
   });

@@ -50,6 +50,14 @@ function extractTierInfo(data: unknown): { tier: string; model?: string } | null
   return { tier: tier ?? "", model };
 }
 
+function getMemoryCardLabel(customType: string, data: unknown, fallback: string): string {
+  const d = data as Record<string, unknown> | undefined;
+  if (customType === "memory_inject" && (d?.alreadyInjected === true || d?.skipped === true)) {
+    return "复用 Memory";
+  }
+  return fallback;
+}
+
 function TierBadge({ tier }: { tier: string }) {
   if (!tier) return null;
   const config: Record<string, { style: string; Icon: ComponentType<{ className?: string }> }> = {
@@ -142,6 +150,7 @@ export const MemoryCard = memo(function MemoryCard({
     label: displayType,
     color: "text-text-tertiary",
   };
+  const displayLabel = getMemoryCardLabel(displayType, displayData, config.label);
   const Icon = getCustomTypeIcon(displayType).icon;
 
   const summary = isSearching
@@ -183,11 +192,11 @@ export const MemoryCard = memo(function MemoryCard({
         onClick={() => setExpanded(!expanded)}
         className={`${CHAT_COMPACT_ROW_BUTTON_BASE_CLASS} ${config.color} hover:bg-surface-hover/15 dark:hover:bg-surface-dim/15`}
         aria-expanded={expanded}
-        aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
+        aria-label={`${displayLabel}${summary ? `: ${summary}` : ""}`}
       >
         <Icon className="w-3 h-3 shrink-0" />
         <span className="flex-1 min-w-0 flex items-center gap-1.5">
-          <span className="font-medium whitespace-nowrap">{config.label}</span>
+          <span className="font-medium whitespace-nowrap">{displayLabel}</span>
           {summary && <span className="text-text-tertiary truncate">{summary}</span>}
         </span>
         {tierInfo && <TierBadge tier={tierInfo.tier} />}
@@ -375,7 +384,7 @@ function PrefetchResultDetail({
   const selectedFileReferences: ContextReference[] = selectedFiles.map((file, index) => ({
     id: `memory-file:${file}:${index}`,
     kind: "memory",
-    title: file.split("/").pop() || file,
+    title: file.split("/").pop() ?? file,
     subtitle: formatFilePath(file),
     path: file,
     status: "used",

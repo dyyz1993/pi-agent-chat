@@ -13,7 +13,7 @@ import {
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
 import { CHAT_LIST_ITEM_CLASS } from "./chat-layout-classes";
-import { useChatStore } from "../../stores/use-chat-store";
+import { dedupeMemoryInjectMessages, useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
@@ -67,6 +67,7 @@ interface CardMetaEntry {
 }
 
 const _cardMetaCache = new Map<string, CacheEntry<Map<string, CardMetaEntry>>>();
+const MESSAGE_LIST_PROCESSING_VERSION = 3;
 
 function buildCompactionActivityMessage(
   sessionId: string,
@@ -131,13 +132,31 @@ interface ProcessedMessage {
   hide?: boolean;
 }
 
+function isMemoryOnlyCustomMessage(msg: ChatMessage): boolean {
+  if (msg.role !== "custom") return false;
+  return msg.content.length > 0 && msg.content.every((block) => {
+    return block.type === "custom" && ALL_MEMORY_TYPE_KEYS.has(block.customType);
+  });
+}
+
 export function buildProcessedMessages(
   messages: ChatMessage[],
   showMemoryEntries: boolean,
+  options: { hideLeadingOrphanMemoryEntries?: boolean } = {},
 ): ProcessedMessage[] {
   const result: ProcessedMessage[] = [];
+  let hasConversationAnchor = false;
 
-  for (const msg of messages) {
+  for (const msg of dedupeMemoryInjectMessages(messages)) {
+    const isConversationAnchor = msg.role === "user" || msg.role === "assistant";
+    if (
+      options.hideLeadingOrphanMemoryEntries === true &&
+      !hasConversationAnchor &&
+      isMemoryOnlyCustomMessage(msg)
+    ) {
+      continue;
+    }
+
     const customBlock = msg.content.find(
       (b): b is Extract<(typeof msg)["content"][number], { type: "custom" }> => b.type === "custom",
     );
@@ -166,6 +185,9 @@ export function buildProcessedMessages(
     }
 
     result.push({ msg });
+    if (isConversationAnchor) {
+      hasConversationAnchor = true;
+    }
   }
 
   return result;
@@ -291,7 +313,7 @@ export const MessageListView = memo(function MessageListView({
 
   const cardMeta = useMemo(() => {
     if (!activeSessionId) return buildCardMeta(visibleMessages, t);
-    const revision = `${computeMessagesRevision(visibleMessages)}:status:${sessionStatus ?? ""}`;
+    const revision = `${computeMessagesRevision(visibleMessages)}:v:${MESSAGE_LIST_PROCESSING_VERSION}:status:${sessionStatus ?? ""}`;
     const cached = _cardMetaCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
@@ -302,17 +324,33 @@ export const MessageListView = memo(function MessageListView({
     return result;
   }, [visibleMessages, t, activeSessionId, sessionStatus]);
   const processedMessages = useMemo(() => {
-    if (!activeSessionId) return buildProcessedMessages(visibleMessages, showMemoryEntries);
-    const revision = `${computeMessagesRevision(visibleMessages)}:memory:${showMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
+    const hideLeadingOrphanMemoryEntries =
+      source === "main" && [isLoadingMore, hasMoreMessages].some((value) => value === true);
+    if (!activeSessionId) {
+      return buildProcessedMessages(visibleMessages, showMemoryEntries, {
+        hideLeadingOrphanMemoryEntries,
+      });
+    }
+    const revision = `${computeMessagesRevision(visibleMessages)}:v:${MESSAGE_LIST_PROCESSING_VERSION}:memory:${showMemoryEntries ? "1" : "0"}:hide-orphan-memory:${hideLeadingOrphanMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
     const cached = _processedMessagesCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
     }
-    const result = buildProcessedMessages(visibleMessages, showMemoryEntries);
+    const result = buildProcessedMessages(visibleMessages, showMemoryEntries, {
+      hideLeadingOrphanMemoryEntries,
+    });
     _processedMessagesCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_processedMessagesCache);
     return result;
-  }, [visibleMessages, activeSessionId, showMemoryEntries, sessionStatus]);
+  }, [
+    activeSessionId,
+    hasMoreMessages,
+    isLoadingMore,
+    sessionStatus,
+    showMemoryEntries,
+    source,
+    visibleMessages,
+  ]);
 
   if (visibleMessages.length === 0 && scrollRef) {
     return (

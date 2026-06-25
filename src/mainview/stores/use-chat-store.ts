@@ -45,11 +45,46 @@ export function clearBackgroundRefreshGeneration(sessionId: string): void {
 
 export type MessageHydrationState = "idle" | "loading" | "ready" | "error";
 
+function getMemoryInjectDataKey(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const operationId = typeof record?.operationId === "string" ? record.operationId : undefined;
+  const fingerprint = typeof record?.fingerprint === "string" ? record.fingerprint : undefined;
+  if (!operationId || !fingerprint) return undefined;
+  return `${operationId}:${fingerprint}`;
+}
+
+function getMemoryInjectMessageKey(message: ChatMessage): string | undefined {
+  if (message.role !== "custom") return undefined;
+  const block = message.content[0];
+  if (block?.type !== "custom" || block.customType !== "memory_inject") return undefined;
+  return getMemoryInjectDataKey(block.data);
+}
+
+export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage[] {
+  const seenInjectKeys = new Set<string>();
+  let changed = false;
+  const result: ChatMessage[] = [];
+
+  for (const message of messages) {
+    const injectKey = getMemoryInjectMessageKey(message);
+    if (injectKey) {
+      if (seenInjectKeys.has(injectKey)) {
+        changed = true;
+        continue;
+      }
+      seenInjectKeys.add(injectKey);
+    }
+    result.push(message);
+  }
+
+  return changed ? result : messages;
+}
+
 function prepareMessagesForStore(
   msgs: ChatMessage[],
   options: { normalizeTools?: boolean; activeToolCallIds?: string[] } = {},
 ): ChatMessage[] {
-  const nextMsgs = [...msgs];
+  const nextMsgs = [...dedupeMemoryInjectMessages(msgs)];
   const activeToolCallIds =
     options.activeToolCallIds === undefined ? undefined : new Set(options.activeToolCallIds);
   if (options.normalizeTools) {
@@ -133,9 +168,72 @@ type MemoryCustomEntry = {
   timestamp: number;
 };
 
+function getNumericField(data: unknown, key: string): number | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function getCustomBlock(
+  message: ChatMessage,
+): Extract<ContentBlock, { type: "custom" }> | undefined {
+  return message.content.find(
+    (block): block is Extract<ContentBlock, { type: "custom" }> => block.type === "custom",
+  );
+}
+
+export function getMemorySemanticTimestamp(data: unknown, fallback: number): number {
+  return (
+    getNumericField(data, "_prefetchOccurredAt") ?? getNumericField(data, "occurredAt") ?? fallback
+  );
+}
+
+function getMemoryPhaseOrder(data: unknown, customType: string): number {
+  return (
+    getNumericField(data, "phaseOrder") ??
+    (customType === "memory_prefetch"
+      ? 1
+      : customType === "memory_prefetch_result"
+        ? 2
+        : customType === "memory_inject"
+          ? 3
+          : 50)
+  );
+}
+
+function getMessageDisplayRank(message: ChatMessage): number {
+  if (message.role === "user") return 0;
+  const custom = getCustomBlock(message);
+  if (custom && ALL_MEMORY_TYPE_KEYS.has(custom.customType)) {
+    return 10 + getMemoryPhaseOrder(custom.data, custom.customType);
+  }
+  if (message.role === "custom") return 40;
+  if (message.role === "assistant") return 60;
+  return 80;
+}
+
+export function compareChatMessagesForDisplay(a: ChatMessage, b: ChatMessage): number {
+  if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+  const rankDiff = getMessageDisplayRank(a) - getMessageDisplayRank(b);
+  if (rankDiff !== 0) return rankDiff;
+  return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+}
+
+export function insertChatMessageByDisplayOrder(
+  messages: ChatMessage[],
+  message: ChatMessage,
+): ChatMessage[] {
+  return [...messages, message].sort(compareChatMessagesForDisplay);
+}
+
 function getMemoryOperationId(entry: MemoryCustomEntry): string | undefined {
   const data = entry.data as Record<string, unknown> | undefined;
   return typeof data?.operationId === "string" ? data.operationId : undefined;
+}
+
+function getMemoryInjectKey(entry: MemoryCustomEntry): string | undefined {
+  if (entry.customType !== "memory_inject") return undefined;
+  return getMemoryInjectDataKey(entry.data);
 }
 
 function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): MemoryCustomEntry[] {
@@ -156,6 +254,7 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
   }
 
   const mergedResultIds = new Set<string>();
+  const seenInjectKeys = new Set<string>();
 
   for (const entry of entries) {
     if (entry.customType !== "memory_prefetch") continue;
@@ -167,12 +266,15 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
       mergedResultIds.add(bestResult.id);
       const prefData = entry.data as Record<string, unknown> | undefined;
       const resData = bestResult.data as Record<string, unknown> | undefined;
+      const prefetchOccurredAt = getMemorySemanticTimestamp(entry.data, entry.timestamp);
       bestResult.data = {
         ...(resData ?? {}),
         _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
         _prefetchAvailableFiles:
           typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
+        _prefetchOccurredAt: prefetchOccurredAt,
       };
+      bestResult.timestamp = prefetchOccurredAt;
     }
   }
 
@@ -183,6 +285,12 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
         const mergedResult = resultMap.get(operationId);
         if (mergedResult && mergedResultIds.has(mergedResult.id)) return false;
       }
+    }
+
+    const injectKey = getMemoryInjectKey(entry);
+    if (injectKey) {
+      if (seenInjectKeys.has(injectKey)) return false;
+      seenInjectKeys.add(injectKey);
     }
 
     return true;
@@ -196,7 +304,7 @@ function memoryEntriesToChatMessages(customEntries: MemoryCustomEntry[]): ChatMe
       id: entry.id,
       role: "custom" as const,
       content: [{ type: "custom" as const, customType: entry.customType, data: entry.data }],
-      timestamp: entry.timestamp,
+      timestamp: getMemorySemanticTimestamp(entry.data, entry.timestamp),
     }));
 }
 
@@ -221,7 +329,7 @@ function mergeRenderableCustomMessages(
   if (customMessages.length === 0) return messages;
   const existingIds = new Set(messages.map((message) => message.id));
   const merged = [...messages, ...customMessages.filter((message) => !existingIds.has(message.id))];
-  return merged.sort((a, b) => a.timestamp - b.timestamp);
+  return merged.sort(compareChatMessagesForDisplay);
 }
 
 function syncMemoryCustomEntries(
@@ -246,10 +354,14 @@ function syncMemoryCustomEntries(
 
     if ((entry.customType === "memory_prefetch_result" || entry.customType === "memory_inject") && entry.data) {
       const payload = entry.data as Record<string, unknown>;
-      memoryStore.addInjected(sessionId, {
-        summary: (payload.summary as string) ?? "",
-        snippet: (payload.snippet as string) ?? "",
-      });
+      const isSkippedInjection =
+        entry.customType === "memory_inject" && (payload.skipped === true || payload.alreadyInjected === true);
+      if (!isSkippedInjection) {
+        memoryStore.addInjected(sessionId, {
+          summary: (payload.summary as string) ?? "",
+          snippet: (payload.snippet as string) ?? "",
+        });
+      }
     }
   }
 }

@@ -43,7 +43,7 @@ vi.mock("../../../src/mainview/stores/use-memory-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/components/chat/memory-config", () => ({
-  ALL_MEMORY_TYPE_KEYS: new Set(["memory_prefetch_result"]),
+  ALL_MEMORY_TYPE_KEYS: new Set(["memory_prefetch", "memory_prefetch_result", "memory_inject"]),
 }));
 
 import { useChatStore, normalizeToolBlocks } from "../../../src/mainview/stores/use-chat-store";
@@ -136,6 +136,39 @@ describe("setMessagesForSession", () => {
 
     expect(useChatStore.getState().messagesBySession["sess-1"]).toHaveLength(1);
     expect(useChatStore.getState().messagesBySession["sess-1"][0].id).toBe("new");
+  });
+
+  it("deduplicates memory inject custom messages at the store write gateway", () => {
+    const data = {
+      operationId: "op-1",
+      fingerprint: "a.md,b.md|1741",
+      selectedFiles: ["a.md", "b.md"],
+      injectedBytes: 1741,
+    };
+
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "inject-1",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_inject", data }],
+        timestamp: 1,
+      },
+      {
+        id: "save-memory",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_extract_result", data: {} }],
+        timestamp: 2,
+      },
+      {
+        id: "inject-2",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_inject", data }],
+        timestamp: 3,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages.map((message) => message.id)).toEqual(["inject-1", "save-memory"]);
   });
 
   it("normalizes toolCall and toolResult through the store write gateway", () => {
@@ -408,6 +441,71 @@ describe("loadSessionMessages custom entry recovery", () => {
     });
   });
 
+  it("anchors merged memory prefetch result after the triggering user message after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: "读取一下上面的文件" }],
+          timestamp: 1_000,
+        },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 3_000,
+        },
+      ],
+      customEntries: [
+        {
+          id: "prefetch-start-1",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-1",
+            query: "读取一下上面的文件",
+            availableFiles: 2,
+            occurredAt: 1_100,
+            phaseOrder: 1,
+          },
+          timestamp: 5_000,
+        },
+        {
+          id: "prefetch-result-1",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            summary: "Matched memory",
+            snippet: "memory text",
+            injectedBytes: 435,
+            selectedFiles: ["MEMORY.md"],
+            occurredAt: 1_200,
+            phaseOrder: 2,
+          },
+          timestamp: 5_100,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages.map((message) => message.role)).toEqual(["user", "custom", "assistant"]);
+    expect(messages[1]).toMatchObject({
+      id: "prefetch-result-1",
+      timestamp: 1_100,
+      content: [
+        {
+          type: "custom",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            _prefetchOccurredAt: 1_100,
+          },
+        },
+      ],
+    });
+  });
+
   it("does not merge memory prefetch entries without matching operationId", async () => {
     vi.mocked(apiClient.call).mockResolvedValue({
       messages: [],
@@ -441,6 +539,56 @@ describe("loadSessionMessages custom entry recovery", () => {
     const messages = useChatStore.getState().messagesBySession["sess-1"];
     expect(messages).toHaveLength(2);
     expect(messages.map((m) => m.id)).toEqual(["prefetch-start-1", "prefetch-result-2"]);
+  });
+
+  it("deduplicates repeated memory inject entries by operation fingerprint after refresh", async () => {
+    const injectData = {
+      operationId: "op-1",
+      fingerprint: "a.md,b.md|1741",
+      summary: "Injected memory context",
+      snippet: "memory text",
+      injectedBytes: 1741,
+      selectedFiles: ["a.md", "b.md"],
+    };
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "inject-1",
+          customType: "memory_inject",
+          data: injectData,
+          timestamp: 100,
+        },
+        {
+          id: "inject-2",
+          customType: "memory_inject",
+          data: injectData,
+          timestamp: 110,
+        },
+        {
+          id: "inject-3",
+          customType: "memory_inject",
+          data: injectData,
+          timestamp: 120,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "inject-1",
+      role: "custom",
+      content: [
+        {
+          type: "custom",
+          customType: "memory_inject",
+        },
+      ],
+    });
   });
 });
 

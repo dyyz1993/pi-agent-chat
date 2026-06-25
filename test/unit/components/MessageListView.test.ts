@@ -65,4 +65,19 @@ describe("MessageListView message processing", () => {
 
     expect(items.map((item) => item.navId)).toEqual(["mem-search", "mem-save", "visible"]);
   });
+
+  it("hides leading orphan memory custom entries while loading older history", () => {
+    const processed = buildProcessedMessages(
+      [
+        customMessage("mem-search", "memory_prefetch_result"),
+        customMessage("mem-save", "memory_extract"),
+        userMessage("visible"),
+        customMessage("mem-after-user", "memory_inject"),
+      ],
+      true,
+      { hideLeadingOrphanMemoryEntries: true },
+    );
+
+    expect(processed.map((item) => item.msg.id)).toEqual(["visible", "mem-after-user"]);
+  });
 });

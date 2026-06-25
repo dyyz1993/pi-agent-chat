@@ -33,6 +33,26 @@ function memoryMsg(id: string, customType: string): ChatMessage {
   };
 }
 
+function memoryInjectMsg(id: string): ChatMessage {
+  return {
+    id,
+    role: "custom",
+    content: [
+      {
+        type: "custom",
+        customType: "memory_inject",
+        data: {
+          operationId: "memory-prefetch-1",
+          fingerprint: "feedback.md|435",
+          selectedFiles: ["feedback.md"],
+          injectedBytes: 435,
+        },
+      },
+    ],
+    timestamp: Date.now(),
+  };
+}
+
 function userMsg(id: string): ChatMessage {
   return {
     id,
@@ -140,6 +160,24 @@ describe("Memory entry display — showMemoryEntries=true (debug mode)", () => {
     const processed = buildProcessedMessages(messages, true);
     expect(processed.length).toBe(RENDERABLE_MEMORY_TYPES.length);
   });
+
+  it("deduplicates repeated memory injection cards even when memory entries are visible", () => {
+    const messages = [
+      assistantMsg("assistant-1"),
+      memoryInjectMsg("inject-1"),
+      memoryMsg("save-memory", "memory_extract"),
+      memoryInjectMsg("inject-2"),
+      assistantMsg("assistant-2"),
+    ];
+
+    const processed = buildProcessedMessages(messages, true);
+    expect(processed.map((p) => p.msg.id)).toEqual([
+      "assistant-1",
+      "inject-1",
+      "save-memory",
+      "assistant-2",
+    ]);
+  });
 });
 
 describe("Memory entry display — SideNav behavior", () => {
@@ -171,6 +209,25 @@ describe("Memory entry display — SideNav behavior", () => {
     expect(navIds).toContain("u1");
     expect(navIds).toContain("mem-1");
     expect(navIds).toContain("a1");
+  });
+
+  it("SideNav deduplicates repeated memory injection icons", () => {
+    const items = buildFlatItems(
+      [
+        assistantMsg("assistant-1"),
+        memoryInjectMsg("inject-1"),
+        memoryMsg("save-memory", "memory_extract"),
+        memoryInjectMsg("inject-2"),
+        assistantMsg("assistant-2"),
+      ],
+      false,
+      true,
+    );
+
+    const navIds = items.map((i) => i.navId);
+    expect(navIds).toContain("inject-1");
+    expect(navIds).toContain("save-memory");
+    expect(navIds).not.toContain("inject-2");
   });
 
   it("SideNav includes non-memory custom messages", () => {

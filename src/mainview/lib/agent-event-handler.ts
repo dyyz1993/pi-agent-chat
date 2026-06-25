@@ -2,7 +2,11 @@ import type { ContentBlock, ChatMessage, TokenUsage, PermissionMeta } from "../t
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
-import { useChatStore } from "../stores/use-chat-store";
+import {
+  getMemorySemanticTimestamp,
+  insertChatMessageByDisplayOrder,
+  useChatStore,
+} from "../stores/use-chat-store";
 import { useSessionStore, clearAgentStarted } from "../stores/use-session-store";
 import { useSessionQueueStore } from "../stores/use-session-queue-store";
 import { useMemoryStore } from "../stores/use-memory-store";
@@ -156,6 +160,23 @@ function getMemoryOperationId(data: unknown): string | undefined {
   return typeof record?.operationId === "string" ? record.operationId : undefined;
 }
 
+function getMemoryInjectKey(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const operationId = getMemoryOperationId(data);
+  const fingerprint = typeof record?.fingerprint === "string" ? record.fingerprint : undefined;
+  if (!operationId || !fingerprint) return undefined;
+  return `${operationId}:${fingerprint}`;
+}
+
+function hasMemoryInjectMessage(messages: ChatMessage[], key: string): boolean {
+  return messages.some((message) =>
+    message.content.some((block) => {
+      if (block.type !== "custom" || block.customType !== "memory_inject") return false;
+      return getMemoryInjectKey(block.data) === key;
+    }),
+  );
+}
+
 function findTimedOutMemoryPrefetchIndex(msgs: ChatMessage[], operationId: string): number {
   for (let i = msgs.length - 1; i >= 0; i--) {
     const msg = msgs[i];
@@ -172,6 +193,10 @@ function mergePrefetchResultData(
   resultData: unknown,
   prefetchData: Record<string, unknown> | undefined,
 ): unknown {
+  const prefetchOccurredAt =
+    typeof prefetchData?.occurredAt === "number" && Number.isFinite(prefetchData.occurredAt)
+      ? prefetchData.occurredAt
+      : undefined;
   return {
     ...(typeof resultData === "object" && resultData !== null
       ? (resultData as Record<string, unknown>)
@@ -179,6 +204,7 @@ function mergePrefetchResultData(
     _prefetchQuery: typeof prefetchData?.query === "string" ? prefetchData.query : "",
     _prefetchAvailableFiles:
       typeof prefetchData?.availableFiles === "number" ? prefetchData.availableFiles : 0,
+    ...(prefetchOccurredAt !== undefined ? { _prefetchOccurredAt: prefetchOccurredAt } : {}),
   };
 }
 
@@ -1218,17 +1244,27 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       return;
     }
 
+    if (event.customType === "memory_inject") {
+      const injectKey = getMemoryInjectKey(event.data);
+      const existing = useChatStore.getState().messagesBySession[sessionId] || [];
+      if (injectKey && hasMemoryInjectMessage(existing, injectKey)) return;
+    }
+
     const memoryStore = useMemoryStore.getState();
     memoryStore.addEvent(sessionId, {
       id: event.id || `custom-${Date.now()}`,
       customType: event.customType,
       data: event.data,
-      timestamp: Date.now(),
+      timestamp: getMemorySemanticTimestamp(event.data, Date.now()),
     });
 
     if (event.customType === "memory_prefetch_result" || event.customType === "memory_inject") {
       const data = event.data as { summary?: string; snippet?: string } | undefined;
-      if (data) {
+      const skippedInjection =
+        event.customType === "memory_inject" &&
+        ((event.data as Record<string, unknown> | undefined)?.skipped === true ||
+          (event.data as Record<string, unknown> | undefined)?.alreadyInjected === true);
+      if (data && !skippedInjection) {
         memoryStore.addInjected(sessionId, {
           summary: data.summary ?? "",
           snippet: data.snippet ?? "",
@@ -1261,21 +1297,19 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
         const chat = useChatStore.getState();
         const msgs = chat.messagesBySession[sessionId] || [];
-        chat.setMessagesForSession(sessionId, [
-          ...msgs,
-          {
-            id: eventId,
-            role: "custom" as const,
-            content: [
-              {
-                type: "custom" as const,
-                customType: "memory_prefetch",
-                data: { ...(event.data as Record<string, unknown>), _timedOut: true },
-              },
-            ],
-            timestamp: Date.now(),
-          },
-        ]);
+        const customMsg: ChatMessage = {
+          id: eventId,
+          role: "custom" as const,
+          content: [
+            {
+              type: "custom" as const,
+              customType: "memory_prefetch",
+              data: { ...(event.data as Record<string, unknown>), _timedOut: true },
+            },
+          ],
+          timestamp: getMemorySemanticTimestamp(event.data, Date.now()),
+        };
+        chat.setMessagesForSession(sessionId, insertChatMessageByDisplayOrder(msgs, customMsg));
       }, PREFETCH_FALLBACK_MS);
 
       sessionMap.set(operationId, { agentEvent: event, timer });
@@ -1315,6 +1349,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           timedOutBlock?.type === "custom"
             ? (timedOutBlock.data as Record<string, unknown> | undefined)
             : undefined;
+        const mergedResultData = mergePrefetchResultData(resultData, prefetchData);
         const replacement: ChatMessage = {
           id: event.id || timedOutMsg.id,
           role: "custom",
@@ -1322,10 +1357,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             {
               type: "custom",
               customType: "memory_prefetch_result",
-              data: mergePrefetchResultData(resultData, prefetchData),
+              data: mergedResultData,
             },
           ],
-          timestamp: Date.now(),
+          timestamp: getMemorySemanticTimestamp(mergedResultData, Date.now()),
         };
         chat.setMessagesForSession(
           sessionId,
@@ -1333,15 +1368,13 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         );
         return;
       }
-      chat.setMessagesForSession(sessionId, [
-        ...existingMsgs,
-        {
-          id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          role: "custom",
-          content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
-          timestamp: Date.now(),
-        },
-      ]);
+      const customMsg: ChatMessage = {
+        id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
+        timestamp: getMemorySemanticTimestamp(resultData, Date.now()),
+      };
+      chat.setMessagesForSession(sessionId, insertChatMessageByDisplayOrder(existingMsgs, customMsg));
       return;
     }
 
@@ -1351,9 +1384,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",
       content: [{ type: "custom", customType: event.customType, data: event.data }],
-      timestamp: Date.now(),
+      timestamp: ALL_MEMORY_TYPE_KEYS.has(event.customType)
+        ? getMemorySemanticTimestamp(event.data, Date.now())
+        : Date.now(),
     };
-    chat.setMessagesForSession(sessionId, [...existing, customMsg]);
+    chat.setMessagesForSession(
+      sessionId,
+      ALL_MEMORY_TYPE_KEYS.has(event.customType)
+        ? insertChatMessageByDisplayOrder(existing, customMsg)
+        : [...existing, customMsg],
+    );
 
     return;
   }

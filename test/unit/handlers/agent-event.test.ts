@@ -20,7 +20,7 @@ vi.mock("../../../src/mainview/lib/notification-gateway", () => ({
 }));
 
 vi.mock("../../../src/mainview/components/chat/memory-config", () => ({
-  ALL_MEMORY_TYPE_KEYS: new Set(),
+  ALL_MEMORY_TYPE_KEYS: new Set(["memory_prefetch", "memory_prefetch_result", "memory_inject"]),
 }));
 
 vi.mock("../../../src/shared/lib/logger", () => ({
@@ -170,7 +170,30 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
     incrementStreamVersion: () =>
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
   }));
-  return { useChatStore };
+  function getMemorySemanticTimestamp(data: unknown, fallback: number): number {
+    const record = data as Record<string, unknown> | undefined;
+    const prefetchOccurredAt = record?._prefetchOccurredAt;
+    const occurredAt = record?.occurredAt;
+    if (typeof prefetchOccurredAt === "number" && Number.isFinite(prefetchOccurredAt)) {
+      return prefetchOccurredAt;
+    }
+    if (typeof occurredAt === "number" && Number.isFinite(occurredAt)) return occurredAt;
+    return fallback;
+  }
+  function insertChatMessageByDisplayOrder(
+    messages: ChatMessage[],
+    message: ChatMessage,
+  ): ChatMessage[] {
+    return [...messages, message].sort((a, b) => {
+      if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+      const rank = (msg: ChatMessage) =>
+        msg.role === "user" ? 0 : msg.role === "custom" ? 10 : msg.role === "assistant" ? 60 : 80;
+      const rankDiff = rank(a) - rank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return a.id.localeCompare(b.id);
+    });
+  }
+  return { getMemorySemanticTimestamp, insertChatMessageByDisplayOrder, useChatStore };
 });
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
@@ -285,6 +308,73 @@ describe("agent_start / agent_end", () => {
     expect(() =>
       handleAgentEvent(SID, { type: "agent_start" } as Parameters<typeof handleAgentEvent>[1]),
     ).not.toThrow();
+  });
+});
+
+describe("memory custom entry ordering", () => {
+  it("uses semantic occurrence time so late memory results render after the triggering user", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "读取一下上面的文件" }],
+        timestamp: 1_000,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "我来检查。" }],
+        timestamp: 3_000,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-1",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-1",
+        query: "读取一下上面的文件",
+        availableFiles: 2,
+        occurredAt: 1_100,
+        phaseOrder: 1,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-1",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-1",
+        summary: "Matched memory",
+        snippet: "memory text",
+        selectedFiles: ["MEMORY.md"],
+        occurredAt: 1_200,
+        phaseOrder: 2,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual([
+      "user-1",
+      "prefetch-result-1",
+      "assistant-1",
+    ]);
+    expect(messages[1]).toMatchObject({
+      role: "custom",
+      timestamp: 1_100,
+      content: [
+        {
+          type: "custom",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            _prefetchOccurredAt: 1_100,
+          },
+        },
+      ],
+    });
   });
 });
 
