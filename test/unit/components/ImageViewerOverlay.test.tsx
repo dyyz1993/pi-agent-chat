@@ -2,6 +2,7 @@
 //
 // 测试 ImageViewerOverlay 组件：
 // - 渲染 img 元素，src 与 alt 正确
+// - 通过 portal 挂到 document.body，避免被消息列表/虚拟滚动容器裁切
 // - 点击背景触发 onClose（事件冒泡到 overlay）
 // - 点击 img 本身不触发 onClose（stopPropagation）
 // - 点击关闭按钮触发 onClose
@@ -37,9 +38,7 @@ describe("ImageViewerOverlay — image rendering", () => {
   });
 
   it("uses the provided alt", () => {
-    render(
-      <ImageViewerOverlay src="https://example.com/a.png" alt="My Image" onClose={vi.fn()} />,
-    );
+    render(<ImageViewerOverlay src="https://example.com/a.png" alt="My Image" onClose={vi.fn()} />);
     expect(screen.getByRole("img")).toHaveAttribute("alt", "My Image");
   });
 
@@ -50,11 +49,7 @@ describe("ImageViewerOverlay — image rendering", () => {
 
   it("defaults alt to 'preview' when alt is undefined", () => {
     render(
-      <ImageViewerOverlay
-        src="https://example.com/a.png"
-        alt={undefined}
-        onClose={vi.fn()}
-      />,
+      <ImageViewerOverlay src="https://example.com/a.png" alt={undefined} onClose={vi.fn()} />,
     );
     expect(screen.getByRole("img")).toHaveAttribute("alt", "preview");
   });
@@ -68,22 +63,17 @@ describe("ImageViewerOverlay — background click triggers onClose", () => {
 
   it("clicking the background overlay triggers onClose", () => {
     const onClose = vi.fn();
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />,
-    );
-    const overlay = container.firstChild as HTMLElement;
-    expect(overlay).not.toBeNull();
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />);
+    const overlay = screen.getByTestId("image-viewer-overlay");
     fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("clicking the overlay padding area triggers onClose", () => {
     const onClose = vi.fn();
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />,
-    );
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />);
     // 模拟点击 overlay 容器自身（非 img、非 button）
-    const overlay = container.firstChild as HTMLElement;
+    const overlay = screen.getByTestId("image-viewer-overlay");
     fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -97,9 +87,7 @@ describe("ImageViewerOverlay — img click does NOT close (stopPropagation)", ()
 
   it("clicking the image does NOT trigger onClose", () => {
     const onClose = vi.fn();
-    render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />,
-    );
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />);
     fireEvent.click(screen.getByRole("img"));
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -124,13 +112,12 @@ describe("ImageViewerOverlay — img click does NOT close (stopPropagation)", ()
     expect(parentClickSpy).not.toHaveBeenCalled();
     // 验证 overlay 根元素存在
     expect(container.firstChild).not.toBeNull();
+    expect(screen.getByTestId("image-viewer-overlay")).toBeInTheDocument();
   });
 
   it("createEvent click on img still does not trigger onClose", () => {
     const onClose = vi.fn();
-    render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />,
-    );
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />);
     const img = screen.getByRole("img");
     const evt = createEvent.click(img);
     fireEvent(img, evt);
@@ -145,42 +132,33 @@ describe("ImageViewerOverlay — close button", () => {
   });
 
   it("renders a close button", () => {
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />,
-    );
-    const button = container.querySelector("button");
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Close image preview" });
     expect(button).not.toBeNull();
   });
 
   it("close button has an X icon (lucide)", () => {
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />,
-    );
-    expect(container.querySelector(".lucide-x")).not.toBeNull();
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
+    expect(
+      screen.getByRole("button", { name: "Close image preview" }).querySelector(".lucide-x"),
+    ).not.toBeNull();
   });
 
   it("clicking the close button triggers onClose", () => {
     const onClose = vi.fn();
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />,
-    );
-    const button = container.querySelector("button") as HTMLButtonElement;
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />);
+    const button = screen.getByRole("button", { name: "Close image preview" });
     fireEvent.click(button);
     // 至少触发一次（关闭语义满足）
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("close button click bubbles to overlay (onClose called via both button and overlay)", () => {
-    // 源码：button 的 onClick={onClose} 没有调 stopPropagation。
-    // button 嵌套在 overlay 内部，overlay 的 onClick={onClose} 也会在冒泡阶段触发。
-    // 因此 onClose 会被调用两次。这是源码的真实行为（非 bug，因为 onClose 通常是幂等的关闭函数）。
+  it("close button click only calls onClose once", () => {
     const onClose = vi.fn();
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />,
-    );
-    const button = container.querySelector("button") as HTMLButtonElement;
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={onClose} />);
+    const button = screen.getByRole("button", { name: "Close image preview" });
     fireEvent.click(button);
-    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -191,28 +169,39 @@ describe("ImageViewerOverlay — layout & accessibility", () => {
   });
 
   it("root is fixed inset-0 fullscreen", () => {
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />,
-    );
-    const root = container.firstChild as HTMLElement;
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
+    const root = screen.getByTestId("image-viewer-overlay");
     expect(root.className).toContain("fixed");
     expect(root.className).toContain("inset-0");
     expect(root.className).toContain("z-fullscreen");
   });
 
   it("root has dark backdrop background", () => {
-    const { container } = render(
-      <ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />,
-    );
-    const root = container.firstChild as HTMLElement;
-    expect(root.className).toContain("bg-black/70");
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
+    const root = screen.getByTestId("image-viewer-overlay");
+    expect(root.className).toContain("bg-black/85");
   });
 
   it("img is constrained to viewport", () => {
     render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
     const img = screen.getByRole("img");
-    expect(img.className).toContain("max-w-[90vw]");
-    expect(img.className).toContain("max-h-[90vh]");
+    expect(img.className).toContain("max-w-[94vw]");
+    expect(img.className).toContain("max-h-[calc(100vh-6rem)]");
     expect(img.className).toContain("object-contain");
+  });
+
+  it("portals outside the message node that triggered it", () => {
+    const { container } = render(
+      <div data-testid="message-node">
+        <ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />
+      </div>,
+    );
+
+    const messageNode = screen.getByTestId("message-node");
+    const overlay = screen.getByTestId("image-viewer-overlay");
+
+    expect(container).toContainElement(messageNode);
+    expect(messageNode).not.toContainElement(overlay);
+    expect(document.body).toContainElement(overlay);
   });
 });

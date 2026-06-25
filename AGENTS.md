@@ -155,6 +155,7 @@ ALL `fixed inset-0` fullscreen components MUST:
 2. Add `paddingBottom: "env(safe-area-inset-bottom, 0px)"` on the container or footer
 3. Close buttons must be minimum 44px touch target (`p-2` + `w-4 h-4` icon = ~40px)
 4. Every fullscreen page MUST have a visible close/exit button
+5. Message-triggered fullscreen previews must be hoisted out of message DOM via `createPortal(document.body)` or a layout-level overlay host; never render `fixed inset-0` directly inside a message row or virtualized list item.
 
 Files that implement this pattern:
 
