@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { RotateCcw, Zap, Target, Brain } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RotateCcw, Zap, Target, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   FONT_PRESET_OPTIONS,
@@ -70,6 +70,11 @@ const MAX_DELAY_OPTIONS = [
   { value: 3600000, label: "60min" },
 ];
 
+type TierSaveMessage = {
+  type: "success" | "error";
+  text: string;
+};
+
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const { t } = useTranslation("settings");
   const settings = useSettingsStore();
@@ -97,6 +102,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
   const [localTierModels, setLocalTierModels] = useState<Record<string, string>>({});
   const [tierSaving, setTierSaving] = useState(false);
+  const [tierSaveMessage, setTierSaveMessage] = useState<TierSaveMessage | null>(null);
 
   const TIER_ICONS: Record<TierKey, React.ComponentType<{ className?: string }>> = {
     fast: Zap,
@@ -123,7 +129,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   }, [effectiveTierModels]);
 
   const handleSaveTierConfig = useCallback(async () => {
-    if (!sessionId) return;
+    setTierSaveMessage(null);
+    if (!sessionId) {
+      setTierSaveMessage({ type: "error", text: t("tierSaveNoSession") });
+      return;
+    }
     setTierSaving(true);
     try {
       await apiClient.call("agent.setTierModels", {
@@ -139,13 +149,16 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       if (activeTier && updatedModels[activeTier]) {
         await useTierStore.getState().switchToTier(activeTier, sessionId);
       }
+      setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
     } catch (err) {
       log.warn("save tier config failed", {
         error: err instanceof Error ? err.message : String(err),
       });
+      setTierSaveMessage({ type: "error", text: t("tierSaveFailed") });
+    } finally {
+      setTierSaving(false);
     }
-    setTierSaving(false);
-  }, [sessionId, localTierModels, fetchTierConfig, effectiveTierModels]);
+  }, [sessionId, localTierModels, fetchTierConfig, t]);
 
   // ---- 代理设置 ----
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
@@ -233,7 +246,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       className="w-[min(92vw,380px)] md:w-[720px] lg:w-[820px] xl:w-[980px]"
       style={{ maxWidth: "min(92vw, 980px)" }}
       bodyClassName="px-4 py-3 sm:px-5 sm:py-4 max-h-[70vh] lg:max-h-[min(78vh,720px)]"
-      footerClassName="justify-between bg-surface-dim/50 dark:bg-surface-dim/30"
+      footerClassName="flex-wrap justify-between gap-2 bg-surface-dim/50 dark:bg-surface-dim/30"
       footer={
         <>
           <Button
@@ -380,6 +393,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     models={availableModels}
                     value={localTierModels[tier] ?? ""}
                     onChange={(v) => {
+                      setTierSaveMessage(null);
                       setLocalTierModels((prev) => ({ ...prev, [tier]: v }));
                     }}
                     placeholder={t("tierConfigDefault", "默认")}
@@ -390,14 +404,27 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             );
           })}
 
-          <div className="flex justify-end">
-            <button
-              onClick={handleSaveTierConfig}
-              disabled={tierSaving}
-              className="px-4 py-1.5 rounded-md text-xs bg-[var(--color-accent)] text-text-inverse hover:bg-[var(--color-accent-hover)] disabled:opacity-40 transition-colors"
-            >
-              {tierSaving ? t("saving", "Saving...") : t("saveTier", "保存")}
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {tierSaveMessage && (
+              <div
+                className={`mr-auto flex min-h-8 min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] ${
+                  tierSaveMessage.type === "success"
+                    ? "border-status-success/30 bg-status-success/10 text-status-success"
+                    : "border-status-error/30 bg-status-error/10 text-status-error"
+                }`}
+                role="status"
+              >
+                {tierSaveMessage.type === "success" ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                )}
+                <span className="min-w-0">{tierSaveMessage.text}</span>
+              </div>
+            )}
+            <Button size="sm" variant="primary" onClick={handleSaveTierConfig} loading={tierSaving}>
+              {t("saveTier")}
+            </Button>
           </div>
 
           <div className="border-t border-border-secondary/60 dark:border-surface-dim/60" />
@@ -478,7 +505,7 @@ function SelectRow<T extends number>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 py-2 px-1">
+    <div className="flex flex-col gap-2 py-2 px-1 sm:flex-row sm:items-center sm:gap-3">
       <div className="flex-1 min-w-0">
         <div className="text-[13px] text-text-primary font-medium">{label}</div>
         <div className="text-[11px] text-text-tertiary mt-0.5">{desc}</div>
@@ -486,7 +513,7 @@ function SelectRow<T extends number>({
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value) as T)}
-        className="h-7 px-2 rounded-md border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-border-focus cursor-pointer"
+        className="h-8 w-full rounded-md border border-border-secondary bg-bg-elevated px-2 text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-border-focus cursor-pointer dark:bg-surface-dim sm:h-7 sm:w-auto"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -515,7 +542,7 @@ function BackoffPreview({
   }
 
   return (
-    <div className="mt-1 px-1 py-2 rounded-lg bg-surface-dim dark:bg-surface-dim/40 border-border-secondary dark:border-surface-dim">
+    <div className="mt-1 px-2 py-2 rounded-lg border border-border-secondary bg-surface-dim dark:border-surface-dim dark:bg-surface-dim/40">
       <div className="flex items-center justify-between mb-1">
         <div className="text-[11px] text-text-tertiary">{t("retryPreview")}</div>
         <div
