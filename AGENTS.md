@@ -127,6 +127,7 @@ All design tokens are defined as CSS custom properties in `src/mainview/index.cs
 ### Mobile Conventions
 
 - Sidebars become 85% width overlays with `bg-black/50` backdrop
+- Chat `SideNav` must render on mobile and tablet. Do not hide, skip, or breakpoint-gate it as a performance shortcut; mobile performance work must preserve the right-side navigation rail and its active/selection behavior.
 - Pin/collapse buttons hidden (`max-sm:hidden`)
 - QuickActionToolbar only renders on mobile/tablet
 - Tab close buttons always visible on mobile (no hover needed)

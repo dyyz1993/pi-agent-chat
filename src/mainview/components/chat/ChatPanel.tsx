@@ -211,7 +211,7 @@ export function ChatPanel() {
   const showToolResults = useSettingsStore((s) => s.showToolResults);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
-  const shouldRenderSideNav = !isMobileOrTablet && messages.length > 0;
+  const shouldRenderSideNav = messages.length > 0;
   const renderedMessages = useMemo(
     () =>
       buildProcessedMessages(messages, showMemoryEntries)
