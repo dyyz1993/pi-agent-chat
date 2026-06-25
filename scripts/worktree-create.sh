@@ -188,19 +188,22 @@ fi
 API_PORT=""
 VITE_PORT=""
 CONFIG_DIR=""
+AGENT_DIR=""
 if [ "$SETUP_DEV" = true ]; then
   header "Ports And Env"
   MAIN_PORT=$(wt_main_port "$MAIN_ENV")
   API_PORT=$(wt_pick_port "$WORKTREE_PATH" "API_PORT" "$((MAIN_PORT + 1))")
   VITE_PORT=$(wt_pick_port "$WORKTREE_PATH" "VITE_PORT" 5174)
   CONFIG_DIR=$(wt_app_config_dir "$WORKTREE_PATH")
+  AGENT_DIR="$CONFIG_DIR/agent"
 
-  wt_write_app_env "$MAIN_ENV" "$WORKTREE_PATH/.env" "$API_PORT" "$AGENT_CLI_PATH"
-  wt_write_registry "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_SOURCE_ROOT" "$AGENT_PATH" "$AGENT_BRANCH" "$AGENT_CLI_PATH"
+  wt_write_app_env "$MAIN_ENV" "$WORKTREE_PATH/.env" "$API_PORT" "$AGENT_CLI_PATH" "$AGENT_DIR"
+  wt_write_registry "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_SOURCE_ROOT" "$AGENT_PATH" "$AGENT_BRANCH" "$AGENT_CLI_PATH" "$AGENT_DIR"
 
   echo "  API:        ${YELLOW}${MAIN_PORT}${NC} -> ${GREEN}${API_PORT}${NC}"
   echo "  Vite:       ${YELLOW}5173${NC} -> ${GREEN}${VITE_PORT}${NC}"
   echo "  config dir: ${CYAN}${CONFIG_DIR}${NC}"
+  echo "  agent dir:  ${CYAN}${AGENT_DIR}${NC}"
   [ -n "$AGENT_CLI_PATH" ] && echo "  agent cli:  ${CYAN}${AGENT_CLI_PATH}${NC}"
   ok ".env and registry are ready"
 fi
@@ -208,13 +211,24 @@ fi
 if [ "$START_NOW" = true ]; then
   header "Start"
   wt_stop_existing_dev "$WORKTREE_PATH"
-  wt_start_dev_server "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR"
+  wt_start_dev_server "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_DIR"
   sleep 3
   PID=$(cat "$WORKTREE_PATH/.worktree-dev.pid" 2>/dev/null || true)
-  if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-    ok "Started dev server (PID $PID)"
+  API_READY=false
+  VITE_READY=false
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ "$API_READY" = true ] || curl -sS "http://localhost:${API_PORT}/health" >/dev/null 2>&1 && API_READY=true
+    [ "$VITE_READY" = true ] || curl -sS -I "http://localhost:${VITE_PORT}/" >/dev/null 2>&1 && VITE_READY=true
+    [ "$API_READY" = true ] && [ "$VITE_READY" = true ] && break
+    sleep 1
+  done
+  if [ "$API_READY" = true ] && [ "$VITE_READY" = true ]; then
+    ok "Started dev server"
     info "Vite: http://localhost:${VITE_PORT}/"
     info "API:  http://localhost:${API_PORT}"
+  elif [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+    ok "Started dev server (PID $PID)"
+    warn "Server is running, but health checks did not respond yet"
   else
     warn "Startup may have failed. Last log lines:"
     tail -40 "$WORKTREE_PATH/logs/dev.log" 2>/dev/null || true

@@ -143,6 +143,7 @@ wt_write_registry() {
   local agent_worktree_path="${6:-}"
   local agent_branch="${7:-}"
   local agent_cli_path="${8:-}"
+  local agent_dir="${9:-}"
   local id
   id=$(wt_id_for_path "$app_path")
 
@@ -155,6 +156,7 @@ APP_BRANCH=$(git -C "$app_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 
 API_PORT=$api_port
 VITE_PORT=$vite_port
 CONFIG_DIR=$config_dir
+AGENT_DIR=$agent_dir
 AGENT_SOURCE_ROOT=$agent_source_root
 AGENT_WORKTREE_PATH=$agent_worktree_path
 AGENT_BRANCH=$agent_branch
@@ -168,10 +170,11 @@ wt_write_app_env() {
   local target_env="$2"
   local api_port="$3"
   local agent_cli_path="${4:-}"
+  local agent_dir="${5:-}"
   local main_port
   main_port=$(wt_main_port "$main_env")
 
-  grep -v -E '^(#|$|PORT=|PI_CLI_PATH=|PI_APP_CONFIG_DIR=|VITE_API_TARGET=|VITE_PORT=|VITE_STRICT_PORT=)' "$main_env" 2>/dev/null > "${target_env}.tmp"
+  grep -v -E '^(#|$|PORT=|PI_CLI_PATH=|PI_CODING_AGENT_DIR=|PI_APP_CONFIG_DIR=|VITE_API_TARGET=|VITE_PORT=|VITE_STRICT_PORT=)' "$main_env" 2>/dev/null > "${target_env}.tmp"
   echo "" >> "${target_env}.tmp"
   echo "# worktree: generated from $(basename "$(dirname "$main_env")") at $(wt_now)" >> "${target_env}.tmp"
   echo "# worktree: main PORT=${main_port}" >> "${target_env}.tmp"
@@ -179,22 +182,97 @@ wt_write_app_env() {
   if [ -n "$agent_cli_path" ]; then
     echo "PI_CLI_PATH=${agent_cli_path}" >> "${target_env}.tmp"
   fi
+  if [ -n "$agent_dir" ]; then
+    echo "PI_CODING_AGENT_DIR=${agent_dir}" >> "${target_env}.tmp"
+  fi
   mv "${target_env}.tmp" "$target_env"
 }
 
 wt_seed_app_config() {
   local config_dir="$1"
+  local worktree_path="$2"
   local source_dir="${PI_APP_CONFIG_SOURCE_DIR:-${HOME}/.pi-agent-chat}"
   local source_config="$source_dir/config.json"
   local target_config="$config_dir/config.json"
+  local marker="$config_dir/.worktree-config-prepared"
 
   mkdir -p "$config_dir"
-  [ "$source_config" != "$target_config" ] || return 0
-  [ -f "$source_config" ] || return 0
-  [ -f "$target_config" ] && return 0
+  if [ "$source_config" != "$target_config" ] && [ -f "$source_config" ] && [ ! -f "$target_config" ]; then
+    cp "$source_config" "$target_config"
+    [ -f "$source_dir/config.json.bak" ] && cp "$source_dir/config.json.bak" "$config_dir/config.json.bak"
+  fi
 
-  cp "$source_config" "$target_config"
-  [ -f "$source_dir/config.json.bak" ] && cp "$source_dir/config.json.bak" "$config_dir/config.json.bak"
+  [ -f "$marker" ] && return 0
+
+  node - "$target_config" "$worktree_path" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const [configPath, worktreePath] = process.argv.slice(2);
+let config = {};
+try {
+  config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+} catch {
+  config = {};
+}
+
+const now = Date.now();
+const name = path.basename(worktreePath);
+config.recentProjects = [
+  {
+    path: worktreePath,
+    name,
+    lastOpened: now,
+    pinned: false,
+    sessionCount: 0,
+  },
+];
+config.activeProject = worktreePath;
+config.openTabs = [];
+config.activeTabId = null;
+config.pinnedSessionIds = [];
+config.configuredPaths = [];
+config.favoriteFolders = [];
+
+fs.mkdirSync(path.dirname(configPath), { recursive: true });
+fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+NODE
+  echo "prepared_at=$(wt_now)" > "$marker"
+  echo "worktree_path=$worktree_path" >> "$marker"
+}
+
+wt_prepare_agent_runtime_dir() {
+  local config_dir="$1"
+  local agent_dir="$2"
+  local source_dir="${PI_CODING_AGENT_SOURCE_DIR:-${HOME}/.pi/agent}"
+  local item
+
+  mkdir -p "$agent_dir"
+
+  for item in auth.json oauth.json models.json; do
+    if [ -e "$source_dir/$item" ] && [ ! -e "$agent_dir/$item" ]; then
+      ln -s "$source_dir/$item" "$agent_dir/$item"
+    fi
+  done
+
+  for item in settings.json keybindings.json; do
+    if [ -f "$source_dir/$item" ] && [ ! -e "$agent_dir/$item" ]; then
+      cp "$source_dir/$item" "$agent_dir/$item"
+    fi
+  done
+
+  for item in skills agents rules prompts themes tools bin; do
+    if [ -e "$source_dir/$item" ] && [ ! -e "$agent_dir/$item" ]; then
+      ln -s "$source_dir/$item" "$agent_dir/$item"
+    fi
+  done
+
+  mkdir -p "$config_dir"
+  cat > "$config_dir/agent-runtime.env" <<EOF
+PI_CODING_AGENT_DIR=$agent_dir
+SOURCE_AGENT_DIR=$source_dir
+UPDATED_AT=$(wt_now)
+EOF
 }
 
 wt_load_env_file() {
@@ -339,6 +417,7 @@ wt_start_dev_server() {
   local api_port="$2"
   local vite_port="$3"
   local config_dir="$4"
+  local agent_dir="$5"
   local env_file="$worktree_path/.env"
   local vite_bin="$worktree_path/node_modules/.bin/vite"
   local bun_bin
@@ -365,7 +444,9 @@ wt_start_dev_server() {
   inherited_path=$(printf "%q" "${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}")
 
   mkdir -p "$worktree_path/logs" "$config_dir"
-  wt_seed_app_config "$config_dir"
+  [ -n "$agent_dir" ] || agent_dir="$config_dir/agent"
+  wt_seed_app_config "$config_dir" "$worktree_path"
+  wt_prepare_agent_runtime_dir "$config_dir" "$agent_dir"
   wt_load_env_file "$env_file"
   : > "$worktree_path/logs/dev.log"
 
@@ -378,6 +459,7 @@ set +a
 export PATH=$inherited_path
 export PORT="$api_port"
 export PI_APP_CONFIG_DIR="$config_dir"
+export PI_CODING_AGENT_DIR="$agent_dir"
 exec "$bun_bin" --bun src/server.ts
 EOF
   cat > "$vite_script" <<EOF
@@ -389,6 +471,7 @@ set +a
 export PATH=$inherited_path
 export PORT="$api_port"
 export PI_APP_CONFIG_DIR="$config_dir"
+export PI_CODING_AGENT_DIR="$agent_dir"
 export VITE_API_TARGET="http://localhost:${api_port}"
 export VITE_PORT="$vite_port"
 export VITE_STRICT_PORT=false

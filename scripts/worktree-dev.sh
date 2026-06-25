@@ -238,15 +238,17 @@ API_PORT=$(wt_pick_port "$WORKTREE_PATH" "API_PORT" "$((MAIN_PORT + 1))" "$ENV_A
 VITE_PORT=$(wt_pick_port "$WORKTREE_PATH" "VITE_PORT" 5174)
 CONFIG_DIR=$(wt_registry_get "$WORKTREE_ID" "CONFIG_DIR" || true)
 [ -n "$CONFIG_DIR" ] || CONFIG_DIR=$(wt_app_config_dir "$WORKTREE_PATH")
+AGENT_DIR="$CONFIG_DIR/agent"
 
-wt_write_app_env "$MAIN_ENV" "$WORKTREE_PATH/.env" "$API_PORT" "$AGENT_CLI_PATH"
-wt_write_registry "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_SOURCE_ROOT" "$AGENT_PATH" "$AGENT_BRANCH" "$AGENT_CLI_PATH"
+wt_write_app_env "$MAIN_ENV" "$WORKTREE_PATH/.env" "$API_PORT" "$AGENT_CLI_PATH" "$AGENT_DIR"
+wt_write_registry "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_SOURCE_ROOT" "$AGENT_PATH" "$AGENT_BRANCH" "$AGENT_CLI_PATH" "$AGENT_DIR"
 
 header "Ports"
 echo "  API:        ${CYAN}http://localhost:${API_PORT}${NC}"
 echo "  Vite:       ${CYAN}http://localhost:${VITE_PORT}/${NC}"
 echo "  Health:     ${CYAN}http://localhost:${API_PORT}/health${NC}"
 echo "  Config dir: ${CYAN}${CONFIG_DIR}${NC}"
+echo "  Agent dir:  ${CYAN}${AGENT_DIR}${NC}"
 [ -n "$AGENT_CLI_PATH" ] && echo "  Agent CLI:  ${CYAN}${AGENT_CLI_PATH}${NC}"
 
 if [ "$START_SERVER" = false ]; then
@@ -255,14 +257,18 @@ if [ "$START_SERVER" = false ]; then
 fi
 
 header "Start"
-wt_start_dev_server "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR"
+wt_start_dev_server "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_DIR"
 sleep 4
 
 PID=$(cat "$WORKTREE_PATH/.worktree-dev.pid" 2>/dev/null || true)
 API_READY=false
 VITE_READY=false
-curl -sS "http://localhost:${API_PORT}/health" >/dev/null 2>&1 && API_READY=true
-curl -sS -I "http://localhost:${VITE_PORT}/" >/dev/null 2>&1 && VITE_READY=true
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ "$API_READY" = true ] || curl -sS "http://localhost:${API_PORT}/health" >/dev/null 2>&1 && API_READY=true
+  [ "$VITE_READY" = true ] || curl -sS -I "http://localhost:${VITE_PORT}/" >/dev/null 2>&1 && VITE_READY=true
+  [ "$API_READY" = true ] && [ "$VITE_READY" = true ] && break
+  sleep 1
+done
 
 if [ "$API_READY" = true ] && [ "$VITE_READY" = true ]; then
   if [ -n "$PID" ]; then
