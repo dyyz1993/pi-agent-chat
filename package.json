@@ -65,7 +65,10 @@
   "piAgentChat": {
     "ciYalcFallbacks": {
       "@dyyz1993/pi-coding-agent": "^0.78.1",
-      "@dyyz1993/pi-tui": "^0.78.1"
+      "@dyyz1993/pi-tui": "0.74.56"
+    },
+    "ciDependencyOverrides": {
+      "@dyyz1993/pi-tui": "0.74.56"
     }
   },
   "dependencies": {

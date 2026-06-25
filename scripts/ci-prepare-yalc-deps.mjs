@@ -6,6 +6,7 @@ import path from "node:path";
 const packageJsonPath = path.resolve(process.cwd(), "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 const fallbacks = packageJson.piAgentChat?.ciYalcFallbacks ?? {};
+const ciDependencyOverrides = packageJson.piAgentChat?.ciDependencyOverrides ?? {};
 const dependencySections = [
   "dependencies",
   "devDependencies",
@@ -19,6 +20,16 @@ const isCi = process.env.CI === "true";
 if (isCi && packageJson.scripts?.postinstall) {
   packageJson.scripts.postinstall = "";
   changed.push("postinstall: disabled for CI");
+}
+
+if (isCi && Object.keys(ciDependencyOverrides).length > 0) {
+  packageJson.overrides = {
+    ...(packageJson.overrides ?? {}),
+    ...ciDependencyOverrides,
+  };
+  for (const [name, version] of Object.entries(ciDependencyOverrides)) {
+    changed.push(`override: ${name} -> ${version}`);
+  }
 }
 
 for (const section of dependencySections) {
