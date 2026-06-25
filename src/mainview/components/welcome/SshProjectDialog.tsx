@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Cable,
   Check,
   CheckCircle2,
@@ -19,6 +20,8 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { classifySshErrorMessage } from "../../../shared/lib/ssh-error-classification";
 import { apiClient } from "../../lib/api-client";
+import { cx } from "../../lib/classes";
+import { Button, IconButton } from "../primitives";
 import type {
   DetectedSshHost,
   ProjectTab,
@@ -199,6 +202,8 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
   const [syncPreviewBusy, setSyncPreviewBusy] = useState(false);
   const [syncPreview, setSyncPreview] = useState<RemoteResourceSyncPreview | null>(null);
   const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
+  const [connectionSourcesLoading, setConnectionSourcesLoading] = useState(false);
+  const [connectionSourcesError, setConnectionSourcesError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
   const selectedProfile = useMemo(
@@ -236,6 +241,8 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     setSyncPreview(null);
     setSyncPreviewError(null);
     setSyncPreviewBusy(false);
+    setConnectionSourcesLoading(true);
+    setConnectionSourcesError(null);
     Promise.all([
       apiClient.call("project.listSshProfiles", {}),
       apiClient.call("project.listDetectedSshHosts", {}),
@@ -253,11 +260,15 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
           applyProfile(nextProfiles[0]);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
           setProfiles([]);
           setDetectedHosts([]);
+          setConnectionSourcesError(err instanceof Error ? err.message : String(err));
         }
+      })
+      .finally(() => {
+        if (!cancelled) setConnectionSourcesLoading(false);
       });
     return () => {
       cancelled = true;
@@ -364,10 +375,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     );
   };
 
-  const browseRemoteDirectory = async (
-    dirPath?: string,
-    nextStep: WizardStep = "directory",
-  ) => {
+  const browseRemoteDirectory = async (dirPath?: string, nextStep: WizardStep = "directory") => {
     if (!canConnect) return;
     setBusy("list");
     setMessage(null);
@@ -515,14 +523,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
               {t("welcome.remoteConfigSubtitle")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-            aria-label={t("close")}
-          >
+          <IconButton label={t("close")} size="md" onClick={onClose}>
             <X className="h-5 w-5" />
-          </button>
+          </IconButton>
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[18rem_1fr]">
@@ -663,9 +666,14 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                       <select
                         value={connectionSelectValue}
                         onChange={(event) => handleSelectConnection(event.target.value)}
-                        className="h-12 w-full rounded-md border border-border-secondary bg-bg-primary px-3 text-base outline-none focus:border-border-focus"
+                        disabled={connectionSourcesLoading}
+                        className="h-12 w-full rounded-md border border-border-secondary bg-bg-primary px-3 text-base outline-none focus:border-border-focus disabled:cursor-wait disabled:opacity-60"
                       >
-                        <option value="">{t("welcome.remoteManual")}</option>
+                        <option value="">
+                          {connectionSourcesLoading
+                            ? t("welcome.remoteProfilesLoading")
+                            : t("welcome.remoteManual")}
+                        </option>
                         {detectedHosts.length > 0 && (
                           <optgroup label={t("welcome.remoteDetectedHosts")}>
                             {detectedHosts.map((item) => (
@@ -686,6 +694,24 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         )}
                       </select>
                     </label>
+
+                    {connectionSourcesError && (
+                      <div className="mt-3 flex items-start gap-2 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs leading-5 text-status-warning">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 whitespace-pre-wrap break-words">
+                          {t("welcome.remoteProfilesLoadFailed")}
+                          {connectionSourcesError ? `\n${connectionSourcesError}` : ""}
+                        </span>
+                      </div>
+                    )}
+                    {!connectionSourcesLoading &&
+                      !connectionSourcesError &&
+                      detectedHosts.length === 0 &&
+                      profiles.length === 0 && (
+                        <div className="mt-3 rounded-md border border-border-secondary bg-bg-primary/70 px-3 py-2 text-xs leading-5 text-text-tertiary">
+                          {t("welcome.remoteNoProfiles")}
+                        </div>
+                      )}
 
                     <div className="mt-4 rounded-md border border-border-secondary bg-bg-primary/70 px-4 py-3">
                       <div className="mb-3 flex items-center justify-between gap-3">
@@ -844,7 +870,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         <div
                           className={`mt-4 grid gap-2 md:grid-cols-3 ${syncResourcesEnabled ? "" : "opacity-50"}`}
                         >
-                          {REMOTE_SYNC_RESOURCES.map((resource) => (
+                          {REMOTE_SYNC_RESOURCES.map((resource) =>
                             (() => {
                               const resourcePreview = syncPreview?.resources.find(
                                 (item) => item.type === resource.type,
@@ -853,7 +879,15 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                               return (
                                 <label
                                   key={resource.type}
-                                  className="flex min-h-28 cursor-pointer items-start gap-3 rounded-md border border-border-secondary bg-bg-elevated px-3 py-3"
+                                  className={cx(
+                                    "flex min-h-28 items-start gap-3 rounded-md border px-3 py-3 transition-colors",
+                                    syncResourcesEnabled
+                                      ? "cursor-pointer bg-bg-elevated hover:border-border-focus hover:bg-surface-hover/25"
+                                      : "cursor-not-allowed bg-bg-primary/50",
+                                    selected && syncResourcesEnabled
+                                      ? "border-[var(--color-accent)] bg-[var(--color-accent)]/8"
+                                      : "border-border-secondary",
+                                  )}
                                 >
                                   <input
                                     type="checkbox"
@@ -914,8 +948,8 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                                   </span>
                                 </label>
                               );
-                            })()
-                          ))}
+                            })(),
+                          )}
                         </div>
 
                         {syncResourcesEnabled && syncResourceCount === 0 && (
@@ -968,17 +1002,19 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                           onKeyDown={(event) => {
                             if (event.key === "Enter") void browseRemoteDirectory(remotePath);
                           }}
+                          placeholder="/home/user/project"
                           className="h-10 min-w-0 rounded-md border border-border-secondary bg-bg-primary px-3 font-mono text-sm outline-none focus:border-border-focus"
                         />
-                        <button
-                          type="button"
+                        <Button
                           onClick={() => browseRemoteDirectory(remotePath)}
                           disabled={busy === "list"}
-                          className="inline-flex h-10 min-w-20 items-center justify-center gap-2 rounded-md border border-border-secondary px-3 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
+                          loading={busy === "list"}
+                          size="md"
+                          variant="secondary"
+                          className="min-w-20"
                         >
-                          {busy === "list" && <Loader2 className="h-4 w-4 animate-spin" />}
                           {t("welcome.remoteGo")}
-                        </button>
+                        </Button>
                       </div>
 
                       <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -991,23 +1027,24 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                           placeholder={t("welcome.remoteNewFolderPlaceholder")}
                           className="h-10 min-w-0 rounded-md border border-border-secondary bg-bg-primary px-3 text-sm outline-none focus:border-border-focus"
                         />
-                        <button
-                          type="button"
+                        <Button
                           onClick={handleCreateDirectory}
                           disabled={!newFolderName.trim() || busy === "create"}
-                          className="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-md border border-border-secondary px-3 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
+                          loading={busy === "create"}
+                          leadingIcon={<FolderPlus className="h-4 w-4" />}
+                          size="md"
+                          variant="secondary"
+                          className="min-w-28"
                         >
-                          {busy === "create" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <FolderPlus className="h-4 w-4" />
-                          )}
                           {t("welcome.remoteCreateFolder")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
-                    <div className="mx-5 mb-5 max-h-[42vh] overflow-y-auto rounded-md border border-border-secondary bg-bg-primary">
+                    <div
+                      className="mx-5 mb-5 max-h-[42vh] overflow-y-auto rounded-md border border-border-secondary bg-bg-primary"
+                      aria-busy={busy === "list"}
+                    >
                       {parentRemotePath(browsePath) && (
                         <button
                           type="button"
@@ -1020,7 +1057,12 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                           <span className="font-mono text-text-secondary">..</span>
                         </button>
                       )}
-                      {entries.length === 0 ? (
+                      {busy === "list" && entries.length === 0 ? (
+                        <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-text-tertiary">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {t("welcome.remoteDirectoryLoading")}
+                        </div>
+                      ) : entries.length === 0 ? (
                         <div className="px-4 py-8 text-center text-sm text-text-tertiary">
                           {t("welcome.remoteDirectoryEmpty")}
                         </div>
@@ -1038,7 +1080,6 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         ))
                       )}
                     </div>
-
                   </section>
                 )}
 
@@ -1062,14 +1103,13 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                     </div>
                   </section>
                 )}
-
               </div>
             </div>
           </main>
         </div>
 
         <footer
-          className="flex items-start justify-between gap-3 border-t border-border-secondary bg-bg-elevated px-6 py-4"
+          className="flex flex-col gap-3 border-t border-border-secondary bg-bg-elevated px-6 py-4 sm:flex-row sm:items-start sm:justify-between"
           style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="min-h-10 min-w-0 flex-1">
@@ -1081,105 +1121,84 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                     : "border-status-error/40 bg-status-error/10 text-status-error"
                 }`}
               >
-                {message.type === "ok" && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
+                {message.type === "ok" ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                )}
                 <span className="min-w-0 whitespace-pre-wrap break-words">{message.text}</span>
               </div>
             )}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {step === "method" && (
               <>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                >
+                <Button variant="ghost" size="md" onClick={onClose}>
                   {t("cancel")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep("config")}
-                  className="rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90"
-                >
+                </Button>
+                <Button variant="primary" size="md" onClick={() => setStep("config")}>
                   {t("next")}
-                </button>
+                </Button>
               </>
             )}
 
             {step === "config" && (
               <>
-                <button
-                  type="button"
-                  onClick={() => setStep("method")}
-                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                >
+                <Button variant="ghost" size="md" onClick={() => setStep("method")}>
                   {t("back")}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={() =>
                     browseRemoteDirectory(undefined, showResourceSync ? "resources" : "directory")
                   }
                   disabled={!canConnect || busy === "list"}
-                  className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  loading={busy === "list"}
+                  variant="primary"
+                  size="md"
                 >
-                  {busy === "list" && <Loader2 className="h-4 w-4 animate-spin" />}
                   {showResourceSync
                     ? t("welcome.remoteConnectAndConfigure")
                     : t("welcome.remoteConnectAndBrowse")}
-                </button>
+                </Button>
               </>
             )}
 
             {step === "resources" && showResourceSync && (
               <>
-                <button
-                  type="button"
-                  onClick={() => setStep("config")}
-                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                >
+                <Button variant="ghost" size="md" onClick={() => setStep("config")}>
                   {t("back")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep("directory")}
-                  className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90"
-                >
+                </Button>
+                <Button variant="primary" size="md" onClick={() => setStep("directory")}>
                   {t("next")}
-                </button>
+                </Button>
               </>
             )}
 
             {step === "directory" && (
               <>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="md"
                   onClick={() => setStep(showResourceSync ? "resources" : "config")}
-                  className="rounded-md px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 >
                   {t("back")}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleOpen}
                   disabled={!canOpen || busy !== null}
-                  className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t("welcome.remoteSelectDirectory")}
-                </button>
+                </Button>
               </>
             )}
 
             {step === "opening" && (
-              <button
-                type="button"
-                disabled
-                className="inline-flex items-center gap-2 rounded-md bg-semantic-accent px-4 py-2 text-sm font-medium text-white opacity-70"
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <Button variant="primary" size="md" loading disabled>
                 {t("welcome.remoteOpening")}
-              </button>
+              </Button>
             )}
           </div>
         </footer>
