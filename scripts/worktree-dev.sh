@@ -259,20 +259,38 @@ wt_start_dev_server "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR"
 sleep 4
 
 PID=$(cat "$WORKTREE_PATH/.worktree-dev.pid" 2>/dev/null || true)
-if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-  ok "Started dev server (PID $PID)"
-  if curl -sS "http://localhost:${API_PORT}/health" >/dev/null 2>&1; then
-    ok "Health check passed"
+API_READY=false
+VITE_READY=false
+curl -sS "http://localhost:${API_PORT}/health" >/dev/null 2>&1 && API_READY=true
+curl -sS -I "http://localhost:${VITE_PORT}/" >/dev/null 2>&1 && VITE_READY=true
+
+if [ "$API_READY" = true ] && [ "$VITE_READY" = true ]; then
+  if [ -n "$PID" ]; then
+    ok "Started dev server (PID $PID)"
   else
-    warn "Server is running, but health check did not respond yet"
+    ok "Started dev server"
   fi
+  ok "Health checks passed"
+elif [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+  ok "Started dev server (PID $PID)"
+  warn "Server is running, but health checks did not respond yet"
+else
+  warn "Startup may have failed. Last log lines:"
+  tail -60 "$WORKTREE_PATH/logs/dev.log" 2>/dev/null || true
+  exit 0
+fi
+
+if [ -f "$WORKTREE_PATH/.worktree-dev.labels" ]; then
+  STOP_HINT="xargs -n1 launchctl remove < ${WORKTREE_PATH}/.worktree-dev.labels"
+else
+  STOP_HINT="kill \$(cat ${WORKTREE_PATH}/.worktree-dev.pid)"
+fi
+
+if [ "$API_READY" = true ] || [ "$VITE_READY" = true ] || { [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; }; then
   echo ""
   echo "  Vite: ${CYAN}http://localhost:${VITE_PORT}/${NC}"
   echo "  API:  ${CYAN}http://localhost:${API_PORT}${NC}"
   echo "  Log:  ${WORKTREE_PATH}/logs/dev.log"
   echo ""
-  info "Stop: kill \$(cat ${WORKTREE_PATH}/.worktree-dev.pid)"
-else
-  warn "Startup may have failed. Last log lines:"
-  tail -60 "$WORKTREE_PATH/logs/dev.log" 2>/dev/null || true
+  info "Stop: $STOP_HINT"
 fi

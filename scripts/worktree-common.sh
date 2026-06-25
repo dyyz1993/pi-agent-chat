@@ -310,19 +310,28 @@ wt_stop_existing_dev() {
   local worktree_path="$1"
   local pid_file="$worktree_path/.worktree-dev.pid"
   local child_file="$worktree_path/.worktree-dev.children"
+  local label_file="$worktree_path/.worktree-dev.labels"
   local pid
   local child
-  [ -f "$pid_file" ] || return 0
-  pid=$(cat "$pid_file" 2>/dev/null || true)
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-    kill "$pid" 2>/dev/null || true
-    sleep 1
+  local label
+  if [ -f "$label_file" ]; then
+    while IFS= read -r label; do
+      [ -n "$label" ] && launchctl remove "$label" 2>/dev/null || true
+    done < "$label_file"
+  fi
+  if [ -f "$pid_file" ]; then
+    pid=$(cat "$pid_file" 2>/dev/null || true)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      sleep 1
+    fi
   fi
   if [ -f "$child_file" ]; then
     for child in $(cat "$child_file" 2>/dev/null); do
       [ -n "$child" ] && kill "$child" 2>/dev/null || true
     done
   fi
+  rm -f "$pid_file" "$child_file" "$label_file"
 }
 
 wt_start_dev_server() {
@@ -333,6 +342,10 @@ wt_start_dev_server() {
   local env_file="$worktree_path/.env"
   local vite_bin="$worktree_path/node_modules/.bin/vite"
   local bun_bin
+  local node_bin
+  local api_script="$worktree_path/.worktree-dev.api.sh"
+  local vite_script="$worktree_path/.worktree-dev.vite.sh"
+  local label_file="$worktree_path/.worktree-dev.labels"
 
   [ -x "$vite_bin" ] || {
     echo "Missing executable: $vite_bin" >&2
@@ -343,37 +356,62 @@ wt_start_dev_server() {
     echo "Missing executable: bun" >&2
     return 1
   }
+  node_bin=$(command -v node || true)
+  [ -n "$node_bin" ] || {
+    echo "Missing executable: node" >&2
+    return 1
+  }
 
   mkdir -p "$worktree_path/logs" "$config_dir"
   wt_seed_app_config "$config_dir"
   wt_load_env_file "$env_file"
+  : > "$worktree_path/logs/dev.log"
 
-  (
-    cd "$worktree_path"
-    export PORT="$api_port"
-    export PI_APP_CONFIG_DIR="$config_dir"
-    export VITE_API_TARGET="http://localhost:${api_port}"
-    export VITE_PORT="$vite_port"
-    export VITE_STRICT_PORT=false
-    export VITE_AUTH_TOKEN="${AUTH_TOKEN:-}"
-    export WORKTREE_DEV_LOG="$worktree_path/logs/dev.log"
-    export WORKTREE_DEV_CHILDREN="$worktree_path/.worktree-dev.children"
-    export WORKTREE_DEV_BUN_BIN="$bun_bin"
-    export WORKTREE_DEV_VITE_BIN="$vite_bin"
-    nohup bash -c '
-      set -m
-      : > "$WORKTREE_DEV_LOG"
-      "$WORKTREE_DEV_BUN_BIN" --bun src/server.ts >> "$WORKTREE_DEV_LOG" 2>&1 &
-      api_pid=$!
-      "$WORKTREE_DEV_VITE_BIN" --port "$VITE_PORT" >> "$WORKTREE_DEV_LOG" 2>&1 &
-      vite_pid=$!
-      echo "$api_pid $vite_pid" > "$WORKTREE_DEV_CHILDREN"
-      cleanup() {
-        kill "$api_pid" "$vite_pid" 2>/dev/null || true
-      }
-      trap cleanup INT TERM EXIT
-      wait "$api_pid" "$vite_pid"
-    ' >/dev/null 2>&1 &
-    echo $! > "$worktree_path/.worktree-dev.pid"
-  )
+  cat > "$api_script" <<EOF
+#!/bin/bash
+cd "$worktree_path"
+set -a
+. "$env_file"
+set +a
+export PORT="$api_port"
+export PI_APP_CONFIG_DIR="$config_dir"
+exec "$bun_bin" --bun src/server.ts
+EOF
+  cat > "$vite_script" <<EOF
+#!/bin/bash
+cd "$worktree_path"
+set -a
+. "$env_file"
+set +a
+export PORT="$api_port"
+export PI_APP_CONFIG_DIR="$config_dir"
+export VITE_API_TARGET="http://localhost:${api_port}"
+export VITE_PORT="$vite_port"
+export VITE_STRICT_PORT=false
+export VITE_AUTH_TOKEN="\${AUTH_TOKEN:-}"
+exec "$node_bin" "$vite_bin" --port "$vite_port"
+EOF
+  chmod +x "$api_script" "$vite_script"
+
+  if [ "$(uname -s 2>/dev/null)" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
+    local id api_label vite_label
+    id=$(wt_id_for_path "$worktree_path")
+    api_label="com.pi-agent-chat.worktree.${id}.api"
+    vite_label="com.pi-agent-chat.worktree.${id}.vite"
+    launchctl remove "$api_label" 2>/dev/null || true
+    launchctl remove "$vite_label" 2>/dev/null || true
+    launchctl submit -l "$api_label" -o "$worktree_path/logs/dev.log" -e "$worktree_path/logs/dev.log" -- "$api_script"
+    launchctl submit -l "$vite_label" -o "$worktree_path/logs/dev.log" -e "$worktree_path/logs/dev.log" -- "$vite_script"
+    printf "%s\n%s\n" "$api_label" "$vite_label" > "$label_file"
+    : > "$worktree_path/.worktree-dev.pid"
+    : > "$worktree_path/.worktree-dev.children"
+    return 0
+  fi
+
+  nohup "$api_script" >> "$worktree_path/logs/dev.log" 2>&1 &
+  api_pid=$!
+  nohup "$vite_script" >> "$worktree_path/logs/dev.log" 2>&1 &
+  vite_pid=$!
+  echo "$api_pid" > "$worktree_path/.worktree-dev.pid"
+  echo "$api_pid $vite_pid" > "$worktree_path/.worktree-dev.children"
 }

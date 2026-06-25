@@ -37,6 +37,7 @@ yarn-error.log*
 # Local worktree runtime files
 .worktree-dev.pid
 .worktree-dev.children
+.worktree-dev.*
 .worktree-deps.json
 
 # Bun
