@@ -343,6 +343,7 @@ wt_start_dev_server() {
   local vite_bin="$worktree_path/node_modules/.bin/vite"
   local bun_bin
   local node_bin
+  local inherited_path
   local api_script="$worktree_path/.worktree-dev.api.sh"
   local vite_script="$worktree_path/.worktree-dev.vite.sh"
   local label_file="$worktree_path/.worktree-dev.labels"
@@ -361,6 +362,7 @@ wt_start_dev_server() {
     echo "Missing executable: node" >&2
     return 1
   }
+  inherited_path=$(printf "%q" "${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}")
 
   mkdir -p "$worktree_path/logs" "$config_dir"
   wt_seed_app_config "$config_dir"
@@ -373,6 +375,7 @@ cd "$worktree_path"
 set -a
 . "$env_file"
 set +a
+export PATH=$inherited_path
 export PORT="$api_port"
 export PI_APP_CONFIG_DIR="$config_dir"
 exec "$bun_bin" --bun src/server.ts
@@ -383,6 +386,7 @@ cd "$worktree_path"
 set -a
 . "$env_file"
 set +a
+export PATH=$inherited_path
 export PORT="$api_port"
 export PI_APP_CONFIG_DIR="$config_dir"
 export VITE_API_TARGET="http://localhost:${api_port}"
