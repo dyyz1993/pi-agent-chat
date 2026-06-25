@@ -212,7 +212,7 @@ function Heatmap({ daily }: { daily: UsageDailyBucket[] }) {
         </div>
       </div>
       <div ref={scrollerRef} className="overflow-x-auto pb-1">
-        <div className="ml-auto w-max min-w-full">
+        <div className="ml-auto w-max">
           <div
             className="ml-5 grid gap-1 text-[9px] leading-3 text-text-tertiary"
             style={{ gridTemplateColumns: `repeat(${columns}, 14px)` }}
