@@ -1,3 +1,5 @@
+export { AnchoredPopover } from "./AnchoredPopover";
+export type { AnchoredPopoverProps } from "./AnchoredPopover";
 export { Button } from "./Button";
 export { CopyAction } from "./CopyAction";
 export { FullscreenOverlay } from "./FullscreenOverlay";

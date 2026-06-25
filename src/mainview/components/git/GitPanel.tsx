@@ -25,7 +25,7 @@ import { GitCommitInput } from "./GitCommitInput";
 import { GitBranchSelector } from "./GitBranchSelector";
 import { PinButton } from "../sidebar/PinButton";
 import { formatFilePath } from "../../lib/format-path";
-import { useCopyFeedback } from "../primitives";
+import { AnchoredPopover, useCopyFeedback } from "../primitives";
 
 /* ── Helpers ────────────────────────────────────────────── */
 
@@ -744,17 +744,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       </div>
 
       {/* Branch selector popup */}
-      {showBranches && branchBtnRef.current && (
-        <div
-          className="absolute z-popover"
-          style={{
-            top: branchBtnRef.current.getBoundingClientRect().bottom + 4,
-            left: branchBtnRef.current.getBoundingClientRect().left,
-          }}
-        >
-          <GitBranchSelector onClose={() => setShowBranches(false)} />
-        </div>
-      )}
+      <AnchoredPopover
+        anchorRef={branchBtnRef}
+        open={showBranches}
+        onClose={() => setShowBranches(false)}
+        placement="bottom"
+        align="start"
+        minWidth={224}
+        maxHeight={256}
+      >
+        <GitBranchSelector onClose={() => setShowBranches(false)} />
+      </AnchoredPopover>
 
       {/* Worktree popup */}
       {showWorktrees && worktrees.length > 1 && (

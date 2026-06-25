@@ -113,6 +113,13 @@ All design tokens are defined as CSS custom properties in `src/mainview/index.cs
 
 `tailwind.config.js` extends spacing with `safe-top`, `safe-bottom`, `safe-left`, `safe-right` using CSS variables. Use `p-safe-top`, `m-safe-bottom` etc. in Tailwind classes.
 
+### Popover / Menu Rules
+
+- Floating dropdowns, anchored menus, and cross-panel popovers should use `src/mainview/components/primitives/AnchoredPopover.tsx`.
+- Use local `absolute bottom-full/top-full` positioning only when the trigger and popover share the same small, unclipped `relative` container.
+- Do not wrap a `fixed` popover in an `absolute` parent and expect the parent to anchor it; fixed popovers must calculate against the trigger or use `AnchoredPopover`.
+- Detailed rules and the current component map live in `docs/ui/popover-menus.md`. Any UI component change that adds, removes, or changes popover/menu behavior must update that document when the pattern changes.
+
 ## Responsive Design
 
 ### Breakpoints
@@ -704,6 +711,7 @@ bunx playwright test        # e2e/*.spec.ts
 | `docs/plans/2026-06-10-plugin-toggle-design.md`             | 已实施           | Plugin 按项目 enable/disable，set_settings + reload，config.json 持久化                        |
 | `docs/plans/2026-06-11-change-review-optimization.md`       | 已实施           | change-review.pending 性能优化：channel + JSONL 降级，底层 readTreeFiles O(M)，approval 持久化 |
 | `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                                          |
+| `docs/ui/popover-menus.md`                                  | UI 规范          | Popover、下拉菜单、右键菜单的锚定规则、组件入口和更新 checklist                                |
 | `docs/testing-architecture.md`                              | 参考文档         | 测试架构总览：6 种测试方法、目录结构、散落文件收拢计划、新测试编写指南                         |
 
 ### WebSocket RPC 端到端测试方法

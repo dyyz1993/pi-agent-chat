@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback } from "react";
 import { GitBranch as BranchIcon, Check } from "lucide-react";
 import { useGitStore, type GitBranch } from "../../stores/use-git-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -18,26 +18,10 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
   const fetchBranches = useGitStore((s) => s.fetchBranches);
   const checkout = useGitStore((s) => s.checkout);
   const currentPath = useExplorerStore((s) => s.currentPath);
-  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchBranches(currentPath);
   }, [fetchBranches, currentPath]);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [onClose]);
 
   const handleCheckout = useCallback(
     (branch: GitBranch) => {
@@ -73,13 +57,8 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
 
   return (
     <div
-      ref={ref}
-      className="fixed z-popover w-56 max-h-64 overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
-      style={
-        {
-          /* positioned by parent via absolute */
-        }
-      }
+      className="max-h-full overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
+      role="menu"
     >
       {loadingBranches ? (
         <div className="text-text-tertiary text-xs text-center py-4">Loading branches...</div>
