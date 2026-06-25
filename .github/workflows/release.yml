@@ -22,8 +22,6 @@ jobs:
       - name: Install dependencies
         run: |
           bun run ci:prepare-deps
-          # Disable postinstall (patch-package not available in CI)
-          node -e 'const p=require("./package.json");p.scripts.postinstall="";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
           rm -f bun.lockb && bun install
 
       - name: Build Vite frontend
@@ -90,7 +88,6 @@ jobs:
         shell: bash
         run: |
           bun run ci:prepare-deps
-          node -e 'const p=require("./package.json");p.scripts.postinstall="";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
           rm -f bun.lockb && bun install
 
       - name: Build Vite frontend

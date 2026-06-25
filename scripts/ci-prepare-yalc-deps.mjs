@@ -14,6 +14,12 @@ const dependencySections = [
 ];
 
 const changed = [];
+const isCi = process.env.CI === "true";
+
+if (isCi && packageJson.scripts?.postinstall) {
+  packageJson.scripts.postinstall = "";
+  changed.push("postinstall: disabled for CI");
+}
 
 for (const section of dependencySections) {
   const dependencies = packageJson[section];
@@ -47,7 +53,7 @@ if (changed.length === 0) {
 }
 
 fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
-console.log("CI dependency preparation: replaced missing yalc dependencies:");
+console.log("CI dependency preparation: updated package metadata:");
 for (const entry of changed) {
   console.log(`- ${entry}`);
 }
