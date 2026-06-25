@@ -18,9 +18,18 @@ import type {
 
 const log = createLogger("config");
 
-const CONFIG_DIR = join(homedir(), ".pi-agent-chat");
+/**
+ * 配置根目录。通过 PI_APP_CONFIG_DIR 环境变量可覆盖，
+ * 主要用于 worktree 场景下多实例隔离。
+ * 主仓库默认 ~/.pi-agent-chat，worktree 可设为独立路径。
+ */
+const CONFIG_DIR = process.env.PI_APP_CONFIG_DIR
+  ? resolve(process.env.PI_APP_CONFIG_DIR)
+  : join(homedir(), ".pi-agent-chat");
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const BACKUP_PATH = join(CONFIG_DIR, "config.json.bak");
+
+log.info("App config: " + CONFIG_PATH);
 
 const MIN_VALID_SIZE = 2;
 

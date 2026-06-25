@@ -4,7 +4,7 @@
 
 import { createServer } from "http";
 import { existsSync, readFileSync, statSync } from "fs";
-import { extname, join, resolve } from "path";
+import { dirname, extname, join, resolve } from "path";
 import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
@@ -38,7 +38,29 @@ log.info("AUTH_TOKEN:", { configured: !!process.env.AUTH_TOKEN });
 log.info("PORT:", { value: process.env.PORT });
 log.info("LOG_DIR:", { value: process.env.LOG_DIR });
 log.info("PI_CLI_PATH:", { value: process.env.PI_CLI_PATH });
+log.info("PI_APP_CONFIG_DIR:", { value: process.env.PI_APP_CONFIG_DIR });
 log.info("==============================");
+// ── Worktree detection ──
+const gitPath = join(process.cwd(), ".git");
+if (existsSync(gitPath) && statSync(gitPath).isFile()) {
+  const gitContent = readFileSync(gitPath, "utf-8");
+  const match = gitContent.match(/^gitdir:\s*(.+)/m);
+  const mainRepo = match
+    ? resolve(dirname(match[1].trim()), "..")
+    : "(unknown)";
+  log.info("┌─ Worktree detected ──────────────────────");
+  log.info("│ worktree: " + process.cwd());
+  log.info("│ main repo: " + mainRepo);
+  try {
+    const gitDir = match ? match[1].trim() : "";
+    const headPath = gitDir ? join(gitDir, "HEAD") : "";
+    if (headPath && existsSync(headPath)) {
+      log.info("│ branch: " + readFileSync(headPath, "utf-8").trim().replace(/^ref: refs\/heads\//, ""));
+    }
+  } catch {}
+  log.info("└───────────────────────────────────────────");
+}
+
 
 const httpServer = createServer();
 const wss = createWsHandler(httpServer, { config });
