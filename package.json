@@ -58,8 +58,15 @@
     "test:theme": "bash run-tests.sh run theme",
     "test:settings": "bash run-tests.sh run settings",
     "test:list": "bash run-tests.sh list",
+    "ci:prepare-deps": "node scripts/ci-prepare-yalc-deps.mjs",
     "verify:remote-child": "bun tools/verify-remote-child-runtime.ts",
     "test:failed": "bash run-tests.sh failed"
+  },
+  "piAgentChat": {
+    "ciYalcFallbacks": {
+      "@dyyz1993/pi-coding-agent": "^0.78.1",
+      "@dyyz1993/pi-tui": "^0.78.1"
+    }
   },
   "dependencies": {
     "@dyyz1993/pi-agent-core": "^0.78.3",
