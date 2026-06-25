@@ -39,7 +39,16 @@ describe("agent client model operations", () => {
         cleanupDeadClient: vi.fn(),
         retryDelayMs: 0,
       }),
-    ).resolves.toEqual([{ provider: "p", id: "m" }]);
+    ).resolves.toEqual([
+      {
+        provider: "p",
+        id: "m",
+        name: "m",
+        contextWindow: undefined,
+        reasoning: undefined,
+        input: ["text"],
+      },
+    ]);
     expect(ensureManagedClient).toHaveBeenCalledWith("sess-1");
   });
 
@@ -49,16 +58,22 @@ describe("agent client model operations", () => {
     });
     const cleanupDeadClient = vi.fn();
 
-    await expect(
-      getAvailableModelsOperation({
-        sessionId: "sess-1",
-        getActiveManaged: () => managed,
-        ensureManagedClient: vi.fn(),
-        isClientAlive: vi.fn().mockResolvedValue(false),
-        cleanupDeadClient,
-        retryDelayMs: 0,
-      }),
-    ).resolves.toEqual([]);
+    const models = await getAvailableModelsOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      ensureManagedClient: vi.fn(),
+      isClientAlive: vi.fn().mockResolvedValue(false),
+      cleanupDeadClient,
+      retryDelayMs: 0,
+    });
+    expect(models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "deepseek",
+          id: "deepseek-v4-flash",
+        }),
+      ]),
+    );
     expect(cleanupDeadClient).toHaveBeenCalledWith(
       "sess-1",
       "getAvailableModels failed: boom",

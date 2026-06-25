@@ -27,8 +27,12 @@ export function useActiveSessionActionGuard(
 ): ActiveSessionActionGuardResult {
   const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
-  const isReady = useSessionStore((s) => (sessionId ? s.sessionReady[sessionId] === true : false));
-  const status = useSessionStore((s) => (sessionId ? s.sessionStatusMap[sessionId] : undefined));
+  const isReady = useSessionStore((s) =>
+    sessionId ? (s.sessionReady?.[sessionId] ?? false) : false,
+  );
+  const status = useSessionStore((s) =>
+    sessionId ? s.sessionStatusMap?.[sessionId] : undefined,
+  );
   const push = useNotificationStore((s) => s.push);
   const isBusy = status ? DEFAULT_BUSY_STATUSES.has(status) : false;
   const requireReady = defaultOptions.requireReady ?? true;

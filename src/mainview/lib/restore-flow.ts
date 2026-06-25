@@ -53,6 +53,13 @@ export interface RestoreFlowDeps {
   trace: StartupTrace;
 }
 
+interface RecentProjectRecord {
+  path: string;
+  name: string;
+  runtime?: ProjectRuntime;
+  remote?: RemoteProjectRef;
+}
+
 /**
  * Run the app restore flow.
  *
@@ -74,6 +81,7 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
     setActiveProject,
     setActiveSession,
     createNewSession,
+    getProjectTabs,
     getLastActiveSessionByProject,
     loadSessionMessages,
     log,
@@ -165,8 +173,17 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
     });
 
     if (savedTabs && savedTabs.length > 0) {
+      const existingTabIds = new Set(getProjectTabs().map((tab) => tab.id));
       for (const t of savedTabs) {
-        addProjectTab({ id: t.id, name: t.name, path: t.path, runtime: t.runtime, remote: t.remote });
+        if (existingTabIds.has(t.id)) continue;
+        existingTabIds.add(t.id);
+        addProjectTab({
+          id: t.id,
+          name: t.name,
+          path: t.path,
+          runtime: t.runtime,
+          remote: t.remote,
+        });
       }
 
       const targetId =
@@ -219,6 +236,67 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
       }
 
       // Release restoring AFTER sessions are loaded so UI doesn't flash empty state
+      if (!isCancelled()) setRestoring(false);
+      return;
+    }
+
+    const recentResult = (await callApi("project.listRecent", {})) as {
+      projects: RecentProjectRecord[];
+    };
+    const recentProjects = recentResult.projects ?? [];
+    if (recentProjects.length > 0) {
+      const recentProject = recentProjects[0];
+      const tabId = recentProject.remote
+        ? `remote-${recentProject.remote.host}-${recentProject.path}`
+        : `proj-${recentProject.path.replace(/\//g, "-")}`;
+      const exists = getProjectTabs().some((tab) => tab.id === tabId);
+      if (!exists) {
+        addProjectTab({
+          id: tabId,
+          name: recentProject.name,
+          path: recentProject.path,
+          runtime: recentProject.runtime,
+          remote: recentProject.remote,
+        });
+      }
+
+      setActiveProject(tabId, { skipAutoSession: true });
+
+      trace.mark("recent-project.sessions.begin", { projectPath: recentProject.path });
+      const sessions = await Promise.race([
+        loadSessionsForProject(recentProject.path),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("loadSessionsForProject timed out (10s)")), 10_000),
+        ),
+      ]).catch((err) => {
+        trace.error("recent-project.sessions.failed", err, { projectPath: recentProject.path });
+        addLog(`Session load failed: ${err instanceof Error ? err.message : String(err)}`);
+        return [] as SessionMeta[];
+      });
+      trace.mark("recent-project.sessions.done", {
+        projectPath: recentProject.path,
+        sessionCount: sessions.length,
+      });
+
+      if (sessions.length > 0) {
+        const targetSession = pickDefaultSessionId(
+          sessions,
+          getLastActiveSessionByProject()[recentProject.path],
+        );
+        if (!targetSession) {
+          trace.mark("recent-project.create-session.begin", { projectPath: recentProject.path });
+          await createNewSession();
+          trace.done("recent-project.create-session.done", { projectPath: recentProject.path });
+        } else {
+          setActiveSession(targetSession);
+          trace.done("recent-project.active-session.selected", { sessionId: targetSession });
+        }
+      } else {
+        trace.mark("recent-project.create-session.begin", { projectPath: recentProject.path });
+        await createNewSession();
+        trace.done("recent-project.create-session.done", { projectPath: recentProject.path });
+      }
+
       if (!isCancelled()) setRestoring(false);
       return;
     }
