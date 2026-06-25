@@ -332,9 +332,15 @@ wt_start_dev_server() {
   local config_dir="$4"
   local env_file="$worktree_path/.env"
   local vite_bin="$worktree_path/node_modules/.bin/vite"
+  local bun_bin
 
   [ -x "$vite_bin" ] || {
     echo "Missing executable: $vite_bin" >&2
+    return 1
+  }
+  bun_bin=$(command -v bun || true)
+  [ -n "$bun_bin" ] || {
+    echo "Missing executable: bun" >&2
     return 1
   }
 
@@ -352,11 +358,12 @@ wt_start_dev_server() {
     export VITE_AUTH_TOKEN="${AUTH_TOKEN:-}"
     export WORKTREE_DEV_LOG="$worktree_path/logs/dev.log"
     export WORKTREE_DEV_CHILDREN="$worktree_path/.worktree-dev.children"
+    export WORKTREE_DEV_BUN_BIN="$bun_bin"
     export WORKTREE_DEV_VITE_BIN="$vite_bin"
     nohup bash -c '
       set -m
       : > "$WORKTREE_DEV_LOG"
-      bun --bun src/server.ts >> "$WORKTREE_DEV_LOG" 2>&1 &
+      "$WORKTREE_DEV_BUN_BIN" --bun src/server.ts >> "$WORKTREE_DEV_LOG" 2>&1 &
       api_pid=$!
       "$WORKTREE_DEV_VITE_BIN" --port "$VITE_PORT" >> "$WORKTREE_DEV_LOG" 2>&1 &
       vite_pid=$!
