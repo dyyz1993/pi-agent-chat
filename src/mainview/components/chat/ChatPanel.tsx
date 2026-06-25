@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   PanelLeft,
@@ -65,6 +65,20 @@ const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const MAX_MSG_IDS_CACHE = 10;
 
 const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
+
+interface TopLoadScrollAnchor {
+  sessionId: string;
+  scrollHeight: number;
+  scrollTop: number;
+}
+
+export function computeTopLoadRestoredScrollTop(
+  anchor: TopLoadScrollAnchor,
+  nextScrollHeight: number,
+): number {
+  const addedHeight = Math.max(0, nextScrollHeight - anchor.scrollHeight);
+  return anchor.scrollTop + addedHeight;
+}
 
 function evictMsgIdsIfNeeded(): void {
   if (_messageIdsCache.size > MAX_MSG_IDS_CACHE) {
@@ -184,6 +198,8 @@ export function ChatPanel() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const vlistRef = useRef<VirtualizerHandle>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
+  const topLoadScrollAnchorRef = useRef<TopLoadScrollAnchor | null>(null);
+  const topLoadRestoreRafRef = useRef<number | null>(null);
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
@@ -244,6 +260,14 @@ export function ChatPanel() {
       hasMore: hasMoreMessages,
       isLoading: isLoadingMore,
       onLoadMore: () => {
+        const el = messagesScrollRef.current;
+        if (el) {
+          topLoadScrollAnchorRef.current = {
+            sessionId: activeSessionId,
+            scrollHeight: el.scrollHeight,
+            scrollTop: el.scrollTop,
+          };
+        }
         void loadMoreMessages(activeSessionId);
       },
     };
@@ -420,6 +444,47 @@ export function ChatPanel() {
     if (navClickScrollingRef.current) releaseSideNavScrollLock();
     handleScrollEnd();
   }, [handleScrollEnd, releaseSideNavScrollLock]);
+
+  const captureTopLoadScrollAnchor = useCallback(() => {
+    if (!activeSessionId) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    topLoadScrollAnchorRef.current = {
+      sessionId: activeSessionId,
+      scrollHeight: el.scrollHeight,
+      scrollTop: el.scrollTop,
+    };
+  }, [activeSessionId]);
+
+  useLayoutEffect(() => {
+    if (isViewingSubagent || isLoadingMore) return;
+    const anchor = topLoadScrollAnchorRef.current;
+    if (!anchor || anchor.sessionId !== activeSessionId) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+
+    if (topLoadRestoreRafRef.current != null) {
+      cancelAnimationFrame(topLoadRestoreRafRef.current);
+    }
+
+    topLoadRestoreRafRef.current = requestAnimationFrame(() => {
+      topLoadRestoreRafRef.current = requestAnimationFrame(() => {
+        topLoadRestoreRafRef.current = null;
+        const currentAnchor = topLoadScrollAnchorRef.current;
+        if (!currentAnchor || currentAnchor.sessionId !== activeSessionId) return;
+        const scrollTop = computeTopLoadRestoredScrollTop(currentAnchor, el.scrollHeight);
+        el.scrollTop = scrollTop;
+        topLoadScrollAnchorRef.current = null;
+      });
+    });
+
+    return () => {
+      if (topLoadRestoreRafRef.current != null) {
+        cancelAnimationFrame(topLoadRestoreRafRef.current);
+        topLoadRestoreRafRef.current = null;
+      }
+    };
+  }, [activeSessionId, historyLoadVersion, isLoadingMore, isViewingSubagent]);
 
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
@@ -677,9 +742,11 @@ export function ChatPanel() {
   useEffect(() => {
     if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent)
       return;
+    captureTopLoadScrollAnchor();
     loadMoreMessages?.(activeSessionId);
   }, [
     activeSessionId,
+    captureTopLoadScrollAnchor,
     isAtTop,
     hasMoreMessages,
     isLoadingMore,
