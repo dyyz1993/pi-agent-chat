@@ -49,6 +49,13 @@ pi-momo-fork/packages/coding-agent/
 - `yalc push` 后如果 `bun run dev:web` 已经在跑，新创建的 Agent 进程会读取更新后的 `dist/`；已经运行中的 Agent/CLI 进程需要 `agent.reload`、停止后重启 session，或重启 dev server 才会加载新的 extension 代码。
 - 修改底层包后至少验证三层：底层相关单测（例如 `npm test -- extensions/coordinator/handler.test.ts`）、`npm run build && yalc push`、消费项目端口健康检查（默认 `http://localhost:3100/` 和 `http://localhost:5173/`）。
 
+### Local paired worktree stack
+
+- 如果任务需要 app worktree 与本地依赖 fork 一起隔离运行，先读 `docs/workflows/local-paired-worktree-stack.md`。
+- 这类任务不只创建 Git worktree；还必须显式处理源码拓扑、依赖安装策略、yalc/local package、`.env`、`PI_CLI_PATH`、`PI_APP_CONFIG_DIR`、端口 registry、全局命令/bin、build/dist、logs/pid、敏感配置和验证流程。
+- 本机 Web dev 默认使用 `scripts/worktree-create.sh` / `scripts/worktree-dev.sh` / `scripts/worktree-common.sh` 管理 stack；端口和配对关系记录在 `~/.pi-agent-chat/worktrees/registry/`。
+- `docs/workflows/apple-container-paired-worktree-sandbox.md` 是容器隔离方案；本机多端口、多 worktree 启动优先使用 `local-paired-worktree-stack.md`。
+
 ### Remote runtime 架构参考
 
 - 远程 Agent/SSH/server attach 相关设计先读 `docs/architecture/remote-runtime-architecture-comparison.md`。

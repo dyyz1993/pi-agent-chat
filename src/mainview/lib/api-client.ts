@@ -16,13 +16,17 @@ const log = createLogger("gateway");
 /**
  * Token 来源优先级：
  * 1. URL query ?token=xxx（部署时注入）
- * 2. localStorage "rpc-auth-token"
- * 3. 空字符串（连接将被服务端 401 拒绝，需通过上述方式提供有效 token）
+ * 2. dev-only VITE_AUTH_TOKEN（worktree dev server 注入）
+ * 3. localStorage "rpc-auth-token"
+ * 4. 空字符串（连接将被服务端 401 拒绝，需通过上述方式提供有效 token）
  */
 export function resolveAuthToken(): string {
   if (typeof window !== "undefined") {
     const fromQuery = new URLSearchParams(window.location.search).get("token");
     if (fromQuery) return fromQuery;
+    if (import.meta.env.DEV && import.meta.env.VITE_AUTH_TOKEN) {
+      return import.meta.env.VITE_AUTH_TOKEN;
+    }
     const fromStorage = localStorage.getItem("rpc-auth-token");
     if (fromStorage) return fromStorage;
   }
@@ -50,6 +54,22 @@ function isPrivateOrLoopbackHost(hostname: string): boolean {
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
   if (/^192\.168\./.test(hostname)) return true;
   return false;
+}
+
+function appendToken(url: string, token: string): string {
+  if (url.includes("token=")) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+}
+
+function getDevWebSocketTarget(token: string): string | null {
+  if (!import.meta.env.DEV || !import.meta.env.VITE_API_TARGET) return null;
+  try {
+    const apiTarget = new URL(import.meta.env.VITE_API_TARGET);
+    const protocol = apiTarget.protocol === "https:" ? "wss:" : "ws:";
+    return appendToken(`${protocol}//${apiTarget.host}/ws`, token);
+  } catch {
+    return null;
+  }
 }
 
 class APIClientImpl {
@@ -264,7 +284,12 @@ class APIClientImpl {
       new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url");
     if (customUrl) {
-      return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${token}`;
+      return appendToken(customUrl, token);
+    }
+
+    const devTarget = getDevWebSocketTarget(token);
+    if (devTarget) {
+      return devTarget;
     }
 
     if (

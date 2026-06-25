@@ -1,5 +1,7 @@
 # Dependencies
+node_modules
 node_modules/
+packages/*/node_modules
 packages/*/node_modules/
 
 # Build outputs
@@ -31,6 +33,11 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local worktree runtime files
+.worktree-dev.pid
+.worktree-dev.children
+.worktree-deps.json
 
 # Bun
 bun.lockb
@@ -119,6 +126,7 @@ introduction.html
 .pi/sessions/
 
 # Yalc local dependency
+.yalc
 .yalc/
 yalc.lock
 

@@ -1,38 +1,22 @@
 #!/bin/bash
 # scripts/worktree-create.sh
-# 交互式 worktree 创建工具 — 自动处理依赖选择 + 端口分配
-#
-# 用法:
-#   ./scripts/worktree-create.sh <分支名>
-#   ./scripts/worktree-create.sh <分支名> --code       # 自动打开 VS Code
-#   ./scripts/worktree-create.sh <分支名> --link       # 直接软链依赖（非交互）
-#   ./scripts/worktree-create.sh <分支名> --install    # 直接 bun install（非交互）
-#   ./scripts/worktree-create.sh <分支名> --dev        # 软链 + 分配端口 + 生成 .env
-#   ./scripts/worktree-create.sh <分支名> --dev --start # 软链 + 分配端口 + 生成 .env + 直接启动
-#   ./scripts/worktree-create.sh <分支名> --skip-deps  # 跳过依赖处理
-#
-# 示例:
-#   ./scripts/worktree-create.sh ui-dark --dev
-#   → 创建 worktree，软链依赖，分配 3101/5174 端口，生成 .env
+# Create an isolated pi-agent-chat worktree, with optional paired pi-momo-fork worktree.
 
 set -e
 
-# ────────────────────────── 颜色 ──────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-info()  { printf "${CYAN}ℹ${NC}  %s\n" "$1"; }
-ok()    { printf "${GREEN}✔${NC}  %s\n" "$1"; }
-warn()  { printf "${YELLOW}⚠${NC}  %s\n" "$1"; }
-err()   { printf "${RED}✘${NC}  %s\n" "$1";  exit 1; }
-header(){ printf "\n${BOLD}━━━ %s ━━━${NC}\n" "$1"; }
+info()  { printf "${CYAN}i${NC}  %s\n" "$1"; }
+ok()    { printf "${GREEN}OK${NC} %s\n" "$1"; }
+warn()  { printf "${YELLOW}!!${NC} %s\n" "$1"; }
+err()   { printf "${RED}XX${NC} %s\n" "$1"; exit 1; }
+header(){ printf "\n${BOLD}== %s ==${NC}\n" "$1"; }
 
-# 安全读取用户输入（支持非交互式管道输入）
 prompt() {
   local msg="$1"
   local var_name="$2"
@@ -43,290 +27,212 @@ prompt() {
   fi
 }
 
-# ────────────────────────── 路径 ──────────────────────────
-# worktree 的 .git 是文件，用 rev-parse 或 fallback 检测
-if command -v git &>/dev/null && git rev-parse --git-dir &>/dev/null 2>&1; then
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=scripts/worktree-common.sh
+. "$SCRIPT_DIR/worktree-common.sh"
+
+usage() {
+  cat <<EOF
+Usage:
+  ./scripts/worktree-create.sh <branch> [options]
+
+App options:
+  --dev                 Generate .env, allocate ports, and register the worktree.
+  --start               Start after setup. Implies --dev.
+  --code                Open VS Code after setup.
+  --link                Link app .yalc and node_modules from the main repo. Default for --dev.
+  --install             Copy app .yalc and run bun install.
+  --skip-deps           Do not prepare app dependencies.
+
+Paired coding-agent fork options:
+  --with-agent-fork     Create/reuse a paired pi-momo-fork worktree and point PI_CLI_PATH to it.
+  --agent-source <dir>  Source pi-momo-fork repo. Default: $DEFAULT_AGENT_SOURCE_ROOT
+  --agent-path <dir>    Target paired fork worktree path.
+  --agent-branch <name> Branch for paired fork. Default: same as app branch.
+  --agent-link          Link agent node_modules from source fork. Default.
+  --agent-install       Run npm install in paired fork.
+  --agent-skip-deps     Do not prepare agent dependencies.
+  --agent-build         Build packages/coding-agent. Default with --with-agent-fork.
+  --no-agent-build      Skip agent build.
+
+Examples:
+  ./scripts/worktree-create.sh ui-dark --dev --with-agent-fork
+  ./scripts/worktree-create.sh ui-dark --dev --start --with-agent-fork --agent-install
+EOF
+}
+
+find_repo_root() {
+  local dir
+  dir="$(pwd)"
+  while [ "$dir" != "/" ]; do
+    [ -e "$dir/.git" ] && echo "$dir" && return 0
+    dir=$(dirname "$dir")
+  done
+  return 1
+}
+
+if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
   REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 else
-  find_repo_root() {
-    local dir="$(pwd)"
-    while [ "$dir" != "/" ]; do
-      [ -e "$dir/.git" ] && echo "$dir" && return 0
-      dir=$(dirname "$dir")
-    done
-    return 1
-  }
-  REPO_ROOT=$(find_repo_root) || err "不在 git 仓库中"
+  REPO_ROOT=$(find_repo_root) || err "Not inside a git repository"
 fi
+
 REPO_NAME=$(basename "$REPO_ROOT")
 PARENT_DIR=$(dirname "$REPO_ROOT")
 WORKTREE_BASE="${PARENT_DIR}/${REPO_NAME}"
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
-# ────────────────────────── 参数解析 ──────────────────────────
 BRANCH=""
 OPEN_CODE=false
-NON_INTERACTIVE=""
-SKIP_DEPS=false
+APP_DEPS_STRATEGY=""
 SETUP_DEV=false
 START_NOW=false
+WITH_AGENT_FORK=false
+AGENT_SOURCE_ROOT="$DEFAULT_AGENT_SOURCE_ROOT"
+AGENT_PATH=""
+AGENT_BRANCH=""
+AGENT_DEPS_STRATEGY="link"
+AGENT_BUILD=""
 
-for arg in "$@"; do
-  case "$arg" in
-    --code)    OPEN_CODE=true  ;;
-    --link)    NON_INTERACTIVE="link" ;;
-    --install) NON_INTERACTIVE="install" ;;
-    --skip-deps) SKIP_DEPS=true ;;
-    --dev)     NON_INTERACTIVE="link"; SETUP_DEV=true ;;
-    --start)   START_NOW=true ;;
-    --*|-)     err "未知选项: $arg" ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --code) OPEN_CODE=true; shift ;;
+    --link) APP_DEPS_STRATEGY="link"; shift ;;
+    --install) APP_DEPS_STRATEGY="install"; shift ;;
+    --skip-deps) APP_DEPS_STRATEGY="skip"; shift ;;
+    --dev) SETUP_DEV=true; [ -z "$APP_DEPS_STRATEGY" ] && APP_DEPS_STRATEGY="link"; shift ;;
+    --start) START_NOW=true; SETUP_DEV=true; [ -z "$APP_DEPS_STRATEGY" ] && APP_DEPS_STRATEGY="link"; shift ;;
+    --with-agent-fork) WITH_AGENT_FORK=true; shift ;;
+    --agent-source) AGENT_SOURCE_ROOT="$2"; shift 2 ;;
+    --agent-source=*) AGENT_SOURCE_ROOT="${1#*=}"; shift ;;
+    --agent-path) AGENT_PATH="$2"; shift 2 ;;
+    --agent-path=*) AGENT_PATH="${1#*=}"; shift ;;
+    --agent-branch) AGENT_BRANCH="$2"; shift 2 ;;
+    --agent-branch=*) AGENT_BRANCH="${1#*=}"; shift ;;
+    --agent-link) AGENT_DEPS_STRATEGY="link"; shift ;;
+    --agent-install) AGENT_DEPS_STRATEGY="install"; shift ;;
+    --agent-skip-deps) AGENT_DEPS_STRATEGY="skip"; shift ;;
+    --agent-build) AGENT_BUILD="true"; shift ;;
+    --no-agent-build) AGENT_BUILD="false"; shift ;;
+    --*|-) err "Unknown option: $1" ;;
     *)
       if [ -z "$BRANCH" ]; then
-        BRANCH="$arg"
+        BRANCH="$1"
       else
-        err "未知参数: $arg"
+        err "Unknown argument: $1"
       fi
+      shift
       ;;
   esac
 done
 
-[ -z "$BRANCH" ] && err "请指定分支名\n用法: ./scripts/worktree-create.sh <分支名> [--code|--link|--install|--dev|--start|--skip-deps]"
+[ -n "$BRANCH" ] || { usage; exit 1; }
+[ -n "$APP_DEPS_STRATEGY" ] || APP_DEPS_STRATEGY="prompt"
+[ -n "$AGENT_BRANCH" ] || AGENT_BRANCH="$BRANCH"
+[ -n "$AGENT_BUILD" ] || { [ "$WITH_AGENT_FORK" = true ] && AGENT_BUILD="true" || AGENT_BUILD="false"; }
 
 WORKTREE_PATH="${WORKTREE_BASE}-${BRANCH}"
-
-# ────────────────────────── 端口工具 ──────────────────────────
-# 找到 ≥ start 的第一个空闲端口
-find_free_port() {
-  local start=$1
-  local port=$start
-  while lsof -i :$port -P 2>/dev/null | grep -q LISTEN; do
-    port=$((port + 1))
-  done
-  echo "$port"
-}
-
-# ────────────────────────── 检查主仓库状态 ──────────────────────────
 MAIN_YALC="$REPO_ROOT/.yalc"
 MAIN_NM="$REPO_ROOT/node_modules"
 MAIN_ENV="$REPO_ROOT/.env"
 
-check_source() {
-  local missing=0
-  [ ! -d "$MAIN_YALC" ] && warn "主仓库没有 .yalc/（yalc 本地包可能没 publish）" && missing=1
-  [ ! -d "$MAIN_NM" ]   && warn "主仓库没有 node_modules/（请先在主仓库跑 bun install）" && missing=1
-  [ ! -f "$MAIN_ENV" ]  && warn "主仓库没有 .env（缺少配置模板）" && missing=1
-  [ "$missing" -ne 0 ] && err "主仓库缺少依赖源，请先在主仓库准备好"
-}
-check_source
+[ -f "$MAIN_ENV" ] || err "Main repo missing .env: $MAIN_ENV"
+[ -d "$MAIN_NM" ] || warn "Main repo missing node_modules. --link will not work until dependencies exist."
+[ -d "$MAIN_YALC" ] || warn "Main repo missing .yalc. Local packages may not be available."
+[ ! -d "$WORKTREE_PATH" ] || err "Path already exists: $WORKTREE_PATH"
 
-# 检查是否已有 worktree
-if [ -d "$WORKTREE_PATH" ]; then
-  warn "路径已存在: $WORKTREE_PATH"
-  exit 1
-fi
-
-# ────────────────────────── 1. 创建 Worktree ──────────────────────────
-header "创建 Worktree"
-echo "  路径: ${CYAN}${WORKTREE_PATH}${NC}"
-echo "  分支: ${CYAN}${BRANCH}${NC}"
-echo ""
-
+header "Create App Worktree"
+echo "  path:   ${CYAN}${WORKTREE_PATH}${NC}"
+echo "  branch: ${CYAN}${BRANCH}${NC}"
 git worktree add -b "$BRANCH" "$WORKTREE_PATH" 2>&1 | sed 's/^/  /'
-ok "Worktree 创建成功"
-echo ""
+ok "App worktree created"
 
-# ────────────────────────── 2. 依赖处理 ──────────────────────────
 cd "$WORKTREE_PATH"
 
-if [ "$SKIP_DEPS" = true ]; then
-  info "跳过依赖处理（--skip-deps）"
-  echo ""
-else
-  header "依赖处理"
-
-  if [ -n "$NON_INTERACTIVE" ]; then
-    CHOICE="$NON_INTERACTIVE"
-  else
-    echo "  ${BOLD}worktree 需要 node_modules 才能运行。怎么处理？${NC}"
-    echo ""
-    echo "  ${BOLD}[L]${NC} 软链 — 从主仓库软链 .yalc/ 和 node_modules（${GREEN}0 秒${NC}）"
-    echo "       最适合不改 package.json 的场景。如果改了依赖，断开软链重新装即可"
-    echo ""
-    echo "  ${BOLD}[I]${NC} 安装 — 从主仓库复制 .yalc/ + bun install（${YELLOW}几秒${NC}）"
-    echo "       完全独立，无后顾之忧。bun 从缓存硬链接，也很快"
-    echo ""
-    echo "  ${BOLD}[S]${NC} 跳过 — 什么都不做，我自己后面再搞"
-    echo ""
-    prompt "  你的选择 [L/i/s]: " CHOICE
-    echo ""
-    CHOICE=${CHOICE:-L}
-  fi
-
-  case "$(echo "$CHOICE" | tr '[:upper:]' '[:lower:]')" in
-    i|install)
-      info "选项 I：复制 .yalc/ + bun install（独立安装）"
-      echo ""
-
-      if [ -d "$MAIN_YALC" ]; then
-        info "正在复制 .yalc/ ..."
-        cp -R "$MAIN_YALC" "$WORKTREE_PATH/.yalc"
-        ok ".yalc/ 复制完成"
-      fi
-
-      info "正在 bun install ..."
-      if bun install 2>&1; then
-        ok "bun install 完成"
-      else
-        warn "bun install 遇到问题，请检查"
-      fi
-      ;;
-
-    s|skip)
-      info "跳过依赖安装，需要时再处理"
-      ;;
-
-    *) # link (默认)
-      info "选项 L：软链主仓库依赖（0 秒）"
-      echo ""
-
-      if [ -d "$MAIN_YALC" ]; then
-        ln -sf "$MAIN_YALC" "$WORKTREE_PATH/.yalc"
-        ok "软链 .yalc/ → ${MAIN_YALC}"
-      fi
-
-      if [ -d "$MAIN_NM" ]; then
-        ln -sf "$MAIN_NM" "$WORKTREE_PATH/node_modules"
-        ok "软链 node_modules/ → ${MAIN_NM}"
-      fi
-
-      cat > "$WORKTREE_PATH/.worktree-deps.json" <<- JSONEOF
-{
-  "strategy": "symlink",
-  "source": "$REPO_ROOT",
-  "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "warning": "如果修改了 package.json，请删掉软链并重新 bun install"
-}
-JSONEOF
-      ok "已记录依赖来源 → .worktree-deps.json"
-      echo ""
-      info "${YELLOW}提示${NC}: 如果之后修改了 package.json，运行以下命令断开软链并独立安装："
-      info "  cd ${WORKTREE_PATH} && rm -f node_modules .yalc && bun install"
-      ;;
+if [ "$APP_DEPS_STRATEGY" = "prompt" ]; then
+  header "App Dependencies"
+  echo "  [L] Link .yalc and node_modules from main repo (fast, shared deps)"
+  echo "  [I] Copy .yalc and run bun install (more isolated)"
+  echo "  [S] Skip dependency setup"
+  prompt "  Choice [L/i/s]: " APP_CHOICE
+  case "$(echo "${APP_CHOICE:-L}" | tr '[:upper:]' '[:lower:]')" in
+    i) APP_DEPS_STRATEGY="install" ;;
+    s) APP_DEPS_STRATEGY="skip" ;;
+    *) APP_DEPS_STRATEGY="link" ;;
   esac
-  echo ""
 fi
 
-# ────────────────────────── 3. 端口分配 + .env 生成（--dev） ──────────────────────────
+header "App Dependencies"
+wt_prepare_app_deps "$WORKTREE_PATH" "$MAIN_YALC" "$MAIN_NM" "$APP_DEPS_STRATEGY"
+ok "App dependency strategy: $APP_DEPS_STRATEGY"
+
+AGENT_CLI_PATH=""
+if [ "$WITH_AGENT_FORK" = true ]; then
+  header "Paired Agent Fork"
+  AGENT_SOURCE_ROOT=$(cd "$AGENT_SOURCE_ROOT" && pwd)
+  [ -n "$AGENT_PATH" ] || AGENT_PATH=$(wt_default_agent_worktree_path "$WORKTREE_PATH" "$BRANCH" "$AGENT_SOURCE_ROOT")
+
+  if [ -n "$(git -C "$AGENT_SOURCE_ROOT" status --porcelain 2>/dev/null)" ]; then
+    warn "Agent source has uncommitted changes. The paired worktree is created from git commits, not dirty files."
+  fi
+
+  echo "  source: ${CYAN}${AGENT_SOURCE_ROOT}${NC}"
+  echo "  path:   ${CYAN}${AGENT_PATH}${NC}"
+  echo "  branch: ${CYAN}${AGENT_BRANCH}${NC}"
+  echo "  deps:   ${CYAN}${AGENT_DEPS_STRATEGY}${NC}"
+  echo "  build:  ${CYAN}${AGENT_BUILD}${NC}"
+  AGENT_CLI_PATH=$(wt_setup_agent_worktree "$AGENT_SOURCE_ROOT" "$AGENT_BRANCH" "$AGENT_PATH" "$AGENT_DEPS_STRATEGY" "$AGENT_BUILD")
+  ok "PI_CLI_PATH will use $AGENT_CLI_PATH"
+fi
+
+API_PORT=""
+VITE_PORT=""
+CONFIG_DIR=""
 if [ "$SETUP_DEV" = true ]; then
-  header "端口分配"
+  header "Ports And Env"
+  MAIN_PORT=$(wt_main_port "$MAIN_ENV")
+  API_PORT=$(wt_pick_port "$WORKTREE_PATH" "API_PORT" "$((MAIN_PORT + 1))")
+  VITE_PORT=$(wt_pick_port "$WORKTREE_PATH" "VITE_PORT" 5174)
+  CONFIG_DIR=$(wt_app_config_dir "$WORKTREE_PATH")
 
-  # 从主仓库复制完整 .env 内容，只改 PORT
-  MAIN_PORT=$(grep -E '^PORT=' "$MAIN_ENV" 2>/dev/null | head -1 | cut -d= -f2)
-  MAIN_PORT=${MAIN_PORT:-3100}
+  wt_write_app_env "$MAIN_ENV" "$WORKTREE_PATH/.env" "$API_PORT" "$AGENT_CLI_PATH"
+  wt_write_registry "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR" "$AGENT_SOURCE_ROOT" "$AGENT_PATH" "$AGENT_BRANCH" "$AGENT_CLI_PATH"
 
-  # 找空闲端口：从主仓库 port+1 开始找
-  API_PORT=$(find_free_port $((MAIN_PORT + 1)))
-  # Vite 端口：从 5174 开始找
-  VITE_PORT=$(find_free_port 5174)
-
-  echo "  ${BOLD}端口分配${NC}"
-  echo ""
-  echo "  Server API    ${YELLOW}${MAIN_PORT}${NC} → ${GREEN}${API_PORT}${NC}  (API/WebSocket)"
-  echo "  Vite HMR      ${YELLOW}5173${NC}        → ${GREEN}${VITE_PORT}${NC}       (前端开发服务器)"
-  echo ""
-
-  # 生成 .env：复制主仓库全部内容，只改 PORT
-  grep -v -E '^#|^$|^PORT=' "$MAIN_ENV" 2>/dev/null > "$WORKTREE_PATH/.env.tmp"
-  echo "" >> "$WORKTREE_PATH/.env.tmp"
-  echo "# worktree: 端口已偏移（主仓库:${MAIN_PORT}）" >> "$WORKTREE_PATH/.env.tmp"
-  echo "PORT=${API_PORT}" >> "$WORKTREE_PATH/.env.tmp"
-  mv "$WORKTREE_PATH/.env.tmp" "$WORKTREE_PATH/.env"
-  ok ".env 已生成（继承主仓库全量配置，仅 PORT 改为 ${API_PORT}）"
-  echo ""
-
-  # 提示如何启动
-  info "启动："
-  info "  ${SCRIPT_DIR}/worktree-dev.sh ${WORKTREE_PATH}"
-  echo ""
+  echo "  API:        ${YELLOW}${MAIN_PORT}${NC} -> ${GREEN}${API_PORT}${NC}"
+  echo "  Vite:       ${YELLOW}5173${NC} -> ${GREEN}${VITE_PORT}${NC}"
+  echo "  config dir: ${CYAN}${CONFIG_DIR}${NC}"
+  [ -n "$AGENT_CLI_PATH" ] && echo "  agent cli:  ${CYAN}${AGENT_CLI_PATH}${NC}"
+  ok ".env and registry are ready"
 fi
 
-# ────────────────────────── 4. 启动（--start）= --dev + 直接启动 ──────────────────────────
 if [ "$START_NOW" = true ]; then
-  # --start 暗示 --dev
-  if [ "$SETUP_DEV" != true ]; then
-    MAIN_PORT=$(grep -E '^PORT=' "$MAIN_ENV" 2>/dev/null | head -1 | cut -d= -f2)
-    MAIN_PORT=${MAIN_PORT:-3100}
-    API_PORT=$(find_free_port $((MAIN_PORT + 1)))
-    VITE_PORT=$(find_free_port 5174)
-    grep -v -E '^#|^$|^PORT=' "$MAIN_ENV" 2>/dev/null > "$WORKTREE_PATH/.env.tmp"
-    echo "" >> "$WORKTREE_PATH/.env.tmp"
-    echo "# worktree: 端口已偏移（主仓库:${MAIN_PORT}）" >> "$WORKTREE_PATH/.env.tmp"
-    echo "PORT=${API_PORT}" >> "$WORKTREE_PATH/.env.tmp"
-    mv "$WORKTREE_PATH/.env.tmp" "$WORKTREE_PATH/.env"
-  fi
-
-  header "启动"
-  info "正在启动开发服务器（API=${API_PORT}, Vite=${VITE_PORT}）..."
-  echo ""
-
-  cd "$WORKTREE_PATH"
-  PI_APP_CONFIG_DIR="${HOME}/.pi-agent-chat/worktrees/${BRANCH}" \
-  PORT=${API_PORT} \
-  VITE_API_TARGET="http://localhost:${API_PORT}" \
-  VITE_PORT=${VITE_PORT} \
-  VITE_STRICT_PORT=false \
-  dotenv -e "$WORKTREE_PATH/.env" -- \
-    concurrently \
-      -n "api,vite" \
-      -c "blue,green" \
-      "bun --bun src/server.ts" \
-      "vite --port ${VITE_PORT}" \
-    > "$WORKTREE_PATH/logs/dev.log" 2>&1 &
-
-  PID=$!
-  echo $PID > "$WORKTREE_PATH/.worktree-dev.pid"
-  sleep 2
-
-  ok "开发服务器已启动（PID: ${PID}）"
-  info "  API:      http://localhost:${API_PORT}"
-  info "  Vite HMR: http://localhost:${VITE_PORT}"
-  info "  停止: kill \$(cat ${WORKTREE_PATH}/.worktree-dev.pid)"
-  sleep 1
-fi
-
-# ────────────────────────── 5. 完成 ──────────────────────────
-header "完成"
-
-echo ""
-echo "  📂 ${CYAN}cd ${WORKTREE_PATH}${NC}"
-echo "  🌿 分支: ${CYAN}${BRANCH}${NC}"
-
-DEP_STRATEGY="未安装"
-if [ -L "$WORKTREE_PATH/node_modules" ]; then
-  DEP_STRATEGY="软链（主仓库）"
-elif [ -d "$WORKTREE_PATH/node_modules" ] && [ "$(ls -A "$WORKTREE_PATH/node_modules" 2>/dev/null | wc -l)" -gt 0 ]; then
-  DEP_STRATEGY="已独立安装"
-fi
-echo "  📦 依赖: ${CYAN}${DEP_STRATEGY}${NC}"
-echo ""
-
-# 打开编辑器（仅交互模式）
-if [ -z "$NON_INTERACTIVE" ] || [ "$OPEN_CODE" = true ]; then
-  if [ "$OPEN_CODE" != true ]; then
-    prompt "  打开 VS Code？[Y/n]: " OPEN_CHOICE
-    echo ""
-    case "$(echo "$OPEN_CHOICE" | tr '[:upper:]' '[:lower:]')" in
-      n|no) ;;
-      *) OPEN_CODE=true ;;
-    esac
-  fi
-
-  if [ "$OPEN_CODE" = true ]; then
-    info "正在打开 VS Code ..."
-    code "$WORKTREE_PATH" 2>/dev/null || warn "code 命令不可用，请手动打开"
-    ok "已打开 VS Code"
+  header "Start"
+  wt_stop_existing_dev "$WORKTREE_PATH"
+  wt_start_dev_server "$WORKTREE_PATH" "$API_PORT" "$VITE_PORT" "$CONFIG_DIR"
+  sleep 3
+  PID=$(cat "$WORKTREE_PATH/.worktree-dev.pid" 2>/dev/null || true)
+  if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+    ok "Started dev server (PID $PID)"
+    info "Vite: http://localhost:${VITE_PORT}/"
+    info "API:  http://localhost:${API_PORT}"
+  else
+    warn "Startup may have failed. Last log lines:"
+    tail -40 "$WORKTREE_PATH/logs/dev.log" 2>/dev/null || true
   fi
 fi
 
+header "Done"
+echo "  app:      ${CYAN}${WORKTREE_PATH}${NC}"
+echo "  branch:   ${CYAN}${BRANCH}${NC}"
+echo "  deps:     ${CYAN}${APP_DEPS_STRATEGY}${NC}"
+[ -n "$AGENT_PATH" ] && echo "  agent:    ${CYAN}${AGENT_PATH}${NC}"
+[ -n "$API_PORT" ] && echo "  API:      ${CYAN}http://localhost:${API_PORT}${NC}"
+[ -n "$VITE_PORT" ] && echo "  Vite:     ${CYAN}http://localhost:${VITE_PORT}/${NC}"
 echo ""
-ok "一切就绪！"
+info "Start later with: $SCRIPT_DIR/worktree-dev.sh $WORKTREE_PATH"
+
+if [ "$OPEN_CODE" = true ]; then
+  code "$WORKTREE_PATH" 2>/dev/null || warn "code command is not available"
+fi
+
+ok "Ready"
