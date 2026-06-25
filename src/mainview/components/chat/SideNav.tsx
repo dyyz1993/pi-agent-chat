@@ -81,7 +81,7 @@ const SIDE_NAV_INITIAL_ACTIVE_SETTLE_DELAYS_MS = [80, 240, 600, 1200, 2200] as c
 type SideNavScrollStrategy = "center" | "edge";
 
 export type SideNavViewportMetrics = {
-  padding: number;
+  gap: number;
   viewportHeight: number;
   visibleItemCount: number;
 };
@@ -89,21 +89,22 @@ export type SideNavViewportMetrics = {
 export function getSideNavViewportMetrics(
   containerHeight: number,
   itemHeight = SIDE_NAV_ITEM_HEIGHT,
-  minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
+  _minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
 ): SideNavViewportMetrics {
   if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
-    return { padding: 0, viewportHeight: 0, visibleItemCount: 0 };
+    return { gap: 0, viewportHeight: 0, visibleItemCount: 0 };
   }
   if (containerHeight <= itemHeight) {
-    return { padding: 0, viewportHeight: containerHeight, visibleItemCount: 1 };
+    return { gap: 0, viewportHeight: containerHeight, visibleItemCount: 1 };
   }
 
-  const usableHeight = Math.max(itemHeight, containerHeight - minPadding);
-  const visibleItemCount = Math.max(1, Math.floor(usableHeight / itemHeight));
-  const viewportHeight = visibleItemCount * itemHeight;
+  const visibleItemCount = Math.max(1, Math.floor(containerHeight / itemHeight));
+  const totalItemHeight = visibleItemCount * itemHeight;
+  const leftover = Math.max(0, containerHeight - totalItemHeight);
+  const gap = visibleItemCount > 1 ? Math.floor(leftover / (visibleItemCount - 1)) : 0;
   return {
-    padding: Math.max(0, containerHeight - viewportHeight),
-    viewportHeight,
+    gap,
+    viewportHeight: totalItemHeight,
     visibleItemCount,
   };
 }
@@ -113,7 +114,7 @@ export function getSideNavViewportPadding(
   itemHeight = SIDE_NAV_ITEM_HEIGHT,
   minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
 ): number {
-  return getSideNavViewportMetrics(containerHeight, itemHeight, minPadding).padding;
+  return getSideNavViewportMetrics(containerHeight, itemHeight, minPadding).gap;
 }
 
 export function getSideNavScrollTarget(
@@ -633,7 +634,7 @@ export const SideNav = memo(
     const firstNavRef = useRef(true);
     const loadMoreRafRef = useRef<number | null>(null);
     const [viewportMetrics, setViewportMetrics] = useState<SideNavViewportMetrics>({
-      padding: SIDE_NAV_MIN_VIEWPORT_PADDING,
+      gap: 0,
       viewportHeight: 0,
       visibleItemCount: 0,
     });
@@ -753,9 +754,9 @@ export const SideNav = memo(
         const visualHeight = shell.getBoundingClientRect().height || shell.clientHeight;
         const next = getSideNavViewportMetrics(visualHeight);
         setViewportMetrics((current) =>
-          current.padding === next.padding &&
-          current.viewportHeight === next.viewportHeight &&
-          current.visibleItemCount === next.visibleItemCount
+          current.gap === next.gap &&
+                current.viewportHeight === next.viewportHeight &&
+                current.visibleItemCount === next.visibleItemCount
             ? current
             : next,
         );
@@ -834,20 +835,26 @@ export const SideNav = memo(
         <div
           ref={viewportShellRef}
           className="flex-1 min-h-0"
-          style={{
-            paddingBottom: viewportMetrics.padding,
-          }}
         >
           <div
             ref={scrollRef}
             className="overflow-y-auto overflow-x-hidden"
             style={{
-              height: viewportMetrics.viewportHeight || "100%",
+              height: "100%",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
               scrollSnapType: "y proximity",
             }}
           >
+            <div
+              style={{
+                minHeight: "100%",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                gap: viewportMetrics.gap || undefined,
+              }}
+            >
             {items.map((item, i) => {
               const selected = selectedNavId === item.key;
               const isFirstForMessage = !items[i - 1] || items[i - 1].navId !== item.navId;
@@ -876,6 +883,7 @@ export const SideNav = memo(
                 />
               );
             })}
+          </div>
           </div>
         </div>
 
