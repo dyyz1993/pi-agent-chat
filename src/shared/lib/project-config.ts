@@ -67,6 +67,8 @@ interface ProjectConfig {
   disabledPlugins: Record<string, string[]>;
   /** app-level model favorites (global) */
   modelFavorites: string[];
+  /** app-level local preview proxy preference shared by all browser clients */
+  localProxyEnabled?: boolean;
   /** reusable SSH connection profiles for opening remote projects */
   sshProfiles: SshProfile[];
   /** remote project metadata keyed by local shadow project path */
@@ -118,6 +120,8 @@ function parseConfig(raw: string): ProjectConfig {
     disabledSkills: parsed.disabledSkills ?? [],
     disabledPlugins: parsed.disabledPlugins ?? {},
     modelFavorites: parsed.modelFavorites ?? [],
+    localProxyEnabled:
+      typeof parsed.localProxyEnabled === "boolean" ? parsed.localProxyEnabled : undefined,
     sshProfiles: parsed.sshProfiles ?? [],
     remoteProjects: parsed.remoteProjects ?? [],
   };
@@ -133,6 +137,7 @@ function hasUserData(config: ProjectConfig): boolean {
     config.pinnedSessionIds.length > 0 ||
     config.favoriteFolders.length > 0 ||
     config.modelFavorites.length > 0 ||
+    typeof config.localProxyEnabled === "boolean" ||
     config.disabledSkills.length > 0 ||
     (config.disabledPlugins && Object.keys(config.disabledPlugins).length > 0) ||
     config.sshProfiles.length > 0 ||
@@ -791,6 +796,18 @@ export async function setDisabledPlugin(
       config.disabledPlugins[projectPath] = list.filter((p) => p !== pluginPath);
     }
     return config.disabledPlugins[projectPath];
+  });
+}
+
+export async function getLocalProxyPreference(): Promise<boolean> {
+  const config = await load();
+  return config.localProxyEnabled === true;
+}
+
+export async function setLocalProxyPreference(enabled: boolean): Promise<boolean> {
+  return loadAndSave((config) => {
+    config.localProxyEnabled = enabled;
+    return config.localProxyEnabled;
   });
 }
 

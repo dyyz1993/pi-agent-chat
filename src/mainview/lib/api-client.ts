@@ -156,7 +156,7 @@ class APIClientImpl {
         const httpProto = wsUrlObj.protocol === "wss:" ? "https:" : "http:";
         this._baseUrl = `${httpProto}//${wsUrlObj.host}`;
 
-        // 启动时自动检测代理：后端有 PROXY_API_URL → 开启，否则关闭
+        // 启动时读取持久化代理偏好，并确认服务端代理配置真实可用。
         import("./proxy").then(({ tryEnable }) => tryEnable(wsUrlObj.host));
       }
     })();

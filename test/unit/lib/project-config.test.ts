@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdir, writeFile, rm } from "fs/promises";
+import { mkdir, writeFile, readFile, rm } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { existsSync } from "fs";
@@ -489,5 +489,22 @@ describe("setDisabledPlugin", () => {
 
     expect(resultA).toEqual(["/plugins/shared/index.ts"]);
     expect(resultB).toEqual([]);
+  });
+});
+
+describe("local proxy preference", () => {
+  it("persists explicit true and false values", async () => {
+    const { getLocalProxyPreference, setLocalProxyPreference } = await import(
+      "../../../src/shared/lib/project-config"
+    );
+
+    await setLocalProxyPreference(true);
+    expect(await getLocalProxyPreference()).toBe(true);
+
+    await setLocalProxyPreference(false);
+    expect(await getLocalProxyPreference()).toBe(false);
+
+    const raw = JSON.parse(await readFile(TEST_CONFIG_PATH, "utf-8"));
+    expect(raw.localProxyEnabled).toBe(false);
   });
 });

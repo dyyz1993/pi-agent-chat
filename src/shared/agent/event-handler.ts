@@ -12,6 +12,7 @@ import type { LearningCandidate, LearningRun, LearningSnapshot } from "../module
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 import { classifyExtensionUiRequest } from "./agent-event-lifecycle";
+import { createMemoryBroadcast } from "./agent-channel-state";
 
 const log = createLogger("agent");
 
@@ -558,6 +559,11 @@ export class AgentEventHandler {
         { sessionId, candidate: data.candidate as LearningCandidate, timestamp: Date.now() },
         { sessionId },
       );
+    } else {
+      const broadcast = createMemoryBroadcast(sessionId, data, Date.now());
+      if (broadcast) {
+        await this.deps.broadcastEvent(broadcast.name, broadcast.payload, { sessionId });
+      }
     }
   }
 }

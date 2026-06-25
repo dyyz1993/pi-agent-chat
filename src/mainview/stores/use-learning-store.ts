@@ -53,7 +53,7 @@ export const useLearningStore = create<LearningState>()((set, get) => ({
   loadingBySession: {},
   errorBySession: {},
   activeTabBySession: {},
-  collapsedSections: new Set(["diagnostics", "auto-memory-runtime"]),
+  collapsedSections: new Set(["diagnostics", "memory-runtime"]),
 
   loadSnapshot: async (projectPath, sessionId) => {
     set((s) => ({

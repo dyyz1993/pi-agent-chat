@@ -143,12 +143,21 @@ const BREAKDOWN_GROUPS: Array<{
   {
     id: "message_history",
     labelKey: "messageHistory",
-    itemIds: ["conversation", "thinking", "tool_inputs", "tool_outputs", "provider_messages"],
+    itemIds: [
+      "conversation",
+      "thinking",
+      "memory",
+      "rules",
+      "lsp",
+      "tool_inputs",
+      "tool_outputs",
+      "provider_messages",
+    ],
   },
   {
     id: "system_context",
     labelKey: "systemContext",
-    itemIds: ["system_base", "rules", "context_files", "skills", "agents", "provider_system"],
+    itemIds: ["system_base", "context_files", "skills", "agents", "provider_system"],
   },
   {
     id: "tool_definitions",

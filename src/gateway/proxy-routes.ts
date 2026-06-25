@@ -8,6 +8,7 @@
 
 import type { IncomingMessage, ServerResponse } from "http";
 import { createLogger } from "../shared/lib/logger";
+import { getLocalProxyPreference, setLocalProxyPreference } from "../shared/lib/project-config";
 import type { ProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway:proxy");
@@ -27,8 +28,30 @@ export async function handleProxyRoute(ctx: ProxyRouteContext): Promise<boolean>
 
   // 代理能力检测：前端设置面板用它区分“用户想开启”和“服务端实际可用”
   if (url.pathname === "/api/proxy-status" && req.method === "GET") {
+    const preferred = await getLocalProxyPreference();
+    const configured = Boolean(proxyRegistrar);
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ configured: Boolean(proxyRegistrar) }));
+    res.end(JSON.stringify({ configured, preferred, active: preferred && configured }));
+    return true;
+  }
+
+  if (url.pathname === "/api/proxy-preference" && req.method === "POST") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req as AsyncIterable<Buffer | string>)
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString()) as { enabled?: boolean };
+    const configured = Boolean(proxyRegistrar);
+    const requested = body.enabled === true;
+    const preferred = await setLocalProxyPreference(requested && configured);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        configured,
+        preferred,
+        active: preferred && configured,
+        error: requested && !configured ? "Proxy not configured" : undefined,
+      }),
+    );
     return true;
   }
 

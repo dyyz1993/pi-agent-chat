@@ -52,6 +52,18 @@ export function getProxyStatus(): ProxyStatus {
   return { preferred, active, configured, error: statusError };
 }
 
+function applyRemoteStatus(
+  data: { preferred?: boolean; configured?: boolean; active?: boolean; error?: string },
+  fallbackPreferred = preferred,
+): ProxyStatus {
+  preferred = typeof data.preferred === "boolean" ? data.preferred : fallbackPreferred;
+  configured = data.configured === true;
+  active = typeof data.active === "boolean" ? data.active : preferred && configured;
+  statusError = data.error;
+  writeProxyPreference(preferred);
+  return getProxyStatus();
+}
+
 // ---- 公开 API ----
 
 /** 判断是否为本地/LAN 地址，只有这类地址需要走代理 */
@@ -70,7 +82,7 @@ export function isProxyEnabled(): boolean {
   return active;
 }
 
-/** 开启代理偏好；真实可用性由 refreshProxyStatus/tryEnable 兜底确认 */
+/** 本地开启代理偏好；设置面板使用 setProxyPreference 走服务端持久化确认。 */
 export function enableProxy(): ProxyStatus {
   writeProxyPreference(true);
   active = true;
@@ -96,11 +108,13 @@ export async function refreshProxyStatus(): Promise<ProxyStatus> {
       return getProxyStatus();
     }
 
-    const data = (await res.json()) as { configured?: boolean };
-    configured = data.configured === true;
-    active = preferred && configured;
-    statusError = undefined;
-    return getProxyStatus();
+    const data = (await res.json()) as {
+      preferred?: boolean;
+      configured?: boolean;
+      active?: boolean;
+      error?: string;
+    };
+    return applyRemoteStatus(data);
   } catch (e) {
     configured = false;
     active = false;
@@ -110,10 +124,38 @@ export async function refreshProxyStatus(): Promise<ProxyStatus> {
   }
 }
 
+export async function setProxyPreference(next: boolean): Promise<ProxyStatus> {
+  const previous = getProxyStatus();
+  try {
+    const res = await fetch("/api/proxy-preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: next }),
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      preferred?: boolean;
+      configured?: boolean;
+      active?: boolean;
+      error?: string;
+    };
+    return applyRemoteStatus(data, next);
+  } catch (e) {
+    preferred = previous.preferred;
+    active = previous.active;
+    configured = previous.configured;
+    statusError = String(e);
+    writeProxyPreference(preferred);
+    logger.warn("Proxy preference update failed", { enabled: next, error: statusError });
+    return getProxyStatus();
+  }
+}
+
 /**
- * 启动时检测：向后端发一个注册请求来验证代理是否可用
- * - 后端配了 PROXY_API_URL → 注册成功 → 开启
- * - 后端没配 → 502 → 自动关闭
+ * 启动时检测：读取持久化偏好，并向后端发一个注册请求来验证代理是否可用。
+ * 只有偏好已开启、服务端已配置且注册成功时才保持 active。
  */
 export async function tryEnable(serverHost: string): Promise<void> {
   await refreshProxyStatus();

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   handleBashChannelDataOperation,
+  handleLearningChannelDataOperation,
   handleLspChannelDataOperation,
   handleMemoryChannelDataOperation,
   handleSubagentChannelDataOperation,
@@ -80,6 +81,23 @@ describe("agent channel handlers", () => {
       { sessionId: "sess-1", action: "set", todos: [{ text: "ship" }], timestamp: 42 },
       { sessionId: "sess-1" },
     );
+    expect(broadcastEvent).toHaveBeenCalledWith(
+      "memory.updated",
+      { sessionId: "sess-1", files: ["memory.md"], timestamp: 100 },
+      { sessionId: "sess-1" },
+    );
+  });
+
+  it("broadcasts memory events carried by the learning channel", async () => {
+    const broadcastEvent = vi.fn().mockResolvedValue(undefined);
+
+    await handleLearningChannelDataOperation({
+      sessionId: "sess-1",
+      channelMsg: channelMsg({ type: "memory_updated", files: ["memory.md"] }),
+      broadcastEvent,
+      now: () => 100,
+    });
+
     expect(broadcastEvent).toHaveBeenCalledWith(
       "memory.updated",
       { sessionId: "sess-1", files: ["memory.md"], timestamp: 100 },

@@ -23,6 +23,7 @@ import {
 } from "./tool-icon-map";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useAgentStore, type AgentAvatar as AgentAvatarValue } from "../../stores/use-agent-store";
+import { dedupeMemoryInjectMessages } from "../../stores/use-chat-store";
 import { createLogger } from "../../../shared/lib/logger";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
@@ -58,8 +59,10 @@ export type SideNavPagination = {
 };
 
 const MAX_SIDE_NAV_CACHE = 10;
+const FLAT_ITEMS_CACHE_VERSION = 2;
 
 interface FlatItemsCacheEntry {
+  version: number;
   ref: ChatMessage[];
   showThinking: boolean;
   showMemoryEntries: boolean;
@@ -203,8 +206,7 @@ function scrollSideNavItemIntoView(
   const containerRect = container.getBoundingClientRect();
   const itemRect = item.getBoundingClientRect();
   const visualHeight = containerRect.height || container.clientHeight;
-  const hasMeasuredItemRect =
-    itemRect.height > 0 || itemRect.top !== 0 || containerRect.top !== 0;
+  const hasMeasuredItemRect = itemRect.height > 0 || itemRect.top !== 0 || containerRect.top !== 0;
   const itemTop = hasMeasuredItemRect
     ? container.scrollTop + itemRect.top - containerRect.top
     : item.offsetTop;
@@ -257,7 +259,7 @@ export function buildFlatItems(
   showToolResults = true,
 ): FlatItem[] {
   const items: FlatItem[] = [];
-  for (const msg of messages) {
+  for (const msg of dedupeMemoryInjectMessages(messages)) {
     const id = msg.id;
 
     if (msg.role === "user") {
@@ -429,28 +431,26 @@ function buildBlockItem(
         icon: Archive,
         color: errorColor ?? "text-semantic-tool",
       };
-    case "imageBlock":
-      {
-        const entry = getPreviewResourceIcon("image");
-        return {
-          key,
-          navId: msgId,
-          blockId,
-          icon: entry.icon,
-          color: errorColor ?? entry.color,
-        };
-      }
-    case "uiInteraction":
-      {
-        const entry = getUIMethodIcon(block.method);
-        return {
-          key,
-          navId: msgId,
-          blockId,
-          icon: entry.icon,
-          color: errorColor ?? entry.color,
-        };
-      }
+    case "imageBlock": {
+      const entry = getPreviewResourceIcon("image");
+      return {
+        key,
+        navId: msgId,
+        blockId,
+        icon: entry.icon,
+        color: errorColor ?? entry.color,
+      };
+    }
+    case "uiInteraction": {
+      const entry = getUIMethodIcon(block.method);
+      return {
+        key,
+        navId: msgId,
+        blockId,
+        icon: entry.icon,
+        color: errorColor ?? entry.color,
+      };
+    }
   }
 }
 
@@ -483,6 +483,7 @@ function NavDot({
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
+  const selectedTone = getSelectedTone(color);
   let bg = "hover:bg-surface-hover ";
   let barBg = "";
   let iconClr = color;
@@ -494,12 +495,12 @@ function NavDot({
     iconClr = "text-status-error";
     iconState = "opacity-100";
   } else if (isSelected) {
-    bg = "bg-semantic-accent/25 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
-    barBg = "bg-semantic-accent opacity-100 ";
-    iconClr = "text-semantic-accent";
+    bg = "bg-surface-hover/70 ring-1 ring-inset ring-border-secondary/45 ";
+    barBg = selectedTone.bar;
+    iconClr = color;
     iconState = "opacity-100";
   } else if (isScrollActive) {
-    barBg = "bg-semantic-accent/60 opacity-100 ";
+    barBg = selectedTone.scrollBar;
     iconState = "opacity-100";
   }
 
@@ -530,6 +531,66 @@ function NavDot({
       />
     </div>
   );
+}
+
+function getSelectedTone(color: string): { bar: string; scrollBar: string } {
+  switch (color) {
+    case "text-status-success":
+      return {
+        bar: "bg-status-success opacity-100 ",
+        scrollBar: "bg-status-success/60 opacity-100 ",
+      };
+    case "text-status-error":
+      return {
+        bar: "bg-status-error opacity-100 ",
+        scrollBar: "bg-status-error/60 opacity-100 ",
+      };
+    case "text-status-warning":
+      return {
+        bar: "bg-status-warning opacity-100 ",
+        scrollBar: "bg-status-warning/60 opacity-100 ",
+      };
+    case "text-status-info":
+      return {
+        bar: "bg-status-info opacity-100 ",
+        scrollBar: "bg-status-info/60 opacity-100 ",
+      };
+    case "text-semantic-agent":
+      return {
+        bar: "bg-semantic-agent opacity-100 ",
+        scrollBar: "bg-semantic-agent/60 opacity-100 ",
+      };
+    case "text-semantic-tool":
+      return {
+        bar: "bg-semantic-tool opacity-100 ",
+        scrollBar: "bg-semantic-tool/60 opacity-100 ",
+      };
+    case "text-semantic-memory":
+      return {
+        bar: "bg-semantic-memory opacity-100 ",
+        scrollBar: "bg-semantic-memory/60 opacity-100 ",
+      };
+    case "text-semantic-notify":
+      return {
+        bar: "bg-semantic-notify opacity-100 ",
+        scrollBar: "bg-semantic-notify/60 opacity-100 ",
+      };
+    case "text-pink-400":
+      return {
+        bar: "bg-pink-400 opacity-100 ",
+        scrollBar: "bg-pink-400/60 opacity-100 ",
+      };
+    case "text-semantic-accent":
+      return {
+        bar: "bg-semantic-accent opacity-100 ",
+        scrollBar: "bg-semantic-accent/60 opacity-100 ",
+      };
+    default:
+      return {
+        bar: "bg-text-tertiary/70 opacity-100 ",
+        scrollBar: "bg-text-tertiary/50 opacity-100 ",
+      };
+  }
 }
 
 export const SideNav = memo(
@@ -603,6 +664,7 @@ export const SideNav = memo(
       const cached = _flatItemsCache.get(sessionId);
       if (
         cached &&
+        cached.version === FLAT_ITEMS_CACHE_VERSION &&
         cached.ref === messages &&
         cached.showThinking === showThinking &&
         cached.showMemoryEntries === showMemoryEntries &&
@@ -627,6 +689,7 @@ export const SideNav = memo(
         computeCount: result.length,
       });
       _flatItemsCache.set(sessionId, {
+        version: FLAT_ITEMS_CACHE_VERSION,
         ref: messages,
         showThinking,
         showMemoryEntries,
@@ -656,9 +719,12 @@ export const SideNav = memo(
       visibleItemCount: 0,
     });
     const [visibleEdgeFallbackKey, setVisibleEdgeFallbackKey] = useState<string | null>(null);
-    const clickSuppressRef = useRef<{ key: string; navId: string; blockId?: string; until: number } | null>(
-      null,
-    );
+    const clickSuppressRef = useRef<{
+      key: string;
+      navId: string;
+      blockId?: string;
+      until: number;
+    } | null>(null);
 
     const refreshVisibleEdgeFallback = useCallback(() => {
       const container = scrollRef.current;
@@ -772,8 +838,8 @@ export const SideNav = memo(
         const next = getSideNavViewportMetrics(visualHeight, items.length);
         setViewportMetrics((current) =>
           current.gap === next.gap &&
-                current.viewportHeight === next.viewportHeight &&
-                current.visibleItemCount === next.visibleItemCount
+          current.viewportHeight === next.viewportHeight &&
+          current.visibleItemCount === next.visibleItemCount
             ? current
             : next,
         );
@@ -816,13 +882,7 @@ export const SideNav = memo(
         const activeEl = findSideNavItemByKey(container, activeId);
         if (!activeEl) return;
         firstNavRef.current = false;
-        scrollSideNavItemIntoView(
-          container,
-          activeEl,
-          "auto",
-          "edge",
-          SIDE_NAV_FOLLOW_MARGIN,
-        );
+        scrollSideNavItemIntoView(container, activeEl, "auto", "edge", SIDE_NAV_FOLLOW_MARGIN);
         requestAnimationFrame(refreshVisibleEdgeFallback);
       };
 
@@ -831,9 +891,7 @@ export const SideNav = memo(
       const settleDelays = isInitialSync
         ? SIDE_NAV_INITIAL_ACTIVE_SETTLE_DELAYS_MS
         : SIDE_NAV_ACTIVE_SETTLE_DELAYS_MS;
-      const timers = settleDelays.map((delay) =>
-        window.setTimeout(syncActiveIntoView, delay),
-      );
+      const timers = settleDelays.map((delay) => window.setTimeout(syncActiveIntoView, delay));
       return () => {
         cancelAnimationFrame(raf);
         timers.forEach((timer) => window.clearTimeout(timer));
@@ -849,10 +907,7 @@ export const SideNav = memo(
 
     return (
       <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30 overflow-hidden">
-        <div
-          ref={viewportShellRef}
-          className="flex-1 min-h-0"
-        >
+        <div ref={viewportShellRef} className="flex-1 min-h-0">
           <div
             ref={scrollRef}
             className="overflow-y-auto overflow-x-hidden"
@@ -871,35 +926,35 @@ export const SideNav = memo(
                 gap: viewportMetrics.gap || undefined,
               }}
             >
-            {items.map((item, i) => {
-              const selected = selectedNavId === item.key;
-              const isFirstForMessage = !items[i - 1] || items[i - 1].navId !== item.navId;
-              const rawScrollActive =
-                activeId === item.key || (activeId === item.navId && isFirstForMessage);
-              const scrollActive = visibleEdgeFallbackKey
-                ? visibleEdgeFallbackKey === item.key
-                : rawScrollActive;
-              const multi = selectedItems.has(item.navId);
-              return (
-                <NavDot
-                  key={item.key}
-                  dataNavKey={item.key}
-                  dataMessageId={item.navId}
-                  dataBlockId={item.blockId}
-                  Icon={item.icon}
-                  color={item.color}
-                  isSelected={selected}
-                  isScrollActive={scrollActive}
-                  isMultiSelected={multi}
-                  avatar={item.useAgentAvatar ? currentAgentAvatar : undefined}
-                  agentFilePath={item.useAgentAvatar ? currentAgentFilePath : undefined}
-                  agentColor={item.useAgentAvatar ? currentAgentColor : undefined}
-                  onClick={() => handleClick(item.key, item.navId, item.blockId)}
-                  onContextMenu={(e) => handleContextMenu(e, item.navId)}
-                />
-              );
-            })}
-          </div>
+              {items.map((item, i) => {
+                const selected = selectedNavId === item.key;
+                const isFirstForMessage = !items[i - 1] || items[i - 1].navId !== item.navId;
+                const rawScrollActive =
+                  activeId === item.key || (activeId === item.navId && isFirstForMessage);
+                const scrollActive = visibleEdgeFallbackKey
+                  ? visibleEdgeFallbackKey === item.key
+                  : rawScrollActive;
+                const multi = selectedItems.has(item.navId);
+                return (
+                  <NavDot
+                    key={item.key}
+                    dataNavKey={item.key}
+                    dataMessageId={item.navId}
+                    dataBlockId={item.blockId}
+                    Icon={item.icon}
+                    color={item.color}
+                    isSelected={selected}
+                    isScrollActive={scrollActive}
+                    isMultiSelected={multi}
+                    avatar={item.useAgentAvatar ? currentAgentAvatar : undefined}
+                    agentFilePath={item.useAgentAvatar ? currentAgentFilePath : undefined}
+                    agentColor={item.useAgentAvatar ? currentAgentColor : undefined}
+                    onClick={() => handleClick(item.key, item.navId, item.blockId)}
+                    onContextMenu={(e) => handleContextMenu(e, item.navId)}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
 

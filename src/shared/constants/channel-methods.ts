@@ -70,14 +70,14 @@ export const LSP_METHODS = {
   GET_STATUS: "getStatus",
 } as const;
 
-// ---- memory channel ----
+// ---- learning channel memory methods ----
 export const MEMORY_METHODS = {
-  LIST: "memory.list",
-  USER_REMEMBER: "memory.userRemember",
-  MARK_IRRELEVANT: "memory.markIrrelevant",
-  GET_STATUS: "memory.getStatus",
-  REMOVE_RULE: "memory.removeRule",
-  ADD_RULE: "memory.addRule",
+  LIST: "learning.memory.list",
+  USER_REMEMBER: "learning.memory.userRemember",
+  MARK_IRRELEVANT: "learning.memory.markIrrelevant",
+  GET_STATUS: "learning.memory.getStatus",
+  REMOVE_RULE: "learning.memory.removeRule",
+  ADD_RULE: "learning.memory.addRule",
 } as const;
 
 // ---- learning channel ----

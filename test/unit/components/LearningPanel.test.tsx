@@ -197,7 +197,7 @@ beforeEach(() => {
     loadingBySession: {},
     errorBySession: {},
     activeTabBySession: {},
-    collapsedSections: new Set(["diagnostics", "auto-memory-runtime"]),
+    collapsedSections: new Set(["diagnostics", "memory-runtime"]),
   });
   useMemoryStore.setState({
     eventsBySession: {},
@@ -344,7 +344,7 @@ describe("LearningPanel", () => {
     expect(screen.getByText("session sess-1")).toBeInTheDocument();
   });
 
-  it("shows AutoMemory runtime status when expanded", async () => {
+  it("shows Memory Runtime status when expanded", async () => {
     setSessionState({
       activeSessionId: "sess-1",
       projectTabs: [{ id: "project-1", name: "Project", path: "/tmp/project" }],
@@ -395,7 +395,7 @@ describe("LearningPanel", () => {
 
     render(<LearningPanel />);
 
-    fireEvent.click(await screen.findByText("AutoMemory"));
+    fireEvent.click(await screen.findByText("Memory Runtime"));
 
     expect(await screen.findByText("最近预取")).toBeInTheDocument();
     expect(screen.getAllByText(/Learning pipeline/).length).toBeGreaterThan(0);

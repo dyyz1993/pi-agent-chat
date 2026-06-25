@@ -10,6 +10,7 @@ import {
   enableProxy,
   disableProxy,
   refreshProxyStatus,
+  setProxyPreference,
   tryEnable,
   proxyUrlSync,
   checkProxyUrl,
@@ -113,6 +114,60 @@ describe("proxy module", () => {
       expect(status.configured).toBe(false);
       expect(status.active).toBe(false);
       expect(localStorage.getItem("pi-local-proxy-enabled")).toBe("true");
+    });
+
+    it("uses persisted server preference as the source of truth", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: true, preferred: true, active: true }),
+      });
+
+      const status = await refreshProxyStatus();
+
+      expect(status.preferred).toBe(true);
+      expect(status.active).toBe(true);
+      expect(localStorage.getItem("pi-local-proxy-enabled")).toBe("true");
+    });
+  });
+
+  describe("setProxyPreference", () => {
+    it("persists and activates proxy when server confirms success", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: true, preferred: true, active: true }),
+      });
+
+      const status = await setProxyPreference(true);
+
+      expect(status.preferred).toBe(true);
+      expect(status.active).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/proxy-preference",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ enabled: true }),
+        }),
+      );
+    });
+
+    it("does not leave proxy enabled when server cannot enable it", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            configured: false,
+            preferred: false,
+            active: false,
+            error: "Proxy not configured",
+          }),
+      });
+
+      const status = await setProxyPreference(true);
+
+      expect(status.preferred).toBe(false);
+      expect(status.active).toBe(false);
+      expect(status.configured).toBe(false);
+      expect(localStorage.getItem("pi-local-proxy-enabled")).toBeNull();
     });
   });
 

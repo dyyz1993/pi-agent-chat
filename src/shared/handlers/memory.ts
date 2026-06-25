@@ -9,6 +9,7 @@ import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
 import { getLegacyMemoryProjectDir, isPathInsideUserMemoryDir } from "../lib/pi-agent-paths";
+import { MEMORY_METHODS } from "../constants/channel-methods";
 
 const log = createLogger("mcp");
 
@@ -117,7 +118,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       if (sessionId && manager.hasSession(sessionId)) {
         try {
           const result = (await withTimeout(
-            manager.callChannel(sessionId, "memory", "memory.list", {
+            manager.callChannel(sessionId, "learning", MEMORY_METHODS.LIST, {
               projectPath: params.projectPath,
             }),
             CHANNEL_TIMEOUT_MS,
@@ -171,7 +172,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (manager && manager.hasSession(params.sessionId)) {
       try {
         await withTimeout(
-          manager.callChannel(params.sessionId, "memory", "memory.userRemember", {
+          manager.callChannel(params.sessionId, "learning", MEMORY_METHODS.USER_REMEMBER, {
             sourceSessionId: params.sessionId,
             sourceMessageIds: params.messageIds,
             content: params.content,
@@ -194,7 +195,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
         const result = (await withTimeout(
-          manager.callChannel(params.sessionId, "memory", "memory.getStatus", {}),
+          manager.callChannel(params.sessionId, "learning", MEMORY_METHODS.GET_STATUS, {}),
           CHANNEL_TIMEOUT_MS,
         )) as MemoryStatusResult | null;
         if (result) return result;
@@ -211,12 +212,33 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     };
   });
 
+  r("memory.markIrrelevant", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      try {
+        await withTimeout(
+          manager.callChannel(params.sessionId, "learning", MEMORY_METHODS.MARK_IRRELEVANT, {
+            query: params.query,
+            selectedFiles: params.selectedFiles,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        );
+      } catch (err) {
+        log.warn("memory.markIrrelevant channel call failed", {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return { ok: true };
+  });
+
   r("memory.removeRule", async (params) => {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
         await withTimeout(
-          manager.callChannel(params.sessionId, "memory", "memory.removeRule", {
+          manager.callChannel(params.sessionId, "learning", MEMORY_METHODS.REMOVE_RULE, {
             rule: params.rule,
             excludeKeyword: params.excludeKeyword,
           }),
@@ -237,7 +259,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
         await withTimeout(
-          manager.callChannel(params.sessionId, "memory", "memory.addRule", {
+          manager.callChannel(params.sessionId, "learning", MEMORY_METHODS.ADD_RULE, {
             pattern: params.pattern,
             mode: params.mode,
             action: params.action,

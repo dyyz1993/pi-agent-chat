@@ -299,9 +299,11 @@ export async function handleLearningChannelDataOperation(options: {
   const eventType = data.type as string;
   log.info("Learning channel data", { sessionId: options.sessionId, type: eventType });
 
-  const broadcast = createLearningBroadcast(options.sessionId, data, (options.now ?? Date.now)());
-  if (broadcast) {
-    await options.broadcastEvent(broadcast.name, broadcast.payload, {
+  const timestamp = (options.now ?? Date.now)();
+  const broadcast = createLearningBroadcast(options.sessionId, data, timestamp);
+  const memoryBroadcast = broadcast ?? createMemoryBroadcast(options.sessionId, data, timestamp);
+  if (memoryBroadcast) {
+    await options.broadcastEvent(memoryBroadcast.name, memoryBroadcast.payload, {
       sessionId: options.sessionId,
     });
   }
