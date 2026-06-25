@@ -92,17 +92,17 @@ export function getSideNavViewportMetrics(
   minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
 ): SideNavViewportMetrics {
   if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
-    return { padding: minPadding, viewportHeight: 0, visibleItemCount: 0 };
+    return { padding: 0, viewportHeight: 0, visibleItemCount: 0 };
   }
   if (containerHeight <= itemHeight) {
     return { padding: 0, viewportHeight: containerHeight, visibleItemCount: 1 };
   }
 
-  const usableHeight = Math.max(itemHeight, containerHeight - minPadding * 2);
+  const usableHeight = Math.max(itemHeight, containerHeight - minPadding);
   const visibleItemCount = Math.max(1, Math.floor(usableHeight / itemHeight));
   const viewportHeight = visibleItemCount * itemHeight;
   return {
-    padding: Math.max(0, (containerHeight - viewportHeight) / 2),
+    padding: Math.max(0, containerHeight - viewportHeight),
     viewportHeight,
     visibleItemCount,
   };
@@ -830,18 +830,17 @@ export const SideNav = memo(
     ]);
 
     return (
-      <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
+      <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30 overflow-hidden">
         <div
           ref={viewportShellRef}
-          className="flex-1 min-h-0 overflow-hidden"
+          className="flex-1 min-h-0"
           style={{
-            paddingTop: viewportMetrics.padding,
             paddingBottom: viewportMetrics.padding,
           }}
         >
           <div
             ref={scrollRef}
-            className="overflow-y-auto"
+            className="overflow-y-auto overflow-x-hidden"
             style={{
               height: viewportMetrics.viewportHeight || "100%",
               scrollbarWidth: "none",
