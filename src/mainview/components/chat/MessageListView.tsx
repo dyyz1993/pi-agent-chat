@@ -5,11 +5,7 @@ import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
-import {
-  MEMORY_HIDDEN_IN_CHAT,
-  isLspCustomType,
-  isLspVisibleInChat,
-} from "./lsp-constants";
+import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./lsp-constants";
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
 import { CHAT_LIST_ITEM_CLASS } from "./chat-layout-classes";
@@ -134,9 +130,12 @@ interface ProcessedMessage {
 
 function isMemoryOnlyCustomMessage(msg: ChatMessage): boolean {
   if (msg.role !== "custom") return false;
-  return msg.content.length > 0 && msg.content.every((block) => {
-    return block.type === "custom" && ALL_MEMORY_TYPE_KEYS.has(block.customType);
-  });
+  return (
+    msg.content.length > 0 &&
+    msg.content.every((block) => {
+      return block.type === "custom" && ALL_MEMORY_TYPE_KEYS.has(block.customType);
+    })
+  );
 }
 
 export function buildProcessedMessages(
@@ -252,6 +251,7 @@ interface MessageListViewProps {
   isLoadingMore?: boolean;
   hasMoreMessages?: boolean;
   activeSessionId?: string;
+  bufferSize?: number;
 }
 
 export const MessageListView = memo(function MessageListView({
@@ -263,6 +263,7 @@ export const MessageListView = memo(function MessageListView({
   isLoadingMore,
   hasMoreMessages,
   activeSessionId,
+  bufferSize = 800,
 }: MessageListViewProps) {
   const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
@@ -311,9 +312,14 @@ export const MessageListView = memo(function MessageListView({
     return () => cancelAnimationFrame(frame);
   }, [compactionActivity?.startedAt, compactionActivity?.status, scrollRef, source]);
 
+  const messagesRevision = useMemo(
+    () => computeMessagesRevision(visibleMessages),
+    [visibleMessages],
+  );
+
   const cardMeta = useMemo(() => {
     if (!activeSessionId) return buildCardMeta(visibleMessages, t);
-    const revision = `${computeMessagesRevision(visibleMessages)}:v:${MESSAGE_LIST_PROCESSING_VERSION}:status:${sessionStatus ?? ""}`;
+    const revision = `${messagesRevision}:v:${MESSAGE_LIST_PROCESSING_VERSION}:status:${sessionStatus ?? ""}`;
     const cached = _cardMetaCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
@@ -322,7 +328,7 @@ export const MessageListView = memo(function MessageListView({
     _cardMetaCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_cardMetaCache);
     return result;
-  }, [visibleMessages, t, activeSessionId, sessionStatus]);
+  }, [visibleMessages, t, activeSessionId, sessionStatus, messagesRevision]);
   const processedMessages = useMemo(() => {
     const hideLeadingOrphanMemoryEntries =
       source === "main" && [isLoadingMore, hasMoreMessages].some((value) => value === true);
@@ -331,7 +337,7 @@ export const MessageListView = memo(function MessageListView({
         hideLeadingOrphanMemoryEntries,
       });
     }
-    const revision = `${computeMessagesRevision(visibleMessages)}:v:${MESSAGE_LIST_PROCESSING_VERSION}:memory:${showMemoryEntries ? "1" : "0"}:hide-orphan-memory:${hideLeadingOrphanMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
+    const revision = `${messagesRevision}:v:${MESSAGE_LIST_PROCESSING_VERSION}:memory:${showMemoryEntries ? "1" : "0"}:hide-orphan-memory:${hideLeadingOrphanMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
     const cached = _processedMessagesCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
@@ -346,6 +352,7 @@ export const MessageListView = memo(function MessageListView({
     activeSessionId,
     hasMoreMessages,
     isLoadingMore,
+    messagesRevision,
     sessionStatus,
     showMemoryEntries,
     source,
@@ -396,7 +403,7 @@ export const MessageListView = memo(function MessageListView({
       <Virtualizer
         ref={vlistRef}
         scrollRef={scrollRef as React.RefObject<HTMLDivElement | null>}
-        bufferSize={800}
+        bufferSize={bufferSize}
         onScroll={() => onScroll?.()}
         onScrollEnd={() => onScrollEnd?.()}
       >

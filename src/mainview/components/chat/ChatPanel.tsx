@@ -107,12 +107,13 @@ function RefineGoalOverlay({ step }: { step: number }) {
           return (
             <div
               key={i}
-              className={`flex items-center gap-1 text-[11px] whitespace-nowrap transition-colors ${isDone
-                ? "text-status-success"
-                : isActive
-                  ? "text-semantic-accent font-medium"
-                  : "text-text-tertiary/50"
-                }`}
+              className={`flex items-center gap-1 text-[11px] whitespace-nowrap transition-colors ${
+                isDone
+                  ? "text-status-success"
+                  : isActive
+                    ? "text-semantic-accent font-medium"
+                    : "text-text-tertiary/50"
+              }`}
             >
               {i > 0 && <span className="text-text-tertiary/30 mx-0.5">›</span>}
               {isDone ? (
@@ -208,6 +209,9 @@ export function ChatPanel() {
   const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
   const showToolCalls = useSettingsStore((s) => s.showToolCalls);
   const showToolResults = useSettingsStore((s) => s.showToolResults);
+  const breakpoint = useLayoutStore((s) => s.breakpoint);
+  const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
+  const shouldRenderSideNav = !isMobileOrTablet && messages.length > 0;
   const renderedMessages = useMemo(
     () =>
       buildProcessedMessages(messages, showMemoryEntries)
@@ -227,35 +231,37 @@ export function ChatPanel() {
   const collapsedMessageIdsForNav = useTurnStore(
     useCallback(
       (s) =>
-        activeSessionId ? (s.collapsedMessageIdsBySession[activeSessionId] ?? EMPTY_SET) : EMPTY_SET,
-      [activeSessionId],
+        shouldRenderSideNav && activeSessionId
+          ? (s.collapsedMessageIdsBySession[activeSessionId] ?? EMPTY_SET)
+          : EMPTY_SET,
+      [activeSessionId, shouldRenderSideNav],
     ),
   );
-  const sideNavTargets = useMemo(
-    () =>
-      buildFlatItems(
-        renderedMessages,
-        showThinking,
-        showMemoryEntries,
-        collapsedMessageIdsForNav,
-        showToolCalls,
-        showToolResults,
-      ).map((item) => ({
-        key: item.key,
-        messageId: item.navId,
-        blockId: item.blockId,
-      })),
-    [
+  const sideNavTargets = useMemo(() => {
+    if (!shouldRenderSideNav) return undefined;
+    return buildFlatItems(
       renderedMessages,
       showThinking,
       showMemoryEntries,
       collapsedMessageIdsForNav,
       showToolCalls,
       showToolResults,
-    ],
-  );
+    ).map((item) => ({
+      key: item.key,
+      messageId: item.navId,
+      blockId: item.blockId,
+    }));
+  }, [
+    renderedMessages,
+    shouldRenderSideNav,
+    showThinking,
+    showMemoryEntries,
+    collapsedMessageIdsForNav,
+    showToolCalls,
+    showToolResults,
+  ]);
   const sideNavPagination = useMemo<SideNavPagination | undefined>(() => {
-    if (!activeSessionId || isViewingSubagent) return undefined;
+    if (!shouldRenderSideNav || !activeSessionId || isViewingSubagent) return undefined;
     return {
       hasMore: hasMoreMessages,
       isLoading: isLoadingMore,
@@ -271,15 +277,20 @@ export function ChatPanel() {
         void loadMoreMessages(activeSessionId);
       },
     };
-  }, [activeSessionId, hasMoreMessages, isLoadingMore, isViewingSubagent, loadMoreMessages]);
+  }, [
+    activeSessionId,
+    hasMoreMessages,
+    isLoadingMore,
+    isViewingSubagent,
+    loadMoreMessages,
+    shouldRenderSideNav,
+  ]);
   const isStreaming =
     effectiveStatus === "streaming" ||
     effectiveStatus === "compacting" ||
     effectiveStatus === "retrying";
   const isPermissionPending = effectiveStatus === "permission";
   const hasNoModel = effectiveStatus === "idle" && !currentModel;
-  const breakpoint = useLayoutStore((s) => s.breakpoint);
-  const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
   const commandPopup = useCommandPopup();
   const setGoal = useSupervisorStore((s) => s.setGoal);
   const refineGoal = useSupervisorStore((s) => s.refineGoal);
@@ -824,6 +835,7 @@ export function ChatPanel() {
                   isLoadingMore={!isViewingSubagent ? isLoadingMore : undefined}
                   hasMoreMessages={!isViewingSubagent ? hasMoreMessages : undefined}
                   activeSessionId={(isViewingSubagent ? activeSubId : activeSessionId) ?? undefined}
+                  bufferSize={isMobileOrTablet ? 360 : 800}
                 />
               </div>
             )}
@@ -845,15 +857,17 @@ export function ChatPanel() {
             </>
           )}
         </div>
-        <div className="w-10 shrink-0 overflow-hidden">
-          <SideNav
-            ref={sideNavRef}
-            messages={renderedMessages}
-            onNavDotClick={handleNavDotClick}
-            pagination={sideNavPagination}
-            isScrollLocked={isSideNavScrollLocked}
-          />
-        </div>
+        {shouldRenderSideNav && (
+          <div className="w-10 shrink-0 overflow-hidden">
+            <SideNav
+              ref={sideNavRef}
+              messages={renderedMessages}
+              onNavDotClick={handleNavDotClick}
+              pagination={sideNavPagination}
+              isScrollLocked={isSideNavScrollLocked}
+            />
+          </div>
+        )}
       </div>
 
       <MessageSelectionBar
@@ -897,9 +911,7 @@ export function ChatPanel() {
                 {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
 
                 <div className="relative flex-1">
-                  {isRefiningGoal && (
-                    <RefineGoalOverlay step={refineStep} />
-                  )}
+                  {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
                   <InputBar
                     ref={inputBarRef}
                     onSend={goalMode ? handleCreateGoal : handleSend}
@@ -978,7 +990,7 @@ export function ChatPanel() {
                       (goalMode
                         ? !inputText.trim()
                         : !inputText.trim() &&
-                        useAttachmentStore.getState().attachments.length === 0) ||
+                          useAttachmentStore.getState().attachments.length === 0) ||
                       !activeSessionId ||
                       hasNoModel
                     }
