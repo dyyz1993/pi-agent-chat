@@ -144,7 +144,7 @@ All design tokens are defined as CSS custom properties in `src/mainview/index.cs
 ### Settings Surface
 
 - `SettingsPanel` is a full-window overlay surface, not a centered desktop modal.
-- Desktop/tablet settings should use the whole app window with a persistent left navigation, full-height content area, and bottom action bar.
+- Desktop/tablet settings should use the whole app window with a persistent two-level left navigation, full-height content area, and bottom action bar.
 - Mobile may keep the compact full-screen overlay pattern with horizontal tab navigation, but it must still respect safe-area and 44px touch targets.
 
 ### Safe-Area Rules for Fullscreen Overlays

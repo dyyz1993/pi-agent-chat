@@ -93,6 +93,7 @@ const MAX_DELAY_OPTIONS = [
 ];
 
 type SettingsTabId = "display" | "retry" | "models" | "network" | "usage";
+type SettingsGroupId = "conversation" | "agent" | "connection";
 
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
@@ -105,6 +106,21 @@ const SETTINGS_TABS: Array<{
   { id: "network", icon: Network, label: "网络" },
   { id: "usage", icon: Trophy, label: "战绩" },
 ];
+
+const SETTINGS_GROUPS: Array<{
+  id: SettingsGroupId;
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  items: SettingsTabId[];
+}> = [
+  { id: "conversation", icon: SlidersHorizontal, label: "对话", items: ["display", "retry"] },
+  { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage"] },
+  { id: "connection", icon: Network, label: "连接", items: ["network"] },
+];
+
+function getSettingsTab(tabId: SettingsTabId) {
+  return SETTINGS_TABS.find((tab) => tab.id === tabId) ?? SETTINGS_TABS[0];
+}
 
 type TierSaveMessage = {
   type: "success" | "error";
@@ -490,6 +506,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     network: networkContent,
     usage: usageContent,
   };
+  const activeGroup =
+    SETTINGS_GROUPS.find((group) => group.items.includes(activeTab)) ?? SETTINGS_GROUPS[0];
 
   useFocusTrap(panelRef, { onEscape: onClose });
 
@@ -516,8 +534,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       </div>
 
       <div className="min-h-0 flex-1 bg-bg-primary md:flex">
-        <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 md:w-56 md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-3 lg:w-64">
-          <div className="flex gap-1 overflow-x-auto scrollbar-none md:flex-col md:overflow-visible">
+        <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 md:flex md:w-[288px] md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-0">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none md:hidden">
             {SETTINGS_TABS.map((tab) => {
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
@@ -526,7 +544,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors md:min-w-0 ${
+                  className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
                     selected
                       ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
                       : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
@@ -539,6 +557,63 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 </button>
               );
             })}
+          </div>
+
+          <div className="hidden w-20 shrink-0 flex-col gap-1 border-r border-border-secondary p-2 md:flex">
+            {SETTINGS_GROUPS.map((group) => {
+              const Icon = group.icon;
+              const selected = activeGroup.id === group.id;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  aria-current={selected ? "page" : undefined}
+                  onClick={() => setActiveTab(group.items[0])}
+                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center transition-colors ${
+                    selected
+                      ? "bg-semantic-accent/10 text-semantic-accent"
+                      : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="max-w-full truncate text-[11px] font-medium">
+                    {group.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden min-w-0 flex-1 flex-col md:flex">
+            <div className="border-b border-border-secondary px-3 py-3">
+              <div className="text-[11px] font-medium uppercase text-text-tertiary">设置分组</div>
+              <div className="mt-1 truncate text-sm font-semibold text-text-primary">
+                {activeGroup.label}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 p-2">
+              {activeGroup.items.map((tabId) => {
+                const tab = getSettingsTab(tabId);
+                const Icon = tab.icon;
+                const selected = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    aria-current={selected ? "page" : undefined}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex min-h-[40px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
+                      selected
+                        ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
+                        : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 truncate text-[12px] font-medium">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </aside>
 
