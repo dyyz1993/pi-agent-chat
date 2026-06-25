@@ -48,6 +48,7 @@ pi-momo-fork/packages/coding-agent/
 - 修改 extensions 后必须重新 build + yalc push，否则 dist 里是旧版本
 - `yalc push` 后如果 `bun run dev:web` 已经在跑，新创建的 Agent 进程会读取更新后的 `dist/`；已经运行中的 Agent/CLI 进程需要 `agent.reload`、停止后重启 session，或重启 dev server 才会加载新的 extension 代码。
 - 修改底层包后至少验证三层：底层相关单测（例如 `npm test -- extensions/coordinator/handler.test.ts`）、`npm run build && yalc push`、消费项目端口健康检查（默认 `http://localhost:3100/` 和 `http://localhost:5173/`）。
+- CI 依赖策略先读 `docs/workflows/ci-yalc-dependency-policy.md`。GitHub runner 没有本地 `.yalc/`，所以 workflow 通过 `bun run ci:prepare-deps` 做显式 fallback/override；这只能证明 registry fallback 是否可安装，不等价于使用本地 fork 的完整验证。若 app 依赖未发布的 fork API，必须走“构建对应 pi-mono fork”或“发布匹配包版本”的 CI 路径。
 
 ### Remote runtime 架构参考
 

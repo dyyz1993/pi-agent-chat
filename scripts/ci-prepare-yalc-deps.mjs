@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+const POLICY_DOC = "docs/workflows/ci-yalc-dependency-policy.md";
 const packageJsonPath = path.resolve(process.cwd(), "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 const fallbacks = packageJson.piAgentChat?.ciYalcFallbacks ?? {};
@@ -49,7 +50,7 @@ for (const section of dependencySections) {
     const fallback = fallbacks[name];
     if (!fallback) {
       throw new Error(
-        `Missing CI fallback for ${name}. Add it to package.json piAgentChat.ciYalcFallbacks.`,
+        `Missing CI fallback for ${name}. Add it to package.json piAgentChat.ciYalcFallbacks. See ${POLICY_DOC}.`,
       );
     }
 
@@ -60,6 +61,7 @@ for (const section of dependencySections) {
 
 if (changed.length === 0) {
   console.log("CI dependency preparation: local yalc packages are present; no changes needed.");
+  console.log(`CI dependency policy: ${POLICY_DOC}`);
   process.exit(0);
 }
 
@@ -68,3 +70,7 @@ console.log("CI dependency preparation: updated package metadata:");
 for (const entry of changed) {
   console.log(`- ${entry}`);
 }
+console.log(`CI dependency policy: ${POLICY_DOC}`);
+console.log(
+  "Note: registry fallbacks are install fallbacks only; full validation requires matching published packages or a built pi-mono fork.",
+);
