@@ -74,6 +74,7 @@ const _flatItemsCache = new Map<string, FlatItemsCacheEntry>();
 const SIDE_NAV_ITEM_HEIGHT = 32;
 const SIDE_NAV_SCROLL_MARGIN = 48;
 const SIDE_NAV_FOLLOW_MARGIN = 0;
+const SIDE_NAV_COMPACT_GAP = 8;
 const SIDE_NAV_MIN_VIEWPORT_PADDING = 12;
 const SIDE_NAV_CLICK_SCROLL_SUPPRESS_MS = 1000;
 const SIDE_NAV_ACTIVE_SETTLE_DELAYS_MS = [80, 240] as const;
@@ -88,6 +89,7 @@ export type SideNavViewportMetrics = {
 
 export function getSideNavViewportMetrics(
   containerHeight: number,
+  itemCount = Number.POSITIVE_INFINITY,
   itemHeight = SIDE_NAV_ITEM_HEIGHT,
   _minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
 ): SideNavViewportMetrics {
@@ -99,6 +101,14 @@ export function getSideNavViewportMetrics(
   }
 
   const visibleItemCount = Math.max(1, Math.floor(containerHeight / itemHeight));
+  if (Number.isFinite(itemCount) && itemCount <= visibleItemCount) {
+    return {
+      gap: SIDE_NAV_COMPACT_GAP,
+      viewportHeight: containerHeight,
+      visibleItemCount,
+    };
+  }
+
   const totalItemHeight = visibleItemCount * itemHeight;
   const leftover = Math.max(0, containerHeight - totalItemHeight);
   const gap = visibleItemCount > 1 ? Math.floor(leftover / (visibleItemCount - 1)) : 0;
@@ -111,10 +121,11 @@ export function getSideNavViewportMetrics(
 
 export function getSideNavViewportPadding(
   containerHeight: number,
+  itemCount = Number.POSITIVE_INFINITY,
   itemHeight = SIDE_NAV_ITEM_HEIGHT,
   minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
 ): number {
-  return getSideNavViewportMetrics(containerHeight, itemHeight, minPadding).gap;
+  return getSideNavViewportMetrics(containerHeight, itemCount, itemHeight, minPadding).gap;
 }
 
 export function getSideNavScrollTarget(
@@ -752,7 +763,7 @@ export const SideNav = memo(
 
       const updateMetrics = () => {
         const visualHeight = shell.getBoundingClientRect().height || shell.clientHeight;
-        const next = getSideNavViewportMetrics(visualHeight);
+        const next = getSideNavViewportMetrics(visualHeight, items.length);
         setViewportMetrics((current) =>
           current.gap === next.gap &&
                 current.viewportHeight === next.viewportHeight &&
@@ -768,7 +779,7 @@ export const SideNav = memo(
       const observer = new ResizeObserver(updateMetrics);
       observer.observe(shell);
       return () => observer.disconnect();
-    }, []);
+    }, [items.length]);
 
     useEffect(() => {
       if (!selectedNavId) return;
@@ -851,7 +862,6 @@ export const SideNav = memo(
                 minHeight: "100%",
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: "space-between",
                 gap: viewportMetrics.gap || undefined,
               }}
             >
