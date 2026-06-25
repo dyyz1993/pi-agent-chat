@@ -154,8 +154,8 @@ async function main() {
   const filesBefore = (listBefore.result as { files: unknown[] })?.files || [];
   console.log(`  Files before: ${filesBefore.length}`);
 
-  // Step 4: Start agent (loads auto-memory extension)
-  console.log("\n🚀 Starting agent with auto-memory extension...");
+  // Step 4: Start agent (loads Learning memory extension)
+  console.log("\n🚀 Starting agent with Learning memory extension...");
   await captureCall(ws, "Start agent", "agent.start", {
     sessionId,
     projectPath: PROJECT_PATH,
@@ -182,7 +182,7 @@ async function main() {
 
   // Step 5: memory.remember (bookmark trigger)
   const testContent =
-    "这是一条测试消息，用于验证收藏/记忆功能。项目使用了 React + TypeScript + Zustand 技术栈。包含 WebSocket RPC 通信和 auto-memory 插件集成。";
+    "这是一条测试消息，用于验证收藏/记忆功能。项目使用了 React + TypeScript + Zustand 技术栈。包含 WebSocket RPC 通信和 Learning memory 插件集成。";
   const testMessageIds = ["test-msg-001", "test-msg-002"];
 
   const rememberRes = await captureCall(ws, "memory.remember (存为记忆)", "memory.remember", {
@@ -202,7 +202,7 @@ async function main() {
   }
 
   // Step 6: Wait for plugin to process (LLM summary)
-  console.log("\n⏳ Waiting 15s for auto-memory plugin to process (LLM summary)...");
+  console.log("\n⏳ Waiting 15s for Learning memory plugin to process (LLM summary)...");
   await new Promise((r) => setTimeout(r, 15000));
 
   // Step 7: List memory files AFTER

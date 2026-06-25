@@ -15,6 +15,7 @@ vi.mock("../../../src/shared/handlers/agent", () => ({
 }));
 
 import { register as registerMemory } from "../../../src/shared/handlers/memory";
+import { getProcessManager } from "../../../src/shared/handlers/agent";
 import { createMockServer, type MockServer } from "../../helpers/mock-server";
 import { getProjectUserStateDir } from "../../../src/shared/lib/pi-agent-paths";
 
@@ -354,6 +355,7 @@ describe("memory RPC handler", () => {
   let originalAgentDir: string | undefined;
 
   beforeEach(async () => {
+    vi.mocked(getProcessManager).mockReturnValue(null);
     originalAgentDir = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = join(tempDir, "agent");
     await mkdir(process.env.PI_CODING_AGENT_DIR, { recursive: true });
@@ -392,6 +394,75 @@ describe("memory RPC handler", () => {
       filename: "preference.md",
       description: "prefers concise replies",
       type: "user",
+    });
+  });
+
+  it("routes live memory calls through the learning channel", async () => {
+    const callChannel = vi.fn().mockImplementation(async (_sessionId, _channelName, method) => {
+      if (method === "learning.memory.list") {
+        return { files: [], entrypointContent: null, memoryDir: "/runtime/memory" };
+      }
+      if (method === "learning.memory.getStatus") {
+        return {
+          skipRules: { builtin: [], custom: [] },
+          guardRules: { builtin: [], custom: [] },
+          excludeKeywords: [],
+          recentQueries: [],
+          dream: { lastRunAt: null },
+        };
+      }
+      return { ok: true };
+    });
+    vi.mocked(getProcessManager).mockReturnValue({
+      hasSession: (sessionId: string) => sessionId === "sess-1",
+      callChannel,
+    } as never);
+
+    await server.handlers.get("memory.listFiles")!({ projectPath: "/project", sessionId: "sess-1" });
+    await server.handlers.get("memory.remember")!({
+      projectPath: "/project",
+      sessionId: "sess-1",
+      messageIds: ["m1"],
+      content: "remember this",
+    });
+    await server.handlers.get("memory.markIrrelevant")!({
+      sessionId: "sess-1",
+      query: "query",
+      selectedFiles: ["memory.md"],
+    });
+    await server.handlers.get("memory.getStatus")!({ sessionId: "sess-1" });
+    await server.handlers.get("memory.removeRule")!({
+      sessionId: "sess-1",
+      rule: { pattern: "tmp", mode: "contains" },
+    });
+    await server.handlers.get("memory.addRule")!({
+      sessionId: "sess-1",
+      pattern: "tmp",
+      mode: "contains",
+      action: "skip",
+    });
+
+    expect(callChannel).toHaveBeenCalledWith("sess-1", "learning", "learning.memory.list", {
+      projectPath: "/project",
+    });
+    expect(callChannel).toHaveBeenCalledWith("sess-1", "learning", "learning.memory.userRemember", {
+      sourceSessionId: "sess-1",
+      sourceMessageIds: ["m1"],
+      content: "remember this",
+    });
+    expect(callChannel).toHaveBeenCalledWith("sess-1", "learning", "learning.memory.markIrrelevant", {
+      query: "query",
+      selectedFiles: ["memory.md"],
+    });
+    expect(callChannel).toHaveBeenCalledWith("sess-1", "learning", "learning.memory.getStatus", {});
+    expect(callChannel).toHaveBeenCalledWith("sess-1", "learning", "learning.memory.removeRule", {
+      rule: { pattern: "tmp", mode: "contains" },
+      excludeKeyword: undefined,
+    });
+    expect(callChannel).toHaveBeenCalledWith("sess-1", "learning", "learning.memory.addRule", {
+      pattern: "tmp",
+      mode: "contains",
+      action: "skip",
     });
   });
 

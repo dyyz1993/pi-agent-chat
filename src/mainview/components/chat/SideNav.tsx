@@ -23,6 +23,7 @@ import {
 } from "./tool-icon-map";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useAgentStore, type AgentAvatar as AgentAvatarValue } from "../../stores/use-agent-store";
+import { dedupeMemoryInjectMessages } from "../../stores/use-chat-store";
 import { createLogger } from "../../../shared/lib/logger";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
@@ -58,8 +59,10 @@ export type SideNavPagination = {
 };
 
 const MAX_SIDE_NAV_CACHE = 10;
+const FLAT_ITEMS_CACHE_VERSION = 2;
 
 interface FlatItemsCacheEntry {
+  version: number;
   ref: ChatMessage[];
   showThinking: boolean;
   showMemoryEntries: boolean;
@@ -245,7 +248,7 @@ export function buildFlatItems(
   showToolResults = true,
 ): FlatItem[] {
   const items: FlatItem[] = [];
-  for (const msg of messages) {
+  for (const msg of dedupeMemoryInjectMessages(messages)) {
     const id = msg.id;
 
     if (msg.role === "user") {
@@ -471,6 +474,7 @@ function NavDot({
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
+  const selectedTone = getSelectedTone(color);
   let bg = "hover:bg-surface-hover ";
   let barBg = "";
   let iconClr = color;
@@ -480,11 +484,11 @@ function NavDot({
     barBg = "bg-status-error opacity-100 ";
     iconClr = "text-status-error";
   } else if (isSelected) {
-    bg = "bg-semantic-accent/25 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
-    barBg = "bg-semantic-accent opacity-100 ";
-    iconClr = "text-semantic-accent";
+    bg = "bg-surface-hover/70 ring-1 ring-inset ring-border-secondary/45 ";
+    barBg = selectedTone.bar;
+    iconClr = color;
   } else if (isScrollActive) {
-    barBg = "bg-semantic-accent/60 opacity-100 ";
+    barBg = selectedTone.scrollBar;
   }
 
   return (
@@ -512,6 +516,66 @@ function NavDot({
       />
     </div>
   );
+}
+
+function getSelectedTone(color: string): { bar: string; scrollBar: string } {
+  switch (color) {
+    case "text-status-success":
+      return {
+        bar: "bg-status-success opacity-100 ",
+        scrollBar: "bg-status-success/60 opacity-100 ",
+      };
+    case "text-status-error":
+      return {
+        bar: "bg-status-error opacity-100 ",
+        scrollBar: "bg-status-error/60 opacity-100 ",
+      };
+    case "text-status-warning":
+      return {
+        bar: "bg-status-warning opacity-100 ",
+        scrollBar: "bg-status-warning/60 opacity-100 ",
+      };
+    case "text-status-info":
+      return {
+        bar: "bg-status-info opacity-100 ",
+        scrollBar: "bg-status-info/60 opacity-100 ",
+      };
+    case "text-semantic-agent":
+      return {
+        bar: "bg-semantic-agent opacity-100 ",
+        scrollBar: "bg-semantic-agent/60 opacity-100 ",
+      };
+    case "text-semantic-tool":
+      return {
+        bar: "bg-semantic-tool opacity-100 ",
+        scrollBar: "bg-semantic-tool/60 opacity-100 ",
+      };
+    case "text-semantic-memory":
+      return {
+        bar: "bg-semantic-memory opacity-100 ",
+        scrollBar: "bg-semantic-memory/60 opacity-100 ",
+      };
+    case "text-semantic-notify":
+      return {
+        bar: "bg-semantic-notify opacity-100 ",
+        scrollBar: "bg-semantic-notify/60 opacity-100 ",
+      };
+    case "text-pink-400":
+      return {
+        bar: "bg-pink-400 opacity-100 ",
+        scrollBar: "bg-pink-400/60 opacity-100 ",
+      };
+    case "text-semantic-accent":
+      return {
+        bar: "bg-semantic-accent opacity-100 ",
+        scrollBar: "bg-semantic-accent/60 opacity-100 ",
+      };
+    default:
+      return {
+        bar: "bg-text-tertiary/70 opacity-100 ",
+        scrollBar: "bg-text-tertiary/50 opacity-100 ",
+      };
+  }
 }
 
 export const SideNav = memo(
@@ -585,6 +649,7 @@ export const SideNav = memo(
       const cached = _flatItemsCache.get(sessionId);
       if (
         cached &&
+        cached.version === FLAT_ITEMS_CACHE_VERSION &&
         cached.ref === messages &&
         cached.showThinking === showThinking &&
         cached.showMemoryEntries === showMemoryEntries &&
@@ -609,6 +674,7 @@ export const SideNav = memo(
         computeCount: result.length,
       });
       _flatItemsCache.set(sessionId, {
+        version: FLAT_ITEMS_CACHE_VERSION,
         ref: messages,
         showThinking,
         showMemoryEntries,

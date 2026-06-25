@@ -170,7 +170,7 @@ function ruleLabel(rule: { pattern: string; mode: string }): string {
   return `${rule.mode}: ${rule.pattern}`;
 }
 
-function autoMemoryEventLabel(customType: string): string {
+function memoryRuntimeEventLabel(customType: string): string {
   const labels: Record<string, string> = {
     memory_prefetch: "预取开始",
     memory_prefetch_result: "预取结果",
@@ -180,12 +180,12 @@ function autoMemoryEventLabel(customType: string): string {
   return labels[customType] ?? customType;
 }
 
-function autoMemorySelectedFiles(data: unknown): string[] {
+function memoryRuntimeSelectedFiles(data: unknown): string[] {
   if (!isRecord(data)) return [];
   return stringArray(data.selectedFiles);
 }
 
-function autoMemoryFileRef(path: string, memoryDir: string): LearningFileRef {
+function memoryRuntimeFileRef(path: string, memoryDir: string): LearningFileRef {
   const resolvedPath = joinMemoryPath(memoryDir, path);
   return {
     path: resolvedPath,
@@ -550,7 +550,7 @@ function RuntimeSubsection({
   );
 }
 
-function AutoMemoryEventRow({
+function MemoryRuntimeEventRow({
   event,
   memoryDir,
 }: {
@@ -558,7 +558,7 @@ function AutoMemoryEventRow({
   memoryDir: string;
 }) {
   const data = isRecord(event.data) ? event.data : {};
-  const selectedFiles = autoMemorySelectedFiles(data);
+  const selectedFiles = memoryRuntimeSelectedFiles(data);
   const summary = getMemorySummary(event.customType, data);
   const layer = typeof data.layer === "string" ? data.layer : null;
   const durationMs = typeof data.durationMs === "number" ? data.durationMs : null;
@@ -580,7 +580,7 @@ function AutoMemoryEventRow({
     <div className="min-w-0 overflow-hidden rounded px-1 py-1 transition-colors hover:bg-surface-hover/40 dark:hover:bg-surface-code/30">
       <div className="flex items-center gap-1.5">
         <ToneBadge tone={event.customType.includes("dream") ? "accent" : "info"}>
-          {autoMemoryEventLabel(event.customType)}
+          {memoryRuntimeEventLabel(event.customType)}
         </ToneBadge>
         <span className="min-w-0 flex-1 truncate text-[10px] text-text-secondary">
           {summary ?? query ?? (meta || "无详情")}
@@ -600,7 +600,7 @@ function AutoMemoryEventRow({
       {selectedFiles.length > 0 && (
         <div className="mt-1 flex min-w-0 flex-wrap gap-1 pl-1">
           {selectedFiles.slice(0, 4).map((file) => (
-            <FileLink key={file} file={autoMemoryFileRef(file, memoryDir)} />
+            <FileLink key={file} file={memoryRuntimeFileRef(file, memoryDir)} />
           ))}
           {selectedFiles.length > 4 && (
             <span className="px-1.5 py-0.5 text-[10px] text-text-tertiary">
@@ -642,7 +642,7 @@ function QueryHistoryRow({ query, memoryDir }: { query: PrefetchHistoryEntry; me
       {query.selected.length > 0 && (
         <div className="mt-1 flex min-w-0 flex-wrap gap-1 pl-1">
           {query.selected.slice(0, 4).map((file) => (
-            <FileLink key={file} file={autoMemoryFileRef(file, memoryDir)} />
+            <FileLink key={file} file={memoryRuntimeFileRef(file, memoryDir)} />
           ))}
         </div>
       )}
@@ -650,7 +650,7 @@ function QueryHistoryRow({ query, memoryDir }: { query: PrefetchHistoryEntry; me
   );
 }
 
-function AutoMemoryRuntime({
+function MemoryRuntime({
   status,
   events,
   memoryDir,
@@ -686,7 +686,7 @@ function AutoMemoryRuntime({
         {autoEvents.length > 0 ? (
           <div className="space-y-0.5">
             {autoEvents.map((event) => (
-              <AutoMemoryEventRow key={event.id} event={event} memoryDir={memoryDir} />
+              <MemoryRuntimeEventRow key={event.id} event={event} memoryDir={memoryDir} />
             ))}
           </div>
         ) : (
@@ -1121,16 +1121,16 @@ export function LearningPanel() {
             </div>
             <div className="min-w-0 overflow-hidden border-b border-border-secondary dark:border-surface-code/50">
               <SectionHeader
-                collapsed={collapsedSections.has("auto-memory-runtime")}
-                onToggle={() => toggleSection("auto-memory-runtime")}
+                collapsed={collapsedSections.has("memory-runtime")}
+                onToggle={() => toggleSection("memory-runtime")}
                 icon={SlidersHorizontal}
                 iconCls="text-status-info"
-                label="AutoMemory"
+                label="Memory Runtime"
                 badge={(memoryStatus?.recentQueries?.length ?? 0) + memoryEvents.length}
               />
-              {!collapsedSections.has("auto-memory-runtime") && (
+              {!collapsedSections.has("memory-runtime") && (
                 <div className="min-w-0 px-2.5 pb-1.5">
-                  <AutoMemoryRuntime
+                  <MemoryRuntime
                     status={memoryStatus}
                     events={memoryEvents}
                     memoryDir={snapshot.dirs.memoryDir}
