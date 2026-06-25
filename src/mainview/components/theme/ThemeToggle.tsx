@@ -1,24 +1,14 @@
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useThemeStore, THEME_META, type Theme } from "../../stores/use-theme-store";
+import { IconButton } from "../primitives";
 
-const THEME_SEQUENCE: Theme[] = [
-  "light",
-  "dark",
-  "nord",
-  "solarized",
-  "warm-dark",
-  "rose",
-  "latte",
-  "sunset",
-  "system",
-];
+const THEME_SEQUENCE: Theme[] = ["light", "dark"];
 
 function getThemeLabel(theme: Theme): string {
-  return theme === "system" ? "system" : THEME_META[theme].label;
+  return THEME_META[theme].label;
 }
 
 function getThemeIcon(theme: Theme) {
-  if (theme === "system") return Monitor;
   return THEME_META[theme].group === "light" ? Sun : Moon;
 }
 
@@ -28,11 +18,9 @@ export function ThemeToggle() {
   const Icon = getThemeIcon(theme);
 
   return (
-    <button
-      type="button"
+    <IconButton
       data-testid="theme-toggle"
-      title={`theme ${getThemeLabel(theme)}`}
-      aria-label={`theme ${getThemeLabel(theme)}`}
+      label={`theme ${getThemeLabel(theme)}`}
       onClick={() => {
         const currentIndex = THEME_SEQUENCE.indexOf(theme);
         const next = THEME_SEQUENCE[(currentIndex + 1) % THEME_SEQUENCE.length];
@@ -40,6 +28,6 @@ export function ThemeToggle() {
       }}
     >
       <Icon aria-hidden="true" />
-    </button>
+    </IconButton>
   );
 }

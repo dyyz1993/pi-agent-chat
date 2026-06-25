@@ -5,38 +5,21 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("settings");
 
-export type Theme =
-  | "light"
-  | "dark"
-  | "nord"
-  | "solarized"
-  | "warm-dark"
-  | "rose"
-  | "latte"
-  | "sunset"
-  | "system";
+export type Theme = "light" | "dark";
+export type ResolvedTheme = Theme;
 
-export const THEME_META: Record<
-  Exclude<Theme, "system">,
-  { label: string; group: "light" | "dark" }
-> = {
+export const THEME_META: Record<Theme, { label: string; group: "light" | "dark" }> = {
   light: { label: "Light", group: "light" },
   dark: { label: "Dark", group: "dark" },
-  nord: { label: "Nord", group: "dark" },
-  solarized: { label: "Solarized", group: "light" },
-  "warm-dark": { label: "Warm Dark", group: "dark" },
-  rose: { label: "Rosé Pine", group: "dark" },
-  latte: { label: "Latte", group: "light" },
-  sunset: { label: "Sunset", group: "dark" },
 };
 
-export function isDarkGroup(resolved: Exclude<Theme, "system">): boolean {
+export function isDarkGroup(resolved: ResolvedTheme): boolean {
   return THEME_META[resolved]?.group === "dark";
 }
 
 interface ThemeState {
   theme: Theme;
-  resolvedTheme: Exclude<Theme, "system">;
+  resolvedTheme: ResolvedTheme;
   language: string;
   setTheme: (theme: Theme) => void;
   setLanguage: (lang: string) => void;
@@ -47,16 +30,25 @@ function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function resolveTheme(theme: Theme): Exclude<Theme, "system"> {
-  if (theme === "system") return getSystemTheme();
-  return theme;
+function normalizeTheme(value: unknown): Theme {
+  if (value === "light" || value === "dark") return value;
+
+  // Migrate removed themes into the two-theme system without leaving stale data-theme values.
+  if (value === "solarized" || value === "latte") return "light";
+  if (value === "system") return getSystemTheme();
+  return "dark";
 }
 
-function applyTheme(resolved: Exclude<Theme, "system">) {
+function resolveTheme(theme: Theme): ResolvedTheme {
+  return normalizeTheme(theme);
+}
+
+function applyTheme(resolved: ResolvedTheme) {
   const html = document.documentElement;
   html.classList.remove("dark", "light");
   html.setAttribute("data-theme", resolved);
   const group = THEME_META[resolved]?.group ?? "dark";
+  html.classList.add(group);
   if (group === "dark") {
     html.classList.add("dark");
   }
@@ -67,7 +59,7 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
       theme: "dark" as Theme,
-      resolvedTheme: "dark" as Exclude<Theme, "system">,
+      resolvedTheme: "dark" as ResolvedTheme,
       language: i18n.language || "zh-CN",
       setTheme: (theme: Theme) => {
         const resolved = resolveTheme(theme);
@@ -87,8 +79,10 @@ export const useThemeStore = create<ThemeState>()(
       name: "pi-theme",
       onRehydrateStorage: () => (state) => {
         if (state) {
-          const resolved = resolveTheme(state.theme);
+          const theme = normalizeTheme(state.theme);
+          const resolved = resolveTheme(theme);
           applyTheme(resolved);
+          state.theme = theme;
           state.resolvedTheme = resolved;
         }
       },
@@ -97,16 +91,8 @@ export const useThemeStore = create<ThemeState>()(
 );
 
 if (typeof window !== "undefined") {
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  mql.addEventListener("change", () => {
-    const state = useThemeStore.getState();
-    if (state.theme === "system") {
-      const resolved = getSystemTheme() as Exclude<Theme, "system">;
-      applyTheme(resolved);
-      useThemeStore.setState({ resolvedTheme: resolved });
-    }
-  });
-
-  const resolved = resolveTheme(useThemeStore.getState().theme);
+  const theme = normalizeTheme(useThemeStore.getState().theme);
+  const resolved = resolveTheme(theme);
+  useThemeStore.setState({ theme, resolvedTheme: resolved });
   applyTheme(resolved);
 }

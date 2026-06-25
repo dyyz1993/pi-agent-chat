@@ -1,4 +1,5 @@
 import { memo, useId, useRef, type CSSProperties, type ReactNode, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { cx } from "../../lib/classes";
@@ -20,6 +21,7 @@ interface ModalDialogProps {
   headerClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  overlayClassName?: string;
   style?: CSSProperties;
   "data-testid"?: string;
 }
@@ -44,6 +46,7 @@ export const ModalDialog = memo(function ModalDialog({
   headerClassName,
   bodyClassName,
   footerClassName,
+  overlayClassName,
   style,
   "data-testid": dataTestId,
 }: ModalDialogProps) {
@@ -58,9 +61,12 @@ export const ModalDialog = memo(function ModalDialog({
     }
   };
 
-  return (
+  const dialog = (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-bg-overlay backdrop-blur-sm px-4 sm:px-6"
+      className={cx(
+        "fixed inset-0 z-modal flex items-center justify-center bg-bg-overlay backdrop-blur-sm px-4 sm:px-6",
+        overlayClassName,
+      )}
       style={{
         paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))",
         paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
@@ -120,4 +126,7 @@ export const ModalDialog = memo(function ModalDialog({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(dialog, document.body);
 });

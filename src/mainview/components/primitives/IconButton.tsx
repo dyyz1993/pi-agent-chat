@@ -13,7 +13,8 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<IconButtonVariant, string> = {
   ghost: "text-text-tertiary hover:bg-surface-hover hover:text-text-primary",
-  primary: "bg-semantic-accent text-white hover:bg-semantic-accent/85",
+  primary:
+    "bg-[var(--color-accent)] text-text-inverse hover:bg-[var(--color-accent-hover)] shadow-sm shadow-black/10",
   danger: "text-status-error hover:bg-status-error/10 hover:text-status-error",
 };
 
@@ -34,6 +35,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={title ?? label}
       className={cx(
         "inline-flex shrink-0 items-center justify-center rounded-lg transition-colors",
+        "active:scale-[0.98]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",
         "disabled:cursor-not-allowed disabled:opacity-50",
         sizeClasses[size],

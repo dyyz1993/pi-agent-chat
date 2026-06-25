@@ -537,14 +537,14 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
         <div className="ml-auto flex items-center gap-0.5">
           <button
             onClick={handleOpenAt}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
               popupMode === "at"
                 ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
                 : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
             }`}
             title={t("quickAction.atMention")}
           >
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 whitespace-nowrap">
               <AtSign className="w-3.5 h-3.5" />
               <span>@</span>
             </div>
@@ -571,13 +571,13 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
               }
               openStatusPanel("supervisor");
             }}
-            className={`px-2 py-1 rounded-md text-xs font-medium hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors ${
+            className={`px-2 py-1 rounded-md text-xs font-medium hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors whitespace-nowrap ${
               goalButtonClass
             }`}
             title={t("goal.entry")}
             aria-label={t("goal.entry")}
           >
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 whitespace-nowrap">
               <Target className="w-3.5 h-3.5" />
               <span>Goal</span>
             </div>

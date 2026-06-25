@@ -7,6 +7,7 @@ import App from "./App";
 import "./lib/channels/in-app-channel";
 import "./lib/channels/pwa-channel";
 import "./stores/use-theme-store";
+import "./stores/use-settings-store";
 
 if (typeof globalThis.crypto !== "undefined" && !globalThis.crypto.randomUUID) {
   Object.defineProperty(globalThis.crypto, "randomUUID", {

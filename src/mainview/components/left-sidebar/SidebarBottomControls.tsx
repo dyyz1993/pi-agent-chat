@@ -399,7 +399,7 @@ export function SidebarBottomControls() {
             setTierConfigOpen(false);
           }}
           disabled={!activeSessionId || !agentReady || agentSwitching}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40 whitespace-nowrap"
           aria-expanded={agentOpen}
           aria-label={t("agentSelect")}
         >
@@ -728,7 +728,7 @@ export function SidebarBottomControls() {
               }}
               disabled={switchingTier || !activeSessionId || !agentReady}
               className={`
-                flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 justify-center
+                flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 min-w-0 justify-center overflow-hidden whitespace-nowrap
                 ${
                   isActive
                     ? "bg-semantic-accent/15 text-semantic-accent font-medium ring-1 ring-semantic-accent/30"
@@ -739,7 +739,7 @@ export function SidebarBottomControls() {
               title={labels[tier]}
             >
               <Icon className="w-2.5 h-2.5 shrink-0" />
-              <span>{labels[tier]}</span>
+              <span className="min-w-0 truncate">{labels[tier]}</span>
             </button>
           );
         })}
@@ -775,9 +775,9 @@ export function SidebarBottomControls() {
               const Icon = icons[tier];
               return (
                 <div key={tier} className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 w-14 shrink-0">
+                  <div className="flex items-center gap-1 w-14 shrink-0 whitespace-nowrap">
                     <Icon className="w-3 h-3 text-text-tertiary" />
-                    <span className="text-[11px] text-text-secondary">{labels[tier]}</span>
+                    <span className="text-[11px] text-text-secondary truncate">{labels[tier]}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <ModelPickerButton
@@ -806,14 +806,14 @@ export function SidebarBottomControls() {
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => setTierConfigOpen(false)}
-                className="px-2 py-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
+                className="px-2 py-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover whitespace-nowrap"
               >
                 {t("cancel", { ns: "common" })}
               </button>
               <button
                 onClick={handleSaveTierConfig}
                 disabled={tierConfigSaving}
-                className="px-2 py-1 rounded text-[11px] bg-semantic-accent text-white hover:bg-semantic-accent disabled:opacity-40"
+                className="px-2 py-1 rounded text-[11px] bg-semantic-accent text-white hover:bg-semantic-accent disabled:opacity-40 whitespace-nowrap"
               >
                 {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
               </button>
@@ -829,7 +829,7 @@ export function SidebarBottomControls() {
             setWorkspaceOpen(false);
           }}
           disabled={!activeSessionId || !agentReady || !currentModel?.reasoning}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40 whitespace-nowrap"
           aria-expanded={thinkingOpen}
           aria-label={t("thinkingSelect")}
           title={
@@ -865,8 +865,10 @@ export function SidebarBottomControls() {
                   ) : (
                     <span className="w-3 shrink-0" />
                   )}
-                  <span>{t(THINKING_LEVEL_KEYS[idx])}</span>
-                  <span className="text-text-tertiary ml-auto text-[10px] font-mono">{value}</span>
+                  <span className="whitespace-nowrap">{t(THINKING_LEVEL_KEYS[idx])}</span>
+                  <span className="text-text-tertiary ml-auto text-[10px] font-mono whitespace-nowrap">
+                    {value}
+                  </span>
                 </button>
               );
             })}

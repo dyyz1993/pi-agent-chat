@@ -2,8 +2,9 @@ import { useEffect, useCallback, useState } from "react";
 import { RotateCcw, Zap, Target, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  FONT_PRESET_OPTIONS,
   useSettingsStore,
-  type DisplaySettings,
+  type ToggleSettingKey,
   useRetryConfigStore,
   RETRY_DEFAULTS,
 } from "../../stores/use-settings-store";
@@ -28,7 +29,7 @@ interface SettingsPanelProps {
 }
 
 const TOGGLE_ITEMS: {
-  key: keyof DisplaySettings;
+  key: ToggleSettingKey;
   labelKey: string;
   descKey: string;
 }[] = [
@@ -76,6 +77,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const reset = useSettingsStore((s) => s.reset);
   const chatViewMode = useSettingsStore((s) => s.chatViewMode);
   const setViewMode = useSettingsStore((s) => s.setViewMode);
+  const fontPreset = useSettingsStore((s) => s.fontPreset);
+  const setFontPreset = useSettingsStore((s) => s.setFontPreset);
 
   const retryConfig = useRetryConfigStore();
   const setRetryConfig = useRetryConfigStore((s) => s.setRetryConfig);
@@ -226,9 +229,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       title={t("title")}
       onClose={onClose}
       closeLabel={t("close")}
-      size="sm"
-      className="w-[380px]"
-      bodyClassName="px-4 py-3 space-y-3 max-h-[60vh]"
+      size="lg"
+      className="w-[min(92vw,380px)] md:w-[720px] lg:w-[820px] xl:w-[980px]"
+      style={{ maxWidth: "min(92vw, 980px)" }}
+      bodyClassName="px-4 py-3 sm:px-5 sm:py-4 max-h-[70vh] lg:max-h-[min(78vh,720px)]"
       footerClassName="justify-between bg-surface-dim/50 dark:bg-surface-dim/30"
       footer={
         <>
@@ -250,163 +254,194 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         </>
       }
     >
-      <SectionHeader>{t("chatDisplay")}</SectionHeader>
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
+        <div className="space-y-3">
+          <SectionHeader>{t("chatDisplay")}</SectionHeader>
 
-      <div className="py-1">
-        <div className="text-[13px] text-text-primary font-medium mb-1.5">{t("chatViewMode")}</div>
-        <div className="flex rounded-lg border border-border-secondary overflow-hidden">
-          {(["developer", "clean"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`flex-1 py-1.5 text-[12px] font-medium transition-colors ${
-                chatViewMode === mode
-                  ? "bg-semantic-accent text-white"
-                  : "bg-bg-elevated dark:bg-surface-dim text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-hover/60"
-              }`}
+          <div className="py-1">
+            <div className="text-[13px] text-text-primary font-medium mb-1.5">
+              {t("chatViewMode")}
+            </div>
+            <div className="flex rounded-lg border border-border-secondary overflow-hidden">
+              {(["developer", "clean"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`flex-1 py-1.5 text-[12px] font-medium transition-colors ${
+                    chatViewMode === mode
+                      ? "bg-[var(--color-accent)] text-text-inverse"
+                      : "bg-bg-elevated dark:bg-surface-dim text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-hover/60"
+                  }`}
+                >
+                  {t(`chatViewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}` as const)}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-text-tertiary mt-1">
+              {chatViewMode === "developer"
+                ? t("chatViewModeDeveloperDesc")
+                : t("chatViewModeCleanDesc")}
+            </div>
+          </div>
+
+          <div className="py-1">
+            <div className="text-[13px] text-text-primary font-medium mb-1.5">
+              {t("fontPreset")}
+            </div>
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-border-secondary bg-bg-elevated/60 dark:bg-surface-dim/60 p-1">
+              {FONT_PRESET_OPTIONS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setFontPreset(option.key)}
+                  className={`min-w-0 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                    fontPreset === option.key
+                      ? "bg-[var(--color-accent)] text-text-inverse"
+                      : "text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-hover/60"
+                  }`}
+                >
+                  {t(option.labelKey)}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-text-tertiary mt-1">
+              {t(FONT_PRESET_OPTIONS.find((option) => option.key === fontPreset)?.descKey ?? "")}
+            </div>
+          </div>
+
+          {TOGGLE_ITEMS.map(({ key, labelKey, descKey }) => (
+            <label
+              key={key}
+              className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors group"
             >
-              {t(`chatViewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}` as const)}
-            </button>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] text-text-primary font-medium">{t(labelKey)}</div>
+                <div className="text-[11px] text-text-tertiary mt-0.5">{t(descKey)}</div>
+              </div>
+              <ToggleSwitch checked={settings[key]} onChange={() => toggle(key)} />
+            </label>
           ))}
         </div>
-        <div className="text-[11px] text-text-tertiary mt-1">
-          {chatViewMode === "developer"
-            ? t("chatViewModeDeveloperDesc")
-            : t("chatViewModeCleanDesc")}
-        </div>
-      </div>
 
-      {TOGGLE_ITEMS.map(({ key, labelKey, descKey }) => (
-        <label
-          key={key}
-          className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors group"
-        >
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] text-text-primary font-medium">{t(labelKey)}</div>
-            <div className="text-[11px] text-text-tertiary mt-0.5">{t(descKey)}</div>
-          </div>
-          <ToggleSwitch checked={settings[key] as boolean} onChange={() => toggle(key)} />
-        </label>
-      ))}
+        <div className="space-y-3 border-t border-border-secondary/60 pt-4 dark:border-surface-dim/60 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+          <SectionHeader>{t("retryTitle")}</SectionHeader>
 
-      <div className="border-t border-border-secondary/60 dark:border-surface-dim/60 my-2" />
-
-      <SectionHeader>{t("retryTitle")}</SectionHeader>
-
-      <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
-        <div className="flex-1 min-w-0">
-          <div className="text-[13px] text-text-primary font-medium">{t("retryEnabled")}</div>
-          <div className="text-[11px] text-text-tertiary mt-0.5">{t("retryEnabledDesc")}</div>
-        </div>
-        <ToggleSwitch
-          checked={retryConfig.enabled}
-          onChange={() => persistRetry({ enabled: !retryConfig.enabled })}
-        />
-      </label>
-
-      <SelectRow
-        label={t("retryMaxRetries")}
-        desc={t("retryMaxRetriesDesc")}
-        value={retryConfig.maxRetries}
-        options={RETRY_OPTIONS}
-        onChange={(v) => persistRetry({ maxRetries: v })}
-      />
-
-      <SelectRow
-        label={t("retryBaseDelay")}
-        desc={t("retryBaseDelayDesc")}
-        value={retryConfig.baseDelayMs}
-        options={BASE_DELAY_OPTIONS}
-        onChange={(v) => persistRetry({ baseDelayMs: v })}
-      />
-
-      <SelectRow
-        label={t("retryMaxDelay")}
-        desc={t("retryMaxDelayDesc")}
-        value={retryConfig.maxDelayMs}
-        options={MAX_DELAY_OPTIONS}
-        onChange={(v) => persistRetry({ maxDelayMs: v })}
-      />
-
-      <BackoffPreview config={retryConfig} />
-
-      <div className="border-t border-border-secondary/60 dark:border-surface-dim/60 my-2" />
-
-      <SectionHeader>{t("tierConfigTitle", "Tier 模型配置")}</SectionHeader>
-
-      {TIER_KEYS.map((tier) => {
-        const Icon = TIER_ICONS[tier];
-        return (
-          <div key={tier} className="flex items-center gap-3 py-2 px-1">
-            <div className="flex items-center gap-1 w-16 shrink-0">
-              <Icon className="w-3 h-3 text-text-tertiary" />
-              <span className="text-[13px] text-text-secondary">{TIER_LABELS[tier]}</span>
-            </div>
+          <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
             <div className="flex-1 min-w-0">
-              <ModelPickerButton
-                models={availableModels}
-                value={localTierModels[tier] ?? ""}
-                onChange={(v) => {
-                  setLocalTierModels((prev) => ({ ...prev, [tier]: v }));
-                }}
-                placeholder={t("tierConfigDefault", "默认")}
-                placement="up"
-              />
+              <div className="text-[13px] text-text-primary font-medium">{t("retryEnabled")}</div>
+              <div className="text-[11px] text-text-tertiary mt-0.5">{t("retryEnabledDesc")}</div>
             </div>
+            <ToggleSwitch
+              checked={retryConfig.enabled}
+              onChange={() => persistRetry({ enabled: !retryConfig.enabled })}
+            />
+          </label>
+
+          <SelectRow
+            label={t("retryMaxRetries")}
+            desc={t("retryMaxRetriesDesc")}
+            value={retryConfig.maxRetries}
+            options={RETRY_OPTIONS}
+            onChange={(v) => persistRetry({ maxRetries: v })}
+          />
+
+          <SelectRow
+            label={t("retryBaseDelay")}
+            desc={t("retryBaseDelayDesc")}
+            value={retryConfig.baseDelayMs}
+            options={BASE_DELAY_OPTIONS}
+            onChange={(v) => persistRetry({ baseDelayMs: v })}
+          />
+
+          <SelectRow
+            label={t("retryMaxDelay")}
+            desc={t("retryMaxDelayDesc")}
+            value={retryConfig.maxDelayMs}
+            options={MAX_DELAY_OPTIONS}
+            onChange={(v) => persistRetry({ maxDelayMs: v })}
+          />
+
+          <BackoffPreview config={retryConfig} />
+        </div>
+
+        <div className="space-y-3 border-t border-border-secondary/60 pt-4 dark:border-surface-dim/60 md:col-span-2 xl:col-span-1 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+          <SectionHeader>{t("tierConfigTitle", "Tier 模型配置")}</SectionHeader>
+
+          {TIER_KEYS.map((tier) => {
+            const Icon = TIER_ICONS[tier];
+            return (
+              <div key={tier} className="flex items-center gap-3 py-2 px-1">
+                <div className="flex items-center gap-1 w-16 shrink-0">
+                  <Icon className="w-3 h-3 text-text-tertiary" />
+                  <span className="text-[13px] text-text-secondary">{TIER_LABELS[tier]}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <ModelPickerButton
+                    models={availableModels}
+                    value={localTierModels[tier] ?? ""}
+                    onChange={(v) => {
+                      setLocalTierModels((prev) => ({ ...prev, [tier]: v }));
+                    }}
+                    placeholder={t("tierConfigDefault", "默认")}
+                    placement="up"
+                  />
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveTierConfig}
+              disabled={tierSaving}
+              className="px-4 py-1.5 rounded-md text-xs bg-[var(--color-accent)] text-text-inverse hover:bg-[var(--color-accent-hover)] disabled:opacity-40 transition-colors"
+            >
+              {tierSaving ? t("saving", "Saving...") : t("saveTier", "保存")}
+            </button>
           </div>
-        );
-      })}
 
-      <div className="flex justify-end">
-        <button
-          onClick={handleSaveTierConfig}
-          disabled={tierSaving}
-          className="px-4 py-1.5 rounded-md text-xs bg-semantic-accent text-white hover:bg-semantic-accent/80 disabled:opacity-40 transition-colors"
-        >
-          {tierSaving ? t("saving", "Saving...") : t("saveTier", "保存")}
-        </button>
-      </div>
+          <div className="border-t border-border-secondary/60 dark:border-surface-dim/60" />
 
-      <div className="border-t border-border-secondary/60 dark:border-surface-dim/60 my-2" />
+          <SectionHeader>{t("proxyTitle")}</SectionHeader>
 
-      <SectionHeader>{t("proxyTitle")}</SectionHeader>
-
-      <label
-        className={`flex items-start gap-3 py-2 px-1 rounded-lg transition-colors ${
-          proxyStatusLoading
-            ? "cursor-wait opacity-80"
-            : "cursor-pointer hover:bg-surface-dim dark:hover:bg-surface-dim/40"
-        }`}
-      >
-        <div className="flex-1 min-w-0">
-          <div className="text-[13px] text-text-primary font-medium">{t("proxyEnabled")}</div>
-          <div className="text-[11px] text-text-tertiary mt-0.5">{t("proxyEnabledDesc")}</div>
-          <div
-            className={`text-[11px] mt-1 ${
-              proxyStatus.active
-                ? "text-status-success"
-                : proxyStatus.configured === false
-                  ? "text-status-warning"
-                  : "text-text-tertiary"
+          <label
+            className={`flex items-start gap-3 py-2 px-1 rounded-lg transition-colors ${
+              proxyStatusLoading
+                ? "cursor-wait opacity-80"
+                : "cursor-pointer hover:bg-surface-dim dark:hover:bg-surface-dim/40"
             }`}
           >
-            {proxyStatusLoading
-              ? t("proxyStatusChecking")
-              : proxyStatus.active
-                ? t("proxyStatusActive")
-                : proxyStatus.configured === false
-                  ? t("proxyStatusNotConfigured")
-                  : proxyStatus.preferred
-                    ? t("proxyStatusPreferred")
-                    : t("proxyStatusDisabled")}
-          </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] text-text-primary font-medium">{t("proxyEnabled")}</div>
+              <div className="text-[11px] text-text-tertiary mt-0.5">{t("proxyEnabledDesc")}</div>
+              <div
+                className={`text-[11px] mt-1 ${
+                  proxyStatus.active
+                    ? "text-status-success"
+                    : proxyStatus.configured === false
+                      ? "text-status-warning"
+                      : "text-text-tertiary"
+                }`}
+              >
+                {proxyStatusLoading
+                  ? t("proxyStatusChecking")
+                  : proxyStatus.active
+                    ? t("proxyStatusActive")
+                    : proxyStatus.configured === false
+                      ? t("proxyStatusNotConfigured")
+                      : proxyStatus.preferred
+                        ? t("proxyStatusPreferred")
+                        : t("proxyStatusDisabled")}
+              </div>
+            </div>
+            <ToggleSwitch
+              checked={proxyStatus.preferred}
+              onChange={toggleProxy}
+              disabled={proxyStatusLoading}
+            />
+          </label>
         </div>
-        <ToggleSwitch
-          checked={proxyStatus.preferred}
-          onChange={toggleProxy}
-          disabled={proxyStatusLoading}
-        />
-      </label>
+      </div>
     </ModalDialog>
   );
 }
@@ -451,7 +486,7 @@ function SelectRow<T extends number>({
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value) as T)}
-        className="h-7 px-2 rounded-md border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-semantic-accent cursor-pointer"
+        className="h-7 px-2 rounded-md border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-border-focus cursor-pointer"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -518,12 +553,14 @@ function ToggleSwitch({
         if (disabled) return;
         onChange();
       }}
-      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
-        checked ? "bg-semantic-accent" : "bg-surface-hover dark:bg-text-secondary"
+      className={`relative inline-flex h-[22px] min-h-[22px] w-[38px] shrink-0 cursor-pointer items-center rounded-full border p-[2px] transition-[background-color,border-color,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary disabled:cursor-not-allowed disabled:opacity-60 ${
+        checked
+          ? "border-[var(--color-accent)] bg-[var(--color-accent)] shadow-sm shadow-black/10"
+          : "border-border-secondary bg-surface-dim hover:bg-surface-hover dark:bg-bg-tertiary dark:hover:bg-surface-dim"
       }`}
     >
       <span
-        className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform ring-0 transition duration-200 ease-in-out ${
+        className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-out ${
           checked ? "translate-x-4" : "translate-x-0"
         }`}
       />

@@ -211,7 +211,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
           <button
             key={type}
             onClick={() => setFilterType(type)}
-            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors whitespace-nowrap ${
               filterType === type
                 ? "bg-semantic-accent/15 text-accent-text"
                 : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary"
@@ -627,7 +627,7 @@ function SessionItem({
               </span>
               {currentAgentName && (
                 <span
-                  className="inline-flex items-center gap-1 text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
+                  className="max-w-[4.5rem] truncate whitespace-nowrap text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
                   title={t("sidebar:currentAgent", "Current Agent")}
                   style={
                     currentAgentColor
@@ -639,12 +639,12 @@ function SessionItem({
                 </span>
               )}
               {isDelegate && (
-                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-notify/15 text-semantic-notify border border-semantic-notify/20">
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-notify/15 text-semantic-notify border border-semantic-notify/20 whitespace-nowrap">
                   {t("sidebar:delegateTag", "委派")}
                 </span>
               )}
               {isSubtask && (
-                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20 whitespace-nowrap">
                   {t("sidebar:subtaskTag", "子任务")}
                 </span>
               )}
@@ -1001,7 +1001,7 @@ function AgentFilterDropdown({
     <select
       value={selectedAgent ?? ""}
       onChange={(e) => onSelectAgent(e.target.value || null)}
-      className="ml-auto text-[10px] bg-bg-elevated/70 border border-border-primary/70 rounded px-1.5 py-0.5 text-text-secondary outline-none cursor-pointer"
+      className="ml-auto max-w-[5.75rem] text-[10px] bg-bg-elevated/70 border border-border-primary/70 rounded px-1.5 py-0.5 text-text-secondary outline-none cursor-pointer whitespace-nowrap"
     >
       <option value="">{t("sidebar:filterAllAgents", "全部角色")}</option>
       {uniqueAgents.map((agent) => (

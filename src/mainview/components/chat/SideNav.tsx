@@ -486,22 +486,26 @@ function NavDot({
   let bg = "hover:bg-surface-hover ";
   let barBg = "";
   let iconClr = color;
+  let iconState = "opacity-75 group-hover:opacity-100";
 
   if (isMultiSelected) {
     bg = "bg-status-error/25 ";
     barBg = "bg-status-error opacity-100 ";
     iconClr = "text-status-error";
+    iconState = "opacity-100";
   } else if (isSelected) {
     bg = "bg-semantic-accent/25 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
     barBg = "bg-semantic-accent opacity-100 ";
     iconClr = "text-semantic-accent";
+    iconState = "opacity-100";
   } else if (isScrollActive) {
     barBg = "bg-semantic-accent/60 opacity-100 ";
+    iconState = "opacity-100";
   }
 
   return (
     <div
-      className={`relative w-10 h-8 rounded-r flex items-center justify-center leading-none cursor-pointer transition-[background-color,box-shadow,transform,opacity] duration-150 ease-out ${isSelected || isScrollActive ? "scale-105" : "scale-100"} ${bg}`}
+      className={`group relative w-10 h-8 rounded-r flex items-center justify-center leading-none cursor-pointer transition-[background-color,box-shadow,transform,opacity] duration-150 ease-out ${isSelected || isScrollActive ? "scale-105" : "scale-100"} ${bg}`}
       style={{ scrollSnapAlign: "start" }}
       onClick={onClick}
       onContextMenu={onContextMenu}
@@ -520,7 +524,9 @@ function NavDot({
         agentFilePath={agentFilePath}
         color={agentColor}
         fallbackIcon={Icon}
-        className={`w-4 h-4 shrink-0 ${iconClr} transition-[color,transform,opacity] duration-150 ease-out ${isSelected || isScrollActive ? "scale-110 opacity-100" : "scale-100 opacity-[0.85]"}`}
+        className={`w-4 h-4 shrink-0 ${iconClr} ${iconState} transition-[color,transform,opacity] duration-150 ease-out ${
+          isSelected || isScrollActive ? "scale-110" : "scale-100"
+        }`}
       />
     </div>
   );

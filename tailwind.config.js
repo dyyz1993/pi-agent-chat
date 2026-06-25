@@ -79,6 +79,10 @@ export default {
       fontSize: {
         input: "var(--input-font-size)",
       },
+      fontFamily: {
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"],
+      },
       boxShadow: {
         subtle: "var(--shadow-subtle)",
         floating: "var(--shadow-floating)",
