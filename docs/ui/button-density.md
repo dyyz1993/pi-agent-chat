@@ -47,17 +47,17 @@ Important distinction:
 
 ## Current Component Map
 
-| Surface / component                       | Current pattern                    | Notes                                                                                      |
-| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `FullscreenOverlay`                       | `IconButton size="md"` close       | Correct for mobile, visually large for compact desktop/chat-scoped overlays.               |
-| `ModalDialog`                             | `IconButton size="md"` close       | Acceptable for touch-sized modal headers; consider responsive density if used in desktops. |
-| `SettingsPanel`                           | `IconButton size="md"` close       | Full-window surface; 44px is acceptable on mobile, may be visually heavy on desktop.       |
-| `SshProjectDialog`                        | `IconButton size="md"` close       | Full-window workflow; same responsive-density consideration as settings.                   |
-| `ProjectPickerDialog`                     | `IconButton size="md"` close       | Mobile fullscreen close uses 44px; desktop may need compact header treatment.              |
-| `chat/preview/CardHeader`                 | `IconButton size="sm"` + `h-7 w-7` | Dense card action pattern; acceptable but should be formalized if repeated.                |
-| `DiffOverlay`                             | Raw `p-1` icon toggles             | Dense inline toggle pattern; should become a segmented/icon primitive if it grows.         |
-| `ChangeReviewPanel`, `HooksPanel`, panels | Raw `p-1` / `p-1.5` icon buttons   | Repeated dense action pattern; migrate gradually to shared compact icon primitives.        |
-| `FileAttachment`, `QuickActionToolbar`    | Raw `p-1.5` icon buttons           | Input-adjacent controls; check touch target on mobile before compacting further.           |
+| Surface / component                       | Current pattern                                            | Notes                                                                                      |
+| ----------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `FullscreenOverlay`                       | Compact close by default; `closeButtonSize="touch"` opt-in | Chat-scoped overlays should not default to a visually oversized close button.              |
+| `ModalDialog`                             | `IconButton size="md"` close                               | Acceptable for touch-sized modal headers; consider responsive density if used in desktops. |
+| `SettingsPanel`                           | `IconButton size="md"` close                               | Full-window surface; 44px is acceptable on mobile, may be visually heavy on desktop.       |
+| `SshProjectDialog`                        | `IconButton size="md"` close                               | Full-window workflow; same responsive-density consideration as settings.                   |
+| `ProjectPickerDialog`                     | `IconButton size="md"` close                               | Mobile fullscreen close uses 44px; desktop may need compact header treatment.              |
+| `chat/preview/CardHeader`                 | `IconButton size="sm"` + `h-7 w-7`                         | Dense card action pattern; acceptable but should be formalized if repeated.                |
+| `DiffOverlay`                             | Dense 28px icon toggles with accent selected state         | Dense inline toggle pattern; should become a segmented/icon primitive if it grows.         |
+| `ChangeReviewPanel`, `HooksPanel`, panels | Raw `p-1` / `p-1.5` icon buttons                           | Repeated dense action pattern; migrate gradually to shared compact icon primitives.        |
+| `FileAttachment`, `QuickActionToolbar`    | Raw `p-1.5` icon buttons                                   | Input-adjacent controls; check touch target on mobile before compacting further.           |
 
 ## Migration Checklist
 

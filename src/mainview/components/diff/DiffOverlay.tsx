@@ -11,8 +11,17 @@ import { getLanguage } from "../../utils/file-utils";
 import { createDiffStyles, DIFF_STYLE_PRESETS } from "./diff-style-factory";
 import { FullscreenOverlay } from "../primitives";
 import { registerShellPrismLanguage } from "../../lib/prism-languages";
+import { cx } from "../../lib/classes";
 
 registerShellPrismLanguage(Prism);
+
+const viewToggleClass = (selected: boolean) =>
+  cx(
+    "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+    selected
+      ? "bg-semantic-accent/15 text-semantic-accent ring-1 ring-semantic-accent/25"
+      : "text-text-tertiary hover:bg-surface-hover/70 hover:text-text-primary dark:hover:text-text-primary",
+  );
 
 function useSyntaxRenderer(filePath: string | undefined) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
@@ -71,17 +80,19 @@ export function DiffOverlay() {
     <div className="flex items-center gap-1">
       <button
         onClick={() => setSplitView(false)}
-        className={`p-1 rounded transition-colors ${!splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
+        className={viewToggleClass(!splitView)}
         title={t("diffLineByLine")}
         aria-label={t("diffLineByLine")}
+        aria-pressed={!splitView}
       >
         <Rows3 className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={() => setSplitView(true)}
-        className={`p-1 rounded transition-colors ${splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
+        className={viewToggleClass(splitView)}
         title={t("diffSideBySide")}
         aria-label={t("diffSideBySide")}
+        aria-pressed={splitView}
       >
         <Columns2 className="w-3.5 h-3.5" />
       </button>

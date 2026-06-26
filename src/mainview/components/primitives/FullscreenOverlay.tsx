@@ -9,6 +9,7 @@ interface FullscreenOverlayProps {
   children: ReactNode;
   onClose: () => void;
   closeLabel: string;
+  closeButtonSize?: "compact" | "touch";
   icon?: ReactNode;
   actions?: ReactNode;
   footer?: ReactNode;
@@ -37,6 +38,7 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
   children,
   onClose,
   closeLabel,
+  closeButtonSize = "compact",
   icon,
   actions,
   footer,
@@ -81,7 +83,16 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
           {title}
         </h2>
         {actions}
-        <IconButton label={closeLabel} size="md" onClick={onClose}>
+        <IconButton
+          label={closeLabel}
+          size={closeButtonSize === "touch" ? "md" : "sm"}
+          onClick={onClose}
+          className={cx(
+            "rounded-md",
+            closeButtonSize === "compact" &&
+              "text-text-tertiary hover:bg-surface-hover/70 hover:text-text-primary",
+          )}
+        >
           <X className="h-4 w-4" />
         </IconButton>
       </div>

@@ -117,6 +117,30 @@ describe("FullscreenOverlay — close button", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("uses a compact visual close button by default", () => {
+    render(
+      <FullscreenOverlay title="T" closeLabel="Close" onClose={vi.fn()}>
+        <span>Body</span>
+      </FullscreenOverlay>,
+    );
+    const button = screen.getByRole("button", { name: "Close" });
+    expect(button.className).toContain("h-8");
+    expect(button.className).toContain("w-8");
+    expect(button.className).not.toContain("h-11");
+    expect(button.className).not.toContain("w-11");
+  });
+
+  it("supports touch-sized close buttons when explicitly requested", () => {
+    render(
+      <FullscreenOverlay title="T" closeLabel="Close" onClose={vi.fn()} closeButtonSize="touch">
+        <span>Body</span>
+      </FullscreenOverlay>,
+    );
+    const button = screen.getByRole("button", { name: "Close" });
+    expect(button.className).toContain("h-11");
+    expect(button.className).toContain("w-11");
+  });
 });
 
 describe("FullscreenOverlay — actions & footer", () => {
@@ -279,12 +303,7 @@ describe("FullscreenOverlay — layout & position", () => {
 
   it("supports position=absolute", () => {
     const { container } = render(
-      <FullscreenOverlay
-        title="T"
-        closeLabel="Close"
-        onClose={vi.fn()}
-        position="absolute"
-      >
+      <FullscreenOverlay title="T" closeLabel="Close" onClose={vi.fn()} position="absolute">
         <span>Body</span>
       </FullscreenOverlay>,
     );
