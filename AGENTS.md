@@ -141,6 +141,40 @@ All design tokens are defined as CSS custom properties in `src/mainview/index.cs
 - Touch targets minimum 44px on all interactive elements
 - `viewport-fit=cover` is set, so `env(safe-area-inset-*)` works
 
+### Chat Content Surfaces
+
+Main chat area surfaces must be designed around stable regions, not ad-hoc modal decisions:
+
+1. **Top Toolbar** — token usage, panel toggles, notifications, review/status entry icons. This region should stay stable for chat-scoped previews and only be covered by true workspace/fullscreen workflows.
+2. **Content Stage** — message list by default; image/text/markdown/code/file/single-diff previews should render here when they are part of the chat workflow.
+3. **Composer Dock** — input/attachment/goal controls. Keep it visible when the user is likely to ask follow-up questions or append selected content; hide it for immersive edit/review workflows.
+
+Surface types:
+
+| Surface                      | Use for                                                                       | Host / current entry points                                                                                                                                                 | Composer default |
+| ---------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Inline card                  | Lightweight recognition inside message flow                                   | `src/mainview/components/chat/preview/*.tsx`, `src/mainview/components/chat/FileAttachment.tsx`                                                                             | visible          |
+| Chat-scoped preview surface  | Image large view, markdown/text reading, read-only code, single-file diff     | Target host: chat content stage in `src/mainview/layouts/MainLayout.tsx`; current state: `src/mainview/stores/use-chat-overlay-store.ts`                                    | visible/compact  |
+| Workspace fullscreen surface | Review, multi-file diff, file editor, running preview, settings/project flows | `src/mainview/components/change-review/ChangeReviewPanel.tsx`, `src/mainview/components/settings/SettingsPanel.tsx`, `src/mainview/components/welcome/SshProjectDialog.tsx` | hidden           |
+| Modal dialog                 | Short confirmation, small form, destructive action confirmation               | `src/mainview/components/primitives/ModalDialog.tsx`                                                                                                                        | blocked          |
+
+Current scattered preview/editing entry points to check before adding a new one:
+
+- `src/mainview/layouts/MainLayout.tsx` currently hosts `FileOverlay`, `DiffOverlay`, `CodeExpandOverlay`, and `MarkdownExpandOverlay` over the chat area.
+- `src/mainview/stores/use-chat-overlay-store.ts` currently models `diff | file | expand | markdown`; new chat-scoped content surfaces should extend or replace this store instead of adding unrelated local state.
+- `src/mainview/components/primitives/ImageViewerOverlay.tsx` is body-portaled because message-triggered fullscreen previews must not live inside message rows.
+- `src/mainview/components/chat/preview/HtmlCard.tsx` and `PdfCard.tsx` currently use `IframeFullscreenOverlay`; when unifying surfaces, route their expanded mode through the shared preview host.
+- `src/mainview/components/file-preview/FileOverlay.tsx` and `src/mainview/components/diff/DiffOverlay.tsx` are chat-area overlays today; keep simple read-only states chat-scoped, but move editing, review, and multi-file flows to workspace fullscreen.
+- `src/mainview/components/change-review/ChangeReviewPanel.tsx` is review workflow UI and should not be treated as a small modal or inline preview.
+
+Decision rules:
+
+- Do not create a new `fixed inset-0` surface from inside a message card, preview card, or virtualized row. Hoist it to the chat/layout host or portal to `document.body`.
+- If the user is still in a conversational "look at this and ask/follow up" mode, prefer chat-scoped preview and keep the composer visible or compact.
+- If the user is editing, approving, rejecting, comparing many files, or running an app preview, use a workspace fullscreen surface and hide the composer.
+- If the operation can be answered with one sentence or one button, use `ModalDialog`; do not put rich file content, diff, code editor, or review UI in a modal dialog.
+- Any UI change that adds or changes image/text/markdown/code/diff/file/review/preview surfaces must update this section and the current entry-point map above.
+
 ### Settings Surface
 
 - `SettingsPanel` is a full-window overlay surface, not a centered desktop modal.
