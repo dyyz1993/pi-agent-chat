@@ -8,16 +8,121 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { stat, readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
-import { extname, basename, dirname } from "path";
+import { spawnSync } from "node:child_process";
+import { extname, basename, dirname, resolve, posix } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { isValidToken } from "./auth";
 import { getMimeType } from "./mime";
 import { isPathAllowed, isPathReadable } from "./path-guard";
+import { listRemoteProjects } from "../shared/lib/project-config";
+import type { RemoteProjectRecord } from "../shared/modules/project";
 
 const log = createLogger("gateway");
 
 export const FS_COOKIE_NAME = "fs_token";
 export const FS_COOKIE_MAX_AGE = 3600;
+
+type HttpFileTarget =
+  | { kind: "local"; path: string }
+  | { kind: "ssh"; path: string; remote: RemoteProjectRecord };
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.length > 1 ? value.replace(/\/+$/, "") : value;
+}
+
+function relativeLocalIfInside(basePath: string, candidatePath: string): string | null {
+  const base = stripTrailingSlash(resolve(basePath));
+  const candidate = stripTrailingSlash(resolve(candidatePath));
+  if (candidate === base) return "";
+  const prefix = `${base}/`;
+  return candidate.startsWith(prefix) ? candidate.slice(prefix.length) : null;
+}
+
+function relativeRemoteIfInside(basePath: string, candidatePath: string): string | null {
+  const base = stripTrailingSlash(posix.normalize(basePath));
+  const candidate = stripTrailingSlash(posix.normalize(candidatePath));
+  if (candidate === base) return "";
+  const prefix = `${base}/`;
+  return candidate.startsWith(prefix) ? candidate.slice(prefix.length) : null;
+}
+
+async function resolveHttpFileTarget(inputPath: string): Promise<HttpFileTarget> {
+  const remoteProjects = await listRemoteProjects().catch(() => []);
+  const localPath = resolve(inputPath);
+
+  for (const remote of remoteProjects) {
+    const localSuffix = relativeLocalIfInside(remote.localPath, localPath);
+    if (localSuffix !== null) {
+      return {
+        kind: "ssh",
+        path: localSuffix ? posix.join(remote.remotePath, localSuffix) : remote.remotePath,
+        remote,
+      };
+    }
+
+    const remoteSuffix = relativeRemoteIfInside(remote.remotePath, inputPath);
+    if (remoteSuffix !== null) {
+      return { kind: "ssh", path: posix.normalize(inputPath), remote };
+    }
+  }
+
+  return { kind: "local", path: localPath };
+}
+
+function runSshFileCommand(
+  remote: RemoteProjectRecord,
+  command: string,
+): { stdout: Buffer; stderr: string } {
+  const result = spawnSync(
+    "ssh",
+    [
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      ...(remote.sshArgs ?? []),
+      remote.host,
+      command,
+    ],
+    { encoding: "buffer", maxBuffer: 100 * 1024 * 1024 },
+  );
+  const stderr = result.stderr?.toString() ?? "";
+  if (result.status !== 0) {
+    throw new Error(stderr.trim() || "ssh command failed");
+  }
+  return { stdout: result.stdout ?? Buffer.alloc(0), stderr };
+}
+
+function getRemoteFileSize(target: Extract<HttpFileTarget, { kind: "ssh" }>): number | "missing" | "directory" {
+  const quoted = shellQuote(target.path);
+  const result = runSshFileCommand(
+    target.remote,
+    `if [ ! -e ${quoted} ]; then echo missing; elif [ -d ${quoted} ]; then echo directory; else wc -c < ${quoted}; fi`,
+  );
+  const text = result.stdout.toString().trim();
+  if (text === "missing") return "missing";
+  if (text === "directory") return "directory";
+  const size = Number.parseInt(text, 10);
+  if (!Number.isFinite(size)) throw new Error(`invalid remote file size: ${text}`);
+  return size;
+}
+
+function readRemoteFileRange(
+  target: Extract<HttpFileTarget, { kind: "ssh" }>,
+  start?: number,
+  count?: number,
+): Buffer {
+  const quoted = shellQuote(target.path);
+  const command =
+    start != null && count != null
+      ? `dd if=${quoted} bs=1 skip=${start} count=${count} 2>/dev/null`
+      : `cat -- ${quoted}`;
+  return runSshFileCommand(target.remote, command).stdout;
+}
 
 export function parseFsCookie(req: IncomingMessage): string | null {
   const cookieHeader = req.headers["cookie"] ?? "";
@@ -58,46 +163,65 @@ export async function handleFsRoute(
     return;
   }
 
-  if (!(await isPathReadable(filePath))) {
+  const target = await resolveHttpFileTarget(filePath);
+  if (target.kind === "local" && !(await isPathReadable(target.path))) {
     res.writeHead(403, { "Content-Type": "text/plain" }).end("Path not allowed");
     return;
   }
 
   try {
-    if (!existsSync(filePath)) {
+    const fileSize = target.kind === "local" ? undefined : getRemoteFileSize(target);
+    if (fileSize === "missing") {
       res.writeHead(404, { "Content-Type": "text/plain" }).end("File not found");
       return;
     }
-    const s = await stat(filePath);
-    if (s.isDirectory()) {
+    if (fileSize === "directory") {
       res.writeHead(400, { "Content-Type": "text/plain" }).end("Is a directory");
       return;
     }
-    const mimeType = getMimeType(extname(filePath));
+    if (target.kind === "local" && !existsSync(target.path)) {
+      res.writeHead(404, { "Content-Type": "text/plain" }).end("File not found");
+      return;
+    }
+    const s = target.kind === "local" ? await stat(target.path) : null;
+    if (s?.isDirectory()) {
+      res.writeHead(400, { "Content-Type": "text/plain" }).end("Is a directory");
+      return;
+    }
+    const size = s?.size ?? fileSize;
+    if (typeof size !== "number") {
+      res.writeHead(500, { "Content-Type": "text/plain" }).end("Failed to read file size");
+      return;
+    }
+    const mimeType = getMimeType(extname(target.path));
 
     const range = req.headers["range"];
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : s.size - 1;
+      const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
       res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${s.size}`,
+        "Content-Range": `bytes ${start}-${end}/${size}`,
         "Accept-Ranges": "bytes",
         "Content-Length": end - start + 1,
         "Content-Type": mimeType,
       });
-      const buffer = await readFile(filePath);
-      res.end(buffer.subarray(start, end + 1));
+      const buffer =
+        target.kind === "local"
+          ? await readFile(target.path)
+          : readRemoteFileRange(target, start, end - start + 1);
+      res.end(target.kind === "local" ? buffer.subarray(start, end + 1) : buffer);
     } else {
       res.writeHead(200, {
-        "Content-Length": s.size,
+        "Content-Length": size,
         "Content-Type": mimeType,
         "Accept-Ranges": "bytes",
       });
-      const buffer = await readFile(filePath);
+      const buffer =
+        target.kind === "local" ? await readFile(target.path) : readRemoteFileRange(target);
       res.end(buffer);
     }
-    log.info("FS served", { path: filePath });
+    log.info("FS served", { path: target.path, target: target.kind });
   } catch (e) {
     log.debug("handleFsRoute: failed to serve file", { filePath, error: String(e) });
     res.writeHead(500, { "Content-Type": "text/plain" }).end("Failed to read file");
@@ -106,22 +230,31 @@ export async function handleFsRoute(
 
 export async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
-  if (!(await isPathReadable(filePath))) {
+  const target = await resolveHttpFileTarget(filePath);
+  if (target.kind === "local" && !(await isPathReadable(target.path))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
   }
   try {
-    const s = await stat(filePath);
+    const size = target.kind === "local" ? undefined : getRemoteFileSize(target);
+    if (size === "missing") {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "File not found" }));
+      return;
+    }
+    const s = target.kind === "local" ? await stat(target.path) : null;
+    const isDirectory = s?.isDirectory() ?? size === "directory";
+    const numericSize = typeof size === "number" ? size : s?.size;
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
-        name: basename(filePath),
-        path: filePath,
-        size: s.size,
-        isDirectory: s.isDirectory(),
-        modified: s.mtime.toISOString(),
-        mimeType: s.isFile() ? getMimeType(extname(filePath)) : undefined,
+        name: basename(target.path),
+        path: target.path,
+        size: numericSize,
+        isDirectory,
+        modified: s?.mtime.toISOString(),
+        mimeType: !isDirectory ? getMimeType(extname(target.path)) : undefined,
       }),
     );
   } catch (e) {
@@ -137,45 +270,72 @@ export async function handleFileContent(
   res: ServerResponse,
 ): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
-  if (!(await isPathReadable(filePath))) {
+  const target = await resolveHttpFileTarget(filePath);
+  if (target.kind === "local" && !(await isPathReadable(target.path))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
   }
   try {
-    if (!existsSync(filePath)) {
+    const fileSize = target.kind === "local" ? undefined : getRemoteFileSize(target);
+    if (fileSize === "missing") {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "File not found" }));
       return;
     }
-    const s = await stat(filePath);
-    const mimeType = getMimeType(extname(filePath));
+    if (fileSize === "directory") {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Is a directory" }));
+      return;
+    }
+    if (target.kind === "local" && !existsSync(target.path)) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "File not found" }));
+      return;
+    }
+    const s = target.kind === "local" ? await stat(target.path) : null;
+    if (s?.isDirectory()) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Is a directory" }));
+      return;
+    }
+    const size = s?.size ?? fileSize;
+    if (typeof size !== "number") {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Failed to read file size" }));
+      return;
+    }
+    const mimeType = getMimeType(extname(target.path));
 
     const range = req.headers["range"];
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : s.size - 1;
+      const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
       const chunkSize = end - start + 1;
 
       res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${s.size}`,
+        "Content-Range": `bytes ${start}-${end}/${size}`,
         "Accept-Ranges": "bytes",
         "Content-Length": chunkSize,
         "Content-Type": mimeType,
       });
-      const buffer = await readFile(filePath);
-      res.end(buffer.subarray(start, end + 1));
+      const buffer =
+        target.kind === "local"
+          ? await readFile(target.path)
+          : readRemoteFileRange(target, start, chunkSize);
+      res.end(target.kind === "local" ? buffer.subarray(start, end + 1) : buffer);
     } else {
       res.writeHead(200, {
-        "Content-Length": s.size,
+        "Content-Length": size,
         "Content-Type": mimeType,
         "Accept-Ranges": "bytes",
       });
-      const buffer = await readFile(filePath);
+      const buffer =
+        target.kind === "local" ? await readFile(target.path) : readRemoteFileRange(target);
       res.end(buffer);
     }
-    log.info("File served", { path: filePath });
+    log.info("File served", { path: target.path, target: target.kind });
   } catch (e) {
     log.debug("handleFileContent: failed to serve file", { filePath, error: String(e) });
     res.writeHead(500, { "Content-Type": "application/json" });

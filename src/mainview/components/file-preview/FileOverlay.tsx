@@ -103,20 +103,43 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
   );
 
   useEffect(() => {
-    if (isSvg && preview.imageUrl && !svgContent) {
-      setSvgLoading(true);
-      fetch(preview.imageUrl)
-        .then((res) => res.text())
-        .then((text) => {
-          setSvgContent(text);
-        })
-        .catch((err) => {
+    let cancelled = false;
+
+    if (!isSvg) {
+      setSvgContent(null);
+      setSvgLoading(false);
+      return;
+    }
+
+    if (preview.content != null) {
+      setSvgContent(preview.content);
+      setSvgLoading(false);
+      return;
+    }
+
+    setSvgContent(null);
+    if (!preview.imageUrl) return;
+
+    setSvgLoading(true);
+    fetch(preview.imageUrl)
+      .then((res) => res.text())
+      .then((text) => {
+        if (!cancelled) setSvgContent(text);
+      })
+      .catch((err) => {
+        if (!cancelled) {
           log.warn("SVG fetch failed", { error: String(err) });
           setSvgContent(null);
-        })
-        .finally(() => setSvgLoading(false));
-    }
-  }, [isSvg, preview.imageUrl, svgContent]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSvgLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSvg, preview.path, preview.content, preview.imageUrl]);
 
   const renderPreview = () => {
     if (loading || svgLoading) {

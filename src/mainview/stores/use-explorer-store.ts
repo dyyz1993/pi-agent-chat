@@ -56,12 +56,19 @@ function entriesToTreeNodes(entries: RPCMethods["file.listDir"]["result"]["entri
   }));
 }
 
-function getFileUrl(filePath: string): string {
-  const mode = useAppStore.getState().mode;
-  if (mode === "desktop") return `file://${filePath}`;
-  const baseUrl = apiClient.getBaseUrl();
-  const token = apiClient.getAuthToken();
-  return `${baseUrl}/file/${encodeURIComponent(filePath)}?token=${token}`;
+function getImageMimeType(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml",
+    webp: "image/webp",
+    ico: "image/x-icon",
+    bmp: "image/bmp",
+  };
+  return map[ext] ?? "application/octet-stream";
 }
 
 function findNode(nodes: TreeNode[], path: string): TreeNode | null {
@@ -239,7 +246,16 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
 
     try {
       if (preview.isImage) {
-        preview.imageUrl = getFileUrl(node.path);
+        preview.mimeType = getImageMimeType(node.name);
+        if (preview.mimeType === "image/svg+xml") {
+          const res = await apiClient.call("file.readFile", { path: node.path });
+          preview.content = res.content;
+          preview.size = res.size;
+        } else {
+          const res = await apiClient.call("file.readBinaryFile", { path: node.path });
+          preview.imageUrl = `data:${preview.mimeType};base64,${res.base64}`;
+          preview.size = res.size;
+        }
       } else if (preview.isText) {
         if (fileSize > MAX_PREVIEW_SIZE) {
           preview.content = `[File too large to preview: ${formatSize(fileSize)}]\n\nThis file exceeds the 500KB preview limit.\nUse an external editor to view this file.`;

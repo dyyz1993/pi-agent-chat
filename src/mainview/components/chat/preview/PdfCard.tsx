@@ -2,20 +2,27 @@ import { memo, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { FileText, RefreshCw, ExternalLink } from "lucide-react";
 import type { PreviewDetails } from "./types";
-import { getFileHttpUrl } from "./types";
+import { getPreviewRenderableSource } from "./types";
+import { MediaCardError } from "./MediaCardError";
 import { CopyAction, IconButton, IframeFullscreenOverlay } from "../../primitives";
+import { usePreviewRenderSource } from "../../../hooks/use-preview-render-source";
 
 export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");
-  const httpUrl = details.absolutePath ? getFileHttpUrl(details.absolutePath) : "";
+  const renderableSource = getPreviewRenderableSource(details);
   const [iframeKey, setIframeKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const previewSource = usePreviewRenderSource(
+    renderableSource,
+    details.mimeType ?? "application/pdf",
+    iframeKey,
+  );
 
   const handleRetry = useCallback(() => {
     setIframeKey((k) => k + 1);
   }, []);
 
-  if (!httpUrl) {
+  if (!renderableSource) {
     return (
       <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
         <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30">
@@ -29,6 +36,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
     );
   }
 
+  const actionUrl = previewSource.src || renderableSource;
   const actions = (
     <div className="flex items-center gap-1">
       <IconButton
@@ -40,13 +48,13 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
         <RefreshCw className="w-3 h-3" />
       </IconButton>
       <CopyAction
-        text={httpUrl}
+        text={actionUrl}
         size="xs"
         title={t("copyLinkTitle")}
         className="h-7 w-7 rounded-md"
       />
       <IconButton
-        onClick={() => window.open(httpUrl, "_blank", "noopener,noreferrer")}
+        onClick={() => window.open(actionUrl, "_blank", "noopener,noreferrer")}
         label={t("openInNewWindowTitle")}
         size="sm"
         className="h-7 w-7 rounded-md"
@@ -61,7 +69,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
       <IframeFullscreenOverlay
         icon={<FileText className="w-3.5 h-3.5 text-red-500 dark:text-red-400 shrink-0" />}
         title={details.title ?? details.source}
-        src={httpUrl}
+        src={previewSource.src}
         onClose={() => setFullscreen(false)}
         closeLabel={t("closeEscTitle")}
         actions={actions}
@@ -95,13 +103,13 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
             <FileText className="w-3 h-3" />
           </IconButton>
           <CopyAction
-            text={httpUrl}
+            text={actionUrl}
             size="xs"
             title={t("copyLinkTitle")}
             className="h-7 w-7 rounded-md"
           />
           <IconButton
-            onClick={() => window.open(httpUrl, "_blank", "noopener,noreferrer")}
+            onClick={() => window.open(actionUrl, "_blank", "noopener,noreferrer")}
             label={t("openInNewWindowTitle")}
             size="sm"
             className="h-7 w-7 rounded-md"
@@ -110,13 +118,27 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
           </IconButton>
         </div>
       </div>
-      <iframe
-        key={iframeKey}
-        src={httpUrl}
-        className="w-full border-0"
-        style={{ minHeight: 300, maxHeight: 600 }}
-        title={details.title ?? details.source}
-      />
+      {previewSource.loading ? (
+        <div className="px-3 py-8 text-center text-xs text-text-tertiary animate-pulse">
+          {t("loadingImage")}
+        </div>
+      ) : previewSource.error ? (
+        <MediaCardError
+          errorKind="server_error"
+          errorDetail={previewSource.error}
+          onRetry={handleRetry}
+        />
+      ) : previewSource.src ? (
+        <iframe
+          key={iframeKey}
+          src={previewSource.src}
+          className="w-full border-0"
+          style={{ minHeight: 300, maxHeight: 600 }}
+          title={details.title ?? details.source}
+        />
+      ) : (
+        <div className="px-3 py-4 text-xs text-text-tertiary italic">{t("noPathForPreview")}</div>
+      )}
     </div>
   );
 });
