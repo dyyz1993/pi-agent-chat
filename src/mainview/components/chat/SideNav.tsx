@@ -99,25 +99,34 @@ export function getSideNavViewportMetrics(
   if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
     return { gap: 0, viewportHeight: 0, visibleItemCount: 0 };
   }
+  const normalizedItemCount =
+    Number.isFinite(itemCount) && itemCount > 0 ? Math.floor(itemCount) : itemCount;
+  if (normalizedItemCount === 0) {
+    return { gap: 0, viewportHeight: 0, visibleItemCount: 0 };
+  }
   if (containerHeight <= itemHeight) {
     return { gap: 0, viewportHeight: containerHeight, visibleItemCount: 1 };
   }
 
-  const visibleItemCount = Math.max(1, Math.floor(containerHeight / itemHeight));
-  if (Number.isFinite(itemCount) && itemCount <= visibleItemCount) {
+  const maxVisibleItemCount = Math.max(1, Math.floor(containerHeight / itemHeight));
+  if (Number.isFinite(normalizedItemCount) && normalizedItemCount <= maxVisibleItemCount) {
+    const visibleItemCount = Math.max(0, normalizedItemCount);
+    const gap = visibleItemCount > 1 ? SIDE_NAV_COMPACT_GAP : 0;
+    const viewportHeight = visibleItemCount * itemHeight + Math.max(0, visibleItemCount - 1) * gap;
     return {
-      gap: SIDE_NAV_COMPACT_GAP,
-      viewportHeight: containerHeight,
+      gap,
+      viewportHeight,
       visibleItemCount,
     };
   }
 
+  const visibleItemCount = maxVisibleItemCount;
   const totalItemHeight = visibleItemCount * itemHeight;
   const leftover = Math.max(0, containerHeight - totalItemHeight);
-  const gap = visibleItemCount > 1 ? Math.floor(leftover / (visibleItemCount - 1)) : 0;
+  const gap = visibleItemCount > 1 ? leftover / (visibleItemCount - 1) : 0;
   return {
     gap,
-    viewportHeight: totalItemHeight,
+    viewportHeight: totalItemHeight + Math.max(0, visibleItemCount - 1) * gap,
     visibleItemCount,
   };
 }
@@ -177,20 +186,23 @@ export function getSideNavVisibleEdgeFallbackKey(
 
   const containerRect = container.getBoundingClientRect();
   const activeRect = activeEl.getBoundingClientRect();
-  if (activeRect.bottom > containerRect.top && activeRect.top < containerRect.bottom) {
+  if (
+    activeRect.top >= containerRect.top - 0.5 &&
+    activeRect.bottom <= containerRect.bottom + 0.5
+  ) {
     return null;
   }
 
   const visibleDots = dots.filter((dot) => {
     const rect = dot.getBoundingClientRect();
-    return rect.bottom > containerRect.top + 0.5 && rect.top < containerRect.bottom - 0.5;
+    return rect.top >= containerRect.top - 0.5 && rect.bottom <= containerRect.bottom + 0.5;
   });
   if (visibleDots.length === 0) return null;
 
-  if (activeRect.bottom <= containerRect.top) {
+  if (activeRect.top < containerRect.top - 0.5) {
     return visibleDots[0].dataset.navKey ?? null;
   }
-  if (activeRect.top >= containerRect.bottom) {
+  if (activeRect.bottom > containerRect.bottom + 0.5) {
     return visibleDots[visibleDots.length - 1].dataset.navKey ?? null;
   }
   return null;
@@ -506,7 +518,7 @@ function NavDot({
 
   return (
     <div
-      className={`group relative w-10 h-8 rounded-r flex items-center justify-center leading-none cursor-pointer transition-[background-color,box-shadow,transform,opacity] duration-150 ease-out ${isSelected || isScrollActive ? "scale-105" : "scale-100"} ${bg}`}
+      className={`group relative w-10 h-8 rounded-r flex items-center justify-center leading-none cursor-pointer transition-[background-color,box-shadow,opacity] duration-150 ease-out ${bg}`}
       style={{ scrollSnapAlign: "start" }}
       onClick={onClick}
       onContextMenu={onContextMenu}
@@ -525,9 +537,7 @@ function NavDot({
         agentFilePath={agentFilePath}
         color={agentColor}
         fallbackIcon={Icon}
-        className={`w-4 h-4 shrink-0 ${iconClr} ${iconState} transition-[color,transform,opacity] duration-150 ease-out ${
-          isSelected || isScrollActive ? "scale-110" : "scale-100"
-        }`}
+        className={`w-4 h-4 shrink-0 ${iconClr} ${iconState} transition-[color,opacity] duration-150 ease-out`}
       />
     </div>
   );
@@ -915,7 +925,7 @@ export const SideNav = memo(
               height: "100%",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              scrollSnapType: "y proximity",
+              scrollSnapType: "y mandatory",
             }}
           >
             <div

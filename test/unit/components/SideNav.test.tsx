@@ -16,6 +16,7 @@ import {
   buildFlatItems,
   getSideNavScrollTarget,
   getSideNavVisibleEdgeFallbackKey,
+  getSideNavViewportMetrics,
   getSideNavViewportPadding,
 } from "../../../src/mainview/components/chat/SideNav";
 import { useTurnStore } from "../../../src/mainview/stores/use-turn-store";
@@ -41,12 +42,14 @@ HTMLElement.prototype.scrollTo = vi.fn();
 
 // Mock settings store
 vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
-  useSettingsStore: (selector: (s: {
-    showThinking: boolean;
-    showMemoryEntries: boolean;
-    showToolCalls: boolean;
-    showToolResults: boolean;
-  }) => unknown) =>
+  useSettingsStore: (
+    selector: (s: {
+      showThinking: boolean;
+      showMemoryEntries: boolean;
+      showToolCalls: boolean;
+      showToolResults: boolean;
+    }) => unknown,
+  ) =>
     selector({
       showThinking: false,
       showMemoryEntries: false,
@@ -57,6 +60,7 @@ vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
 
 // Mock chat store for loadMoreMessages
 vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
+  dedupeMemoryInjectMessages: (messages: ChatMessage[]) => messages,
   useChatStore: () => vi.fn(() => false),
 }));
 
@@ -136,7 +140,9 @@ describe("SideNav — highlight matching", () => {
     useTurnStore.getState().setNavId(botIconKey);
 
     const onNavDotClick = vi.fn();
-    const { container } = render(<SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />);
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
 
     // Should have exactly one element with data-active
     const activeElements = container.querySelectorAll("[data-active]");
@@ -149,7 +155,9 @@ describe("SideNav — highlight matching", () => {
     useTurnStore.getState().setNavId("msg-2");
 
     const onNavDotClick = vi.fn();
-    const { container } = render(<SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />);
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
 
     const activeElements = container.querySelectorAll("[data-active]");
     expect(activeElements.length).toBe(1);
@@ -192,7 +200,9 @@ describe("SideNav — highlight matching", () => {
     const messages = makeMessages();
 
     const onNavDotClick = vi.fn();
-    const { container } = render(<SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />);
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
 
     const activeElements = container.querySelectorAll("[data-active]");
     expect(activeElements.length).toBe(0);
@@ -200,14 +210,29 @@ describe("SideNav — highlight matching", () => {
 });
 
 describe("SideNav — keep active icon visible", () => {
-  it("calculates viewport padding so the visible icon slots fit as an integer count", () => {
-    const padding = getSideNavViewportPadding(646.5);
-    expect(padding).toBe(19.25);
-    expect((646.5 - padding * 2) / 32).toBe(19);
+  it("keeps sparse icon groups top-aligned with compact spacing", () => {
+    const metrics = getSideNavViewportMetrics(646.5, 4);
 
-    const compactPadding = getSideNavViewportPadding(100);
-    expect(compactPadding).toBe(18);
-    expect((100 - compactPadding * 2) / 32).toBe(2);
+    expect(metrics.visibleItemCount).toBe(4);
+    expect(metrics.viewportHeight).toBe(152);
+    expect(metrics.gap).toBe(8);
+    expect(getSideNavViewportPadding(646.5, 4)).toBe(8);
+  });
+
+  it("calculates equal gaps so overflowing edge icons remain complete", () => {
+    const metrics = getSideNavViewportMetrics(100, 12);
+
+    expect(metrics.visibleItemCount).toBe(3);
+    expect(metrics.viewportHeight).toBe(100);
+    expect(metrics.gap).toBe(2);
+  });
+
+  it("uses fractional gaps instead of exposing a clipped extra icon", () => {
+    const metrics = getSideNavViewportMetrics(625, 32);
+
+    expect(metrics.visibleItemCount).toBe(19);
+    expect(metrics.viewportHeight).toBe(625);
+    expect(metrics.gap).toBeCloseTo(17 / 18);
   });
 
   it("calculates centered scroll target for out-of-comfort-zone items", () => {
@@ -270,20 +295,30 @@ describe("SideNav — keep active icon visible", () => {
     below.dataset.navKey = "below";
     container.append(above, first, last, below);
 
-    container.getBoundingClientRect = () =>
-      ({ top: 100, bottom: 164, height: 64 } as DOMRect);
-    above.getBoundingClientRect = () =>
-      ({ top: 36, bottom: 68, height: 32 } as DOMRect);
-    first.getBoundingClientRect = () =>
-      ({ top: 100, bottom: 132, height: 32 } as DOMRect);
-    last.getBoundingClientRect = () =>
-      ({ top: 132, bottom: 164, height: 32 } as DOMRect);
-    below.getBoundingClientRect = () =>
-      ({ top: 180, bottom: 212, height: 32 } as DOMRect);
+    container.getBoundingClientRect = () => ({ top: 100, bottom: 164, height: 64 }) as DOMRect;
+    above.getBoundingClientRect = () => ({ top: 36, bottom: 68, height: 32 }) as DOMRect;
+    first.getBoundingClientRect = () => ({ top: 100, bottom: 132, height: 32 }) as DOMRect;
+    last.getBoundingClientRect = () => ({ top: 132, bottom: 164, height: 32 }) as DOMRect;
+    below.getBoundingClientRect = () => ({ top: 180, bottom: 212, height: 32 }) as DOMRect;
 
     expect(getSideNavVisibleEdgeFallbackKey(container, "above")).toBe("first");
     expect(getSideNavVisibleEdgeFallbackKey(container, "below")).toBe("last");
     expect(getSideNavVisibleEdgeFallbackKey(container, "first")).toBeNull();
+  });
+
+  it("does not treat a clipped active icon as visible", () => {
+    const container = document.createElement("div");
+    const clipped = document.createElement("div");
+    const first = document.createElement("div");
+    clipped.dataset.navKey = "clipped";
+    first.dataset.navKey = "first";
+    container.append(clipped, first);
+
+    container.getBoundingClientRect = () => ({ top: 100, bottom: 164, height: 64 }) as DOMRect;
+    clipped.getBoundingClientRect = () => ({ top: 84, bottom: 116, height: 32 }) as DOMRect;
+    first.getBoundingClientRect = () => ({ top: 116, bottom: 148, height: 32 }) as DOMRect;
+
+    expect(getSideNavVisibleEdgeFallbackKey(container, "clipped")).toBe("first");
   });
 
   it("scrolls SideNav container when selectedNavId is outside viewport", () => {
@@ -297,7 +332,11 @@ describe("SideNav — keep active icon visible", () => {
     const items = buildFlatItems(messages, false);
     const targetDot = container.querySelector(`[data-nav-key="${items[0].key}"]`) as HTMLElement;
 
-    Object.defineProperty(scrollContainer, "scrollTop", { value: 50, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 50,
+      writable: true,
+      configurable: true,
+    });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 100, configurable: true });
     Object.defineProperty(targetDot, "offsetTop", { value: 20, configurable: true });
     Object.defineProperty(targetDot, "offsetHeight", { value: 20, configurable: true });
@@ -320,7 +359,11 @@ describe("SideNav — keep active icon visible", () => {
     const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
     const targetDot = container.querySelector('[data-nav-key="msg-2"]') as HTMLElement;
 
-    Object.defineProperty(scrollContainer, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
     Object.defineProperty(scrollContainer, "scrollHeight", { value: 300, configurable: true });
     Object.defineProperty(targetDot, "offsetTop", { value: 120, configurable: true });
@@ -343,7 +386,11 @@ describe("SideNav — keep active icon visible", () => {
       <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
     );
     const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
-    Object.defineProperty(scrollContainer, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
     const firstDot = container.querySelector(`[data-nav-key="${items[0].key}"]`) as HTMLElement;
     const secondDot = container.querySelector(`[data-nav-key="${items[1].key}"]`) as HTMLElement;
@@ -578,7 +625,10 @@ describe("SideNav — real session data fixture", () => {
   });
 
   it("highlights last nav item when it is explicitly selected by key", () => {
-    const sideNavRef = createRef<{ getFirstIconId: () => string | null; getLastIconId: () => string | null }>();
+    const sideNavRef = createRef<{
+      getFirstIconId: () => string | null;
+      getLastIconId: () => string | null;
+    }>();
 
     render(<SideNav ref={sideNavRef} messages={fixture.messages} onNavDotClick={vi.fn()} />);
 
@@ -610,7 +660,11 @@ describe("SideNav — real session data fixture", () => {
     );
     const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
     const targetDot = container.querySelector(`[data-nav-key="${items[0].key}"]`) as HTMLElement;
-    Object.defineProperty(scrollContainer, "scrollTop", { value: 50, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 50,
+      writable: true,
+      configurable: true,
+    });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 100, configurable: true });
     Object.defineProperty(targetDot, "offsetTop", { value: 20, configurable: true });
     Object.defineProperty(targetDot, "offsetHeight", { value: 20, configurable: true });
@@ -661,7 +715,7 @@ describe("SideNav — memory/compaction filtering (F)", () => {
         role: "compactionSummary",
         content: [{ type: "compactionSummary", summary: "compressed", tokensBefore: 1000 }],
         timestamp: 2,
-    },
+      },
     ];
 
     const items = buildFlatItems(messages, false);
@@ -852,9 +906,7 @@ describe("SideNav — right-click multi-select (K)", () => {
     fireEvent.contextMenu(firstDot);
 
     // Should show "1 selected" indicator
-    rerender(
-      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
-    );
+    rerender(<SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />);
     const selectionInfo = container.querySelector(".text-status-error.text-center");
     expect(selectionInfo?.textContent).toContain("1");
   });
