@@ -120,6 +120,13 @@ All design tokens are defined as CSS custom properties in `src/mainview/index.cs
 - Do not wrap a `fixed` popover in an `absolute` parent and expect the parent to anchor it; fixed popovers must calculate against the trigger or use `AnchoredPopover`.
 - Detailed rules and the current component map live in `docs/ui/popover-menus.md`. Any UI component change that adds, removes, or changes popover/menu behavior must update that document when the pattern changes.
 
+### Button / Icon Density Rules
+
+- Reusable command buttons should use `src/mainview/components/primitives/Button.tsx`, `IconButton.tsx`, or `CopyAction.tsx` before adding raw `<button>` styles.
+- Do not use 44px `IconButton size="md"` as the default for every header action. It is for mobile/touch-sized controls and full-window close targets; dense desktop toolbars should prefer 28-32px visual buttons.
+- Separate visual density from touch target requirements: card/tool rows can be visually compact, but mobile/touch surfaces still need at least a 44px target.
+- Detailed density rules, current component map, and migration checklist live in `docs/ui/button-density.md`. Any UI change that adds or changes repeated button/icon-button patterns must update that document when the pattern changes.
+
 ## Responsive Design
 
 ### Breakpoints
@@ -753,6 +760,7 @@ bunx playwright test        # e2e/*.spec.ts
 | `docs/plans/2026-06-11-change-review-optimization.md`       | 已实施           | change-review.pending 性能优化：channel + JSONL 降级，底层 readTreeFiles O(M)，approval 持久化 |
 | `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                                          |
 | `docs/ui/popover-menus.md`                                  | UI 规范          | Popover、下拉菜单、右键菜单的锚定规则、组件入口和更新 checklist                                |
+| `docs/ui/button-density.md`                                 | UI 规范          | Button、IconButton、CopyAction 的尺寸密度、触控目标、close button 和 toolbar action 规范       |
 | `docs/testing-architecture.md`                              | 参考文档         | 测试架构总览：6 种测试方法、目录结构、散落文件收拢计划、新测试编写指南                         |
 
 ### WebSocket RPC 端到端测试方法
