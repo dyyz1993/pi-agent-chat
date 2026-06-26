@@ -50,6 +50,7 @@ Important distinction:
 | Surface / component                       | Current pattern                                            | Notes                                                                                      |
 | ----------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `FullscreenOverlay`                       | Compact close by default; `closeButtonSize="touch"` opt-in | Chat-scoped overlays should not default to a visually oversized close button.              |
+| `ImageViewerOverlay`                      | 44px mobile close, 36px desktop close                      | Fullscreen media preview keeps touch safety on mobile without oversized desktop chrome.    |
 | `ModalDialog`                             | `IconButton size="md"` close                               | Acceptable for touch-sized modal headers; consider responsive density if used in desktops. |
 | `SettingsPanel`                           | `IconButton size="md"` close                               | Full-window surface; 44px is acceptable on mobile, may be visually heavy on desktop.       |
 | `SshProjectDialog`                        | `IconButton size="md"` close                               | Full-window workflow; same responsive-density consideration as settings.                   |

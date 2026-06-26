@@ -40,7 +40,12 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
       layer="modal"
       bodyRef={scrollRef}
       actions={
-        <IconButton label={t("copyContentTitle")} size="md" onClick={handleCopy}>
+        <IconButton
+          label={t("copyContentTitle")}
+          size="sm"
+          onClick={handleCopy}
+          className="rounded-md"
+        >
           {copied ? (
             <Check className="w-3.5 h-3.5 text-status-success" />
           ) : (

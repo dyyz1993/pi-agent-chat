@@ -57,10 +57,10 @@ export const ImageViewerOverlay = memo(function ImageViewerOverlay({
         label="Close image preview"
         size="md"
         onClick={onClose}
-        className="absolute right-4 rounded-full bg-white/15 text-white hover:bg-white/25 hover:text-white sm:right-6"
+        className="absolute right-4 h-11 w-11 rounded-full bg-white/15 text-white hover:bg-white/25 hover:text-white sm:right-6 sm:h-9 sm:w-9"
         style={{ top: "calc(1rem + env(safe-area-inset-top, 0px))" }}
       >
-        <X className="w-5 h-5" />
+        <X className="w-4 h-4" />
       </IconButton>
     </div>
   );
