@@ -6,21 +6,163 @@
  * 扩展路径从全局目录 ~/.pi/agent/extensions/ 自动发现，无需逐个配置。
  */
 
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createLogger } from "./shared/lib/logger";
 
 const log = createLogger("config");
 
 const MISSING_PI_VARS: string[] = [];
+const DOTENV_SEARCH_DEPTH = 12;
+const PATH_DELIMITER = process.platform === "win32" ? ";" : ":";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    MISSING_PI_VARS.push(name);
-    return "";
+function unquoteEnvValue(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
   }
-  return value;
+  return trimmed;
+}
+
+function applyDotEnvFile(path: string, env: NodeJS.ProcessEnv): void {
+  const content = readFileSync(path, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(trimmed);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    env[key] ??= unquoteEnvValue(rawValue);
+  }
+}
+
+function findAncestorFile(startDir: string, fileName: string): string | null {
+  let current = resolve(startDir);
+  for (let i = 0; i < DOTENV_SEARCH_DEPTH; i += 1) {
+    const candidate = join(current, fileName);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return null;
+}
+
+function defaultEnvSearchDirs(): string[] {
+  const dirs = [process.cwd(), process.env.PWD ?? ""];
+  try {
+    dirs.push(dirname(fileURLToPath(import.meta.url)));
+  } catch {
+    // import.meta.url can be unavailable in some bundled test contexts.
+  }
+  if (process.argv[1]) dirs.push(dirname(process.argv[1]));
+  return dirs.filter(Boolean);
+}
+
+export function loadDotEnvFromAncestors(
+  env: NodeJS.ProcessEnv = process.env,
+  startDirs: string[] = defaultEnvSearchDirs(),
+): string | null {
+  for (const startDir of startDirs) {
+    const dotenvPath = findAncestorFile(startDir, ".env");
+    if (!dotenvPath) continue;
+    applyDotEnvFile(dotenvPath, env);
+    return dotenvPath;
+  }
+  return null;
+}
+
+loadDotEnvFromAncestors();
+
+function compareVersionNamesDesc(a: string, b: string): number {
+  const parse = (value: string) =>
+    value
+      .replace(/^v/, "")
+      .split(".")
+      .map((part) => Number.parseInt(part, 10) || 0);
+  const left = parse(a);
+  const right = parse(b);
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i += 1) {
+    const diff = (right[i] ?? 0) - (left[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return b.localeCompare(a);
+}
+
+function listNvmNodeCandidates(homeDir: string): string[] {
+  const versionsDir = join(homeDir, ".nvm", "versions", "node");
+  try {
+    return readdirSync(versionsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort(compareVersionNamesDesc)
+      .map((version) => join(versionsDir, version, "bin", "node"));
+  } catch {
+    return [];
+  }
+}
+
+export function resolveNodeBinaryPath(
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir: string = homedir(),
+): string {
+  const explicit = env.PI_NODE_PATH ?? env.NODE_BINARY_PATH;
+  if (explicit) return explicit;
+
+  const candidates = [
+    ...listNvmNodeCandidates(homeDir),
+    join(homeDir, ".volta", "bin", "node"),
+    join(homeDir, ".asdf", "shims", "node"),
+    "/opt/homebrew/bin/node",
+    "/usr/local/bin/node",
+    "/usr/bin/node",
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? "";
+}
+
+export function ensureNodeOnPath(
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir: string = homedir(),
+): string {
+  const nodePath = resolveNodeBinaryPath(env, homeDir);
+  if (!nodePath) return "";
+
+  const nodeDir = dirname(nodePath);
+  const entries = (env.PATH ?? "").split(PATH_DELIMITER).filter(Boolean);
+  if (!entries.includes(nodeDir)) {
+    env.PATH = [nodeDir, ...entries].join(PATH_DELIMITER);
+  }
+  return nodePath;
+}
+
+ensureNodeOnPath();
+
+export function resolvePiCliPath(
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
+): string {
+  if (env.PI_CLI_PATH) return env.PI_CLI_PATH;
+
+  const candidates = [
+    join(cwd, "node_modules", ".bin", "pi"),
+    env.PWD ? join(env.PWD, "node_modules", ".bin", "pi") : "",
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      return resolve(candidate);
+    }
+  }
+
+  MISSING_PI_VARS.push("PI_CLI_PATH");
+  return "";
 }
 
 export const config = {
@@ -28,7 +170,7 @@ export const config = {
   authToken: process.env.AUTH_TOKEN ?? "",
   maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE ?? String(50 * 1024 * 1024)),
   logDir: process.env.LOG_DIR ?? "logs",
-  piCliPath: requireEnv("PI_CLI_PATH"),
+  piCliPath: resolvePiCliPath(),
   /** 全局扩展目录，所有扩展通过软链集中管理于此 */
   piExtensionsDir: join(homedir(), ".pi", "agent", "extensions"),
   /** 本地代理注册 API 地址（如 shanbox），不配置则不启用代理 */

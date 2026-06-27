@@ -918,6 +918,10 @@ describe("project handler", () => {
         code: "host-unreachable",
       },
       {
+        stderr: "ssh: connect to host 192.168.0.9 port 22: No route to host\n",
+        code: "host-unreachable",
+      },
+      {
         stderr: "ssh: connect to host 192.168.1.9 port 22: Operation timed out\n",
         code: "timeout",
       },

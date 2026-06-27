@@ -43,7 +43,8 @@ export function resolveRemoteResourceSyncPlan(options: {
     ? projectSyncConfig?.enabled !== false
     : config.remoteResourceSyncEnabled;
 
-  if (!enabled || (explicitResourceTypes && resourceTypes.length === 0)) return null;
+  if (!enabled || (explicitResourceTypes && resourceTypes && resourceTypes.length === 0))
+    return null;
 
   return {
     remoteAgentDir: resolveRemoteSyncedAgentDir({

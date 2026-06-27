@@ -108,6 +108,9 @@ export function attachRemoteSessionMirror(options: {
   debounceMs?: number;
 }): void {
   if (!options.sessionId || !options.localSessionPath) return;
+  const sessionId: string = options.sessionId;
+  const localProjectPath: string = options.localProjectPath;
+  const localSessionPath: string = options.localSessionPath;
 
   let timer: NodeJS.Timeout | undefined;
   let inFlight = false;
@@ -135,17 +138,17 @@ export function attachRemoteSessionMirror(options: {
       });
       const normalized = normalizeRemoteSessionJsonlForLocalIndex({
         content,
-        sessionId: options.sessionId,
-        localProjectPath: options.localProjectPath,
+        sessionId,
+        localProjectPath,
       });
       if (!normalized) {
         log.warn("[remote-session-mirror] skipped non-matching session file", {
-          sessionId: options.sessionId,
+          sessionId,
           remoteSessionFile,
         });
         return;
       }
-      await writeLocalMirror({ localSessionPath: options.localSessionPath, content: normalized });
+      await writeLocalMirror({ localSessionPath, content: normalized });
     } catch (err: unknown) {
       log.debug("[remote-session-mirror] mirror skipped", {
         sessionId: options.sessionId,

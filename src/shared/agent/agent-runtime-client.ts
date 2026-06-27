@@ -176,6 +176,8 @@ export async function createRpcClient(
   const t0 = performance.now();
   const runtime = await resolveActiveRuntimeSelection(cwd);
   const useRemoteChild = runtime.kind === "remote-agent-child";
+  const remoteChildRuntime =
+    runtime.kind === "remote-agent-child" ? runtime : undefined;
 
   if (runtime.kind === "local" && config.sandboxEnabled && globalSandboxManager && userId) {
     const sandbox = await globalSandboxManager.getOrCreate(userId);
@@ -228,11 +230,11 @@ export async function createRpcClient(
       : undefined;
   const remoteChildCliPath = remoteChildBootstrap?.remoteBinaryPath ?? config.remoteChildPiCliPath;
   const remoteChildNodePath = remoteChildBootstrap ? "" : config.remoteChildNodePath;
-  const remoteResourceSyncPlan = useRemoteChild
-    ? resolveRemoteResourceSyncPlan({ runtime, cwd })
+  const remoteResourceSyncPlan = useRemoteChild && remoteChildRuntime
+    ? resolveRemoteResourceSyncPlan({ runtime: remoteChildRuntime, cwd })
     : null;
-  const remoteResourceSync = remoteResourceSyncPlan
-    ? await syncRemoteAgentResources(toRemoteResourceSyncOptions(remoteResourceSyncPlan, runtime)).catch(
+  const remoteResourceSync = remoteResourceSyncPlan && remoteChildRuntime
+    ? await syncRemoteAgentResources(toRemoteResourceSyncOptions(remoteResourceSyncPlan, remoteChildRuntime)).catch(
         (err: unknown) => {
           log.warn("[createRpcClient] optional remote resource sync failed; continuing", {
             cwd,

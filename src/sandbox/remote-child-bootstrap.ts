@@ -305,7 +305,7 @@ export async function bootstrapRemoteChild(
     const tempDir = mkdtempSync(join(tmpdir(), "pi-remote-child-extensions-"));
     const tarball = join(tempDir, "extensions.tgz");
     try {
-      await exec("tar", ["-czf", tarball, "-C", options.localExtensionsDir, "."]);
+      await exec("tar", ["-czf", tarball, "-C", options.localExtensionsDir!, "."]);
       const remoteExtensionsTarball = `${paths.remoteVersionDir}/extensions.tgz`;
       await exec(
         "scp",
