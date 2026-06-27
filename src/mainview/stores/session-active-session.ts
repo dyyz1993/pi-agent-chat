@@ -66,10 +66,14 @@ export function createSetActiveSessionAction({
       options?: { skipCleanup?: boolean; forceNewProcess?: boolean },
     ) => void
   : never {
+  let startGeneration = 0;
+
   return (id, force, options) => {
     const tSwitchStart = performance.now();
     const prevId = get().activeSessionId;
     if (!force && prevId === id) return;
+    const generation = ++startGeneration;
+    const isLatestStart = () => get().activeSessionId === id && generation === startGeneration;
 
     const trace = id ? createStartupTrace("switch-session", { sessionId: id }) : null;
     trace?.mark("begin");
@@ -225,6 +229,7 @@ export function createSetActiveSessionAction({
             sessionPath: session.sessionPath,
           })
           .then(() => {
+            if (!isLatestStart()) return;
             perfLog.info("[switch] pre-loadSessionMessages done (parallel with agent.start)", {
               sessionId: id,
               count: useChatStore.getState().messagesBySession[id]?.length,
@@ -251,6 +256,7 @@ export function createSetActiveSessionAction({
 
         Promise.race([startPromise, timeoutPromise])
           .then(async (result) => {
+            if (!isLatestStart()) return;
             const isHot = result.status === "already_running";
 
             perfLog.info("[switch] agent.start done", {
@@ -402,6 +408,7 @@ export function createSetActiveSessionAction({
             }
           })
           .catch((err) => {
+            if (!isLatestStart()) return;
             clearAgentStarted(id);
             const currentTab = get().projectTabs.find((t) => t.id === get().activeProjectId);
             const errMsg = formatProjectStartError(err, currentTab);

@@ -25,6 +25,7 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
   useChatStore: {
     getState: vi.fn(() => ({
       loadSessionMessages: vi.fn().mockResolvedValue(undefined),
+      _backgroundRefreshMessages: vi.fn().mockResolvedValue(undefined),
       clearSessionMessages: vi.fn(),
       messagesBySession: {},
       saveInputDraft: vi.fn(),
@@ -49,7 +50,12 @@ vi.mock("../../../src/mainview/stores/use-explorer-store", () => ({
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
-    getState: vi.fn(() => ({ setPlugins: vi.fn(), setSkills: vi.fn() })),
+    getState: vi.fn(() => ({
+      setPlugins: vi.fn(),
+      setSkills: vi.fn(),
+      getRememberedPermissionProfile: vi.fn(() => null),
+      applyPermissionProfileSnapshot: vi.fn(),
+    })),
   },
   deriveSkillScope: vi.fn(() => "project"),
   derivePluginScope: vi.fn(() => "project"),
@@ -114,6 +120,7 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
   cleanupSession: vi.fn(),
   cleanupSessionData: vi.fn(),
   cleanupSessionLight: vi.fn(),
+  requestRulesSnapshot: vi.fn(),
   clearSubscriptionState: (s: Record<string, unknown>) => {
     delete (s as Record<string, unknown>).agentSubscriptions;
     delete (s as Record<string, unknown>).batchSubscriptions;
@@ -402,6 +409,66 @@ describe("setActiveProject", () => {
       "project.scanSessions",
       expect.objectContaining({ projectPath: remotePath }),
     );
+  });
+});
+
+describe("setActiveSession", () => {
+  it("ignores stale agent.start timeout after a newer start succeeds", async () => {
+    vi.useFakeTimers();
+
+    const session = makeSession({ sessionId: "sess-1", projectPath: TAB_A.path });
+    let startCalls = 0;
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.start") {
+        startCalls += 1;
+        if (startCalls === 1) return new Promise(() => {});
+        return Promise.resolve({ agentId: "sess-1", status: "started" });
+      }
+      if (method === "agent.getContextUsage") return Promise.resolve({ tokens: 0 });
+      if (method === "agent.getAvailableModels") return Promise.resolve({ models: [] });
+      if (method === "agent.getSettings") return Promise.resolve({});
+      if (method === "agent.getExtensions") return Promise.resolve({ extensions: [] });
+      if (method === "agent.getSkills") return Promise.resolve({ skills: [] });
+      if (method === "agent.getMcpServers") return Promise.resolve({ servers: [] });
+      if (method === "agent.getQueue") return Promise.resolve({ queue: [] });
+      if (method === "agent.getLatestAgentChange") return Promise.resolve({ change: null });
+      if (method === "agent.getAgents") return Promise.resolve({ agents: [] });
+      if (method === "agent.getCurrentAgent") return Promise.resolve({ agent: null });
+      if (method === "agent.getTierModels") return Promise.resolve({});
+      if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "session.loadTierConfig") return Promise.resolve(null);
+      return Promise.resolve({});
+    });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: null,
+      sessionsByProject: { [TAB_A.path]: [session] },
+      projectStartFailed: { [TAB_A.id]: false },
+      projectStartError: { [TAB_A.id]: "" },
+      sessionReady: {},
+      agentReady: {},
+    });
+
+    useSessionStore.getState().setActiveSession("sess-1", true);
+    useSessionStore.getState().setActiveSession("sess-1", true);
+
+    await vi.waitFor(() => {
+      const state = useSessionStore.getState();
+      expect(state.agentReady["sess-1"]).toBe(true);
+      expect(state.projectStartFailed[TAB_A.id]).toBe(false);
+    });
+
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    const state = useSessionStore.getState();
+    expect(state.agentReady["sess-1"]).toBe(true);
+    expect(state.sessionReady["sess-1"]).toBe(true);
+    expect(state.projectStartFailed[TAB_A.id]).toBe(false);
+    expect(state.projectStartError[TAB_A.id]).toBe("");
+
+    vi.useRealTimers();
   });
 });
 

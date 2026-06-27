@@ -120,7 +120,7 @@ interface SupervisorPanelContentProps {
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
-  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
+  fetchTriggerHistory: (sessionId: string, limit?: number, options?: { force?: boolean }) => Promise<void>;
 }
 
 function SupervisorPanelContent({
@@ -294,7 +294,7 @@ function SupervisorPanelContent({
           <button
             type="button"
             className="text-[11px] text-semantic-accent hover:underline"
-            onClick={() => fetchTriggerHistory(sessionId, 50)}
+            onClick={() => fetchTriggerHistory(sessionId, 50, { force: true })}
           >
             {t("supervisor.triggerHistory.refresh")}
           </button>

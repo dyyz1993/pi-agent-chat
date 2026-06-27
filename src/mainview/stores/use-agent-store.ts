@@ -127,7 +127,7 @@ function isMissingRuntimeClientError(error: unknown): boolean {
 function findSessionInStore(sessionId: string): SessionMeta | null {
   const state = useSessionStore.getState();
   for (const sessions of Object.values(state.sessionsByProject)) {
-    const session = sessions.find((item) => item.id === sessionId || item.sessionId === sessionId);
+    const session = sessions.find((item) => item.sessionId === sessionId);
     if (session) return session;
   }
   return null;
@@ -143,7 +143,7 @@ async function findSessionForRecovery(sessionId: string): Promise<SessionMeta | 
 
   try {
     const sessions = await state.loadSessionsForProject(activeProject.path);
-    return sessions.find((item) => item.id === sessionId || item.sessionId === sessionId) ?? null;
+    return sessions.find((item) => item.sessionId === sessionId) ?? null;
   } catch (error) {
     log.warn("failed to load sessions while recovering runtime client", {
       sessionId,

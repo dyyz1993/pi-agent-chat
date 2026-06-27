@@ -71,6 +71,8 @@ interface AgentStateResult {
 }
 
 interface InitialStateSessionState {
+  activeProjectId: string | null;
+  activeSessionId: string | null;
   currentModel: { provider: string; id: string; name?: string } | null;
   modelBySession: Record<string, { provider: string; id: string; name?: string }>;
   modelStateLoading: boolean;
@@ -86,10 +88,17 @@ interface InitialStateSessionState {
   modelFavorites: Set<string>;
   modelManuallySet: boolean;
   sessionReady: Record<string, boolean>;
+  agentReady: Record<string, boolean>;
+  projectStartFailed: Record<string, boolean>;
+  projectStartError: Record<string, string>;
   sessionStatusMap: Record<string, SessionStatus>;
   sessionsByProject: Record<string, SessionMeta[]>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
+  fetchModelState: (
+    sessionId: string,
+    options?: { force?: boolean; includeFavorites?: boolean },
+  ) => Promise<void>;
 }
 
 type SetState = StoreApi<InitialStateSessionState>["setState"];
@@ -168,6 +177,16 @@ export function createFetchInitialStateAction({
             trace.mark("p1-getstate-done", { ms: Math.round(performance.now() - t0) });
             const result = rawResult as AgentStateResult;
             if (!result) return;
+
+            set((s) => {
+              if (s.activeSessionId !== sessionId || !s.activeProjectId) return {};
+              return {
+                sessionReady: { ...s.sessionReady, [sessionId]: true },
+                agentReady: { ...s.agentReady, [sessionId]: true },
+                projectStartFailed: { ...s.projectStartFailed, [s.activeProjectId]: false },
+                projectStartError: { ...s.projectStartError, [s.activeProjectId]: "" },
+              };
+            });
 
             useStatusStore
               .getState()
@@ -352,16 +371,11 @@ export function createFetchInitialStateAction({
           });
 
         // --- Priority 2 (parallel, max 3) ---
-        const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
+        const modelsPromise = get().fetchModelState(sessionId, { includeFavorites: false });
         const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
         const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
 
         modelsPromise
-          .then((modelsResult) => {
-            if (Array.isArray(modelsResult)) {
-              set({ availableModels: modelsResult });
-            }
-          })
           .catch((err) => {
             log.warn("agent.getAvailableModels failed", {
               sessionId,
@@ -621,7 +635,7 @@ export function createFetchInitialStateAction({
         // --- Priority 5 (parallel) ---
         const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
         const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
-        const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
+        const tierPromise = useTierStore.getState().fetchTierConfig(sessionId);
         const favoritesPromise = apiClient.call("project.getModelFavorites", {});
         const persistedTierPromise = currentSessionMeta
           ? apiClient
@@ -630,11 +644,7 @@ export function createFetchInitialStateAction({
           : Promise.resolve({ config: null as unknown });
 
         Promise.all([statePromise, tierPromise, persistedTierPromise])
-          .then(([rawState, rawTier, rawPersisted]) => {
-            const tierResult = rawTier as { models: Record<string, string> };
-            if (tierResult?.models) {
-              useTierStore.getState().setGlobalDefaults(tierResult.models);
-            }
+          .then(([rawState, , rawPersisted]) => {
             const persisted = rawPersisted as {
               config: { tierModels: Record<string, string>; currentTier: string | null } | null;
             };

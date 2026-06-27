@@ -799,6 +799,7 @@ export type AgentEvent =
       errorMessage: string;
     }
   | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | { type: "auto_continue"; reason: string; iteration: number }
   | { type: "extension_llm_error"; error: string; source?: string }
   | {
       type: "mcp_connection_change";

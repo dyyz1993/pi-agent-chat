@@ -102,10 +102,12 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
 import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
+import { apiClient } from "../../../src/mainview/lib/api-client";
 
 describe("useSessionStore - basic state", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.clearAllMocks();
     mockListRootDir.mockClear();
     mockGitRefreshAll.mockClear();
     useSessionStore.setState({
@@ -125,11 +127,13 @@ describe("useSessionStore - basic state", () => {
       memorySubscriptions: {},
       coordinatorSubscriptions: {},
       sessionReady: {},
+      agentReady: {},
       sessionContextMap: {},
       sessionStatusMap: {},
       currentModel: null,
       currentThinkingLevel: "medium",
       availableModels: [],
+      availableModelsBySession: {},
       projectStartFailed: {},
       projectStartError: {},
       _projectVersion: 0,
@@ -153,8 +157,69 @@ describe("useSessionStore - basic state", () => {
     expect(s.currentModel).toBeNull();
     expect(s.currentThinkingLevel).toBe("medium");
     expect(s.availableModels).toEqual([]);
+    expect(s.availableModelsBySession).toEqual({});
     expect(s.projectStartFailed).toEqual({});
     expect(s.projectStartError).toEqual({});
+  });
+
+  it("deduplicates concurrent model state fetches for the same session", async () => {
+    const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getAvailableModels") {
+        return Promise.resolve([
+          {
+            provider: "openai",
+            id: "gpt-5",
+            name: "GPT-5",
+            contextWindow: 1000000,
+            reasoning: true,
+            input: ["text"],
+          },
+        ]);
+      }
+      if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      return Promise.resolve({});
+    });
+
+    await Promise.all([
+      useSessionStore.getState().fetchModelState("sess-1"),
+      useSessionStore.getState().fetchModelState("sess-1"),
+    ]);
+
+    const modelCalls = mockedCall.mock.calls.filter(
+      ([method]) => method === "agent.getAvailableModels",
+    );
+    expect(modelCalls).toHaveLength(1);
+    expect(useSessionStore.getState().availableModelsBySession["sess-1"]).toHaveLength(1);
+  });
+
+  it("reuses cached model state unless force is requested", async () => {
+    const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getAvailableModels") {
+        return Promise.resolve([
+          {
+            provider: "openai",
+            id: "gpt-5",
+            name: "GPT-5",
+            contextWindow: 1000000,
+            reasoning: true,
+            input: ["text"],
+          },
+        ]);
+      }
+      if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      return Promise.resolve({});
+    });
+
+    await useSessionStore.getState().fetchModelState("sess-1");
+    await useSessionStore.getState().fetchModelState("sess-1");
+    await useSessionStore.getState().fetchModelState("sess-1", { force: true });
+
+    const modelCalls = mockedCall.mock.calls.filter(
+      ([method]) => method === "agent.getAvailableModels",
+    );
+    expect(modelCalls).toHaveLength(2);
   });
 
   it("updateSessionStatus sets status for a session", () => {
@@ -166,6 +231,22 @@ describe("useSessionStore - basic state", () => {
     useSessionStore.getState().updateSessionStatus("sess-1", "streaming");
     useSessionStore.getState().updateSessionStatus("sess-1", "idle");
     expect(useSessionStore.getState().sessionStatusMap["sess-1"]).toBe("idle");
+  });
+
+  it("updateSessionStatus clears active project start failure for live active session", () => {
+    useSessionStore.setState({
+      activeSessionId: "sess-1",
+      activeProjectId: "tab-1",
+      projectTabs: [{ id: "tab-1", name: "repo", path: "/repo" }],
+      projectStartFailed: { "tab-1": true },
+      projectStartError: { "tab-1": "agent.start timed out (30s)" },
+    });
+
+    useSessionStore.getState().updateSessionStatus("sess-1", "streaming");
+
+    const state = useSessionStore.getState();
+    expect(state.projectStartFailed["tab-1"]).toBe(false);
+    expect(state.projectStartError["tab-1"]).toBe("");
   });
 
   it("refreshes active workspace resources when a running session returns to idle", () => {

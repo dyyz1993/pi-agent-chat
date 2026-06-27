@@ -10,6 +10,13 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("supervisor");
 
+const statusPromises = new Map<string, Promise<void>>();
+const taskReportPromises = new Map<string, Promise<void>>();
+const triggerHistoryPromises = new Map<string, Promise<void>>();
+const loadedStatusSessions = new Set<string>();
+const loadedTaskReportSessions = new Set<string>();
+const loadedTriggerHistoryKeys = new Set<string>();
+
 export interface SupervisorSessionState {
   status: SupervisorStatus | null;
   taskReports: TaskReport[];
@@ -19,7 +26,7 @@ export interface SupervisorSessionState {
 interface SupervisorState {
   bySession: Record<string, SupervisorSessionState>;
 
-  fetchStatus: (sessionId: string) => Promise<void>;
+  fetchStatus: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
   setGoal: (sessionId: string, objective: string) => Promise<void>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
   refineGoal: (sessionId: string, objective: string) => Promise<{ success: boolean; objective?: string; error?: string }>;
@@ -28,8 +35,8 @@ interface SupervisorState {
   cancelPause: (sessionId: string) => Promise<void>;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
-  fetchTaskReport: (sessionId: string) => Promise<void>;
-  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
+  fetchTaskReport: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
+  fetchTriggerHistory: (sessionId: string, limit?: number, options?: { force?: boolean }) => Promise<void>;
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => void;
   clearSession: (sessionId: string) => void;
 }
@@ -69,23 +76,35 @@ function mergeTriggerRecords(
 export const useSupervisorStore = create<SupervisorState>()((set) => ({
   bySession: {},
 
-  fetchStatus: async (sessionId: string) => {
-    try {
-      const status = (await apiClient.call("supervisor.getStatus", {
-        sessionId,
-      })) as SupervisorStatus;
-      set((s) => ({
-        bySession: updateSession(s.bySession, sessionId, (session) => ({
-          ...session,
-          status,
-        })),
-      }));
-    } catch (err) {
-      log.warn("fetchStatus failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
+  fetchStatus: async (sessionId: string, options?: { force?: boolean }) => {
+    if (!options?.force && loadedStatusSessions.has(sessionId)) return;
+    const existingPromise = statusPromises.get(sessionId);
+    if (existingPromise) return existingPromise;
+
+    const promise = (async () => {
+      try {
+        const status = (await apiClient.call("supervisor.getStatus", {
+          sessionId,
+        })) as SupervisorStatus;
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status,
+          })),
+        }));
+        loadedStatusSessions.add(sessionId);
+      } catch (err) {
+        log.warn("fetchStatus failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        statusPromises.delete(sessionId);
+      }
+    })();
+
+    statusPromises.set(sessionId, promise);
+    return promise;
   },
 
   setGoal: async (sessionId: string, objective: string) => {
@@ -250,43 +269,68 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
     }
   },
 
-  fetchTaskReport: async (sessionId: string) => {
-    try {
-      const result = (await apiClient.call("supervisor.getTaskReport", {
-        sessionId,
-      })) as { tasks: TaskReport[] };
-      set((s) => ({
-        bySession: updateSession(s.bySession, sessionId, (session) => ({
-          ...session,
-          taskReports: result.tasks,
-        })),
-      }));
-    } catch (err) {
-      log.warn("fetchTaskReport failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
+  fetchTaskReport: async (sessionId: string, options?: { force?: boolean }) => {
+    if (!options?.force && loadedTaskReportSessions.has(sessionId)) return;
+    const existingPromise = taskReportPromises.get(sessionId);
+    if (existingPromise) return existingPromise;
+
+    const promise = (async () => {
+      try {
+        const result = (await apiClient.call("supervisor.getTaskReport", {
+          sessionId,
+        })) as { tasks: TaskReport[] };
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            taskReports: result.tasks,
+          })),
+        }));
+        loadedTaskReportSessions.add(sessionId);
+      } catch (err) {
+        log.warn("fetchTaskReport failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        taskReportPromises.delete(sessionId);
+      }
+    })();
+
+    taskReportPromises.set(sessionId, promise);
+    return promise;
   },
 
-  fetchTriggerHistory: async (sessionId: string, limit?: number) => {
-    try {
-      const result = (await apiClient.call("supervisor.getTriggerHistory", {
-        sessionId,
-        limit,
-      })) as { triggers: TriggerRecord[] };
-      set((s) => ({
-        bySession: updateSession(s.bySession, sessionId, (session) => ({
-          ...session,
-          triggerRecords: mergeTriggerRecords(session.triggerRecords, result.triggers),
-        })),
-      }));
-    } catch (err) {
-      log.warn("fetchTriggerHistory failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
+  fetchTriggerHistory: async (sessionId: string, limit?: number, options?: { force?: boolean }) => {
+    const key = `${sessionId}:${limit ?? "default"}`;
+    if (!options?.force && loadedTriggerHistoryKeys.has(key)) return;
+    const existingPromise = triggerHistoryPromises.get(key);
+    if (existingPromise) return existingPromise;
+
+    const promise = (async () => {
+      try {
+        const result = (await apiClient.call("supervisor.getTriggerHistory", {
+          sessionId,
+          limit,
+        })) as { triggers: TriggerRecord[] };
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            triggerRecords: mergeTriggerRecords(session.triggerRecords, result.triggers),
+          })),
+        }));
+        loadedTriggerHistoryKeys.add(key);
+      } catch (err) {
+        log.warn("fetchTriggerHistory failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        triggerHistoryPromises.delete(key);
+      }
+    })();
+
+    triggerHistoryPromises.set(key, promise);
+    return promise;
   },
 
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => {
@@ -412,6 +456,11 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
   },
 
   clearSession: (sessionId: string) => {
+    loadedStatusSessions.delete(sessionId);
+    loadedTaskReportSessions.delete(sessionId);
+    for (const key of Array.from(loadedTriggerHistoryKeys)) {
+      if (key.startsWith(`${sessionId}:`)) loadedTriggerHistoryKeys.delete(key);
+    }
     set((s) => {
       const { [sessionId]: _, ...rest } = s.bySession;
       return { bySession: rest };

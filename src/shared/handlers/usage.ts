@@ -58,10 +58,11 @@ async function refreshStats(
       range,
       scannedSessionFiles,
     });
-    const lastCacheWriteAt = await writeUsageSnapshot({
+    const snapshotStats: UsageShareStats = {
       ...stats,
       dataQuality: { ...stats.dataQuality, cacheStatus: "refresh" },
-    });
+    };
+    const lastCacheWriteAt = await writeUsageSnapshot(snapshotStats);
     return {
       ...stats,
       dataQuality: {
@@ -69,7 +70,7 @@ async function refreshStats(
         cacheStatus: "refresh",
         lastCacheWriteAt,
       },
-    };
+    } satisfies UsageShareStats;
   })();
 
   refreshInFlight.set(key, promise);

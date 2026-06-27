@@ -61,12 +61,27 @@ function appendToken(url: string, token: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
 }
 
-function getDevWebSocketTarget(token: string): string | null {
+function rewriteLoopbackTargetForPageHost(url: string, pageHostname?: string): string {
+  if (!pageHostname || isLoopbackHost(pageHostname)) return url;
+  try {
+    const target = new URL(url);
+    if (isLoopbackHost(target.hostname)) {
+      target.hostname = pageHostname;
+    }
+    return target.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
   if (!import.meta.env.DEV || !import.meta.env.VITE_API_TARGET) return null;
   try {
     const apiTarget = new URL(import.meta.env.VITE_API_TARGET);
+    const rewrittenTarget = rewriteLoopbackTargetForPageHost(apiTarget.toString(), pageHostname);
+    const resolvedTarget = new URL(rewrittenTarget);
     const protocol = apiTarget.protocol === "https:" ? "wss:" : "ws:";
-    return appendToken(`${protocol}//${apiTarget.host}/ws`, token);
+    return appendToken(`${protocol}//${resolvedTarget.host}/ws`, token);
   } catch {
     return null;
   }
@@ -284,10 +299,10 @@ class APIClientImpl {
       new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url");
     if (customUrl) {
-      return appendToken(customUrl, token);
+      return appendToken(rewriteLoopbackTargetForPageHost(customUrl, window.location.hostname), token);
     }
 
-    const devTarget = getDevWebSocketTarget(token);
+    const devTarget = getDevWebSocketTarget(token, window.location.hostname);
     if (devTarget) {
       return devTarget;
     }

@@ -990,6 +990,9 @@ export function clearSubscriptionState(
   };
 }
 
+let pendingTabsSyncKey: string | null = null;
+let lastSyncedTabsKey: string | null = null;
+
 export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null) {
   const persistTabs: PersistedTab[] = tabs.map((t) => ({
     id: t.id,
@@ -998,16 +1001,32 @@ export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null
     runtime: t.runtime,
     remote: t.remote,
   }));
-  apiClient.call("project.syncTabs", { tabs: persistTabs, activeTabId }).catch((err) => {
-    useAppStore.getState().addLog(`[sub] ${String(err)}`);
-  });
+  const payload = { tabs: persistTabs, activeTabId };
+  const key = JSON.stringify(payload);
+  if (key === pendingTabsSyncKey || key === lastSyncedTabsKey) return;
+
+  pendingTabsSyncKey = key;
+  apiClient
+    .call("project.syncTabs", payload)
+    .then(() => {
+      lastSyncedTabsKey = key;
+    })
+    .catch((err) => {
+      useAppStore.getState().addLog(`[sub] ${String(err)}`);
+    })
+    .finally(() => {
+      if (pendingTabsSyncKey === key) pendingTabsSyncKey = null;
+    });
 }
 
 let projectStatusSubId: string | null = null;
 let sessionRenamedSubId: string | null = null;
+let projectStatusSubPending = false;
+let sessionRenamedSubPending = false;
 
 export function setupSessionRenamedSubscription(): void {
-  if (sessionRenamedSubId) return;
+  if (sessionRenamedSubId || sessionRenamedSubPending) return;
+  sessionRenamedSubPending = true;
 
   apiClient
     .subscribe(
@@ -1028,14 +1047,17 @@ export function setupSessionRenamedSubscription(): void {
     )
     .then((subId) => {
       sessionRenamedSubId = subId;
+      sessionRenamedSubPending = false;
     })
     .catch((err) => {
+      sessionRenamedSubPending = false;
       useAppStore.getState().addLog(`[sub] ${String(err)}`);
     });
 }
 
 export function setupProjectStatusSubscription(): void {
-  if (projectStatusSubId) return;
+  if (projectStatusSubId || projectStatusSubPending) return;
+  projectStatusSubPending = true;
 
   apiClient
     .subscribe(
@@ -1060,8 +1082,10 @@ export function setupProjectStatusSubscription(): void {
     )
     .then((subId) => {
       projectStatusSubId = subId;
+      projectStatusSubPending = false;
     })
     .catch((err) => {
+      projectStatusSubPending = false;
       useAppStore.getState().addLog(`[sub] ${String(err)}`);
     });
 }

@@ -76,6 +76,7 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useSupervisorStore } from "../../../src/mainview/stores/use-supervisor-store";
+import { useTierStore } from "../../../src/mainview/stores/use-tier-store";
 
 let _sidCounter = 0;
 function nextSid() {
@@ -147,6 +148,7 @@ beforeEach(() => {
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
+    availableModelsBySession: {},
     projectStartFailed: {},
     projectStartError: {},
     _projectVersion: 0,
@@ -154,9 +156,25 @@ beforeEach(() => {
     modelFavorites: new Set(),
   });
   useSupervisorStore.setState({ bySession: {} });
+  useTierStore.setState({ globalDefaults: {}, dataBySession: {}, switching: false });
 });
 
 describe("fetchInitialState context usage retry", () => {
+  it("shares startup model and tier fetches with component store entrypoints", async () => {
+    const sid = nextSid();
+    setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
+
+    await Promise.all([
+      useSessionStore.getState().fetchInitialState(sid),
+      useSessionStore.getState().fetchModelState(sid),
+      useTierStore.getState().fetchTierConfig(sid),
+    ]);
+
+    const calls = (apiClient.call as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.filter(([method]) => method === "agent.getAvailableModels")).toHaveLength(1);
+    expect(calls.filter(([method]) => method === "agent.getTierModels")).toHaveLength(1);
+  });
+
   it("calls agent.getContextUsage (not getSessionStats)", async () => {
     const sid = nextSid();
     setupMock(() => Promise.resolve({ tokens: 5000, contextWindow: 200000, percent: 0.025 }));

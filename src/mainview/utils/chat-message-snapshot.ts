@@ -1,5 +1,15 @@
 import type { ChatMessage, ContentBlock } from "../types";
 
+function unknownSignature(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
 /**
  * Compare two content block arrays with early exit.
  * Avoids JSON.stringify by doing field-by-field comparison.
@@ -30,7 +40,13 @@ function isContentSame(a: ContentBlock[], b: ContentBlock[]): boolean {
       }
       case "toolResult": {
         const ob = bb as Extract<ContentBlock, { type: "toolResult" }>;
-        if (ba.content !== ob.content || !!ba.isError !== !!ob.isError) return false;
+        if (
+          ba.content !== ob.content ||
+          !!ba.isError !== !!ob.isError ||
+          unknownSignature(ba.details) !== unknownSignature(ob.details)
+        ) {
+          return false;
+        }
         break;
       }
       case "toolExecution": {
@@ -39,7 +55,8 @@ function isContentSame(a: ContentBlock[], b: ContentBlock[]): boolean {
           ba.toolName !== ob.toolName ||
           ba.status !== ob.status ||
           (ba.output ?? "") !== (ob.output ?? "") ||
-          (ba.args ?? "") !== (ob.args ?? "")
+          (ba.args ?? "") !== (ob.args ?? "") ||
+          unknownSignature(ba.details) !== unknownSignature(ob.details)
         ) {
           return false;
         }

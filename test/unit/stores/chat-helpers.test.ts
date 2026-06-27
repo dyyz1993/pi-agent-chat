@@ -68,6 +68,49 @@ describe("chat store helpers", () => {
     expect(hasSameMessageSnapshots(current, changed)).toBe(false);
   });
 
+  it("treats tool execution detail changes as a meaningful snapshot update", () => {
+    const current: ChatMessage[] = [
+      {
+        id: "m-preview",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "preview-1",
+            toolName: "preview",
+            args: "{\"source\":\"/tmp/demo.png\"}",
+            status: "done",
+            output: "Preview: /tmp/demo.png",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+    const changed: ChatMessage[] = [
+      {
+        ...current[0],
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "preview-1",
+            toolName: "preview",
+            args: "{\"source\":\"/tmp/demo.png\"}",
+            status: "done",
+            output: "Preview: /tmp/demo.png",
+            details: {
+              source: "/tmp/demo.png",
+              absolutePath: "/tmp/demo.png",
+              resourceType: "image",
+              status: "ok",
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(hasSameMessageSnapshots(current, changed)).toBe(false);
+  });
+
   it("detects stale agent process send failures for the active session", () => {
     expect(
       isAgentNotStartedError(

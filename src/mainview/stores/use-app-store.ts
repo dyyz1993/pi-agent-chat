@@ -8,6 +8,9 @@ import { createStartupTrace } from "../lib/startup-monitor";
 
 const log = createLogger("system");
 
+let connectionInitPromise: Promise<void> | null = null;
+let connectionListenerInstalled = false;
+
 type DemoResult =
   | MethodResult<RPCMethods, "system.ping">
   | MethodResult<RPCMethods, "system.hello">
@@ -27,7 +30,7 @@ interface AppState {
   timerRunning: boolean;
   connectionStatus: "connected" | "disconnected";
 
-  initializeConnection: () => void;
+  initializeConnection: () => Promise<void> | void;
   addLog: (msg: string) => void;
   setMethod: (method: DemoMethod) => void;
   callRPC: (inputText: string) => Promise<void>;
@@ -50,9 +53,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   connectionStatus: "connected",
 
   initializeConnection: () => {
+    if (get().ready && apiClient.isConnected()) return connectionInitPromise ?? undefined;
+    if (connectionInitPromise) return connectionInitPromise;
+
     const MAX_RETRIES = 5;
     let retries = 0;
     const trace = createStartupTrace("connection.initialize");
+
+    if (!connectionListenerInstalled) {
+      connectionListenerInstalled = true;
+      apiClient.onConnectionChange((status) => {
+        set({ connectionStatus: status });
+        get().addLog(`Connection: ${status}`);
+      });
+    }
+
     const init = async () => {
       try {
         trace.mark("api-client.initialize.begin", { attempt: retries + 1 });
@@ -76,16 +91,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         } else {
           set({ ready: false, initError: `Failed to connect after ${MAX_RETRIES} retries` });
           get().addLog(`Failed to connect after ${MAX_RETRIES} retries`);
+          connectionInitPromise = null;
         }
       }
     };
     set({ initError: null });
-    init();
-
-    apiClient.onConnectionChange((status) => {
-      set({ connectionStatus: status });
-      get().addLog(`Connection: ${status}`);
-    });
+    connectionInitPromise = init();
+    return connectionInitPromise;
   },
 
   addLog: (msg: string) => {

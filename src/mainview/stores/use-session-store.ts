@@ -43,6 +43,7 @@ const perfLog = createLogger("session-perf");
 
 const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
 const _resourceRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const _modelStatePromises = new Map<string, Promise<void>>();
 const STATUS_STUCK_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function clearStatusWatchdog(sessionId: string) {
@@ -113,12 +114,32 @@ function scheduleWorkspaceResourceRefresh(getState: () => SessionState, sessionI
   _resourceRefreshTimers.set(sessionId, timer);
 }
 
+function clearActiveProjectStartErrorForSession(
+  state: SessionState,
+  sessionId: string,
+): Partial<SessionState> {
+  if (state.activeSessionId !== sessionId || !state.activeProjectId) return {};
+  return {
+    projectStartFailed: { ...state.projectStartFailed, [state.activeProjectId]: false },
+    projectStartError: { ...state.projectStartError, [state.activeProjectId]: "" },
+  };
+}
+
 export interface ModelInfo {
   provider: string;
   id: string;
   name?: string;
   reasoning?: boolean;
 }
+
+type AvailableModel = {
+  provider: string;
+  id: string;
+  name: string;
+  contextWindow: number;
+  reasoning: boolean;
+  input: ("text" | "image")[];
+};
 
 /**
  * Insert a new session after the last pinned session.
@@ -159,14 +180,8 @@ interface SessionState {
   modelStateLoading: boolean;
   modelManuallySet: boolean;
   currentThinkingLevel: string;
-  availableModels: Array<{
-    provider: string;
-    id: string;
-    name: string;
-    contextWindow: number;
-    reasoning: boolean;
-    input: ("text" | "image")[];
-  }>;
+  availableModels: AvailableModel[];
+  availableModelsBySession: Record<string, AvailableModel[]>;
   modelFavorites: Set<string>;
   lastActiveSessionByProject: Record<string, string>;
   projectStartFailed: Record<string, boolean>;
@@ -196,7 +211,10 @@ interface SessionState {
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   restoreContextFromHistory: (sessionId: string) => void;
   fetchInitialState: (sessionId: string) => void;
-  fetchModelState: (sessionId: string) => void;
+  fetchModelState: (
+    sessionId: string,
+    options?: { force?: boolean; includeFavorites?: boolean },
+  ) => Promise<void>;
   scheduleWorkspaceResourceRefresh: (sessionId: string) => void;
   refreshSessionResources: (sessionId: string) => void;
   setCurrentModel: (provider: string, modelId: string) => void;
@@ -252,6 +270,7 @@ export const useSessionStore = create<SessionState>()(
       modelManuallySet: false,
       currentThinkingLevel: "medium",
       availableModels: [],
+      availableModelsBySession: {},
       modelFavorites: new Set<string>(),
       lastActiveSessionByProject: {},
       projectStartFailed: {},
@@ -622,6 +641,9 @@ export const useSessionStore = create<SessionState>()(
         const previousStatus = get().sessionStatusMap[sessionId] ?? "idle";
         set((s) => ({
           sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
+          ...(status === "streaming" || status === "idle"
+            ? clearActiveProjectStartErrorForSession(s, sessionId)
+            : {}),
         }));
 
         if (status === "idle" && previousStatus !== "idle") {
@@ -670,21 +692,46 @@ export const useSessionStore = create<SessionState>()(
         perfLog,
       }),
 
-      fetchModelState: (sessionId) => {
-        apiClient
-          .call("agent.getAvailableModels", { sessionId })
-          .then((modelsResult) => {
-            if (Array.isArray(modelsResult)) {
-              set({ availableModels: modelsResult });
-            }
-          })
-          .catch((err) => {
-            log.warn("agent.getAvailableModels failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
+      fetchModelState: async (sessionId, options) => {
+        const cached = get().availableModelsBySession[sessionId];
+        if (!options?.force && cached) {
+          set({ availableModels: cached });
+          if (options?.includeFavorites !== false && get().modelFavorites.size === 0) {
+            get().fetchModelFavorites();
+          }
+          return;
+        }
+
+        const existingPromise = _modelStatePromises.get(sessionId);
+        if (existingPromise) {
+          await existingPromise;
+        } else {
+          const promise = apiClient
+            .call("agent.getAvailableModels", { sessionId })
+            .then((modelsResult) => {
+              if (Array.isArray(modelsResult)) {
+                set((s) => ({
+                  availableModels: modelsResult,
+                  availableModelsBySession: {
+                    ...s.availableModelsBySession,
+                    [sessionId]: modelsResult,
+                  },
+                }));
+              }
+            })
+            .catch((err) => {
+              log.warn("agent.getAvailableModels failed", {
+                sessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
+            })
+            .finally(() => {
+              _modelStatePromises.delete(sessionId);
             });
-          });
-        if (get().modelFavorites.size === 0) {
+          _modelStatePromises.set(sessionId, promise);
+          await promise;
+        }
+        if (options?.includeFavorites !== false && get().modelFavorites.size === 0) {
           get().fetchModelFavorites();
         }
       },
@@ -1019,6 +1066,7 @@ apiClient.onReconnect(() => {
         });
         useSessionStore.setState((s) => ({
           sessionReady: { ...s.sessionReady, [activeSessionId]: true },
+          agentReady: { ...s.agentReady, [activeSessionId]: true },
         }));
         requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
