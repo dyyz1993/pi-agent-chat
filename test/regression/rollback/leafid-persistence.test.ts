@@ -94,7 +94,7 @@ describe("rollback leafId persistence", () => {
     );
     mgr(manager).sessionPaths.set("s1", sf);
 
-    await manager.navigateTree("s1", "m2");
+    await manager.navigateTree("s1", "m2", { skipFiles: true });
 
     expect(leafPointerInFile(sf)).toBe(true);
   });
@@ -112,7 +112,7 @@ describe("rollback leafId persistence", () => {
     );
     mgr(manager).sessionPaths.set("s1", sf);
 
-    await manager.navigateTree("s1", "m2");
+    await manager.navigateTree("s1", "m2", { skipFiles: true });
     const r = await manager.getFullMessages("s1", sf);
 
     expect(r.totalCount).toBe(2);
@@ -132,7 +132,7 @@ describe("rollback leafId persistence", () => {
     );
     mgr(manager).sessionPaths.set("s1", sf);
 
-    await manager.navigateTree("s1", "m2");
+    await manager.navigateTree("s1", "m2", { skipFiles: true });
     expect(leafPointerInFile(sf)).toBe(true);
 
     mgr(manager).leafIds.delete("s1");
@@ -155,7 +155,7 @@ describe("rollback leafId persistence", () => {
     );
     mgr(manager).sessionPaths.set("s1", sf);
 
-    await manager.navigateTree("s1", "m2");
+    await manager.navigateTree("s1", "m2", { skipFiles: true });
     appendFileSync(sf, "\n" + msg("m5", "m2", "user"));
     appendFileSync(sf, "\n" + msg("m6", "m5", "assistant"));
 

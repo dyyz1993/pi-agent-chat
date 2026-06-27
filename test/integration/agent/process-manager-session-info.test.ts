@@ -58,8 +58,8 @@ interface InternalAPM {
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   processByCwd: Map<string, ManagedClientShape>;
-  channelHandlers: {
-    handleEvent: (sessionId: string, event: Record<string, unknown>) => void;
+  eventHandler: {
+    handleEvent: (sessionId: string, event: never) => void;
   };
 }
 
@@ -130,7 +130,7 @@ describe("AgentProcessManager — session_info_changed event", () => {
     const m = internals(manager);
     m.clients.set(sessionId, managed);
 
-    m.channelHandlers.handleEvent(sessionId, {
+    m.eventHandler.handleEvent(sessionId, {
       type: "session_info_changed",
       name: "Auto Generated Title",
     });
@@ -156,7 +156,7 @@ describe("AgentProcessManager — session_info_changed event", () => {
     const m = internals(manager);
     m.clients.set(sessionId, managed);
 
-    m.channelHandlers.handleEvent(sessionId, {
+    m.eventHandler.handleEvent(sessionId, {
       type: "session_info_changed",
       name: "Some Title",
     });
@@ -180,7 +180,7 @@ describe("AgentProcessManager — session_info_changed event", () => {
     const m = internals(manager);
     m.clients.set(sessionId, managed);
 
-    m.channelHandlers.handleEvent(sessionId, {
+    m.eventHandler.handleEvent(sessionId, {
       type: "session_info_changed",
       name: "",
     });
@@ -198,7 +198,7 @@ describe("AgentProcessManager — session_info_changed event", () => {
     const m = internals(manager);
     m.clients.set(sessionId, managed);
 
-    m.channelHandlers.handleEvent(sessionId, {
+    m.eventHandler.handleEvent(sessionId, {
       type: "session_info_changed",
       name: 12345,
     });
@@ -219,7 +219,7 @@ describe("AgentProcessManager — session_info_changed event", () => {
     const m = internals(manager);
     m.clients.set(sessionId, managed);
 
-    m.channelHandlers.handleEvent(sessionId, {
+    m.eventHandler.handleEvent(sessionId, {
       type: "session_info_changed",
       name: "Idle Title Update",
     });

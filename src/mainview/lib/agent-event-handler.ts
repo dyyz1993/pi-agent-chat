@@ -1154,7 +1154,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "tool_execution_end") {
-    storeGet().scheduleWorkspaceResourceRefresh(sessionId);
+    const sessionStore = storeGet();
+    if (typeof sessionStore.scheduleWorkspaceResourceRefresh === "function") {
+      sessionStore.scheduleWorkspaceResourceRefresh(sessionId);
+    }
     flushNow();
     const toolCallId = event.toolCallId;
     setToolActive(sessionId, toolCallId, false);

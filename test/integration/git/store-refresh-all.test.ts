@@ -59,6 +59,9 @@ describe("useGitStore.refreshAll", () => {
     });
 
     mockCall.mockImplementation((method: string) => {
+      if (method === "git.checkRepo") {
+        return Promise.resolve({ isGitRepo: true });
+      }
       if (method === "git.status") {
         return statusPromise.then(() => ({
           branch: "main",
@@ -80,10 +83,13 @@ describe("useGitStore.refreshAll", () => {
 
     const refreshPromise = useGitStore.getState().refreshAll(REPO);
 
-    expect(mockCall).toHaveBeenCalledWith("git.status", { repoPath: REPO });
-    expect(mockCall).toHaveBeenCalledWith("git.worktreeList", { repoPath: REPO });
-    expect(mockCall).toHaveBeenCalledWith("git.branches", { repoPath: REPO });
-    expect(mockCall).toHaveBeenCalledTimes(3);
+    expect(mockCall).toHaveBeenCalledWith("git.checkRepo", { repoPath: REPO });
+    await vi.waitFor(() => {
+      expect(mockCall).toHaveBeenCalledWith("git.status", { repoPath: REPO });
+      expect(mockCall).toHaveBeenCalledWith("git.worktreeList", { repoPath: REPO });
+      expect(mockCall).toHaveBeenCalledWith("git.branches", { repoPath: REPO });
+      expect(mockCall).toHaveBeenCalledTimes(4);
+    });
 
     statusResolved!();
     worktreesResolved!();
@@ -99,14 +105,19 @@ describe("useGitStore.refreshAll", () => {
 
   it("does nothing when isGitRepo is false", async () => {
     useGitStore.setState({ isGitRepo: false });
+    mockCall.mockResolvedValue({ isGitRepo: false });
 
     await useGitStore.getState().refreshAll(REPO);
 
-    expect(mockCall).not.toHaveBeenCalled();
+    expect(mockCall).toHaveBeenCalledTimes(1);
+    expect(mockCall).toHaveBeenCalledWith("git.checkRepo", { repoPath: REPO });
   });
 
   it("updates store state with fetched data", async () => {
     mockCall.mockImplementation((method: string) => {
+      if (method === "git.checkRepo") {
+        return Promise.resolve({ isGitRepo: true });
+      }
       if (method === "git.status") {
         return Promise.resolve({
           branch: "feature/test",

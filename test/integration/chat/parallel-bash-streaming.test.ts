@@ -126,7 +126,14 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
     loadSessionMessages: () => {},
   }));
-  return { useChatStore };
+  return {
+    useChatStore,
+    getMemorySemanticTimestamp: (_data: unknown, fallback: number) => fallback,
+    insertChatMessageByDisplayOrder: (messages: ChatMessage[], message: ChatMessage) => [
+      ...messages,
+      message,
+    ],
+  };
 });
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
@@ -195,7 +202,11 @@ vi.mock("../../../src/mainview/stores/use-ui-dialog-store", () => {
   return { useUIDialogStore };
 });
 
-import { handleAgentEvent, toolCallNameMap, toolCallArgsMap } from "../../../src/mainview/lib/agent-event-handler";
+import {
+  handleAgentEvent,
+  toolCallNameMap,
+  toolCallArgsMap,
+} from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
@@ -390,10 +401,7 @@ describe("Parallel Bash Streaming", () => {
     );
 
     // Simulate: both updates arrive in the same frame
-    sendSameFrame(
-      makeUpdate("call_a96", "1\n"),
-      makeUpdate("call_9c0", "1\n"),
-    );
+    sendSameFrame(makeUpdate("call_a96", "1\n"), makeUpdate("call_9c0", "1\n"));
 
     const blocks = getToolBlocks();
     console.log(`[T4] blocks after same-frame updates:`);
@@ -431,16 +439,15 @@ describe("Parallel Bash Streaming", () => {
     // Phase 2: 10 rounds of updates, each round has both updates in the same frame
     for (let i = 1; i <= 10; i++) {
       const text = Array.from({ length: i }, (_, j) => String(j + 1)).join("\n") + "\n";
-      sendSameFrame(
-        makeUpdate("call_a96", text),
-        makeUpdate("call_9c0", text),
-      );
+      sendSameFrame(makeUpdate("call_a96", text), makeUpdate("call_9c0", text));
     }
 
     blocks = getToolBlocks();
     console.log(`[T5] After 10 update rounds:`);
     for (const b of blocks) {
-      console.log(`  ${b.toolCallId}: status=${b.status} output=${JSON.stringify(b.output?.slice(0, 30))}`);
+      console.log(
+        `  ${b.toolCallId}: status=${b.status} output=${JSON.stringify(b.output?.slice(0, 30))}`,
+      );
     }
 
     // Phase 3: Both ends in same frame
@@ -452,7 +459,9 @@ describe("Parallel Bash Streaming", () => {
     blocks = getToolBlocks();
     console.log(`[T5] Final state after ends:`);
     for (const b of blocks) {
-      console.log(`  ${b.toolCallId}: status=${b.status} output=${JSON.stringify(b.output?.slice(0, 30))}`);
+      console.log(
+        `  ${b.toolCallId}: status=${b.status} output=${JSON.stringify(b.output?.slice(0, 30))}`,
+      );
     }
 
     // Assertions
@@ -526,10 +535,7 @@ describe("Refresh — getFullMessages + real-time events", () => {
     console.log("[T6] After refresh: store has 2 running blocks");
 
     // Real-time updates arrive (both in same frame — simulates parallel)
-    sendSameFrame(
-      makeUpdate("call_a96", "1\n2\n3\n4\n"),
-      makeUpdate("call_9c0", "1\n2\n3\n4\n"),
-    );
+    sendSameFrame(makeUpdate("call_a96", "1\n2\n3\n4\n"), makeUpdate("call_9c0", "1\n2\n3\n4\n"));
 
     let blocks = getToolBlocks();
     console.log(`[T6] After same-frame updates:`);
@@ -554,7 +560,9 @@ describe("Refresh — getFullMessages + real-time events", () => {
     blocks = getToolBlocks();
     console.log(`[T6] After same-frame ends:`);
     for (const b of blocks) {
-      console.log(`  ${b.toolCallId}: status=${b.status} output=${JSON.stringify(b.output?.slice(0, 20))}`);
+      console.log(
+        `  ${b.toolCallId}: status=${b.status} output=${JSON.stringify(b.output?.slice(0, 20))}`,
+      );
     }
 
     // Both should be done
@@ -576,9 +584,7 @@ describe("Refresh — getFullMessages + real-time events", () => {
     console.log("[T7] After refresh: a96=done, 9c0=running");
 
     // Only 9c0 should receive updates
-    sendSameFrame(
-      makeUpdate("call_9c0", "1\n2\n3\n4\n5\n6\n7\n"),
-    );
+    sendSameFrame(makeUpdate("call_9c0", "1\n2\n3\n4\n5\n6\n7\n"));
 
     let blocks = getToolBlocks();
     const c0 = blocks.find((b) => b.toolCallId === "call_9c0");
@@ -609,9 +615,7 @@ describe("Refresh — getFullMessages + real-time events", () => {
   it("T8 — Refresh, then tool_execution_start arrives with different ID (message_update linkage)", () => {
     // After refresh, getFullMessages returns a block from JSONL
     // The block's toolCallId is the execution ID
-    setRefreshedMessages([
-      makeRefreshBlock("exec-id-001", "running", ""),
-    ]);
+    setRefreshedMessages([makeRefreshBlock("exec-id-001", "running", "")]);
 
     // tool_execution_start arrives for the SAME tool but via real-time
     // with the same ID — should find the existing block
@@ -663,9 +667,8 @@ describe("Refresh — getFullMessages + real-time events", () => {
 
     const msgs = getMessages();
     const assistantMsg = msgs.find((m) => m.id === "msg-assistant");
-    const toolBlocks = assistantMsg?.content.filter(
-      (b): b is ToolExecBlock => b.type === "toolExecution",
-    ) ?? [];
+    const toolBlocks =
+      assistantMsg?.content.filter((b): b is ToolExecBlock => b.type === "toolExecution") ?? [];
 
     console.log(`[T9] Tool blocks after updates:`);
     for (const b of toolBlocks) {
@@ -687,9 +690,9 @@ describe("Refresh — getFullMessages + real-time events", () => {
 
     const msgsAfter = getMessages();
     const assistantMsgAfter = msgsAfter.find((m) => m.id === "msg-assistant");
-    const toolBlocksAfter = assistantMsgAfter?.content.filter(
-      (b): b is ToolExecBlock => b.type === "toolExecution",
-    ) ?? [];
+    const toolBlocksAfter =
+      assistantMsgAfter?.content.filter((b): b is ToolExecBlock => b.type === "toolExecution") ??
+      [];
 
     console.log(`[T9] Final state:`);
     for (const b of toolBlocksAfter) {
@@ -706,9 +709,7 @@ describe("Refresh — getFullMessages + real-time events", () => {
 
   it("T10 — Refresh with NO running tools, then new agent turn starts tools", () => {
     // Previous turn's tools are all done from getFullMessages
-    setRefreshedMessages([
-      makeRefreshBlock("prev-call-1", "done", "done output\n"),
-    ]);
+    setRefreshedMessages([makeRefreshBlock("prev-call-1", "done", "done output\n")]);
 
     // New agent turn: message_start creates new assistant message
     handleAgentEvent(SID, {

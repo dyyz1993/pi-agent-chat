@@ -475,12 +475,8 @@ export function ChatPanel() {
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
-        if (id && id !== lastSetNavIdRef.current) {
-          lastSetNavIdRef.current = id;
-          setNavId(id);
-        }
       },
-      [setActive, setNavId],
+      [setActive],
     ),
     streamVersion,
     historyLoadVersion,

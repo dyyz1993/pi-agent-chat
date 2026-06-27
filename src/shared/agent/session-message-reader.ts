@@ -107,6 +107,11 @@ export class SessionMessageReader {
     this.deps = deps;
   }
 
+  private resolveReadableSessionPath(sessionId: string, sessionPath?: string): string {
+    if (sessionPath) return sessionPath;
+    return this.deps.resolveSessionPath(sessionId) || "";
+  }
+
   /**
    * Get cached session data. Three outcomes:
    * 1. Exact match (file unchanged) → return cached data
@@ -353,7 +358,7 @@ export class SessionMessageReader {
         });
       }
     } else {
-      resolvedSessionPath = this.deps.resolveSessionPath(sessionId) ?? sessionPath ?? "";
+      resolvedSessionPath = this.resolveReadableSessionPath(sessionId, sessionPath);
       const leafId = this.deps.leafIds.get(sessionId) ?? null;
       if (resolvedSessionPath && leafId !== undefined) {
         const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
@@ -531,7 +536,7 @@ export class SessionMessageReader {
     // Resolve session file path first
     const resolvedSessionPath = managed
       ? managed.info.sessionPath
-      : (this.deps.resolveSessionPath(sessionId) ?? sessionPath ?? "");
+      : this.resolveReadableSessionPath(sessionId, sessionPath);
 
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
@@ -661,7 +666,7 @@ export class SessionMessageReader {
             customEntries: allCustomEntries,
             compactionEntries: allCompactionEntries,
             parentById,
-            lineCount: fullResult.messages.length,
+            lineCount: fullResult.totalLines,
             lastJsonlLeafPointer,
             activeJsonlLeafId,
           });

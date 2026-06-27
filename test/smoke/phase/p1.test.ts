@@ -126,7 +126,14 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
     loadSessionMessages: () => {},
   }));
-  return { useChatStore };
+  return {
+    useChatStore,
+    getMemorySemanticTimestamp: (_data: unknown, fallback: number) => fallback,
+    insertChatMessageByDisplayOrder: (messages: ChatMessage[], message: ChatMessage) => [
+      ...messages,
+      message,
+    ],
+  };
 });
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
