@@ -60,6 +60,15 @@ export interface DelegateSyncResult {
   error?: string;
 }
 
+/**
+ * Why a delegate send could not be delivered. Used to give the caller an
+ * accurate reason instead of the generic "session not found / file may have
+ * been deleted" message that is only true for one case.
+ */
+export type DelegateSendNotFoundReason =
+  | "not_a_delegate_child"
+  | "session_file_missing";
+
 // ---------------------------------------------------------------------------
 // Shared delegate session bootstrap
 // ---------------------------------------------------------------------------
@@ -272,7 +281,11 @@ export async function handleCoordinatorDelegateSendOperation<
   steer: (sessionId: string, content: string) => void;
   followUp: (sessionId: string, content: string) => void;
   now?: () => number;
-}): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
+}): Promise<{
+  delivered: boolean;
+  targetStatus: "active" | "started" | "not_found";
+  notFoundReason?: DelegateSendNotFoundReason;
+}> {
   const { targetSessionId, message } = options.msg;
 
   if (
@@ -282,7 +295,14 @@ export async function handleCoordinatorDelegateSendOperation<
       targetSessionId,
     )
   ) {
-    return { delivered: false, targetStatus: "not_found" };
+    return {
+      delivered: false,
+      targetStatus: "not_found",
+      // The target is not a delegate child of the source session. The delegate
+      // relation either never existed or was cleared (session_delegate_remove
+      // or parent-stop cascade cleanup) — the file is not necessarily gone.
+      notFoundReason: "not_a_delegate_child",
+    };
   }
 
   let target = options.clients.get(targetSessionId);
@@ -308,7 +328,18 @@ export async function handleCoordinatorDelegateSendOperation<
       }
     }
     if (!target) {
-      return { delivered: false, targetStatus: "not_found" };
+      // Target passed the delegate-child check but is not running and could not
+      // be restarted. If its session file is gone this is a real deletion;
+      // otherwise it is an unknown runtime state (not a file-deletion case).
+      const sessionPath = options.sessionPaths.get(targetSessionId) ?? "";
+      return {
+        delivered: false,
+        targetStatus: "not_found",
+        notFoundReason:
+          sessionPath && !existsSync(sessionPath)
+            ? "session_file_missing"
+            : "not_a_delegate_child",
+      };
     }
   }
 

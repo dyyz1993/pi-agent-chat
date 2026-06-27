@@ -57,8 +57,6 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import type { ChatMessage } from "../../../src/mainview/types";
 
-const SID = "sess-compact-test";
-
 function makeUserMsg(text: string, local = false): ChatMessage {
   return {
     id: `user_${Date.now()}_${Math.random()}`,

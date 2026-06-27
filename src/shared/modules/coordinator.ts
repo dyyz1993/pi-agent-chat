@@ -29,6 +29,7 @@ export interface DelegateCreateResult {
 export interface DelegateSendResult {
   delivered: boolean;
   targetStatus: "active" | "started" | "not_found";
+  notFoundReason?: "not_a_delegate_child" | "session_file_missing";
 }
 
 export interface DelegateStatusExt {
