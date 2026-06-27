@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useInputHistory } from "../../hooks/use-input-history";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
+import { shouldPasteTextAsPlaceholder } from "../../lib/composer-paste";
 
 export interface InputBarHandle {
   send: () => void;
@@ -25,6 +26,9 @@ interface InputBarProps {
   sessionId?: string;
   placeholder?: string;
   historyEnabled?: boolean;
+  hasExternalContent?: boolean;
+  embedded?: boolean;
+  onPasteTextAsPlaceholder?: (text: string) => boolean;
   onTriggerPopup?: (mode: "at" | "slash") => void;
   popupOpen?: boolean;
   onPopupConfirm?: () => void;
@@ -44,6 +48,9 @@ export const InputBar = memo(
       sessionId = "",
       placeholder,
       historyEnabled = true,
+      hasExternalContent = false,
+      embedded = false,
+      onPasteTextAsPlaceholder,
       onTriggerPopup,
       popupOpen = false,
       onPopupConfirm,
@@ -78,6 +85,8 @@ export const InputBar = memo(
     disabledRef.current = disabled;
     const onSendRef = useRef(onSend);
     onSendRef.current = onSend;
+    const onPasteTextAsPlaceholderRef = useRef(onPasteTextAsPlaceholder);
+    onPasteTextAsPlaceholderRef.current = onPasteTextAsPlaceholder;
 
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
@@ -127,8 +136,8 @@ export const InputBar = memo(
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           const val = valueRef.current;
-          if (!disabledRef.current && val.trim()) {
-            if (historyEnabled) saveToHistory(val.trim());
+          if (!disabledRef.current && (val.trim() || hasExternalContent)) {
+            if (historyEnabled && val.trim()) saveToHistory(val.trim());
             onSendRef.current?.();
           }
         }
@@ -144,6 +153,7 @@ export const InputBar = memo(
         navigateNext,
         setInputText,
         historyEnabled,
+        hasExternalContent,
       ],
     );
 
@@ -152,10 +162,10 @@ export const InputBar = memo(
     const onPopupCancelRef = useRef(onPopupCancel);
     onPopupCancelRef.current = onPopupCancel;
 
-    const handleChange = useCallback(
-      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const syncTextareaValue = useCallback(
+      (next: string) => {
         const prev = valueRef.current;
-        const next = e.target.value;
+        if (next === prev) return;
         setInputText(next);
         resetIndex();
 
@@ -178,6 +188,53 @@ export const InputBar = memo(
         }
       },
       [setInputText, resetIndex, popupOpen],
+    );
+
+    const handleChange = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        syncTextareaValue(e.target.value);
+      },
+      [syncTextareaValue],
+    );
+
+    useEffect(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+
+      const syncFromDom = () => {
+        syncTextareaValue(el.value);
+      };
+      const syncAfterNativeEdit = () => {
+        requestAnimationFrame(syncFromDom);
+      };
+
+      el.addEventListener("input", syncFromDom);
+      el.addEventListener("compositionend", syncAfterNativeEdit);
+      el.addEventListener("beforeinput", syncAfterNativeEdit);
+      return () => {
+        el.removeEventListener("input", syncFromDom);
+        el.removeEventListener("compositionend", syncAfterNativeEdit);
+        el.removeEventListener("beforeinput", syncAfterNativeEdit);
+      };
+    }, [syncTextareaValue]);
+
+    const handlePaste = useCallback(
+      (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        const handler = onPasteTextAsPlaceholderRef.current;
+        if (!handler) return;
+        const items = Array.from(e.clipboardData?.items ?? []);
+        if (items.some((item) => item.kind === "file")) return;
+
+        const text = e.clipboardData?.getData("text/plain") ?? "";
+        if (!shouldPasteTextAsPlaceholder(text)) return;
+
+        if (handler(text)) {
+          e.preventDefault();
+          resetIndex();
+          requestAnimationFrame(() => textareaRef.current?.focus());
+        }
+      },
+      [resetIndex],
     );
 
     const handleClear = useCallback(() => {
@@ -206,10 +263,10 @@ export const InputBar = memo(
 
     const send = useCallback(() => {
       const val = valueRef.current;
-      if (!val.trim()) return;
-      if (historyEnabled) saveToHistory(val.trim());
+      if (!val.trim() && !hasExternalContent) return;
+      if (historyEnabled && val.trim()) saveToHistory(val.trim());
       onSendRef.current?.();
-    }, [saveToHistory, historyEnabled]);
+    }, [saveToHistory, historyEnabled, hasExternalContent]);
 
     const blur = useCallback(() => {
       textareaRef.current?.blur();
@@ -239,7 +296,11 @@ export const InputBar = memo(
 
     return (
       <div
-        className="flex-1 rounded-lg border border-border-primary bg-bg-elevated/95 focus-within:border-border-focus focus-within:shadow-sm overflow-hidden transition-colors"
+        className={`flex-1 overflow-hidden transition-colors ${
+          embedded
+            ? "bg-transparent"
+            : "rounded-lg border border-border-primary bg-bg-elevated/95 focus-within:border-border-focus focus-within:shadow-sm"
+        }`}
         style={{ minHeight: expanded ? `${EXPANDED_INPUT_HEIGHT}px` : `${COLLAPSED_INPUT_HEIGHT}px` }}
       >
         <div className="relative h-full flex">
@@ -249,6 +310,7 @@ export const InputBar = memo(
             value={inputText}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             disabled={disabled}
             rows={1}
             placeholder={

@@ -51,7 +51,13 @@ import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { ForkDialog } from "./ForkDialog";
 import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
+import { TextSelectionToolbar } from "./TextSelectionToolbar";
+import { ComposerPlaceholderBar } from "./ComposerPlaceholderBar";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
+import {
+  composeInputWithPlaceholders,
+  useComposerPlaceholderStore,
+} from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import type { ChatMessage } from "../../types";
 import { useAgentStore } from "../../stores/use-agent-store";
@@ -70,6 +76,31 @@ interface TopLoadScrollAnchor {
   sessionId: string;
   scrollHeight: number;
   scrollTop: number;
+}
+
+export function shouldStartTopLoad({
+  activeSessionId,
+  isAtTop,
+  hasMoreMessages,
+  isLoadingMore,
+  isViewingSubagent,
+  lockedSessionId,
+}: {
+  activeSessionId: string | null | undefined;
+  isAtTop: boolean;
+  hasMoreMessages: boolean;
+  isLoadingMore: boolean;
+  isViewingSubagent: boolean;
+  lockedSessionId: string | null;
+}): boolean {
+  return (
+    !!activeSessionId &&
+    isAtTop &&
+    hasMoreMessages &&
+    !isLoadingMore &&
+    !isViewingSubagent &&
+    lockedSessionId !== activeSessionId
+  );
 }
 
 export function computeTopLoadRestoredScrollTop(
@@ -152,6 +183,9 @@ export function ChatPanel() {
   });
   const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
+  const attachmentCount = useAttachmentStore((s) => s.attachments.length);
+  const composerPlaceholders = useComposerPlaceholderStore((s) => s.placeholders);
+  const hasComposerPlaceholders = composerPlaceholders.length > 0;
 
   const effectiveStatus = isViewingSubagent ? subStatus : parentStatus;
 
@@ -197,9 +231,11 @@ export function ChatPanel() {
   const sendFollowUp = useChatStore((s) => s.sendFollowUp);
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const selectionRootRef = useRef<HTMLDivElement>(null);
   const vlistRef = useRef<VirtualizerHandle>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
   const topLoadScrollAnchorRef = useRef<TopLoadScrollAnchor | null>(null);
+  const topLoadLockedSessionRef = useRef<string | null>(null);
   const topLoadRestoreRafRef = useRef<number | null>(null);
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
@@ -559,7 +595,7 @@ export function ChatPanel() {
   );
 
   const handleSend = async () => {
-    if (!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) return;
+    if (!inputText.trim() && attachmentCount === 0 && !hasComposerPlaceholders) return;
 
     const attachmentStore = useAttachmentStore.getState();
     const hasAttachments = attachmentStore.attachments.length > 0;
@@ -614,10 +650,19 @@ export function ChatPanel() {
       }
     }
 
+    const placeholders = useComposerPlaceholderStore.getState().placeholders;
+    if (placeholders.length > 0) {
+      const currentText = useChatStore.getState().inputText;
+      useChatStore.getState().setInputText(composeInputWithPlaceholders(currentText, placeholders));
+    }
+
     if (isStreaming) {
       await sendSteer();
     } else {
       await sendMessage();
+    }
+    if (placeholders.length > 0) {
+      useComposerPlaceholderStore.getState().clearPlaceholders();
     }
     resumeAutoScroll();
     if (isMobileOrTablet) {
@@ -702,13 +747,20 @@ export function ChatPanel() {
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
-    if (!items) return;
     const files: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file) files.push(file);
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+    }
+    const clipboardFiles = Array.from(e.clipboardData?.files ?? []);
+    for (const file of clipboardFiles) {
+      if (!files.some((existing) => existing.name === file.name && existing.size === file.size)) {
+        files.push(file);
       }
     }
     if (files.length > 0) {
@@ -751,10 +803,29 @@ export function ChatPanel() {
   }, []);
 
   useEffect(() => {
-    if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent)
+    if (!isAtTop || !hasMoreMessages || isViewingSubagent) {
+      topLoadLockedSessionRef.current = null;
+    }
+  }, [activeSessionId, hasMoreMessages, isAtTop, isViewingSubagent]);
+
+  useEffect(() => {
+    if (
+      !shouldStartTopLoad({
+        activeSessionId,
+        isAtTop,
+        hasMoreMessages,
+        isLoadingMore,
+        isViewingSubagent,
+        lockedSessionId: topLoadLockedSessionRef.current,
+      })
+    ) {
       return;
+    }
+    const sessionId = activeSessionId;
+    if (!sessionId) return;
+    topLoadLockedSessionRef.current = sessionId;
     captureTopLoadScrollAnchor();
-    loadMoreMessages?.(activeSessionId);
+    loadMoreMessages?.(sessionId);
   }, [
     activeSessionId,
     captureTopLoadScrollAnchor,
@@ -773,7 +844,7 @@ export function ChatPanel() {
 
   return (
     <div
-      className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated"
+      className="flex-1 min-h-0 flex flex-col overflow-hidden relative bg-bg-elevated"
       style={agentBorderColor ? { borderLeft: `2px solid ${agentBorderColor.border}` } : undefined}
     >
       <MermaidFullscreen />
@@ -802,9 +873,9 @@ export function ChatPanel() {
 
       <RetryNotification />
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1 min-w-0 relative overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col">
+          <div className="flex-1 min-h-0 min-w-0 relative overflow-hidden">
             {projectFailed && !isViewingSubagent ? (
               <div className="h-full flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3 max-w-xs text-center">
@@ -825,7 +896,7 @@ export function ChatPanel() {
                 </div>
               </div>
             ) : (
-              <div className="relative h-full">
+              <div ref={selectionRootRef} className="relative h-full">
                 <MessageListView
                   source={isViewingSubagent ? "sub" : "main"}
                   scrollRef={messagesScrollRef}
@@ -836,6 +907,11 @@ export function ChatPanel() {
                   hasMoreMessages={!isViewingSubagent ? hasMoreMessages : undefined}
                   activeSessionId={(isViewingSubagent ? activeSubId : activeSessionId) ?? undefined}
                   bufferSize={isMobileOrTablet ? 360 : 800}
+                />
+                <TextSelectionToolbar
+                  rootRef={selectionRootRef}
+                  onQuoteText={(text) => useComposerPlaceholderStore.getState().addTextQuote(text)}
+                  onFocusInput={() => inputBarRef.current?.focus()}
                 />
               </div>
             )}
@@ -878,11 +954,11 @@ export function ChatPanel() {
         }}
       />
 
-      {!isViewingSubagent && <QuickActionToolbar onGoalClick={() => startGoalMode()} />}
+      {!goalMode && !isViewingSubagent && <QuickActionToolbar onGoalClick={() => startGoalMode()} />}
 
       <div
         className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
-        style={{ paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }}
+        style={isMobileOrTablet ? undefined : { paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }}
         onPaste={handlePaste}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -900,18 +976,11 @@ export function ChatPanel() {
             </div>
           ) : (
             <>
-              {goalMode && !isRefiningGoal && (
-                <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
-                  <Target className="w-3.5 h-3.5" />
-                  <span>{t("goal.composerMode")}</span>
-                </div>
-              )}
-              {!goalMode && <AttachmentBar />}
-              <div className="flex items-stretch gap-1.5">
-                {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
-
-                <div className="relative flex-1">
+              <div className="flex items-end gap-1.5">
+                <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
                   {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
+                  {!goalMode && <AttachmentBar />}
+                  {!goalMode && <ComposerPlaceholderBar />}
                   <InputBar
                     ref={inputBarRef}
                     onSend={goalMode ? handleCreateGoal : handleSend}
@@ -919,6 +988,14 @@ export function ChatPanel() {
                     disabled={!activeSessionId || isCreatingGoal}
                     placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
                     historyEnabled={!goalMode}
+                    hasExternalContent={!goalMode && hasComposerPlaceholders}
+                    embedded
+                    onPasteTextAsPlaceholder={
+                      !goalMode
+                        ? (text) =>
+                            Boolean(useComposerPlaceholderStore.getState().addTextQuote(text))
+                        : undefined
+                    }
                     onTriggerPopup={
                       !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
                     }
@@ -928,9 +1005,24 @@ export function ChatPanel() {
                     onPopupArrowUp={commandPopup.navigateUp}
                     onPopupArrowDown={commandPopup.navigateDown}
                   />
+                  <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5">
+                    <AttachmentButtons
+                      layout="compact"
+                      mode={goalMode ? "goal" : "normal"}
+                      onGoalClick={() => startGoalMode()}
+                      onExitGoalMode={() => startGoalMode()}
+                    />
+                    {!goalMode && (
+                      <div className="hidden text-[11px] text-text-tertiary sm:block">
+                        {attachmentCount > 0
+                          ? t("fileAttachment.count", { count: attachmentCount })
+                          : t("composerActionsHint")}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
+                <div className="flex shrink-0 flex-col justify-end gap-1.5 py-1">
                   {goalMode ? (
                     <button
                       onClick={() => void handleRefineGoal()}
@@ -990,11 +1082,12 @@ export function ChatPanel() {
                       (goalMode
                         ? !inputText.trim()
                         : !inputText.trim() &&
-                          useAttachmentStore.getState().attachments.length === 0) ||
+                          attachmentCount === 0 &&
+                          !hasComposerPlaceholders) ||
                       !activeSessionId ||
                       hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && useAttachmentStore.getState().attachments.length > 0)) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && (attachmentCount > 0 || hasComposerPlaceholders))) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                     title={
                       isPermissionPending
                         ? t("waitPermission")

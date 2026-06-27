@@ -51,7 +51,8 @@ describe("Goal action stack regression", () => {
     const attachmentButtons = readSource("src/mainview/components/chat/FileAttachment.tsx");
     const quickActionToolbar = readSource("src/mainview/components/chat/QuickActionToolbar.tsx");
 
-    expect(chatPanel).toContain("<AttachmentButtons onGoalClick={() => startGoalMode()} />");
+    expect(chatPanel).toContain("layout=\"compact\"");
+    expect(chatPanel).toContain("onGoalClick={() => startGoalMode()}");
     expect(chatPanel).toContain("<QuickActionToolbar onGoalClick={() => startGoalMode()} />");
     expect(attachmentButtons).toContain("if (onGoalClick)");
     expect(quickActionToolbar).toContain("if (onGoalClick)");

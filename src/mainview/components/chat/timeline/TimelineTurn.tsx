@@ -387,7 +387,7 @@ export const TimelineTurn = memo(function TimelineTurn({
                   disabled={isSessionBusy}
                 />
               </div>
-              <div className="max-w-[80%] px-3 py-2 rounded-lg bg-semantic-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-semantic-accent/30">
+              <div className="max-w-[80%] px-3 py-2 rounded-lg bg-semantic-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-semantic-accent/30 select-text">
                 {turn.userText}
               </div>
             </div>
@@ -495,7 +495,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
 
   if (isStreaming) {
     return (
-      <div className="px-3 py-2 rounded-lg bg-surface-hover/60 text-sm text-text-primary whitespace-pre-wrap break-words">
+      <div className="px-3 py-2 rounded-lg bg-surface-hover/60 text-sm text-text-primary whitespace-pre-wrap break-words select-text">
         {text}
         <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-0.5 align-text-bottom" />
       </div>
@@ -503,8 +503,8 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
   }
 
   return (
-    <div className="group/text relative px-3 py-2 rounded-lg bg-surface-code/40 dark:bg-surface-dim/40 prose dark:prose-invert prose-sm max-w-none">
-      <pre className="whitespace-pre-wrap break-words text-sm text-text-primary">{text}</pre>
+    <div className="group/text relative px-3 py-2 rounded-lg bg-surface-code/40 dark:bg-surface-dim/40 prose dark:prose-invert prose-sm max-w-none select-text">
+      <pre className="whitespace-pre-wrap break-words text-sm text-text-primary select-text">{text}</pre>
       <button
         onClick={() => copy(text)}
         className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-surface-hover dark:hover:bg-surface-hover transition-all"
