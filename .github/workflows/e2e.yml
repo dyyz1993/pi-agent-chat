@@ -22,6 +22,7 @@ jobs:
           bun-version: "1.3.11"
       - run: node scripts/ci-hydrate-yalc.mjs
       - run: bun install
+      - run: node scripts/ci-hydrate-yalc.mjs
 
       - run: bunx playwright install --with-deps chromium
 
