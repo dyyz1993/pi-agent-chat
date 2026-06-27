@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -40,6 +40,22 @@ function hydratePackage({ name, version }) {
     rmSync(temp, { recursive: true, force: true });
   }
 }
+
+function disablePostinstallInCi() {
+  if (process.env.CI !== "true") {
+    return;
+  }
+
+  const packageJsonPath = join(process.cwd(), "package.json");
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  if (packageJson.scripts?.postinstall !== undefined) {
+    packageJson.scripts.postinstall = "";
+    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+    console.log("[ci-hydrate-yalc] disabled package.json postinstall for CI install");
+  }
+}
+
+disablePostinstallInCi();
 
 for (const pkg of packages) {
   hydratePackage(pkg);

@@ -21,8 +21,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Disable postinstall (patch-package not available in CI)
-          node -e 'const p=require("./package.json");p.scripts.postinstall="";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
           node scripts/ci-hydrate-yalc.mjs
           rm -f bun.lockb && bun install
 
@@ -89,7 +87,6 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          node -e 'const p=require("./package.json");p.scripts.postinstall="";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
           node scripts/ci-hydrate-yalc.mjs
           rm -f bun.lockb && bun install
 
