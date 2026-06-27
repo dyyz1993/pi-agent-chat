@@ -49,6 +49,34 @@ pi-momo-fork/packages/coding-agent/
 - `yalc push` 后如果 `bun run dev:web` 已经在跑，新创建的 Agent 进程会读取更新后的 `dist/`；已经运行中的 Agent/CLI 进程需要 `agent.reload`、停止后重启 session，或重启 dev server 才会加载新的 extension 代码。
 - 修改底层包后至少验证三层：底层相关单测（例如 `npm test -- extensions/coordinator/handler.test.ts`）、`npm run build && yalc push`、消费项目端口健康检查（默认 `http://localhost:3100/` 和 `http://localhost:5173/`）。
 
+### Desktop dev 启动方式
+
+- Web/HMR 与 App Server 默认分开看：`bun run dev:web` 会同时启动 Vite `http://localhost:5173` 和 server `http://localhost:3100`；若它们已经在跑，不要重复启动一组新进程。
+- 桌面 dev app 的主流程优先使用 Vite HMR：`src/bun/index.ts` 在 dev channel 下会先探测 `http://localhost:5173`，可访问时桌面窗口直接加载该地址；因此只改 renderer/React/CSS 时，保持 5173 运行后直接打开 dev app 即可看到最新 UI。
+- Vite HMR 只覆盖 renderer 页面，不会刷新桌面主进程 bundle。凡是改到 `src/bun/**`、`src/shared/handlers/**`、`src/shared/modules/**`、`src/shared/register-all-handlers.ts`、`src/gateway/**`、`electrobun.config.ts`，或新增/修改桌面 IPC/RPC handler，都必须重建并重启桌面 app。
+- 稳定启动桌面端：
+  1. 确认端口：`lsof -nP -iTCP:5173 -sTCP:LISTEN` 与 `lsof -nP -iTCP:3100 -sTCP:LISTEN`。
+  2. 若 `build/dev-macos-arm64/PiAgentChat-dev.app` 不存在，或改过任何桌面主进程/IPC/RPC 相关文件，先执行 `npx electrobun build --env=dev`。
+  3. 打开桌面端：`open -na build/dev-macos-arm64/PiAgentChat-dev.app`。
+- 如果桌面端黑屏、窗口不出现、菜单/剪贴板/窗口 resize 逻辑仍是旧的，先退出旧的 `PiAgentChat-dev` 进程，再重新执行 `npx electrobun build --env=dev && open -na build/dev-macos-arm64/PiAgentChat-dev.app`。
+- `npm run dev` / `electrobun dev --watch` 适合调 Electrobun 壳本身，但日常验证 renderer 最新效果时优先用上面的 “5173 + dev app” 流程，避免 watch 进程和现有 web/server 进程互相混淆。
+- 桌面 renderer 可通过 `PI_ELECTROBUN_RENDERER` 切换；默认 `cef`，用 `PI_ELECTROBUN_RENDERER=native` 显式回退。语音输入、第三方输入法或文本服务兼容性排查时，可用默认桌面构建验证 `cef` 行为，再用 `npm run build:desktop:native` 或 `npm run dev:desktop:native` 做 native 对照。
+
+### Desktop main-process freshness checks
+
+- 典型症状：Web 端正常，但桌面端仍报旧错误；新 RPC 在桌面端返回 `Method not found: <method>`；菜单、剪贴板、窗口 resize、桌面预览读文件等行为不更新；历史 preview 卡片在桌面端显示旧 fallback（例如 `No path available for preview`）。
+- 先判断变更归属：
+  - 只改 `src/mainview/**`、CSS、locale、前端 store/component：刷新 5173 或重开 dev app 通常足够。
+  - 改 `src/shared/handlers/**`、`src/shared/modules/**`、`src/bun/**`、`src/gateway/**`、`src/shared/register-all-handlers.ts`：必须重建桌面 bundle。
+- 标准刷新流程：
+  1. `pkill -f '/Users/xuyingzhou/Project/temporary/pi-agent-chat/build/dev-macos-arm64/PiAgentChat-dev.app' || true`
+  2. `npx electrobun build --env=dev`
+  3. `open -na build/dev-macos-arm64/PiAgentChat-dev.app`
+  4. `pgrep -fl 'PiAgentChat-dev|Resources/main.js|bun/index.js'` 确认新进程已启动。
+- 若怀疑 bundle 仍旧，检查生成时间和 bundle 内容：`stat -f '%Sm %N' -t '%Y-%m-%d %H:%M:%S' build/dev-macos-arm64/PiAgentChat-dev.app/Contents/Resources/app/bun/index.js`，再用 `rg '<method-or-symbol>' build/dev-macos-arm64/PiAgentChat-dev.app/Contents/Resources/app/bun/index.js` 确认新 handler 已打进桌面包。
+- 调桌面专属 RPC 时，必须直接在桌面页验证，而不是只看 Web。CEF devtools 默认端口是 `9223`，可以用 Playwright CDP 连接后在页面里调用 `apiClient.call(...)`，确认运行中的桌面进程真的注册了该 method。
+- 这类问题不要先改 preview/card/UI fallback。先证明：session JSONL 是否有数据、前端 store 是否有数据、文件是否存在、桌面 RPC 是否存在。若前三者都正常而桌面 RPC `Method not found`，根因就是桌面主进程 bundle 未刷新。
+
 ### Local paired worktree stack
 
 - 如果任务需要 app worktree 与本地依赖 fork 一起隔离运行，先读 `docs/workflows/local-paired-worktree-stack.md`。
@@ -74,6 +102,14 @@ pi-momo-fork/packages/coding-agent/
 - Remote Resource Sync 必须写入远端 managed agent root（默认 `<REMOTE_SYNC_AGENT_DIR>`），然后通过远端 child 的 `PI_CODING_AGENT_DIR=<REMOTE_SYNC_AGENT_DIR>` 加载。不要覆盖远端用户自己的 `~/.pi/agent`，除非用户显式配置同步目录并接受其管理语义。
 - Remote Resource Sync 必须维护 manifest/hash（当前为 `.remote-resource-sync/manifest.json`），用来判断已同步、缺失、变更和 blocked 项；同步过程要跳过软链、`.env`、密钥文件、`auth.json`、`oauth.json`、`models.json` 等敏感文件。
 - 新增 SSH 相关功能时先判断它属于“临时远程执行”还是“远程常驻服务”。如果需求需要自动双向同步、长期远程状态、多客户端共享或团队访问，优先归入 server/attach 语义，不要偷偷塞进 `ssh` fallback。
+
+### Preview / File Rendering 边界
+
+- 预览文件时不要把远程项目路径直接交给浏览器 `file://`。`file://` 只适合本机真实文件，SSH shadow path 或远端绝对路径都会导致桌面端/Web 端出现 `No path available for preview`、broken image 或 renderer load error。
+- Web/mobile 的文件预览应统一走 gateway `/file/<encoded-path>` 或 `/fs/<path>`，gateway 负责把 remote project 的本地 shadow path / 远端 absolute path 映射到 SSH 读取。
+- 桌面 IPC 没有 HTTP `baseUrl` 时，媒体类预览（image/video/audio/pdf/html）应通过 `file.readBinaryFile` / `file.readFile` RPC 读取，再生成 data URL 或直接渲染内容；不要在 desktop IPC 中新增裸 `file://` 预览路径。
+- Explorer 图片预览同样走 RPC：SVG 使用 `file.readFile`，栅格图片使用 `file.readBinaryFile`，这样本地与 SSH 远程项目共享同一套 path resolver。
+- 新增 preview 类型时至少覆盖两类测试：gateway remote shadow path → SSH 读取；desktop/RPC path → data URL 或 content 渲染。
 
 ### Coordinator 委派索引规则
 
@@ -181,6 +217,25 @@ Decision rules:
 - If the user is editing, approving, rejecting, comparing many files, or running an app preview, use a workspace fullscreen surface and hide the composer.
 - If the operation can be answered with one sentence or one button, use `ModalDialog`; do not put rich file content, diff, code editor, or review UI in a modal dialog.
 - Any UI change that adds or changes image/text/markdown/code/diff/file/review/preview surfaces must update this section and the current entry-point map above.
+
+### Composer Placeholder / Context Block Rules
+
+Composer-side references must be modeled as structured placeholder/context blocks, not as unrelated ad-hoc strings inserted into the textarea.
+
+Use this rule for selected text quotes, `@file`, future `@agent` references, memory snippets, rules, skills, URL/page captures, screenshots, terminal excerpts, and any other context that should travel with the next user message.
+
+Expected UX:
+
+- Render placeholders in the composer input frame above the textarea: visually part of the input box, but technically outside the raw textarea.
+- Render composer tools such as attach, image, goal, future Skill/Agent insertion, and slash helpers in the composer frame action row; avoid floating a separate vertical toolbar beside the input on desktop.
+- Default to a compact/collapsed chip or row that shows type, title, source, and a small size/count hint.
+- Let the user expand a placeholder to preview the full content inline, then collapse it again.
+- Keep the raw textarea focused on the user's own message; do not dump long quoted context directly into the input when a structured placeholder is available.
+- Pasting short plain text into the textarea should remain normal text input; pasting long, multiline, or fenced-code text should create a text quote placeholder in the composer frame.
+- When a placeholder must serialize into the outbound prompt, use a deterministic renderer per type. Text selections should serialize as fenced code blocks, not blockquote spam.
+- Reuse one renderer/store path for all placeholder types instead of creating one-off local state in individual buttons, cards, or message rows.
+- Placeholder renderers must use the shared design tokens and dense composer style; avoid nested cards inside the composer.
+- The canonical client state is `use-composer-placeholder-store`; selected text, future `@agent`, Skill, slash command, file/image, memory, rule, and diagnostic snippets should extend that store and renderer instead of adding separate composer-side state.
 
 ### Settings Surface
 
