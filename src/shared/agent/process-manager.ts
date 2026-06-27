@@ -195,11 +195,20 @@ function scanExtensionDir(dir: string, extensionPaths: string[]): void {
   }
 }
 
-function getBuiltinExtensionsDir(): string {
+function getBuiltinExtensionsDir(): string | undefined {
   const cliPath = config.piCliPath;
   // Resolve symlinks — .bin/pi is a symlink to ../@dyyz1993/pi-coding-agent/dist/cli.js
   // Without realpathSync, path.resolve would go up from .bin/ instead of dist/
-  const resolvedCliPath = realpathSync(cliPath);
+  let resolvedCliPath: string;
+  try {
+    resolvedCliPath = realpathSync(cliPath);
+  } catch (err: unknown) {
+    log.warn("Failed to resolve builtin extension CLI path", {
+      cliPath,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
   // cli.js is at <pkg>/dist/cli.js — go up 2 levels to reach package root
   const pkgRoot = path.resolve(resolvedCliPath, "..", "..");
 
@@ -234,7 +243,7 @@ function discoverExtensionArgs(includeUser = true): string[] {
   }
 
   const builtinExtDir = getBuiltinExtensionsDir();
-  if (existsSync(builtinExtDir)) {
+  if (builtinExtDir && existsSync(builtinExtDir)) {
     scanExtensionDir(builtinExtDir, extensionPaths);
   }
 

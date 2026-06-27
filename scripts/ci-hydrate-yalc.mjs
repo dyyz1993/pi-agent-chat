@@ -56,8 +56,36 @@ function disablePostinstallInCi() {
   }
 }
 
+function pinCodingAgentTransitiveDependencies() {
+  const codingAgentPath = packageYalcPath("@dyyz1993/pi-coding-agent");
+  const packageJsonPath = join(codingAgentPath, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return;
+  }
+
+  const tuiPackage = packages.find((pkg) => pkg.name === "@dyyz1993/pi-tui");
+  if (!tuiPackage) {
+    return;
+  }
+
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  packageJson.dependencies ??= {};
+  packageJson.dependencies["@dyyz1993/pi-tui"] = tuiPackage.version;
+  writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+  const shrinkwrapPath = join(codingAgentPath, "npm-shrinkwrap.json");
+  if (existsSync(shrinkwrapPath)) {
+    rmSync(shrinkwrapPath, { force: true });
+  }
+  console.log(
+    `[ci-hydrate-yalc] pinned @dyyz1993/pi-coding-agent -> @dyyz1993/pi-tui@${tuiPackage.version}`,
+  );
+}
+
 disablePostinstallInCi();
 
 for (const pkg of packages) {
   hydratePackage(pkg);
 }
+
+pinCodingAgentTransitiveDependencies();
