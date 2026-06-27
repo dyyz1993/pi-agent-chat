@@ -28,6 +28,7 @@ import { createLogger } from "../../../shared/lib/logger";
 import { ThemeMenu } from "../theme/ThemeMenu";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { CopyButton } from "../chat/CopyButton";
+import { DropdownSelect } from "../primitives";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { useNotificationStore } from "../../stores/use-notification-store";
@@ -283,7 +284,7 @@ export function SidebarBottomControls() {
       });
       useTierStore.getState().setSessionTierModels(activeSessionId, tierConfigModels);
       setTierConfigOpen(false);
-      await fetchTierConfig(activeSessionId);
+      await fetchTierConfig(activeSessionId, { force: true });
       // If the currently active tier exists, re-apply it to switch to the new model
       const { dataBySession, globalDefaults } = useTierStore.getState();
       const sessionData = dataBySession[activeSessionId ?? ""];
@@ -620,18 +621,16 @@ export function SidebarBottomControls() {
                 <label className="text-[10px] text-text-tertiary block mb-0.5">
                   {t("baseBranch")}
                 </label>
-                <select
+                <DropdownSelect
                   value={sourceBranch}
-                  onChange={(e) => setSourceBranch(e.target.value)}
-                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded px-2 py-1 text-xs text-text-secondary outline-none"
-                >
-                  {worktrees.map((wt) => (
-                    <option key={wt.path} value={wt.branch}>
-                      {wt.branch}
-                      {wt.isMain ? t("mainBranch") : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSourceBranch}
+                  ariaLabel={t("baseBranch")}
+                  className="w-full rounded px-2 py-1 text-xs"
+                  options={worktrees.map((wt) => ({
+                    value: wt.branch,
+                    label: `${wt.branch}${wt.isMain ? t("mainBranch") : ""}`,
+                  }))}
+                />
               </div>
               <div>
                 <label className="text-[10px] text-text-tertiary block mb-0.5">

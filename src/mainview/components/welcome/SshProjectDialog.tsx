@@ -21,7 +21,7 @@ import { useTranslation } from "react-i18next";
 import { classifySshErrorMessage } from "../../../shared/lib/ssh-error-classification";
 import { apiClient } from "../../lib/api-client";
 import { cx } from "../../lib/classes";
-import { Button, IconButton } from "../primitives";
+import { Button, DropdownSelect, IconButton } from "../primitives";
 import type {
   DetectedSshHost,
   ProjectTab,
@@ -221,6 +221,27 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     : sshAlias
       ? `ssh:${sshAlias}`
       : "";
+  const connectionOptions = useMemo(
+    () => [
+      {
+        value: "",
+        label: connectionSourcesLoading
+          ? t("welcome.remoteProfilesLoading")
+          : t("welcome.remoteManual"),
+      },
+      ...detectedHosts.map((item) => ({
+        value: `ssh:${item.host}`,
+        label: item.name,
+        group: t("welcome.remoteDetectedHosts"),
+      })),
+      ...profiles.map((profile) => ({
+        value: `profile:${profile.id}`,
+        label: `${profile.name} · ${profile.host}`,
+        group: t("welcome.remoteProfile"),
+      })),
+    ],
+    [connectionSourcesLoading, detectedHosts, profiles, t],
+  );
   const connectionHost = firstNonEmpty(selectedProfile?.host, sshAlias, host);
   const connectionTitle =
     firstNonEmpty(sshAlias, selectedProfile?.name, name, host) || t("welcome.remoteManual");
@@ -663,36 +684,14 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         <Search className="h-4 w-4 text-status-info" />
                         {t("welcome.remoteConnectionAlias")}
                       </span>
-                      <select
+                      <DropdownSelect
                         value={connectionSelectValue}
-                        onChange={(event) => handleSelectConnection(event.target.value)}
+                        onChange={handleSelectConnection}
                         disabled={connectionSourcesLoading}
-                        className="h-12 w-full rounded-md border border-border-secondary bg-bg-primary px-3 text-base outline-none focus:border-border-focus disabled:cursor-wait disabled:opacity-60"
-                      >
-                        <option value="">
-                          {connectionSourcesLoading
-                            ? t("welcome.remoteProfilesLoading")
-                            : t("welcome.remoteManual")}
-                        </option>
-                        {detectedHosts.length > 0 && (
-                          <optgroup label={t("welcome.remoteDetectedHosts")}>
-                            {detectedHosts.map((item) => (
-                              <option key={`ssh:${item.host}`} value={`ssh:${item.host}`}>
-                                {item.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {profiles.length > 0 && (
-                          <optgroup label={t("welcome.remoteProfile")}>
-                            {profiles.map((profile) => (
-                              <option key={`profile:${profile.id}`} value={`profile:${profile.id}`}>
-                                {profile.name} · {profile.host}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
+                        ariaLabel={t("welcome.remoteConnectionAlias")}
+                        className="h-12 w-full bg-bg-primary px-3 text-base"
+                        options={connectionOptions}
+                      />
                     </label>
 
                     {connectionSourcesError && (

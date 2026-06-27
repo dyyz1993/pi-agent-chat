@@ -15,12 +15,14 @@ export default tseslint.config(
       'eslint-plugin-rpc/**',
       'eslint-plugin-theme/**',
       'postcss.config.js',
+      'probe-compaction.mjs',
       'tailwind.config.js',
       'scripts/**',
       'preview-test/**',
       '*.html',
       '.codenomad/**',
       '.yalc/**',
+      'repro/**',
 
       'src/electrobun-shim.d.ts',
       'eslint.config.mjs',
@@ -110,6 +112,23 @@ export default tseslint.config(
           object: 'window',
           property: 'prompt',
           message: 'Use an in-app input UI instead of window.prompt().',
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXOpeningElement[name.name='select']",
+          message: 'Use the in-app DropdownSelect/Listbox UI instead of native <select>.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='React'][callee.property.name='createElement'] > Literal[value='select']:first-child",
+          message: 'Use the in-app DropdownSelect/Listbox UI instead of native select elements.',
+        },
+        {
+          selector:
+            "CallExpression[callee.name='createElement'] > Literal[value='select']:first-child",
+          message: 'Use the in-app DropdownSelect/Listbox UI instead of native select elements.',
         },
       ],
 

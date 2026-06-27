@@ -119,7 +119,7 @@
   "welcome.remoteError.missing-host": "SSH host is missing. Choose an alias or enter a host.",
   "welcome.remoteError.auth-failed": "SSH authentication failed. Check the username, private key, or ~/.ssh/config.",
   "welcome.remoteError.timeout": "SSH connection timed out. Check the host, port, and network.",
-  "welcome.remoteError.host-unreachable": "Cannot reach the SSH host. Check the host name, IP, or port.",
+  "welcome.remoteError.host-unreachable": "Cannot reach the SSH host. Check that the host is online, on the same network or VPN, and that the IP, port, or firewall allows SSH.",
   "welcome.remoteError.host-key": "SSH host key verification failed. Confirm this host in a terminal first.",
   "welcome.remoteError.ssh-config": "SSH configuration is invalid. Check ~/.ssh/config, private key paths, and SSH options.",
   "welcome.remoteError.remote-path": "The remote directory does not exist or is not a directory.",

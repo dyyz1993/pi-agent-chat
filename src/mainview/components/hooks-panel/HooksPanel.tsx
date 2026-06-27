@@ -23,7 +23,7 @@ import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useShallow } from "zustand/react/shallow";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
-import { PanelHeader } from "../primitives";
+import { DropdownSelect, PanelHeader } from "../primitives";
 import type { HookLogEntry, HookRuleStats, HookConfigSnapshot } from "../../stores/use-hooks-store";
 
 const DECISION_STYLES: Record<string, { icon: React.ElementType; cls: string }> = {
@@ -475,7 +475,7 @@ export function HooksPanel() {
   const configSnapshot = session?.configSnapshot;
   const loading = session?.loading || false;
   const openFile = useExplorerStore((s) => s.openFile);
-  const homePath = useMemo(() => inferHomePath(configSnapshot), [configSnapshot]);
+  const homePath = useMemo(() => inferHomePath(configSnapshot ?? undefined), [configSnapshot]);
 
   const handleOpenPath = useCallback(
     (path: string) => {
@@ -585,17 +585,20 @@ export function HooksPanel() {
         <div className="ml-auto flex items-center gap-1 px-2">
           {activeTab === "activity" && (
             <>
-              <select
+              <DropdownSelect
                 value={filterEvent ?? ""}
-                onChange={(e) => setFilterEvent(e.target.value || undefined)}
-                className="text-[9px] bg-surface-code dark:bg-surface-dim/50 text-text-secondary border border-border-secondary rounded px-1 py-0.5"
-              >
-                <option value="">All events</option>
-                <option value="PreToolUse">PreToolUse</option>
-                <option value="PostToolUse">PostToolUse</option>
-                <option value="Stop">Stop</option>
-                <option value="Notification">Notification</option>
-              </select>
+                onChange={(next) => setFilterEvent(next || undefined)}
+                ariaLabel="Filter hook events"
+                className="h-6 w-[7.25rem] rounded px-1.5 py-0 text-[9px] dark:bg-surface-dim/50"
+                menuClassName="text-[9px]"
+                options={[
+                  { value: "", label: "All events" },
+                  { value: "PreToolUse", label: "PreToolUse" },
+                  { value: "PostToolUse", label: "PostToolUse" },
+                  { value: "Stop", label: "Stop" },
+                  { value: "Notification", label: "Notification" },
+                ]}
+              />
               <button
                 onClick={() => {
                   if (activeSessionId) clearLog(activeSessionId);

@@ -2,6 +2,8 @@ export { AnchoredPopover } from "./AnchoredPopover";
 export type { AnchoredPopoverProps } from "./AnchoredPopover";
 export { Button } from "./Button";
 export { CopyAction } from "./CopyAction";
+export { DropdownSelect } from "./DropdownSelect";
+export type { DropdownSelectOption } from "./DropdownSelect";
 export { FullscreenOverlay } from "./FullscreenOverlay";
 export { IframeFullscreenOverlay } from "./IframeFullscreenOverlay";
 export { ImageViewerOverlay } from "./ImageViewerOverlay";

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MutableRefObject,
   type ReactNode,
   type Ref,
   type RefObject,
@@ -41,7 +42,7 @@ function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
   if (typeof ref === "function") {
     ref(value);
   } else {
-    ref.current = value;
+    (ref as MutableRefObject<T | null>).current = value;
   }
 }
 

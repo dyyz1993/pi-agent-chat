@@ -25,7 +25,7 @@ import { useTranslation } from "react-i18next";
 import {
   FONT_PRESET_OPTIONS,
   useSettingsStore,
-  type DisplaySettings,
+  type ToggleSettingKey,
   useRetryConfigStore,
   RETRY_DEFAULTS,
 } from "../../stores/use-settings-store";
@@ -33,7 +33,7 @@ import { apiClient } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
-import { Button, IconButton } from "../primitives";
+import { Button, DropdownSelect, IconButton } from "../primitives";
 import { UsagePanel } from "../usage-panel/UsagePanel";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import {
@@ -51,7 +51,7 @@ interface SettingsPanelProps {
 }
 
 const TOGGLE_ITEMS: {
-  key: keyof DisplaySettings;
+  key: ToggleSettingKey;
   labelKey: string;
   descKey: string;
 }[] = [
@@ -193,7 +193,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         models: localTierModels,
       });
       useTierStore.getState().setSessionTierModels(sessionId, localTierModels);
-      await fetchTierConfig(sessionId);
+      await fetchTierConfig(sessionId, { force: true });
       const { dataBySession, globalDefaults } = useTierStore.getState();
       const sessionData = dataBySession[sessionId];
       const activeTier = sessionData?.currentTier ?? null;
@@ -700,17 +700,13 @@ function SelectRow<T extends number>({
         <div className="text-[13px] font-medium text-text-primary">{label}</div>
         <div className="mt-0.5 text-[11px] text-text-tertiary">{desc}</div>
       </div>
-      <select
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value) as T)}
-        className="h-8 w-full cursor-pointer rounded-md border border-border-secondary bg-bg-elevated px-2 text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-border-focus dark:bg-surface-dim sm:h-7 sm:w-auto"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <DropdownSelect
+        value={String(value)}
+        onChange={(next) => onChange(Number(next) as T)}
+        ariaLabel={label}
+        className="h-8 w-full text-[12px] sm:h-7 sm:w-auto"
+        options={options.map((opt) => ({ value: String(opt.value), label: opt.label }))}
+      />
     </div>
   );
 }

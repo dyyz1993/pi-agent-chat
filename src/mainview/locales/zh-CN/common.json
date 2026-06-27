@@ -119,7 +119,7 @@
   "welcome.remoteError.missing-host": "缺少 SSH 主机，请选择配置别名或填写主机。",
   "welcome.remoteError.auth-failed": "SSH 认证失败，请检查用户名、私钥或 ~/.ssh/config。",
   "welcome.remoteError.timeout": "SSH 连接超时，请检查主机地址、端口和网络。",
-  "welcome.remoteError.host-unreachable": "无法连接到 SSH 主机，请检查主机名、IP 或端口。",
+  "welcome.remoteError.host-unreachable": "无法连接到 SSH 主机，请检查主机是否在线、是否在同一网络或 VPN 内，以及 IP/端口/防火墙设置。",
   "welcome.remoteError.host-key": "SSH 主机密钥校验失败，请先在终端确认该主机是否可信。",
   "welcome.remoteError.ssh-config": "SSH 配置无效，请检查 ~/.ssh/config、私钥路径和 SSH 参数。",
   "welcome.remoteError.remote-path": "远端目录不存在或不是目录，请选择其他路径。",

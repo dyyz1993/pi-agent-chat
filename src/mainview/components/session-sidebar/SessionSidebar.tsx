@@ -23,7 +23,7 @@ import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SessionStatus, SubagentSessionInfo } from "../../types";
 import { ConfirmDialog } from "../explorer/ConfirmDialog";
-import { useCopyFeedback } from "../primitives";
+import { DropdownSelect, useCopyFeedback } from "../primitives";
 import { agentColorStyle } from "../../utils/agent-color";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 
@@ -998,17 +998,15 @@ function AgentFilterDropdown({
   if (uniqueAgents.length === 0) return null;
 
   return (
-    <select
+    <DropdownSelect
       value={selectedAgent ?? ""}
-      onChange={(e) => onSelectAgent(e.target.value || null)}
-      className="ml-auto max-w-[5.75rem] text-[10px] bg-bg-elevated/70 border border-border-primary/70 rounded px-1.5 py-0.5 text-text-secondary outline-none cursor-pointer whitespace-nowrap"
-    >
-      <option value="">{t("sidebar:filterAllAgents", "全部角色")}</option>
-      {uniqueAgents.map((agent) => (
-        <option key={agent} value={agent}>
-          {agent}
-        </option>
-      ))}
-    </select>
+      onChange={(next) => onSelectAgent(next || null)}
+      ariaLabel={t("sidebar:filterAllAgents", "全部角色")}
+      className="ml-auto h-6 max-w-[5.75rem] rounded border-border-primary/70 bg-bg-elevated/70 px-1.5 py-0.5 text-[10px] whitespace-nowrap"
+      options={[
+        { value: "", label: t("sidebar:filterAllAgents", "全部角色") },
+        ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
+      ]}
+    />
   );
 }

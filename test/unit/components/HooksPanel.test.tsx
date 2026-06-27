@@ -292,8 +292,8 @@ describe("HooksPanel", () => {
     });
     render(<HooksPanel />);
 
-    const select = screen.getByDisplayValue("All events");
-    fireEvent.change(select, { target: { value: "PreToolUse" } });
+    fireEvent.click(screen.getByRole("button", { name: "Filter hook events" }));
+    fireEvent.click(screen.getByRole("option", { name: "PreToolUse" }));
 
     await waitFor(() => {
       expect(mockCall).toHaveBeenCalledWith(

@@ -198,4 +198,30 @@ describe("fetchTierConfig", () => {
 
     expect(useTierStore.getState().globalDefaults).toEqual({ fast: "a/haiku" });
   });
+
+  it("deduplicates concurrent tier config fetches for the same session", async () => {
+    mockedCall.mockResolvedValue({
+      models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" },
+    });
+
+    await Promise.all([
+      useTierStore.getState().fetchTierConfig("sess-1"),
+      useTierStore.getState().fetchTierConfig("sess-1"),
+    ]);
+
+    expect(mockedCall).toHaveBeenCalledTimes(1);
+    expect(mockedCall).toHaveBeenCalledWith("agent.getTierModels", { sessionId: "sess-1" });
+  });
+
+  it("reuses cached tier config unless force is requested", async () => {
+    mockedCall.mockResolvedValue({
+      models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" },
+    });
+
+    await useTierStore.getState().fetchTierConfig("sess-1");
+    await useTierStore.getState().fetchTierConfig("sess-1");
+    await useTierStore.getState().fetchTierConfig("sess-1", { force: true });
+
+    expect(mockedCall).toHaveBeenCalledTimes(2);
+  });
 });

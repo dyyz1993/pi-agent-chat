@@ -9,6 +9,8 @@ const log = createLogger("tier");
 const TIER_KEYS = ["fast", "pro", "max"] as const;
 type TierKey = (typeof TIER_KEYS)[number];
 
+const tierConfigPromises = new Map<string, Promise<void>>();
+
 interface TierSessionData {
   tierModels: Record<string, string>;
   currentTier: TierKey | null;
@@ -27,7 +29,7 @@ interface TierState {
   setSessionCurrentTier: (sessionId: string, tier: TierKey | null) => void;
   syncTierFromModel: (sessionId: string, provider: string, modelId: string) => void;
   switchToTier: (tier: TierKey, sessionId: string) => Promise<void>;
-  fetchTierConfig: (sessionId: string) => Promise<void>;
+  fetchTierConfig: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
   loadPersistedConfig: (sessionId: string, sessionPath: string) => Promise<void>;
   savePersistedConfig: (sessionId: string, sessionPath: string) => Promise<void>;
   savePersistedConfigForSession: (sessionId: string) => void;
@@ -90,23 +92,37 @@ export const useTierStore = create<TierState>()((set, get) => ({
     get().setSessionCurrentTier(sessionId, null);
   },
 
-  fetchTierConfig: async (sessionId) => {
-    try {
-      const result = (await apiClient.call("agent.getTierModels", { sessionId })) as {
-        models: Record<string, string>;
-      };
-      set({ globalDefaults: result.models });
-      get().setSessionTierModels(sessionId, result.models);
-      const currentModel = useSessionStore.getState().currentModel;
-      if (currentModel) {
-        get().syncTierFromModel(sessionId, currentModel.provider, currentModel.id);
-      }
-      log.info("fetched tier config as global defaults", { models: result.models });
-    } catch (err) {
-      log.warn("failed to fetch tier config", {
-        error: err instanceof Error ? err.message : String(err),
-      });
+  fetchTierConfig: async (sessionId, options) => {
+    if (!options?.force && get().dataBySession[sessionId]?.tierModels) {
+      return;
     }
+
+    const existingPromise = tierConfigPromises.get(sessionId);
+    if (existingPromise) return existingPromise;
+
+    const promise = (async () => {
+      try {
+        const result = (await apiClient.call("agent.getTierModels", { sessionId })) as {
+          models: Record<string, string>;
+        };
+        set({ globalDefaults: result.models });
+        get().setSessionTierModels(sessionId, result.models);
+        const currentModel = useSessionStore.getState().currentModel;
+        if (currentModel) {
+          get().syncTierFromModel(sessionId, currentModel.provider, currentModel.id);
+        }
+        log.info("fetched tier config as global defaults", { models: result.models });
+      } catch (err) {
+        log.warn("failed to fetch tier config", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        tierConfigPromises.delete(sessionId);
+      }
+    })();
+
+    tierConfigPromises.set(sessionId, promise);
+    return promise;
   },
 
   switchToTier: async (tier, sessionId) => {
