@@ -30,6 +30,8 @@ import { useAgentStore } from "./use-agent-store";
 import { clearAgentStarted } from "./use-session-store";
 import { useSessionTodoStore } from "./use-session-todo-store";
 import { useDelegateActivityStore } from "./use-delegate-activity-store";
+import { useUIDialogStore } from "./use-ui-dialog-store";
+import { classifyExtensionUiRequest } from "../../shared/agent/agent-event-lifecycle";
 import { createLogger } from "../../shared/lib/logger";
 
 const perfLog = createLogger("session-perf");
@@ -78,6 +80,51 @@ function statusFromCoordinatorChildEvent(event: unknown): SessionStatus | null {
       return "streaming";
     default:
       return null;
+  }
+}
+
+/**
+ * Coordinator-propagated child UI requests (e.g. permission prompts from a
+ * delegated sub-session) must be registered on the parent side too, otherwise
+ * the session list shows the "needHelp" badge but the parent session's
+ * UIPendingCenter / ProjectRuntimePendingRequests have no entry point. This
+ * mirrors the direct-event handling in agent-event-handler.ts but operates on
+ * the relayed child event and keys the request by the child session id.
+ */
+export function registerCoordinatorChildUiRequest(childSessionId: string, event: unknown): void {
+  if (!event || typeof event !== "object") return;
+  const e = event as Record<string, unknown>;
+  if (e.type === "extension_ui_request") {
+    const method = typeof e.method === "string" ? e.method : undefined;
+    const id = typeof e.id === "string" ? e.id : undefined;
+    if (!id || !method) return;
+    if (classifyExtensionUiRequest({ method }).type !== "interactive") return;
+    useUIDialogStore.getState().registerUIRequest({
+      requestId: id,
+      sessionId: childSessionId,
+      method: method as "askUserQuestion" | "confirm" | "input" | "select" | "editor",
+      title: typeof e.title === "string" ? e.title : undefined,
+      message: typeof e.message === "string" ? e.message : undefined,
+      options: Array.isArray(e.options) ? (e.options as string[]) : undefined,
+      questions: Array.isArray(e.questions) ? (e.questions as []) : undefined,
+      multiple: typeof e.multiple === "boolean" ? e.multiple : undefined,
+      placeholder: typeof e.placeholder === "string" ? e.placeholder : undefined,
+      prefill: typeof e.prefill === "string" ? e.prefill : undefined,
+      timeout: typeof e.timeout === "number" ? e.timeout : undefined,
+      toolCallId: typeof e.toolCallId === "string" ? e.toolCallId : undefined,
+      confirmText: typeof e.confirmText === "string" ? e.confirmText : undefined,
+      cancelText: typeof e.cancelText === "string" ? e.cancelText : undefined,
+    });
+    return;
+  }
+  if (e.type === "extension_ui_resolved") {
+    const id = typeof e.id === "string" ? e.id : undefined;
+    const reason = typeof e.reason === "string" ? e.reason : "responded";
+    if (id) {
+      useUIDialogStore
+        .getState()
+        .resolveFromRemote(id, reason as "responded" | "timeout" | "aborted");
+    }
   }
 }
 
@@ -846,6 +893,10 @@ export function setupSubscriptions(
         if (childStatus) {
           syncCoordinatorChildSessionStatus(payload.childSessionId, childStatus);
         }
+        // Surface delegated child permission/UI prompts on the parent side too,
+        // so UIPendingCenter and ProjectRuntimePendingRequests show an entry
+        // point (the session list already shows the badge).
+        registerCoordinatorChildUiRequest(payload.childSessionId, payload.event);
         useDelegateActivityStore.getState().handleEvent(payload.childSessionId, payload.event);
       },
       { parentSessionId: id },
