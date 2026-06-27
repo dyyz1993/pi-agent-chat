@@ -7,7 +7,11 @@ import { getProcessManager } from "./agent";
 import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
 import { existsSync, createReadStream } from "fs";
 import * as readline from "readline";
-import type { ApprovalResult, PendingChangeResult, ReviewApprovalStatus } from "../modules/change-review";
+import type {
+  ApprovalResult,
+  PendingChangeResult,
+  ReviewApprovalStatus,
+} from "../modules/change-review";
 
 const log = createLogger("change-review");
 

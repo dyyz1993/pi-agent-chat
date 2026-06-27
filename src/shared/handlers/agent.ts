@@ -111,10 +111,7 @@ function readProjectTrustEntry(
   return legacyEntry ? { ...legacyEntry, trustStorePath: legacyTrustStorePath } : null;
 }
 
-function remoteTrustProjectPath(remoteProject: {
-  host: string;
-  remotePath: string;
-}): string {
+function remoteTrustProjectPath(remoteProject: { host: string; remotePath: string }): string {
   const hostSegment = encodeURIComponent(remoteProject.host);
   const remotePath = `/${remoteProject.remotePath.replace(/^\/+/, "")}`.replace(/\/+$/, "") || "/";
   return normalizeProjectPath(`/__pi_remote__/ssh/${hostSegment}${remotePath}`);

@@ -129,10 +129,14 @@ export function StatusPanel() {
   const [recoveredRemoteRef, setRecoveredRemoteRef] = useState<RemoteProjectRef | null>(null);
   const activeRemoteRef = activeProjectTab?.remote ?? recoveredRemoteRef;
   const activeSshRuntimeKind =
-    activeRemoteRef?.sshRuntimeKind ?? (remoteStatus?.enabled ? "ssh-command" : "remote-agent-child");
-  const displayRemoteEnabled = Boolean(activeRemoteRef ?? remoteStatus?.enabled ?? activeProjectTab?.runtime === "ssh");
+    activeRemoteRef?.sshRuntimeKind ??
+    (remoteStatus?.enabled ? "ssh-command" : "remote-agent-child");
+  const displayRemoteEnabled = Boolean(
+    activeRemoteRef ?? remoteStatus?.enabled ?? activeProjectTab?.runtime === "ssh",
+  );
   const displayRemoteHost = activeRemoteRef?.host ?? remoteStatus?.host;
-  const displayRemotePath = activeRemoteRef?.remotePath ?? remoteStatus?.remoteCwd ?? activeProjectTab?.path;
+  const displayRemotePath =
+    activeRemoteRef?.remotePath ?? remoteStatus?.remoteCwd ?? activeProjectTab?.path;
 
   const permissionPresets = [
     {
@@ -380,9 +384,7 @@ export function StatusPanel() {
                                 ? t("permissionTrustTrusted")
                                 : t("permissionTrustUntrusted")}
                             </span>
-                            <span className="text-text-tertiary">
-                              {t("executionSandboxAxis")}
-                            </span>
+                            <span className="text-text-tertiary">{t("executionSandboxAxis")}</span>
                             <span className="flex items-center gap-1 text-text-secondary">
                               {executionSandboxMode === "filesystem" ? (
                                 <ShieldCheck className="h-3 w-3 text-status-success" />
@@ -505,7 +507,9 @@ export function StatusPanel() {
                             </div>
                           </>
                         ) : (
-                          <div className="text-text-tertiary">{t("remoteConfigureFromProject")}</div>
+                          <div className="text-text-tertiary">
+                            {t("remoteConfigureFromProject")}
+                          </div>
                         )}
                       </div>
                     </div>

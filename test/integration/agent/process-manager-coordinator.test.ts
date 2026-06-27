@@ -58,15 +58,21 @@ interface InternalAPM {
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   processByCwd: Map<string, Set<ManagedClientShape>>;
-  handleCoordinatorDelegateSend: (msg: Record<string, unknown>) => Promise<{
-    delivered: boolean;
-    targetStatus: string;
-  }>;
-  handleCoordinatorCall: (
-    sessionId: string,
-    msg: Record<string, unknown>,
-    channelName?: string,
-  ) => Promise<void>;
+  coordinatorHandler: {
+    parentChildMap: Map<string, Set<string>>;
+    handleCoordinatorDelegateSend: (
+      sourceSessionId: string,
+      msg: never,
+    ) => Promise<{
+      delivered: boolean;
+      targetStatus: string;
+    }>;
+    handleCoordinatorCall: (
+      sessionId: string,
+      msg: Record<string, unknown>,
+      channelName?: string,
+    ) => Promise<void>;
+  };
   start: (
     sessionId: string,
     projectPath: string,
@@ -139,6 +145,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       m.clients.set(targetId, mockManaged);
       m.sessionPaths.set(targetId, `/fake/sessions/${targetId}.jsonl`);
       m.sessionProjectPaths.set(targetId, "/fake/project");
+      m.coordinatorHandler.parentChildMap.set("source-session", new Set([targetId]));
 
       const msg = {
         __call: "session_delegate_send",
@@ -147,7 +154,10 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "hello from delegate",
       };
 
-      const result = await m.handleCoordinatorDelegateSend(msg);
+      const result = await m.coordinatorHandler.handleCoordinatorDelegateSend(
+        "source-session",
+        msg as never,
+      );
 
       expect(result.delivered).toBe(true);
       expect(result.targetStatus).toBe("active");
@@ -176,6 +186,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       const m = internals(manager);
       m.sessionPaths.set(targetId, realPath);
       m.sessionProjectPaths.set(targetId, projectPath);
+      m.coordinatorHandler.parentChildMap.set("source-session", new Set([targetId]));
 
       // Mock start() to simulate restart
       const startSpy = vi
@@ -197,9 +208,12 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "reactivate me",
       };
 
-      const result = await m.handleCoordinatorDelegateSend(msg);
+      const result = await m.coordinatorHandler.handleCoordinatorDelegateSend(
+        "source-session",
+        msg as never,
+      );
 
-      expect(startSpy).toHaveBeenCalledWith(targetId, projectPath, realPath);
+      expect(startSpy).toHaveBeenCalledWith(targetId, projectPath, realPath, undefined);
       expect(result.delivered).toBe(true);
       expect(result.targetStatus).toBe("active");
 
@@ -215,6 +229,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       const m = internals(manager);
       m.sessionPaths.set(targetId, nonexistentPath);
       m.sessionProjectPaths.set(targetId, projectPath);
+      m.coordinatorHandler.parentChildMap.set("source-session", new Set([targetId]));
 
       const msg = {
         __call: "session_delegate_send",
@@ -223,7 +238,10 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "to nowhere",
       };
 
-      const result = await m.handleCoordinatorDelegateSend(msg);
+      const result = await m.coordinatorHandler.handleCoordinatorDelegateSend(
+        "source-session",
+        msg as never,
+      );
 
       expect(result.delivered).toBe(false);
       expect(result.targetStatus).toBe("not_found");
@@ -237,7 +255,10 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "to phantom",
       };
 
-      const result = await internals(manager).handleCoordinatorDelegateSend(msg);
+      const result = await internals(manager).coordinatorHandler.handleCoordinatorDelegateSend(
+        "source-session",
+        msg as never,
+      );
 
       expect(result.delivered).toBe(false);
       expect(result.targetStatus).toBe("not_found");
@@ -265,6 +286,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       const m = internals(manager);
       m.sessionPaths.set(targetId, realPath);
       m.sessionProjectPaths.set(targetId, projectPath);
+      m.coordinatorHandler.parentChildMap.set("source-session", new Set([targetId]));
 
       const startSpy = vi
         .spyOn(manager, "start")
@@ -277,7 +299,10 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "will fail",
       };
 
-      const result = await m.handleCoordinatorDelegateSend(msg);
+      const result = await m.coordinatorHandler.handleCoordinatorDelegateSend(
+        "source-session",
+        msg as never,
+      );
 
       expect(startSpy).toHaveBeenCalled();
       expect(result.delivered).toBe(false);
@@ -322,6 +347,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       m.sessionPaths.set(sessionB, realPathB);
       m.sessionProjectPaths.set(sessionA, projectPath);
       m.sessionProjectPaths.set(sessionB, projectPath);
+      m.coordinatorHandler.parentChildMap.set(sessionA, new Set([sessionB]));
 
       // Mock start() for B — simulates switchSession that evicts A
       vi.spyOn(manager, "start").mockImplementation(
@@ -353,7 +379,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "test fallback route",
       };
 
-      await m.handleCoordinatorCall(sessionA, msg, "coordinator");
+      await m.coordinatorHandler.handleCoordinatorCall(sessionA, msg, "coordinator");
 
       expect(coordSendSpy).not.toHaveBeenCalled();
 
@@ -368,7 +394,11 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       };
 
       await expect(
-        internals(manager).handleCoordinatorCall("orphan-session", msg, "coordinator"),
+        internals(manager).coordinatorHandler.handleCoordinatorCall(
+          "orphan-session",
+          msg,
+          "coordinator",
+        ),
       ).resolves.toBeUndefined();
     });
   });

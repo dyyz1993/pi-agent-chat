@@ -1,9 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import {
-  getProjectExecutionSandboxPath,
-  normalizeProjectPath,
-} from "./pi-agent-paths";
+import { getProjectExecutionSandboxPath, normalizeProjectPath } from "./pi-agent-paths";
 
 export type ExecutionSandboxMode = "off" | "filesystem";
 
@@ -21,9 +18,7 @@ export function normalizeExecutionSandboxMode(value: unknown): ExecutionSandboxM
   return value === "filesystem" ? "filesystem" : "off";
 }
 
-export function readProjectExecutionSandbox(
-  projectPath: string,
-): ProjectExecutionSandboxState {
+export function readProjectExecutionSandbox(projectPath: string): ProjectExecutionSandboxState {
   const normalizedProjectPath = normalizeProjectPath(projectPath);
   const configPath = getProjectExecutionSandboxPath(normalizedProjectPath);
   let mode: ExecutionSandboxMode = "off";

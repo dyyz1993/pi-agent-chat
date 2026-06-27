@@ -233,11 +233,9 @@ export const config = {
   remoteBootstrapPiPackage: process.env.REMOTE_BOOTSTRAP_PI_PACKAGE !== "false",
   /** 本地 pi-coding-agent 包目录，用于 SSH runtime 私有 bootstrap */
   remoteLocalPiPackagePath:
-    process.env.REMOTE_LOCAL_PI_PACKAGE_PATH ??
-    ".yalc/@dyyz1993/pi-coding-agent",
+    process.env.REMOTE_LOCAL_PI_PACKAGE_PATH ?? ".yalc/@dyyz1993/pi-coding-agent",
   /** 本地 pi monorepo packages 目录；提供时用于同步完整 workspace 包而不是 yalc stub */
-  remoteLocalPiWorkspacePackagesPath:
-    process.env.REMOTE_LOCAL_PI_WORKSPACE_PACKAGES_PATH ?? "",
+  remoteLocalPiWorkspacePackagesPath: process.env.REMOTE_LOCAL_PI_WORKSPACE_PACKAGES_PATH ?? "",
   /** Remote child MVP：直接通过 SSH 启动远端 pi --mode rpc，而不是本地 CLI 或 sandbox bridge */
   remoteChildEnabled: process.env.REMOTE_CHILD_ENABLED === "true",
   /** Remote child 工作目录；默认复用 REMOTE_PROJECT_PATH */
@@ -245,17 +243,11 @@ export const config = {
     process.env.REMOTE_CHILD_PROJECT_PATH ?? process.env.REMOTE_PROJECT_PATH ?? "",
   /** Remote child CLI 路径；可为可执行 pi，或配合 REMOTE_CHILD_NODE_PATH 指向 cli.js */
   remoteChildPiCliPath:
-    process.env.REMOTE_CHILD_PI_CLI_PATH ??
-    process.env.REMOTE_PI_CLI_PATH ??
-    "pi",
+    process.env.REMOTE_CHILD_PI_CLI_PATH ?? process.env.REMOTE_PI_CLI_PATH ?? "pi",
   /** Remote child node 路径；设为空字符串表示直接执行 REMOTE_CHILD_PI_CLI_PATH */
-  remoteChildNodePath:
-    process.env.REMOTE_CHILD_NODE_PATH ??
-    process.env.REMOTE_NODE_PATH ??
-    "node",
+  remoteChildNodePath: process.env.REMOTE_CHILD_NODE_PATH ?? process.env.REMOTE_NODE_PATH ?? "node",
   /** Remote child shell wrapper */
-  remoteChildShell:
-    process.env.REMOTE_CHILD_SHELL ?? process.env.REMOTE_SHELL ?? "sh -lc",
+  remoteChildShell: process.env.REMOTE_CHILD_SHELL ?? process.env.REMOTE_SHELL ?? "sh -lc",
   /** Remote child 本地单文件二进制；设置后启动前会自动上传到远端版本目录 */
   remoteChildLocalBinaryPath: process.env.REMOTE_CHILD_LOCAL_BINARY_PATH ?? "",
   /** Remote child 本地内置 extensions 目录；不填则使用当前 pi 包的 dist/extensions */

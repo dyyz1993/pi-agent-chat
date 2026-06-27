@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildLsofListenPidsArgs,
   encodeRemoteInstanceId,
@@ -68,13 +71,7 @@ describe("RemoteSshProvider helpers", () => {
   });
 
   it("builds lsof args that only match listening tunnels on one port", () => {
-    expect(buildLsofListenPidsArgs(3430)).toEqual([
-      "-n",
-      "-P",
-      "-t",
-      "-iTCP:3430",
-      "-sTCP:LISTEN",
-    ]);
+    expect(buildLsofListenPidsArgs(3430)).toEqual(["-n", "-P", "-t", "-iTCP:3430", "-sTCP:LISTEN"]);
   });
 
   it("encodes remote instance ids for per-connection bridge directories", () => {
@@ -98,10 +95,10 @@ describe("RemoteSshProvider helpers", () => {
       remoteShell: "zsh -lc",
     });
 
-    expect(command).toContain('mkdir -p "${HOME}/.pi/agent/remote-runtime" \'/home/me/project\'');
+    expect(command).toContain("mkdir -p \"${HOME}/.pi/agent/remote-runtime\" '/home/me/project'");
     expect(command).toContain("PI_CHILD_NODE_OPTIONS='--max-old-space-size=1024'");
     expect(command).toContain('PI_CODING_AGENT_DIR="${HOME}/.pi/agent"');
-    expect(command).toContain('\'node\' "${HOME}/.pi/agent/remote-runtime/sandbox-agent.js"');
+    expect(command).toContain("'node' \"${HOME}/.pi/agent/remote-runtime/sandbox-agent.js\"");
     expect(command).toContain("--port=3101");
     expect(command).toContain("--cli-path='pi'");
     expect(command).toContain("--cwd='/home/me/project'");
@@ -130,12 +127,26 @@ describe("RemoteSshProvider helpers", () => {
   });
 
   it("discovers sibling yalc packages needed by the remote bootstrap", () => {
-    const names = getLocalScopePackageNames(".yalc/@dyyz1993/pi-coding-agent");
+    const root = mkdtempSync(join(tmpdir(), "pi-agent-chat-ssh-test-"));
+    try {
+      const scopeDir = join(root, ".yalc", "@dyyz1993");
+      const packageNames = ["pi-coding-agent", "pi-agent-core", "pi-ai", "pi-tui"];
+      for (const packageName of packageNames) {
+        const packageDir = join(scopeDir, packageName);
+        mkdirSync(packageDir, { recursive: true });
+        writeFileSync(
+          join(packageDir, "package.json"),
+          JSON.stringify({ name: `@dyyz1993/${packageName}` }),
+        );
+      }
 
-    expect(names).toEqual(
-      expect.arrayContaining(["pi-agent-core", "pi-ai", "pi-tui"]),
-    );
-    expect(names).not.toContain("pi-coding-agent");
+      const names = getLocalScopePackageNames(join(scopeDir, "pi-coding-agent"));
+
+      expect(names).toEqual(expect.arrayContaining(["pi-agent-core", "pi-ai", "pi-tui"]));
+      expect(names).not.toContain("pi-coding-agent");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("builds versioned remote child paths from the local binary hash", () => {
@@ -149,8 +160,7 @@ describe("RemoteSshProvider helpers", () => {
     ).toEqual({
       remoteVersionDir: "~/.pi/agent/remote-runtime/child/children/abcdef0123456789",
       remoteBinaryPath: "~/.pi/agent/remote-runtime/child/children/abcdef0123456789/pi_remote",
-      remoteHashPath:
-        "~/.pi/agent/remote-runtime/child/children/abcdef0123456789/pi_remote.sha256",
+      remoteHashPath: "~/.pi/agent/remote-runtime/child/children/abcdef0123456789/pi_remote.sha256",
       remoteUploadPath:
         "~/.pi/agent/remote-runtime/child/children/abcdef0123456789/pi_remote.uploading",
     });

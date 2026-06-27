@@ -83,7 +83,14 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       loadSessionMessages: () => {},
     }),
   );
-  return { useChatStore };
+  return {
+    useChatStore,
+    getMemorySemanticTimestamp: (_data: unknown, fallback: number) => fallback,
+    insertChatMessageByDisplayOrder: (messages: ChatMessage[], message: ChatMessage) => [
+      ...messages,
+      message,
+    ],
+  };
 });
 
 vi.mock("../../../src/mainview/stores/use-notification-store", () => {
@@ -122,7 +129,13 @@ import { useSessionStore } from "../../../src/mainview/stores/use-session-store"
 import { useNotificationStore } from "../../../src/mainview/stores/use-notification-store";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
 import { ScenarioPlayer } from "../../helpers/mock-llm";
-import { agentStart, messageStart, messageUpdate, messageEnd, agentEnd } from "../../helpers/mock-llm";
+import {
+  agentStart,
+  messageStart,
+  messageUpdate,
+  messageEnd,
+  agentEnd,
+} from "../../helpers/mock-llm";
 
 const SID = "batch7-test-session";
 

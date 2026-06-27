@@ -107,6 +107,11 @@ export class SessionMessageReader {
     this.deps = deps;
   }
 
+  private resolveReadableSessionPath(sessionId: string, sessionPath?: string): string {
+    if (sessionPath) return sessionPath;
+    return this.deps.resolveSessionPath(sessionId) || "";
+  }
+
   /**
    * Get cached session data. Three outcomes:
    * 1. Exact match (file unchanged) → return cached data
@@ -353,7 +358,7 @@ export class SessionMessageReader {
         });
       }
     } else {
-      resolvedSessionPath = this.deps.resolveSessionPath(sessionId) ?? sessionPath ?? "";
+      resolvedSessionPath = this.resolveReadableSessionPath(sessionId, sessionPath);
       const leafId = this.deps.leafIds.get(sessionId) ?? null;
       if (resolvedSessionPath && leafId !== undefined) {
         const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
@@ -389,36 +394,49 @@ export class SessionMessageReader {
         try {
           const userId = this.deps._getSandboxUserId(sessionId);
           if (userId) {
-            const raw = await sandboxManager.execInSandbox(
-              userId,
-              `cat ${resolvedSessionPath}`,
-            );
+            const raw = await sandboxManager.execInSandbox(userId, `cat ${resolvedSessionPath}`);
             const lines = raw.split("\n");
             for (const line of lines) {
               if (!line.trim()) continue;
               try {
                 const parsed = JSON.parse(line) as Record<string, unknown>;
                 if (parsed.type === "custom") {
-                  if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  if (
+                    activePathIds &&
+                    typeof parsed.id === "string" &&
+                    !activePathIds.has(parsed.id)
+                  )
                     continue;
                   customEntries.push({
                     id: (parsed.id as string) ?? `custom-${Date.now()}`,
                     customType: (parsed.customType as string) ?? "unknown",
                     data: parsed.data,
-                    timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                    timestamp: new Date(
+                      (parsed.timestamp as string | number | Date) ?? 0,
+                    ).getTime(),
                   });
                 } else if (parsed.type === "compaction") {
-                  if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  if (
+                    activePathIds &&
+                    typeof parsed.id === "string" &&
+                    !activePathIds.has(parsed.id)
+                  )
                     continue;
                   messages.push({
                     id: parsed.id,
                     role: "compactionSummary",
                     summary: parsed.summary ?? "",
                     tokensBefore: parsed.tokensBefore,
-                    timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                    timestamp: new Date(
+                      (parsed.timestamp as string | number | Date) ?? 0,
+                    ).getTime(),
                   });
                 } else if (parsed.type === "message" && parsed.message) {
-                  if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  if (
+                    activePathIds &&
+                    typeof parsed.id === "string" &&
+                    !activePathIds.has(parsed.id)
+                  )
                     continue;
                   messages.push(parsed.message);
                 }
@@ -518,7 +536,7 @@ export class SessionMessageReader {
     // Resolve session file path first
     const resolvedSessionPath = managed
       ? managed.info.sessionPath
-      : this.deps.resolveSessionPath(sessionId) ?? sessionPath ?? "";
+      : this.resolveReadableSessionPath(sessionId, sessionPath);
 
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
@@ -550,10 +568,7 @@ export class SessionMessageReader {
         try {
           const userId = this.deps._getSandboxUserId(sessionId);
           if (userId) {
-            const raw = await sandboxManager.execInSandbox(
-              userId,
-              `cat ${resolvedSessionPath}`,
-            );
+            const raw = await sandboxManager.execInSandbox(userId, `cat ${resolvedSessionPath}`);
             const parsed = parseJsonlFromText(raw);
             allMessages.push(...parsed.messages);
             allCustomEntries.push(...parsed.customEntries);
@@ -651,7 +666,7 @@ export class SessionMessageReader {
             customEntries: allCustomEntries,
             compactionEntries: allCompactionEntries,
             parentById,
-            lineCount: fullResult.messages.length,
+            lineCount: fullResult.totalLines,
             lastJsonlLeafPointer,
             activeJsonlLeafId,
           });
@@ -678,7 +693,7 @@ export class SessionMessageReader {
     const inMemoryLeafId = this.deps.leafIds.get(sessionId) ?? null;
     const isStreaming = managed?.info.status === "streaming";
     const leafId =
-      (lastJsonlLeafPointer ? activeJsonlLeafId ?? lastJsonlLeafPointer : null) ??
+      (lastJsonlLeafPointer ? (activeJsonlLeafId ?? lastJsonlLeafPointer) : null) ??
       (isStreaming ? (activeJsonlLeafId ?? null) : null) ??
       inMemoryLeafId;
     if (leafId && leafId !== inMemoryLeafId) {
@@ -908,7 +923,8 @@ export class SessionMessageReader {
       });
       return {
         cancelled: true,
-        reason: "File rollback requires an active agent process. Restart the session and try again.",
+        reason:
+          "File rollback requires an active agent process. Restart the session and try again.",
       };
     }
 

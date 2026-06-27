@@ -67,8 +67,8 @@ let _minLevel: LogLevel = (() => {
   if (isValidLogLevel(envLevel)) return envLevel;
   console.warn(
     `[logger] Invalid LOG_LEVEL value: "${envLevel}". ` +
-    `Valid values: ${VALID_LOG_LEVELS.join(", ")}. ` +
-    `Falling back to "info".`
+      `Valid values: ${VALID_LOG_LEVELS.join(", ")}. ` +
+      `Falling back to "info".`,
   );
   return "info";
 })();

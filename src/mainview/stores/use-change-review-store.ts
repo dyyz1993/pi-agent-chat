@@ -83,7 +83,9 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
         };
 
         const approvalsResult = await apiClient.call("change-review.approvals", baseParams);
-        const approvals = (Array.isArray(approvalsResult) ? approvalsResult : []) as ReviewApproval[];
+        const approvals = (
+          Array.isArray(approvalsResult) ? approvalsResult : []
+        ) as ReviewApproval[];
 
         const pendingResult = await apiClient.call("change-review.pending", baseParams);
         const pending = (Array.isArray(pendingResult) ? pendingResult : []) as PendingChange[];

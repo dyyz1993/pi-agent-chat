@@ -29,14 +29,21 @@ interface SupervisorState {
   fetchStatus: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
   setGoal: (sessionId: string, objective: string) => Promise<void>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
-  refineGoal: (sessionId: string, objective: string) => Promise<{ success: boolean; objective?: string; error?: string }>;
+  refineGoal: (
+    sessionId: string,
+    objective: string,
+  ) => Promise<{ success: boolean; objective?: string; error?: string }>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
   fetchTaskReport: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
-  fetchTriggerHistory: (sessionId: string, limit?: number, options?: { force?: boolean }) => Promise<void>;
+  fetchTriggerHistory: (
+    sessionId: string,
+    limit?: number,
+    options?: { force?: boolean },
+  ) => Promise<void>;
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => void;
   clearSession: (sessionId: string) => void;
 }
@@ -155,7 +162,10 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
     }
   },
 
-  refineGoal: async (sessionId: string, objective: string): Promise<{ success: boolean; objective?: string; error?: string }> => {
+  refineGoal: async (
+    sessionId: string,
+    objective: string,
+  ): Promise<{ success: boolean; objective?: string; error?: string }> => {
     try {
       const result = (await apiClient.call("supervisor.refineGoal", {
         sessionId,

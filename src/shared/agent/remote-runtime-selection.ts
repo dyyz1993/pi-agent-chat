@@ -21,9 +21,7 @@ export type ActiveRuntimeSelection =
 export function getRemoteProjectSshRuntimeKind(
   remoteProject: Pick<RemoteProjectRecord, "sshRuntimeKind">,
 ): SshRuntimeKind {
-  return remoteProject.sshRuntimeKind === "ssh-command"
-    ? "ssh-command"
-    : "remote-agent-child";
+  return remoteProject.sshRuntimeKind === "ssh-command" ? "ssh-command" : "remote-agent-child";
 }
 
 export function shouldCreateLocalRuntimeCwd(
@@ -32,10 +30,12 @@ export function shouldCreateLocalRuntimeCwd(
   return runtime.kind !== "remote-agent-child";
 }
 
-export function splitSshArgsForRemoteChild(input: {
+export function splitSshArgsForRemoteChild(input: { target: string; sshArgs?: string[] }): {
   target: string;
-  sshArgs?: string[];
-}): { target: string; port?: number; keyPath?: string; extraSshArgs: string[] } {
+  port?: number;
+  keyPath?: string;
+  extraSshArgs: string[];
+} {
   const args = input.sshArgs ?? [];
   const extraSshArgs: string[] = [];
   let target = input.target;

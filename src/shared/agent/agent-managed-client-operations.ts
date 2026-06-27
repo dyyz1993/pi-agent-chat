@@ -93,7 +93,9 @@ export async function ensureManagedClientOperation<TManaged extends ManagedSessi
     }
 
     if (!projectPath || !sessionPath) {
-      log.warn("[ensureManagedClient] session metadata not found", { sessionId: options.sessionId });
+      log.warn("[ensureManagedClient] session metadata not found", {
+        sessionId: options.sessionId,
+      });
       return null;
     }
 

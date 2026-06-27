@@ -102,7 +102,7 @@ describe("managed client restart", () => {
     // Phase 1: rollback with JSONL fallback (no managed client)
     const manager1 = new AgentProcessManager(new MockRPC() as never);
     mgr(manager1).sessionPaths.set("s1", sf);
-    await manager1.navigateTree("s1", "m2");
+    await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
     const r1 = await manager1.getFullMessages("s1", sf);
     expect(r1.totalCount).toBe(2);
@@ -151,7 +151,7 @@ describe("managed client restart", () => {
     // Rollback
     const manager1 = new AgentProcessManager(new MockRPC() as never);
     mgr(manager1).sessionPaths.set("s1", sf);
-    await manager1.navigateTree("s1", "m2");
+    await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
     // CLI startup appends tier_config after leaf_pointer
     appendFileSync(
@@ -206,7 +206,7 @@ describe("managed client restart", () => {
     // Rollback to m2
     const manager1 = new AgentProcessManager(new MockRPC() as never);
     mgr(manager1).sessionPaths.set("s1", sf);
-    await manager1.navigateTree("s1", "m2");
+    await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
     // User chats (new messages appended)
     appendFileSync(sf, "\n" + msg("m5", "m2", "user"));
@@ -257,14 +257,14 @@ describe("managed client restart", () => {
     // Rollback to m3
     const manager1 = new AgentProcessManager(new MockRPC() as never);
     mgr(manager1).sessionPaths.set("s1", sf);
-    await manager1.navigateTree("s1", "m3");
+    await manager1.navigateTree("s1", "m3", { skipFiles: true });
 
     // User chats from m3
     appendFileSync(sf, "\n" + msg("m5", "m3", "user"));
     appendFileSync(sf, "\n" + msg("m6", "m5", "assistant"));
 
     // Second rollback to m2
-    await manager1.navigateTree("s1", "m2");
+    await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
     // Restart with managed client that returns wrong leaf
     const manager2 = new AgentProcessManager(new MockRPC() as never);

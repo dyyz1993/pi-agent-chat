@@ -222,7 +222,13 @@ export class SessionMessageCache {
     } catch {
       // file gone — keep original offset
     }
-    return { newEntries, totalLines: lineIndex, newByteOffset, newCompactionEntries, lastLeafPointer };
+    return {
+      newEntries,
+      totalLines: lineIndex,
+      newByteOffset,
+      newCompactionEntries,
+      lastLeafPointer,
+    };
   }
 
   private touch(sessionId: string, cached: CachedSessionData): void {

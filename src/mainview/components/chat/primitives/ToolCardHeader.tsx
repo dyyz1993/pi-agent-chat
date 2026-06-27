@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import {     getToolIcon } from "../tool-icon-map";
+import { getToolIcon } from "../tool-icon-map";
 import { useToolDuration } from "./useToolDuration";
 
 export type ToolCardStatus = "running" | "done" | "error" | "background" | "terminated";

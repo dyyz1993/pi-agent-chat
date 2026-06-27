@@ -17,6 +17,7 @@ import {
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateStopOperation,
   handleCoordinatorDelegateForkOperation,
+  type DelegateSendNotFoundReason,
 } from "./coordinator-delegate-operations";
 import type { DelegateReplyMode } from "./coordinator-delegate-utils";
 import { createLogger } from "../lib/logger";
@@ -290,7 +291,11 @@ export class CoordinatorHandler {
   async handleCoordinatorDelegateSend(
     sourceSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
-  ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
+  ): Promise<{
+    delivered: boolean;
+    targetStatus: "active" | "started" | "not_found";
+    notFoundReason?: DelegateSendNotFoundReason;
+  }> {
     return handleCoordinatorDelegateSendOperation({
       sourceSessionId,
       msg,

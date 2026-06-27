@@ -41,11 +41,7 @@ export function ComposerPlaceholderBar() {
               <span className="shrink-0 font-medium text-text-primary">{t("composerQuote")}</span>
               <span className="max-w-52 truncate text-text-secondary">{placeholder.title}</span>
               <span className="shrink-0 text-[11px] text-text-tertiary">
-                {getTextStats(
-                  placeholder.text,
-                  t("composerQuoteChars"),
-                  t("composerQuoteLines"),
-                )}
+                {getTextStats(placeholder.text, t("composerQuoteChars"), t("composerQuoteLines"))}
               </span>
               {placeholder.expanded ? (
                 <ChevronUp className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />

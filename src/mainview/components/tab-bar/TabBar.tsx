@@ -324,7 +324,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           //   - sessionsByProject[tab.path] === []       → loaded  → 按 session 计算颜色
           // 这样首屏进入时不会从"绿点（误判为 idle）"跳到"其他色"。
           const sessionsForTab = sessionsByProject[tab.path];
-          const knowledge: "unknown" | "loaded" = sessionsForTab === undefined ? "unknown" : "loaded";
+          const knowledge: "unknown" | "loaded" =
+            sessionsForTab === undefined ? "unknown" : "loaded";
           const sessions = sessionsForTab ?? [];
           const dotClass = resolveDotClass(knowledge, sessions, sessionStatusMap);
           const isActive = activeProjectId === tab.id;
@@ -347,7 +348,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             Boolean(remoteRuntime?.enabled) ||
             isRemoteProjectLocalPath(tab.path);
           const remoteRuntimeKind =
-            tab.remote?.sshRuntimeKind ?? (remoteRuntime?.enabled ? "ssh-command" : "remote-agent-child");
+            tab.remote?.sshRuntimeKind ??
+            (remoteRuntime?.enabled ? "ssh-command" : "remote-agent-child");
           const RemoteRuntimeIcon = remoteRuntimeKind === "ssh-command" ? Cable : CloudCog;
           const remoteRuntimeTitle =
             remoteHost || remotePath

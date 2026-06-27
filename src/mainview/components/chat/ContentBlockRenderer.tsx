@@ -12,11 +12,7 @@ import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
 import { getToolRenderer } from "./tool-renderers";
 import type { ToolRendererProps } from "./tool-renderers";
-import {
-  MEMORY_HIDDEN_IN_CHAT,
-  isLspCustomType,
-  isLspVisibleInChat,
-} from "./lsp-constants";
+import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./lsp-constants";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import type { ContentBlock, UIInteractionBlock } from "../../types";
 

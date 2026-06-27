@@ -457,8 +457,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const ext = filePath.lastIndexOf(".");
-      const ct =
-        ext >= 0 ? getMimeType(filePath.slice(ext)) : "application/octet-stream";
+      const ct = ext >= 0 ? getMimeType(filePath.slice(ext)) : "application/octet-stream";
       const range = req.headers["range"];
       const data = readFileSync(filePath);
       if (range) {

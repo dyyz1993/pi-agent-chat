@@ -1,14 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from "react";
-import {
-  Paperclip,
-  ImageIcon,
-  X,
-  Loader2,
-  AlertCircle,
-  Target,
-  Plus,
-  Repeat2,
-} from "lucide-react";
+import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Target, Plus, Repeat2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
@@ -43,7 +34,9 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
             title={att.name}
           >
             <div className="truncate text-[11px] font-medium text-text-primary">{att.name}</div>
-            <div className="truncate text-[10px] text-text-tertiary">{formatFileSize(att.size)}</div>
+            <div className="truncate text-[10px] text-text-tertiary">
+              {formatFileSize(att.size)}
+            </div>
           </button>
           <button
             type="button"
@@ -55,11 +48,7 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
           </button>
         </div>
         {expanded && (
-          <ImageViewerOverlay
-            src={att.preview}
-            alt={att.name}
-            onClose={() => setExpanded(false)}
-          />
+          <ImageViewerOverlay src={att.preview} alt={att.name} onClose={() => setExpanded(false)} />
         )}
       </>
     );
@@ -426,9 +415,7 @@ export function AttachmentButtons({
                     pulse ? "animate-pulse" : ""
                   } ${armed ? "opacity-25" : "opacity-100"}`}
                 />
-                {armed && (
-                  <X className="absolute h-4 w-4 text-text-primary" />
-                )}
+                {armed && <X className="absolute h-4 w-4 text-text-primary" />}
               </button>
             );
           })()}

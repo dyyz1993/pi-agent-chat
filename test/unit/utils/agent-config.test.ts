@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 
-const AGENTS_DIR = "/Users/xuyingzhou/.pi/agent/agents/";
+const AGENTS_DIR = process.env.PI_AGENT_TEST_AGENTS_DIR;
 
 const VALID_TOOLS = new Set([
   "read",
@@ -136,6 +136,7 @@ function parseTools(toolsRaw: string | string[] | undefined): string[] {
 }
 
 function loadAllAgents(): ParsedAgent[] {
+  if (!AGENTS_DIR) return [];
   const files = fs
     .readdirSync(AGENTS_DIR)
     .filter((f) => f.endsWith(".md"))
@@ -187,9 +188,10 @@ function isReadOnlyTools(tools: string[]): boolean {
   return tools.length > 0 && tools.every((t) => READ_ONLY_TOOLS.has(t));
 }
 
-const agents = loadAllAgents();
+const agents = AGENTS_DIR && fs.existsSync(AGENTS_DIR) ? loadAllAgents() : [];
+const describeIfAgentsDirExists = agents.length > 0 ? describe : describe.skip;
 
-describe("Agent Config Validation", () => {
+describeIfAgentsDirExists("Agent Config Validation", () => {
   describe("1. Frontmatter Parsing", () => {
     it("should discover agent .md files", () => {
       expect(agents.length).toBeGreaterThanOrEqual(15);

@@ -7,7 +7,7 @@
 // - iconCls 传递到 icon 元素的 className
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { SectionHeader } from "../../../src/mainview/components/primitives/SectionHeader";
 
 vi.mock("react-i18next", () => ({
@@ -31,12 +31,7 @@ describe("SectionHeader — chevron icon", () => {
 
   it("renders ChevronRight when collapsed=true", () => {
     const { container } = render(
-      <SectionHeader
-        collapsed={true}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="Tools"
-      />,
+      <SectionHeader collapsed={true} onToggle={vi.fn()} icon={ChevronUp} label="Tools" />,
     );
     // lucide 渲染为 <svg>，类名中包含 "lucide-chevron-right"
     const chevronRight = container.querySelector(".lucide-chevron-right");
@@ -47,12 +42,7 @@ describe("SectionHeader — chevron icon", () => {
 
   it("renders ChevronDown when collapsed=false", () => {
     const { container } = render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="Tools"
-      />,
+      <SectionHeader collapsed={false} onToggle={vi.fn()} icon={ChevronUp} label="Tools" />,
     );
     const chevronDown = container.querySelector(".lucide-chevron-down");
     expect(chevronDown).not.toBeNull();
@@ -69,14 +59,7 @@ describe("SectionHeader — interactions", () => {
 
   it("click on button triggers onToggle", () => {
     const onToggle = vi.fn();
-    render(
-      <SectionHeader
-        collapsed={true}
-        onToggle={onToggle}
-        icon={ChevronUp}
-        label="Tools"
-      />,
-    );
+    render(<SectionHeader collapsed={true} onToggle={onToggle} icon={ChevronUp} label="Tools" />);
     fireEvent.click(screen.getByRole("button"));
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
@@ -84,12 +67,7 @@ describe("SectionHeader — interactions", () => {
   it("click on label span still triggers onToggle (event bubbles to button)", () => {
     const onToggle = vi.fn();
     render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={onToggle}
-        icon={ChevronUp}
-        label="My Tools"
-      />,
+      <SectionHeader collapsed={false} onToggle={onToggle} icon={ChevronUp} label="My Tools" />,
     );
     fireEvent.click(screen.getByText("My Tools"));
     expect(onToggle).toHaveBeenCalledTimes(1);
@@ -104,12 +82,7 @@ describe("SectionHeader — label & badge", () => {
 
   it("renders the label text", () => {
     render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="My Section"
-      />,
+      <SectionHeader collapsed={false} onToggle={vi.fn()} icon={ChevronUp} label="My Section" />,
     );
     expect(screen.getByText("My Section")).toBeInTheDocument();
   });
@@ -145,12 +118,7 @@ describe("SectionHeader — label & badge", () => {
 
   it("does NOT render badge when badge = undefined", () => {
     const { container } = render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="Tools"
-      />,
+      <SectionHeader collapsed={false} onToggle={vi.fn()} icon={ChevronUp} label="Tools" />,
     );
     expect(container.querySelectorAll(".ml-auto").length).toBe(0);
   });
@@ -177,12 +145,7 @@ describe("SectionHeader — icon & iconCls", () => {
 
   it("renders the provided icon", () => {
     const { container } = render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="Tools"
-      />,
+      <SectionHeader collapsed={false} onToggle={vi.fn()} icon={ChevronUp} label="Tools" />,
     );
     expect(container.querySelector(".lucide-chevron-up")).not.toBeNull();
   });
@@ -205,12 +168,7 @@ describe("SectionHeader — icon & iconCls", () => {
 
   it("renders icon without iconCls (empty string appended)", () => {
     const { container } = render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="Tools"
-      />,
+      <SectionHeader collapsed={false} onToggle={vi.fn()} icon={ChevronUp} label="Tools" />,
     );
     const icon = container.querySelector(".lucide-chevron-up") as HTMLElement | null;
     expect(icon).not.toBeNull();
@@ -227,14 +185,7 @@ describe("SectionHeader — accessibility", () => {
   });
 
   it("is a button element", () => {
-    render(
-      <SectionHeader
-        collapsed={false}
-        onToggle={vi.fn()}
-        icon={ChevronUp}
-        label="Tools"
-      />,
-    );
+    render(<SectionHeader collapsed={false} onToggle={vi.fn()} icon={ChevronUp} label="Tools" />);
     expect(screen.getByRole("button")).toBeInTheDocument();
   });
 

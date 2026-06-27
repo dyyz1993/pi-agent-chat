@@ -375,13 +375,12 @@ export function createFetchInitialStateAction({
         const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
         const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
 
-        modelsPromise
-          .catch((err) => {
-            log.warn("agent.getAvailableModels failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
+        modelsPromise.catch((err) => {
+          log.warn("agent.getAvailableModels failed", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
           });
+        });
 
         settingsPromise
           .then((raw) => {

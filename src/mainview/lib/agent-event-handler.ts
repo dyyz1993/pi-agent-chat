@@ -1154,7 +1154,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "tool_execution_end") {
-    storeGet().scheduleWorkspaceResourceRefresh(sessionId);
+    const sessionStore = storeGet();
+    if (typeof sessionStore.scheduleWorkspaceResourceRefresh === "function") {
+      sessionStore.scheduleWorkspaceResourceRefresh(sessionId);
+    }
     flushNow();
     const toolCallId = event.toolCallId;
     setToolActive(sessionId, toolCallId, false);
@@ -1396,7 +1399,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
         timestamp: getMemorySemanticTimestamp(resultData, Date.now()),
       };
-      chat.setMessagesForSession(sessionId, insertChatMessageByDisplayOrder(existingMsgs, customMsg));
+      chat.setMessagesForSession(
+        sessionId,
+        insertChatMessageByDisplayOrder(existingMsgs, customMsg),
+      );
       return;
     }
 

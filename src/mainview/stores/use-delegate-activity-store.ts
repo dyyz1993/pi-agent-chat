@@ -142,7 +142,9 @@ function upsertTool(
     return [...tools, { toolCallId, toolName, status }];
   }
   return tools.map((tool) =>
-    tool.toolCallId === toolCallId ? { ...tool, toolName: tool.toolName || toolName, status } : tool,
+    tool.toolCallId === toolCallId
+      ? { ...tool, toolName: tool.toolName || toolName, status }
+      : tool,
   );
 }
 
@@ -217,14 +219,12 @@ export const useDelegateActivityStore = create<DelegateActivityState>((set) => (
         const toolName = getString(event, "toolName") ?? "tool";
         if (!toolCallId) return state;
         const status =
-          type === "tool_execution_end"
-            ? event.isError === true
-              ? "error"
-              : "done"
-            : "running";
+          type === "tool_execution_end" ? (event.isError === true ? "error" : "done") : "running";
         const round = ensureRound(next, now);
         const tools = upsertTool(round.tools, toolCallId, toolName, status);
-        const nextRoundStatus: DelegateActivityStatus = tools.some((tool) => tool.status === "error")
+        const nextRoundStatus: DelegateActivityStatus = tools.some(
+          (tool) => tool.status === "error",
+        )
           ? "error"
           : tools.some((tool) => tool.status === "running")
             ? "running"

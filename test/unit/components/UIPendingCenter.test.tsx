@@ -331,10 +331,9 @@ describe("UIPendingCenter", () => {
         prefill: "existing code",
       }),
     ];
-    const { container } = render(<UIPendingCenter />);
-    const textarea = container.querySelector("textarea");
+    render(<UIPendingCenter />);
+    const textarea = screen.getByDisplayValue("existing code");
     expect(textarea).toBeInTheDocument();
-    expect(textarea?.value).toBe("existing code");
     expect(screen.getAllByText("uiPending.editor").length).toBeGreaterThanOrEqual(2);
     const buttons = screen.getAllByRole("button");
     const confirmBtn = buttons.find((b) => b.textContent?.includes("uiPending.confirm"));
@@ -354,10 +353,10 @@ describe("UIPendingCenter", () => {
         options: ["OptionA extra-desc", "OptionB"],
       }),
     ];
-    const { container } = render(<UIPendingCenter />);
+    render(<UIPendingCenter />);
     expect(screen.getByText("OptionA")).toBeInTheDocument();
     expect(screen.getByText("extra-desc")).toBeInTheDocument();
-    expect(container.querySelector('input[type="text"]')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("uiCard.customAnswer")).toBeInTheDocument();
   });
 
   it("renders confirm card without hooks error", () => {

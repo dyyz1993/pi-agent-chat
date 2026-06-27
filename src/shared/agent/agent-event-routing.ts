@@ -1,9 +1,6 @@
 import type { AgentEvent, ChannelDataEvent, ExtensionUIRequestEvent } from "../modules/agent";
 import { createLogger } from "../lib/logger";
-import {
-  classifyExtensionUiRequest,
-  extractMessageEndText,
-} from "./agent-event-lifecycle";
+import { classifyExtensionUiRequest, extractMessageEndText } from "./agent-event-lifecycle";
 import type { SyncChildRegistry, SyncDelegateResolver } from "./coordinator-session-state";
 import { findParentSession } from "./coordinator-session-state";
 import { sanitizeEvent, type SanitizedEvent } from "./hold-events";

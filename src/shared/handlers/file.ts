@@ -360,7 +360,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("file.createFile", async (params) => {
     const dirTarget = await resolveFileTarget(params.dirPath);
     const filePath =
-      dirTarget.kind === "ssh" ? remoteJoin(dirTarget.path, params.name) : join(dirTarget.path, params.name);
+      dirTarget.kind === "ssh"
+        ? remoteJoin(dirTarget.path, params.name)
+        : join(dirTarget.path, params.name);
     if (dirTarget.kind === "ssh") {
       runSshCommand(dirTarget.remote, `: > ${shellQuote(filePath)}`);
       return { path: filePath };
@@ -414,10 +416,17 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const destPath =
       destTarget.kind === "ssh" ? remoteJoin(destTarget.path, name) : join(destTarget.path, name);
     if (srcTarget.kind === "ssh" || destTarget.kind === "ssh") {
-      if (srcTarget.kind !== "ssh" || destTarget.kind !== "ssh" || srcTarget.remote.id !== destTarget.remote.id) {
+      if (
+        srcTarget.kind !== "ssh" ||
+        destTarget.kind !== "ssh" ||
+        srcTarget.remote.id !== destTarget.remote.id
+      ) {
         throw new Error("Copy between local and remote projects is not supported here");
       }
-      runSshCommand(srcTarget.remote, `cp -R -- ${shellQuote(srcTarget.path)} ${shellQuote(destPath)}`);
+      runSshCommand(
+        srcTarget.remote,
+        `cp -R -- ${shellQuote(srcTarget.path)} ${shellQuote(destPath)}`,
+      );
       return { path: destPath };
     }
     await cp(srcTarget.path, destPath, { recursive: true });
@@ -438,7 +447,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("file.readBinaryFile", async (params) => {
     const target = await resolveFileTarget(params.path);
     if (target.kind === "ssh") {
-      const result = runSshCommand(target.remote, `base64 < ${shellQuote(target.path)} | tr -d '\\n'`);
+      const result = runSshCommand(
+        target.remote,
+        `base64 < ${shellQuote(target.path)} | tr -d '\\n'`,
+      );
       const base64 = result.stdout.trim();
       return {
         base64,

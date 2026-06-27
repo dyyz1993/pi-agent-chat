@@ -20,7 +20,12 @@ import { useStatusStore } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
 import { clearSessionFetchInitCache } from "./session-initial-state";
 import { clearRetrySession } from "./use-retry-store";
-import { handleAgentEvent, toolCallNameMap, toolCallArgsMap, cleanupEventHandlerMaps } from "../lib/agent-event-handler";
+import {
+  handleAgentEvent,
+  toolCallNameMap,
+  toolCallArgsMap,
+  cleanupEventHandlerMaps,
+} from "../lib/agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
 import { useHooksStore } from "./use-hooks-store";
@@ -795,48 +800,47 @@ export function setupSubscriptions(
       coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: "__pending__" },
     }));
 
-    const createdSubPromise = apiClient
-      .subscribe(
-        "coordinator.session_created",
-        (payload: { parentSessionId: string; session: SessionMeta }) => {
-          if (payload.parentSessionId !== id) return;
+    const createdSubPromise = apiClient.subscribe(
+      "coordinator.session_created",
+      (payload: { parentSessionId: string; session: SessionMeta }) => {
+        if (payload.parentSessionId !== id) return;
 
-          const projectPath = payload.session.projectPath;
+        const projectPath = payload.session.projectPath;
 
-          useSessionStore.setState((s) => {
-            const sessions = s.sessionsByProject[projectPath] || [];
-            if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
-              return {};
-            }
-            if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
-              return {};
-            }
+        useSessionStore.setState((s) => {
+          const sessions = s.sessionsByProject[projectPath] || [];
+          if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
+            return {};
+          }
+          if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
+            return {};
+          }
 
-            const updates: Record<string, unknown> = {
-              sessionsByProject: {
-                ...s.sessionsByProject,
-                [projectPath]: insertAfterPinned(sessions, payload.session),
-              },
+          const updates: Record<string, unknown> = {
+            sessionsByProject: {
+              ...s.sessionsByProject,
+              [projectPath]: insertAfterPinned(sessions, payload.session),
+            },
+          };
+
+          const tabExists = s.projectTabs.find((t) => t.path === projectPath);
+          if (!tabExists) {
+            const projectName = projectPath.split("/").pop() ?? projectPath;
+            const newTab: ProjectTab = {
+              id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              name: projectName,
+              path: projectPath,
             };
+            const nextTabs = [...s.projectTabs, newTab];
+            syncTabsToBackend(nextTabs, s.activeProjectId);
+            updates.projectTabs = nextTabs;
+          }
 
-            const tabExists = s.projectTabs.find((t) => t.path === projectPath);
-            if (!tabExists) {
-              const projectName = projectPath.split("/").pop() ?? projectPath;
-              const newTab: ProjectTab = {
-                id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                name: projectName,
-                path: projectPath,
-              };
-              const nextTabs = [...s.projectTabs, newTab];
-              syncTabsToBackend(nextTabs, s.activeProjectId);
-              updates.projectTabs = nextTabs;
-            }
-
-            return updates;
-          });
-        },
-        { parentSessionId: id },
-      );
+          return updates;
+        });
+      },
+      { parentSessionId: id },
+    );
 
     const eventSubPromise = apiClient.subscribe(
       "coordinator.session_event",

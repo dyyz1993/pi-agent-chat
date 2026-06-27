@@ -48,6 +48,7 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
       setGlobalDefaults: vi.fn(),
       setSessionTierModels: vi.fn(),
       setSessionCurrentTier: vi.fn(),
+      fetchTierConfig: vi.fn().mockResolvedValue(undefined),
       dataBySession: {},
       globalDefaults: {},
     }),

@@ -167,9 +167,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         </span>
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
-      {canJump && (
-        <SessionJumpButton onJump={handleJumpToSession} title={t("subagent.view")} />
-      )}
+      {canJump && <SessionJumpButton onJump={handleJumpToSession} title={t("subagent.view")} />}
     </>
   );
 

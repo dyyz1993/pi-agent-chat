@@ -1,10 +1,7 @@
 import { create } from "zustand";
 import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
-import {
-  buildPreservedStreamingMessage,
-  normalizeToolBlocks,
-} from "../lib/chat-tool-normalizer";
+import { buildPreservedStreamingMessage, normalizeToolBlocks } from "../lib/chat-tool-normalizer";
 import { hasSameMessageSnapshots } from "../utils/chat-message-snapshot";
 import { isAgentNotStartedError, sendAgentMessageWithTimeout } from "../lib/chat-send-utils";
 import { readDraft, writeDraft } from "../utils/chat-input-draft";
@@ -336,10 +333,14 @@ function syncMemoryCustomEntries(
       timestamp: entry.timestamp,
     });
 
-    if ((entry.customType === "memory_prefetch_result" || entry.customType === "memory_inject") && entry.data) {
+    if (
+      (entry.customType === "memory_prefetch_result" || entry.customType === "memory_inject") &&
+      entry.data
+    ) {
       const payload = entry.data as Record<string, unknown>;
       const isSkippedInjection =
-        entry.customType === "memory_inject" && (payload.skipped === true || payload.alreadyInjected === true);
+        entry.customType === "memory_inject" &&
+        (payload.skipped === true || payload.alreadyInjected === true);
       if (!isSkippedInjection) {
         memoryStore.addInjected(sessionId, {
           summary: (payload.summary as string) ?? "",

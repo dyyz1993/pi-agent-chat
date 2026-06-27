@@ -262,7 +262,8 @@ export const useStatusStore = create<StatusState>((set) => ({
   setExecutionSandboxMode: (mode, options) => {
     const { sessionId, projectPath, sessionPath } = options;
     const state = useStatusStore.getState();
-    if (!projectPath || state.executionSandboxLoading || state.executionSandbox?.mode === mode) return;
+    if (!projectPath || state.executionSandboxLoading || state.executionSandbox?.mode === mode)
+      return;
 
     set({ executionSandboxLoading: true });
     (async () => {

@@ -410,12 +410,7 @@ export const HeaderActions = memo(function HeaderActions({
 
   return (
     <>
-      <ActionBtn
-        icon={GitFork}
-        title={t("fork")}
-        onClick={handleFork}
-        disabled={isSessionBusy}
-      />
+      <ActionBtn icon={GitFork} title={t("fork")} onClick={handleFork} disabled={isSessionBusy} />
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}

@@ -14,10 +14,13 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
   const [desktopReloadKey, setDesktopReloadKey] = useState(0);
   const renderableSource = getPreviewRenderableSource(details);
   const localPreviewPath = isPreviewRemoteUrl(renderableSource) ? undefined : renderableSource;
-  const previewSource = usePreviewRenderSource(renderableSource, details.mimeType, desktopReloadKey);
-  const { error, errorKind, errorDetail, handleError, handleRetry, retryKey } = useMediaCardError(
-    localPreviewPath,
+  const previewSource = usePreviewRenderSource(
+    renderableSource,
+    details.mimeType,
+    desktopReloadKey,
   );
+  const { error, errorKind, errorDetail, handleError, handleRetry, retryKey } =
+    useMediaCardError(localPreviewPath);
 
   const handleRetryAndReload = () => {
     setLoaded(false);

@@ -85,7 +85,9 @@ function goldSummary(result?: GoldResult): string | null {
   return result.verdict;
 }
 
-function checklistStatusClass(status: NonNullable<GoalState["checklist"]>[number]["status"]): string {
+function checklistStatusClass(
+  status: NonNullable<GoalState["checklist"]>[number]["status"],
+): string {
   switch (status) {
     case "done":
       return "text-status-success";
@@ -236,7 +238,11 @@ export function GoalActionCard({
               className="inline-flex items-center gap-0.5 text-[11px] text-semantic-accent hover:underline"
               aria-expanded={detailsExpanded}
             >
-              {detailsExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {detailsExpanded ? (
+                <ChevronUp className="w-3 h-3" />
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
               <span>{detailsExpanded ? t("collapse") : t("expand")}</span>
             </button>
           </div>
@@ -261,8 +267,13 @@ export function GoalActionCard({
               {detailsExpanded ? (
                 <div className="grid gap-0.5">
                   {goal.checklist.map((item) => (
-                    <div key={item.id} className="flex items-start gap-1.5 text-[11px] text-text-secondary">
-                      <span className={`mt-px w-3 shrink-0 text-center ${checklistStatusClass(item.status)}`}>
+                    <div
+                      key={item.id}
+                      className="flex items-start gap-1.5 text-[11px] text-text-secondary"
+                    >
+                      <span
+                        className={`mt-px w-3 shrink-0 text-center ${checklistStatusClass(item.status)}`}
+                      >
                         {checklistMarker(item.status)}
                       </span>
                       <span className="break-words">{item.text}</span>

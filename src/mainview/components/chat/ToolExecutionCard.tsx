@@ -78,9 +78,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   const headerDescription = useMemo(() => {
     const fallback =
-      getToolArgsDescription(block.toolName, block.args) ??
-      block.description ??
-      block.toolName;
+      getToolArgsDescription(block.toolName, block.args) ?? block.description ?? block.toolName;
 
     if (!block.output || isRunning) {
       return formatPathLikeText(block.description ?? fallback, { projectRoot: projectRoots });

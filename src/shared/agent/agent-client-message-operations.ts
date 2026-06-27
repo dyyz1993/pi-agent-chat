@@ -237,10 +237,10 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
   // Use the last JSONL entry instead — it always includes the latest messages.
   const isStreaming = managed?.info.status === "streaming";
   const leafId =
-    jsonlLeafId
-    ?? (isStreaming ? (accumulator.activeJsonlLeafId ?? null) : null)
-    ?? options.leafIds.get(options.sessionId)
-    ?? null;
+    jsonlLeafId ??
+    (isStreaming ? (accumulator.activeJsonlLeafId ?? null) : null) ??
+    options.leafIds.get(options.sessionId) ??
+    null;
   if (leafId && leafId !== options.leafIds.get(options.sessionId)) {
     options.leafIds.set(options.sessionId, leafId);
   }

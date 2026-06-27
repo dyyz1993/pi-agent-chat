@@ -241,7 +241,9 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
           ? `已识别 Memory，本会话已注入过 · ${parts.join(" · ")}`
           : "已识别 Memory，本会话已注入过";
       }
-      return parts.length > 0 ? `已注入 Memory 到模型上下文 · ${parts.join(" · ")}` : "已注入 Memory 到模型上下文";
+      return parts.length > 0
+        ? `已注入 Memory 到模型上下文 · ${parts.join(" · ")}`
+        : "已注入 Memory 到模型上下文";
     }
     case "memory_extract": {
       type FileEntry = { filename: string; name: string; description: string };

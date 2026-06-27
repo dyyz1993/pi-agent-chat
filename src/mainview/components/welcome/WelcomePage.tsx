@@ -58,7 +58,9 @@ export function WelcomePage({
             <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-semantic-accent/12 text-semantic-accent">
               <FolderOpen className="h-5 w-5" />
             </span>
-            <span className="text-base font-medium text-text-primary">{t("welcome.localTitle")}</span>
+            <span className="text-base font-medium text-text-primary">
+              {t("welcome.localTitle")}
+            </span>
             <span className="mt-1 text-sm leading-5 text-text-secondary">
               {t("welcome.localDescription")}
             </span>

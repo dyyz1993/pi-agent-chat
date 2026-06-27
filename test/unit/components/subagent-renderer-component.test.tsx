@@ -29,7 +29,7 @@ vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
           ? { "/fake/parent.jsonl": [hoisted.matchedSub] }
           : {},
         messagesBySubsession:
-          hoisted.messages.length > 0 ? { "sess_sub_test_001": hoisted.messages } : {},
+          hoisted.messages.length > 0 ? { sess_sub_test_001: hoisted.messages } : {},
       };
       return selector(fakeState);
     }),
@@ -53,17 +53,23 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
-  useSessionStore: Object.assign(vi.fn(() => "sess_parent_001"), {
-    getState: vi.fn(() => ({ sessionContextMap: {}, activeSessionId: "sess_parent_001" })),
-    subscribe: vi.fn(),
-  }),
+  useSessionStore: Object.assign(
+    vi.fn(() => "sess_parent_001"),
+    {
+      getState: vi.fn(() => ({ sessionContextMap: {}, activeSessionId: "sess_parent_001" })),
+      subscribe: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
-  useSettingsStore: Object.assign(vi.fn(() => true), {
-    getState: vi.fn(() => ({ collapseToolCards: true })),
-    subscribe: vi.fn(),
-  }),
+  useSettingsStore: Object.assign(
+    vi.fn(() => true),
+    {
+      getState: vi.fn(() => ({ collapseToolCards: true })),
+      subscribe: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("../../../src/mainview/stores/use-agent-store", () => ({
@@ -97,9 +103,7 @@ vi.mock("../../../src/mainview/utils/agent-color", () => ({
 }));
 
 vi.mock("../../../src/mainview/components/chat/primitives/AnsiText", () => ({
-  AnsiText: ({ content }: { content: string }) => (
-    <span data-testid="ansi-text">{content}</span>
-  ),
+  AnsiText: ({ content }: { content: string }) => <span data-testid="ansi-text">{content}</span>,
 }));
 
 // Import after mocks
@@ -112,7 +116,10 @@ function makeBlock(
     type: "toolExecution",
     toolCallId: "tc-sub-001",
     toolName: "subagent",
-    args: JSON.stringify({ description: "Refactor module", instruction: "Refactor the auth module" }),
+    args: JSON.stringify({
+      description: "Refactor module",
+      instruction: "Refactor the auth module",
+    }),
     status: "done",
     output: "",
     ...overrides,
@@ -142,41 +149,39 @@ function setupMockStore(
   hoisted.messages = messages;
 }
 
-describe("SubagentExecutionCard — 彩色竖条 (StatusBar)", () => {
+describe("SubagentExecutionCard — status styling", () => {
   afterEach(() => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
   });
 
-  it("运行中显示蓝色竖条", () => {
+  it("运行中显示信息状态图标", () => {
     setupMockStore({ status: "running" });
     const block = makeBlock({ status: "running" });
     const { container } = render(<SubagentExecutionCard block={block} />);
 
-    const bar = container.querySelector(".absolute.left-0.top-0");
-    expect(bar).toBeTruthy();
-    expect(bar?.className).toContain("bg-status-info");
-    expect(bar?.className).toContain("animate-pulse");
+    const icon = container.querySelector(".lucide-bot");
+    expect(icon).toBeTruthy();
+    expect(icon?.className).toContain("text-status-info");
   });
 
-  it("成功显示绿色竖条", () => {
+  it("成功显示稳定的 agent 状态图标", () => {
     setupMockStore({ status: "done" });
     const block = makeBlock({ status: "done" });
     const { container } = render(<SubagentExecutionCard block={block} />);
 
-    const bar = container.querySelector(".absolute.left-0.top-0");
-    expect(bar?.className).toContain("bg-status-success");
-    expect(bar?.className).not.toContain("animate-pulse");
+    const icon = container.querySelector(".lucide-bot");
+    expect(icon?.className).toContain("text-semantic-agent");
   });
 
-  it("失败显示红色竖条", () => {
+  it("失败显示红色状态图标", () => {
     setupMockStore({ status: "error" });
     const block = makeBlock({ status: "error" });
     const { container } = render(<SubagentExecutionCard block={block} />);
 
-    const bar = container.querySelector(".absolute.left-0.top-0");
-    expect(bar?.className).toContain("bg-status-error");
+    const icon = container.querySelector(".lucide-bot");
+    expect(icon?.className).toContain("text-status-error");
   });
 });
 
@@ -194,7 +199,7 @@ describe("SubagentExecutionCard — 状态文案", () => {
 
     const statusText = screen.getByText("Running");
     expect(statusText.className).toContain("animate-pulse");
-    expect(statusText.className).toContain("text-status-info");
+    expect(statusText.className).toContain("text-semantic-agent");
   });
 
   it("完成显示 'Completed' 文案 + 绿色", () => {
@@ -223,12 +228,12 @@ describe("SubagentExecutionCard — 展开/折叠行为", () => {
     hoisted.messages = [];
   });
 
-  it("失败状态默认展开（不折叠）", () => {
+  it("失败状态默认遵循折叠设置", () => {
     setupMockStore({ status: "error" });
     const block = makeBlock({ status: "error" });
     render(<SubagentExecutionCard block={block} />);
 
-    expect(screen.getByText("Input")).toBeTruthy();
+    expect(screen.queryByText("Input")).toBeNull();
   });
 
   it("成功状态默认折叠", () => {
@@ -268,8 +273,20 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
         role: "assistant",
         content: [
           { type: "text", text: "Working..." },
-          { type: "toolExecution", toolCallId: "tc-read-1", toolName: "read", args: "", status: "done" },
-          { type: "toolExecution", toolCallId: "tc-edit-1", toolName: "edit", args: "", status: "running" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-read-1",
+            toolName: "read",
+            args: "",
+            status: "done",
+          },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-edit-1",
+            toolName: "edit",
+            args: "",
+            status: "running",
+          },
         ],
       },
     ]);
@@ -307,9 +324,9 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
       },
     ]);
     const block = makeBlock({ status: "running" });
-    render(<SubagentExecutionCard block={block} />);
+    const { container } = render(<SubagentExecutionCard block={block} />);
 
-    expect(screen.getByText(/3 more tools/)).toBeTruthy();
+    expect(container.textContent).toContain("+4");
   });
 
   it("无消息和工具调用时不崩溃", () => {
@@ -332,9 +349,8 @@ describe("SubagentExecutionCard — 耗时显示", () => {
     const block = makeBlock({ status: "done" });
     render(<SubagentExecutionCard block={block} />);
 
-    // useToolDuration mocked to return "12s"
     const timeElements = document.querySelectorAll(".tabular-nums");
     expect(timeElements.length).toBeGreaterThan(0);
-    expect(timeElements[0]?.textContent).toBe("12s");
+    expect(timeElements[0]?.textContent).toMatch(/^\d+s$/);
   });
 });

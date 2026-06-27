@@ -32,6 +32,7 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
     getState: () => ({
       getCurrentTier: vi.fn(() => null),
       getTierModels: vi.fn(() => ({})),
+      fetchTierConfig: vi.fn(() => Promise.resolve()),
       syncTierFromModel: vi.fn(),
       switchToTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
@@ -71,7 +72,13 @@ vi.mock("../../../src/mainview/stores/use-git-store", () => ({
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
-    getState: () => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() }),
+    getState: () => ({
+      setPlugins: vi.fn(),
+      setSkills: vi.fn(),
+      setMcpServers: vi.fn(),
+      setProjectTrustState: vi.fn(),
+      applyPermissionProfileSnapshot: vi.fn(),
+    }),
   },
   deriveSkillScope: () => "project" as const,
   derivePluginScope: () => "project" as const,
@@ -584,23 +591,23 @@ describe("Level 5: fetchInitialState does NOT overwrite streaming status", () =>
             {
               type: "extension_ui_request",
               id: "ui-1",
-	              method: "select",
-	              title: "Confirm command",
-	              message: "Run command flagged for recursive rm?",
-	              options: ["1. Allow once", "2. Always allow", "3. Deny once", "4. Always deny"],
-	              timeout: 60_000,
-	              toolCallId: "tool-1",
-	              permissionMeta: {
-	                type: "permission_runtime",
-	                requestId: "perm-1",
-	                provider: "dangerous-command",
-	                subject: "command.run",
-	                toolCallId: "tool-1",
-	                metadata: {
-	                  command: "rm -rf /tmp/data",
-	                },
-	              },
-	            },
+              method: "select",
+              title: "Confirm command",
+              message: "Run command flagged for recursive rm?",
+              options: ["1. Allow once", "2. Always allow", "3. Deny once", "4. Always deny"],
+              timeout: 60_000,
+              toolCallId: "tool-1",
+              permissionMeta: {
+                type: "permission_runtime",
+                requestId: "perm-1",
+                provider: "dangerous-command",
+                subject: "command.run",
+                toolCallId: "tool-1",
+                metadata: {
+                  command: "rm -rf /tmp/data",
+                },
+              },
+            },
           ],
         });
       }
@@ -619,19 +626,19 @@ describe("Level 5: fetchInitialState does NOT overwrite streaming status", () =>
     await vi.waitFor(() => {
       expect(uiDialogMocks.registerUIRequest).toHaveBeenCalledWith(
         expect.objectContaining({
-	          requestId: "ui-1",
-	          sessionId: "s1",
-	          method: "select",
-	          title: "Confirm command",
-	          message: "Run command flagged for recursive rm?",
-	          toolCallId: "tool-1",
-	          permissionMeta: expect.objectContaining({
-	            type: "permission_runtime",
-	            provider: "dangerous-command",
-	            subject: "command.run",
-	          }),
-	        }),
-	      );
+          requestId: "ui-1",
+          sessionId: "s1",
+          method: "select",
+          title: "Confirm command",
+          message: "Run command flagged for recursive rm?",
+          toolCallId: "tool-1",
+          permissionMeta: expect.objectContaining({
+            type: "permission_runtime",
+            provider: "dangerous-command",
+            subject: "command.run",
+          }),
+        }),
+      );
       expect(useSessionStore.getState().sessionStatusMap["s1"]).toBe("permission");
     });
   });

@@ -33,22 +33,6 @@ interface InternalAPM {
   leafIds: Map<string, string | null>;
   sessionPaths: Map<string, string>;
   clients: Map<string, unknown>;
-  sessionMsgCache: Map<
-    string,
-    {
-      messages: Array<{ entryId: string; message: unknown }>;
-      customEntries: Array<{
-        id: string;
-        customType: string;
-        data: unknown;
-        timestamp: number;
-      }>;
-      parentById: Map<string, string | null>;
-      fileSize: number;
-      mtimeMs: number;
-      lineCount: number;
-    }
-  >;
 }
 
 function mgr(manager: AgentProcessManager): InternalAPM {
@@ -133,7 +117,7 @@ describe("lineCount cache correctness", () => {
     const manager = new AgentProcessManager(new MockRPC() as never);
     mgr(manager).sessionPaths.set("s1", sf);
 
-    await manager.navigateTree("s1", "m2");
+    await manager.navigateTree("s1", "m2", { skipFiles: true });
     const r1 = await manager.getFullMessages("s1", sf);
     expect(r1.totalCount).toBe(2);
     expect(r1.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
@@ -144,7 +128,7 @@ describe("lineCount cache correctness", () => {
     const r2 = await manager.getFullMessages("s1", sf);
     expect(r2.totalCount).toBe(4);
 
-    await manager.navigateTree("s1", "m2");
+    await manager.navigateTree("s1", "m2", { skipFiles: true });
     const r3 = await manager.getFullMessages("s1", sf);
     expect(r3.totalCount).toBe(2);
 
@@ -171,7 +155,7 @@ describe("lineCount cache correctness", () => {
     mgr(manager).sessionPaths.set("s1", sf);
 
     await manager.getFullMessages("s1", sf);
-    const cache1 = mgr(manager).sessionMsgCache.get("s1");
+    const cache1 = manager.getSessionCache("s1", sf);
     expect(cache1).toBeDefined();
     expect(cache1!.lineCount).toBe(3);
 
@@ -179,14 +163,14 @@ describe("lineCount cache correctness", () => {
     appendFileSync(sf, "\n" + msg("m4", "m3", "assistant"));
 
     await manager.getFullMessages("s1", sf);
-    const cache2 = mgr(manager).sessionMsgCache.get("s1");
+    const cache2 = manager.getSessionCache("s1", sf);
     expect(cache2).toBeDefined();
     expect(cache2!.lineCount).toBe(5);
 
     appendFileSync(sf, "\n" + msg("m5", "m4", "user"));
 
     await manager.getFullMessages("s1", sf);
-    const cache3 = mgr(manager).sessionMsgCache.get("s1");
+    const cache3 = manager.getSessionCache("s1", sf);
     expect(cache3).toBeDefined();
     expect(cache3!.lineCount).toBe(6);
   });

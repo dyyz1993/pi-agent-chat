@@ -44,11 +44,7 @@ function bashOutputKey(sessionId: string, toolCallId: string): string {
   return `${sessionId}:${toolCallId}`;
 }
 
-function flushBashOutput(
-  key: string,
-  sessionId: string,
-  broadcastEvent: BroadcastEvent,
-): void {
+function flushBashOutput(key: string, sessionId: string, broadcastEvent: BroadcastEvent): void {
   const pending = pendingBashOutputs.get(key);
   if (!pending || pending.events.length === 0) {
     pendingBashOutputs.delete(key);

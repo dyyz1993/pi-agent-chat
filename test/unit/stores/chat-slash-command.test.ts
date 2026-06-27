@@ -57,8 +57,6 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import type { ChatMessage } from "../../../src/mainview/types";
 
-const SID = "sess-compact-test";
-
 function makeUserMsg(text: string, local = false): ChatMessage {
   return {
     id: `user_${Date.now()}_${Math.random()}`,
@@ -171,8 +169,8 @@ describe("slash command 本地消息 dedup", () => {
   });
 });
 
-describe("slash command 不设 streaming 状态", () => {
-  it("/compact-force 发送时不调 updateSessionStatus('streaming')", async () => {
+describe("slash command 发送状态", () => {
+  it("/compact-force 发送时走统一 streaming 状态", async () => {
     const { apiClient } = await import("../../../src/mainview/lib/api-client");
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
 
@@ -180,7 +178,7 @@ describe("slash command 不设 streaming 状态", () => {
     await useChatStore.getState().sendMessage();
 
     const streamingCall = updateStatusMock.mock.calls.find(([, s]) => s === "streaming");
-    expect(streamingCall).toBeUndefined();
+    expect(streamingCall).toBeDefined();
   });
 
   it("普通消息发送时调 updateSessionStatus('streaming')", async () => {

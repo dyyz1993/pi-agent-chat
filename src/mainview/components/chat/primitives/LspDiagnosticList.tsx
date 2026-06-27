@@ -48,10 +48,7 @@ export const LspDiagnosticList = memo(function LspDiagnosticList({
             <span className="text-status-warning ml-1">{f.summary}</span>
           </div>
           {f.issues.map((issue, i) => (
-            <div
-              key={i}
-              className={`${issueTextClass} text-text-tertiary pl-4 pt-0.5`}
-            >
+            <div key={i} className={`${issueTextClass} text-text-tertiary pl-4 pt-0.5`}>
               <span
                 className={
                   issue.severity === 1
@@ -63,9 +60,7 @@ export const LspDiagnosticList = memo(function LspDiagnosticList({
               >
                 L{issue.line}
               </span>
-              {issue.source && (
-                <span className="text-text-tertiary"> [{issue.source}]</span>
-              )}
+              {issue.source && <span className="text-text-tertiary"> [{issue.source}]</span>}
               {issue.code != null && (
                 <span className="text-text-tertiary"> ({String(issue.code)})</span>
               )}

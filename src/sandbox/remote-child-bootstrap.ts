@@ -51,7 +51,11 @@ export function sha256File(path: string): string {
   return hash.digest("hex");
 }
 
-function updateHashWithDirectory(hash: ReturnType<typeof createHash>, dir: string, prefix = ""): void {
+function updateHashWithDirectory(
+  hash: ReturnType<typeof createHash>,
+  dir: string,
+  prefix = "",
+): void {
   if (!existsSync(dir)) return;
   for (const entry of readdirSync(dir).sort()) {
     if (entry === "node_modules" || entry === "__tests__") continue;
@@ -86,7 +90,12 @@ export function buildRemoteChildPaths(options: {
   localBinaryPath: string;
   sha256: string;
   binaryName?: string;
-}): { remoteVersionDir: string; remoteBinaryPath: string; remoteHashPath: string; remoteUploadPath: string } {
+}): {
+  remoteVersionDir: string;
+  remoteBinaryPath: string;
+  remoteHashPath: string;
+  remoteUploadPath: string;
+} {
   const binaryName = options.binaryName ?? basename(options.localBinaryPath) ?? "pi";
   const safeBinaryName = binaryName.replace(/[^a-zA-Z0-9._-]/g, "_") || "pi";
   const remoteVersionDir = `${options.remoteRuntimeDir}/children/${options.sha256.slice(0, 16)}`;
@@ -113,7 +122,9 @@ export function buildRemoteChildReadyCommand(options: {
     `test -x ${shRemotePath(options.remoteBinaryPath)}`,
     `test "$(cat ${shRemotePath(options.remoteHashPath)} 2>/dev/null || true)" = ${shQuote(options.sha256)}`,
     options.remoteExtensionsDir ? `test -d ${shRemotePath(options.remoteExtensionsDir)}` : "",
-  ].filter(Boolean).join(" && ");
+  ]
+    .filter(Boolean)
+    .join(" && ");
 }
 
 export function buildRemoteChildInstallExtensionsCommand(options: {
@@ -165,7 +176,9 @@ export function getRemoteChildBinaryCandidates(options: {
   remotePlatform?: string;
   remoteArch?: string;
 }): string[] {
-  const resolvedCliPath = existsSync(options.cliPath) ? realpathSync(options.cliPath) : options.cliPath;
+  const resolvedCliPath = existsSync(options.cliPath)
+    ? realpathSync(options.cliPath)
+    : options.cliPath;
   const distDir = dirname(resolvedCliPath);
   const platform = options.remotePlatform ? normalizeRemotePlatform(options.remotePlatform) : "";
   const arch = options.remoteArch ? normalizeRemoteArch(options.remoteArch) : "";
@@ -278,13 +291,10 @@ export async function bootstrapRemoteChild(
     };
   }
 
-  await exec(
-    "ssh",
-    [
-      ...buildSshArgs(sshBase),
-      wrapRemoteShell(options.remoteShell, `mkdir -p ${shRemotePath(paths.remoteVersionDir)}`),
-    ],
-  );
+  await exec("ssh", [
+    ...buildSshArgs(sshBase),
+    wrapRemoteShell(options.remoteShell, `mkdir -p ${shRemotePath(paths.remoteVersionDir)}`),
+  ]);
   await exec(
     "scp",
     buildScpArgs({
@@ -293,13 +303,10 @@ export async function bootstrapRemoteChild(
       remotePath: paths.remoteUploadPath,
     }),
   );
-  await exec(
-    "ssh",
-    [
-      ...buildSshArgs(sshBase),
-      wrapRemoteShell(options.remoteShell, buildRemoteChildInstallCommand({ ...paths, sha256 })),
-    ],
-  );
+  await exec("ssh", [
+    ...buildSshArgs(sshBase),
+    wrapRemoteShell(options.remoteShell, buildRemoteChildInstallCommand({ ...paths, sha256 })),
+  ]);
   let uploadedExtensions = false;
   if (shouldUploadExtensions) {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-remote-child-extensions-"));

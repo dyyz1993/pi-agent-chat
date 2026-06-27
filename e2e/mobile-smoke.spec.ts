@@ -1,13 +1,16 @@
 import { test, expect } from "@playwright/test";
-
-const BASE_URL = "http://localhost:5173?token=test-ci-token";
+import { E2E_PAGE_URL, ensureE2EProject } from "./helpers/e2e-project";
 
 test.describe("T26 Mobile Features — ui-tester Guided", () => {
+  test.beforeEach(async () => {
+    await ensureE2EProject();
+  });
+
   test.describe("T26.1 QuickActionToolbar", () => {
     test.use({ viewport: { width: 375, height: 812 } }); // iPhone X
 
     test("QuickActionToolbar appears on mobile input focus", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       // Tap on the chat input
@@ -27,7 +30,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("@ popup shows Agents/Files/Memory tabs", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       const toolbar = page.locator('[data-testid="quick-action-toolbar"]');
@@ -36,13 +39,9 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
         const popup = page.locator('[data-testid="mention-popup"]');
         await expect(popup).toBeVisible({ timeout: 3000 });
 
-        // Check for the three tabs
-        await expect(
-          popup
-            .locator("text=Agents")
-            .or(popup.locator("text=Files"))
-            .or(popup.locator("text=Memory")),
-        ).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Agents" })).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Files" })).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Memory" })).toBeVisible();
       }
     });
   });
@@ -51,7 +50,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("/ popup shows Commands/Skills tabs", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       const toolbar = page.locator('[data-testid="quick-action-toolbar"]');
@@ -59,10 +58,8 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
         await toolbar.locator('button[aria-label*="/"]').click();
         const popup = page.locator('[data-testid="command-popup"]');
         if (await popup.isVisible({ timeout: 2000 }).catch(() => false)) {
-          // Check for Commands and Skills tabs
-          await expect(
-            popup.locator("text=Commands").or(popup.locator("text=Skills")),
-          ).toBeVisible();
+          await expect(popup.getByRole("button", { name: "Commands" })).toBeVisible();
+          await expect(popup.getByRole("button", { name: "Skills" })).toBeVisible();
         }
       }
     });
@@ -72,7 +69,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("Sidebar becomes overlay on mobile", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       // Toggle sidebar
@@ -98,7 +95,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("Tab close button always visible on mobile", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       const tabBar = page.locator('[data-testid="tab-bar"]');
@@ -115,7 +112,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("Diff viewer forces unified view on mobile", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
       // This test requires the diff panel to be open,
       // which requires git state - skipped in basic smoke

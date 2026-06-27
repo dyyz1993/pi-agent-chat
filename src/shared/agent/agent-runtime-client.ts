@@ -7,13 +7,20 @@ import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
 import { SandboxManager } from "../../sandbox/sandbox-manager";
 import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
 import { RemoteSshProvider } from "../../sandbox/providers/ssh";
-import { bootstrapRemoteChild, resolveRemoteChildLocalBinaryPath } from "../../sandbox/remote-child-bootstrap";
+import {
+  bootstrapRemoteChild,
+  resolveRemoteChildLocalBinaryPath,
+} from "../../sandbox/remote-child-bootstrap";
 import { syncRemoteAgentResources } from "../../sandbox/remote-resource-sync";
 import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 import type { ISandboxProvider } from "../../sandbox/types";
 import { config } from "../../server-config";
 import { createLogger } from "../lib/logger";
-import { discoverExtensionArgs, getBuiltinExtensionsDir, scanExtensionDir } from "./agent-runtime-config";
+import {
+  discoverExtensionArgs,
+  getBuiltinExtensionsDir,
+  scanExtensionDir,
+} from "./agent-runtime-config";
 import {
   applyExecutionSandboxEnv,
   readProjectExecutionSandbox,
@@ -24,10 +31,7 @@ import {
   resolveActiveRuntimeSelection,
   shouldCreateLocalRuntimeCwd,
 } from "./remote-runtime-selection";
-import {
-  attachRemoteSessionMirror,
-  getRemoteChildSessionDir,
-} from "./remote-session-mirror";
+import { attachRemoteSessionMirror, getRemoteChildSessionDir } from "./remote-session-mirror";
 import { startModelProxy, type StartedModelProxy } from "./model-proxy";
 import {
   getRemoteProjectTrustArgs,
@@ -39,7 +43,10 @@ const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
 
 const EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs()];
-const BUILTIN_EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs({ includeUser: false })];
+const BUILTIN_EXTENSION_ARGS = [
+  "--no-extensions",
+  ...discoverExtensionArgs({ includeUser: false }),
+];
 
 type RpcClientInstance = RpcClientAPI;
 
@@ -176,8 +183,7 @@ export async function createRpcClient(
   const t0 = performance.now();
   const runtime = await resolveActiveRuntimeSelection(cwd);
   const useRemoteChild = runtime.kind === "remote-agent-child";
-  const remoteChildRuntime =
-    runtime.kind === "remote-agent-child" ? runtime : undefined;
+  const remoteChildRuntime = runtime.kind === "remote-agent-child" ? runtime : undefined;
 
   if (runtime.kind === "local" && config.sandboxEnabled && globalSandboxManager && userId) {
     const sandbox = await globalSandboxManager.getOrCreate(userId);
@@ -230,20 +236,22 @@ export async function createRpcClient(
       : undefined;
   const remoteChildCliPath = remoteChildBootstrap?.remoteBinaryPath ?? config.remoteChildPiCliPath;
   const remoteChildNodePath = remoteChildBootstrap ? "" : config.remoteChildNodePath;
-  const remoteResourceSyncPlan = useRemoteChild && remoteChildRuntime
-    ? resolveRemoteResourceSyncPlan({ runtime: remoteChildRuntime, cwd })
-    : null;
-  const remoteResourceSync = remoteResourceSyncPlan && remoteChildRuntime
-    ? await syncRemoteAgentResources(toRemoteResourceSyncOptions(remoteResourceSyncPlan, remoteChildRuntime)).catch(
-        (err: unknown) => {
+  const remoteResourceSyncPlan =
+    useRemoteChild && remoteChildRuntime
+      ? resolveRemoteResourceSyncPlan({ runtime: remoteChildRuntime, cwd })
+      : null;
+  const remoteResourceSync =
+    remoteResourceSyncPlan && remoteChildRuntime
+      ? await syncRemoteAgentResources(
+          toRemoteResourceSyncOptions(remoteResourceSyncPlan, remoteChildRuntime),
+        ).catch((err: unknown) => {
           log.warn("[createRpcClient] optional remote resource sync failed; continuing", {
             cwd,
             err: err instanceof Error ? err.message : String(err),
           });
           return undefined;
-        },
-      )
-    : undefined;
+        })
+      : undefined;
   const runtimeRemotePiAgentDir = useRemoteChild ? runtime.remotePiAgentDir : undefined;
   const remotePiAgentDir = remoteResourceSync?.remoteAgentDir ?? runtimeRemotePiAgentDir;
   const modelProxy = useRemoteChild ? await startModelProxy() : undefined;
@@ -255,7 +263,10 @@ export async function createRpcClient(
   const args = buildRpcClientArgs({
     extensionArgs: useRemoteChild
       ? [
-          ...getRemoteExtensionArgs(localRemoteChildExtensionsDir, remoteChildBootstrap?.remoteExtensionsDir),
+          ...getRemoteExtensionArgs(
+            localRemoteChildExtensionsDir,
+            remoteChildBootstrap?.remoteExtensionsDir,
+          ),
           ...getRemoteProjectTrustArgs({ runtime, cwd }),
         ]
       : runtime.kind === "ssh-command"
@@ -274,9 +285,7 @@ export async function createRpcClient(
     env: {
       ...applyExecutionSandboxEnv(process.env, readProjectExecutionSandbox(cwd).mode),
       NODE_OPTIONS: "--max-old-space-size=4096",
-      ...(runtime.kind === "ssh-command"
-        ? buildSshCommandRuntimeEnv(runtime.remoteProject)
-        : {}),
+      ...(runtime.kind === "ssh-command" ? buildSshCommandRuntimeEnv(runtime.remoteProject) : {}),
     },
     ...(useRemoteChild
       ? {
@@ -297,7 +306,11 @@ export async function createRpcClient(
   });
   attachModelProxyCleanup(client, modelProxy);
   const tBeforeStart = performance.now();
-  perfLog.info("[createRpcClient] calling client.start()", { sessionId: sessionPath?.split("/").pop(), cwd, argsCount: args.length });
+  perfLog.info("[createRpcClient] calling client.start()", {
+    sessionId: sessionPath?.split("/").pop(),
+    cwd,
+    argsCount: args.length,
+  });
   try {
     await client.start();
   } catch (startErr) {

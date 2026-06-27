@@ -576,9 +576,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="max-w-full truncate text-[11px] font-medium">
-                    {group.label}
-                  </span>
+                  <span className="max-w-full truncate text-[11px] font-medium">{group.label}</span>
                 </button>
               );
             })}

@@ -46,6 +46,7 @@ export interface FullJsonlParseResult {
   parentById: Map<string, string | null>;
   lastLeafPointer: string | null;
   activeJsonlLeafId: string | null;
+  totalLines: number;
 }
 
 /**
@@ -65,9 +66,7 @@ export interface IncrementalJsonlReadResult {
  *
  * Extracts the common per-line parsing logic shared by all read paths.
  */
-function parseJsonlLine(
-  line: string,
-): {
+function parseJsonlLine(line: string): {
   entryId: string;
   parentId: string | null;
   parsed: Record<string, unknown>;
@@ -99,6 +98,9 @@ function appendParsedEntry(
 ): "message" | "custom" | "compaction" | "leaf_pointer" | null {
   if (parsed.type === "message" && parsed.message) {
     messages.push({ entryId, message: parsed.message });
+    if (leafState) {
+      leafState.activeJsonlLeafId = entryId;
+    }
     return "message";
   }
 
@@ -132,6 +134,9 @@ function appendParsedEntry(
         timestamp: compEntry.timestamp,
       },
     });
+    if (leafState) {
+      leafState.activeJsonlLeafId = entryId;
+    }
     return "compaction";
   }
 
@@ -157,28 +162,25 @@ export async function readJsonlFully(sessionPath: string): Promise<FullJsonlPars
   const customEntries: ParsedCustomEntry[] = [];
   const compactionEntries: ParsedCompactionEntry[] = [];
   const parentById = new Map<string, string | null>();
-  const leafState = { lastLeafPointer: null as string | null, activeJsonlLeafId: null as string | null };
+  const leafState = {
+    lastLeafPointer: null as string | null,
+    activeJsonlLeafId: null as string | null,
+  };
+  let totalLines = 0;
 
   const rl = readline.createInterface({
     input: createReadStream(sessionPath, { encoding: "utf-8" }),
     crlfDelay: Infinity,
   });
   for await (const line of rl) {
+    totalLines++;
     const result = parseJsonlLine(line);
     if (!result) continue;
     const { entryId, parentId, parsed } = result;
     if (entryId) {
       parentById.set(entryId, parentId);
-      leafState.activeJsonlLeafId = entryId;
     }
-    appendParsedEntry(
-      parsed,
-      entryId,
-      messages,
-      customEntries,
-      compactionEntries,
-      leafState,
-    );
+    appendParsedEntry(parsed, entryId, messages, customEntries, compactionEntries, leafState);
   }
   rl.close();
 
@@ -189,6 +191,7 @@ export async function readJsonlFully(sessionPath: string): Promise<FullJsonlPars
     parentById,
     lastLeafPointer: leafState.lastLeafPointer,
     activeJsonlLeafId: leafState.activeJsonlLeafId,
+    totalLines,
   };
 }
 
@@ -208,13 +211,17 @@ export async function readJsonlFromByteOffset(
   let lineIndex = 0;
   let newEntries = 0;
   const newCompactionEntries: ParsedCompactionEntry[] = [];
-  const leafState = { lastLeafPointer: null as string | null, activeJsonlLeafId: null as string | null };
+  const leafState = {
+    lastLeafPointer: null as string | null,
+    activeJsonlLeafId: null as string | null,
+  };
 
   const rl = readline.createInterface({
     input: createReadStream(sessionPath, { encoding: "utf-8", start: byteOffset }),
     crlfDelay: Infinity,
   });
   for await (const line of rl) {
+    if (!line.trim()) continue;
     lineIndex++;
     const result = parseJsonlLine(line);
     if (!result) continue;
@@ -283,12 +290,7 @@ export async function readJsonlFromLine(
       parentById.set(entryId, parentId);
     }
     // Note: this path does NOT collect compactionEntries (legacy behavior)
-    const entryType = appendParsedEntry(
-      parsed,
-      entryId,
-      messages,
-      customEntries,
-    );
+    const entryType = appendParsedEntry(parsed, entryId, messages, customEntries);
     if (entryType === "message" || entryType === "custom" || entryType === "compaction") {
       newEntries++;
     }
@@ -354,12 +356,23 @@ export async function readJsonlTreeEntries(sessionPath: string): Promise<JsonlTr
  */
 export function parseJsonlFromText(
   text: string,
-): Pick<FullJsonlParseResult, "messages" | "customEntries" | "compactionEntries" | "parentById" | "lastLeafPointer" | "activeJsonlLeafId"> {
+): Pick<
+  FullJsonlParseResult,
+  | "messages"
+  | "customEntries"
+  | "compactionEntries"
+  | "parentById"
+  | "lastLeafPointer"
+  | "activeJsonlLeafId"
+> {
   const messages: ParsedMessageEntry[] = [];
   const customEntries: ParsedCustomEntry[] = [];
   const compactionEntries: ParsedCompactionEntry[] = [];
   const parentById = new Map<string, string | null>();
-  const leafState = { lastLeafPointer: null as string | null, activeJsonlLeafId: null as string | null };
+  const leafState = {
+    lastLeafPointer: null as string | null,
+    activeJsonlLeafId: null as string | null,
+  };
 
   const lines = text.split("\n");
   for (const line of lines) {
@@ -370,14 +383,7 @@ export function parseJsonlFromText(
       parentById.set(entryId, parentId);
       leafState.activeJsonlLeafId = entryId;
     }
-    appendParsedEntry(
-      parsed,
-      entryId,
-      messages,
-      customEntries,
-      compactionEntries,
-      leafState,
-    );
+    appendParsedEntry(parsed, entryId, messages, customEntries, compactionEntries, leafState);
   }
 
   return {

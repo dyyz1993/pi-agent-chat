@@ -57,6 +57,7 @@ function compactionSummaryMsg(id: string, summary = "压缩了 50 条消息的�
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   useSessionStore.setState({
     activeSessionId: SESSION_ID,
     sessionStatusMap: {},
@@ -68,6 +69,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.runOnlyPendingTimers();
+  vi.useRealTimers();
   useSessionStore.setState({ activeSessionId: null, sessionStatusMap: {} });
 });
 
@@ -94,7 +97,12 @@ describe("CompactionSummaryCard — 压缩中样式", () => {
 
   it("运行态默认可展开并显示原因", () => {
     const { container } = render(
-      <CompactionSummaryCard blockId="running-compact" summary="" status="running" reason="manual" />,
+      <CompactionSummaryCard
+        blockId="running-compact"
+        summary=""
+        status="running"
+        reason="manual"
+      />,
     );
 
     expect(container.textContent).toContain("compacting");
@@ -131,8 +139,9 @@ describe("手动压缩事件流 — sessionStatus 变化", () => {
     } as unknown as AgentEvent;
 
     handleAgentEvent(SESSION_ID, event);
+    vi.advanceTimersByTime(2000);
 
-    // 手动压缩场景: 没有 streaming 消息 → 立即清 status
+    // 手动压缩场景: 没有 streaming 消息 → 最短展示时间后清 status
     expect(useSessionStore.getState().sessionStatusMap[SESSION_ID]).toBe("idle");
   });
 
@@ -177,6 +186,7 @@ describe("手动压缩事件流 — sessionStatus 变化", () => {
 
     // 不应该 throw
     expect(() => handleAgentEvent(SESSION_ID, event)).not.toThrow();
+    vi.advanceTimersByTime(2000);
 
     // status 应该被清除
     expect(useSessionStore.getState().sessionStatusMap[SESSION_ID]).toBe("idle");
@@ -261,6 +271,7 @@ describe("compaction_start → compaction_end 完整流程", () => {
       result: { tokensAfter: 5000 },
       aborted: false,
     } as AgentEvent);
+    vi.advanceTimersByTime(2000);
 
     // 4. status 回到 idle
     expect(useSessionStore.getState().sessionStatusMap[SESSION_ID]).toBe("idle");
@@ -302,6 +313,7 @@ describe("compaction_start → compaction_end 完整流程", () => {
 
     // 4. agent_end → 清 status
     handleAgentEvent(SESSION_ID, { type: "agent_end" } as AgentEvent);
+    vi.advanceTimersByTime(2000);
     expect(useSessionStore.getState().sessionStatusMap[SESSION_ID]).toBe("idle");
   });
 });

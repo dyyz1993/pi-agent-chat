@@ -133,7 +133,14 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
     loadSessionMessages: () => {},
   }));
-  return { useChatStore };
+  return {
+    useChatStore,
+    getMemorySemanticTimestamp: (_data: unknown, fallback: number) => fallback,
+    insertChatMessageByDisplayOrder: (messages: ChatMessage[], message: ChatMessage) => [
+      ...messages,
+      message,
+    ],
+  };
 });
 
 interface MCPServerTool {
@@ -259,7 +266,10 @@ import { useUIDialogStore } from "../../../src/mainview/stores/use-ui-dialog-sto
 import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
 import { ScenarioPlayer } from "../../helpers/mock-llm";
-import { fullExtensionChainScenario, multiSessionParallelScenario } from "../../helpers/event-fixtures";
+import {
+  fullExtensionChainScenario,
+  multiSessionParallelScenario,
+} from "../../helpers/event-fixtures";
 
 const SID = "smoke-test-session-p4";
 

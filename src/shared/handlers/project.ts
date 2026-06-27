@@ -132,8 +132,7 @@ async function findRemoteProjectLocalPath(input: {
   return (
     projects.find(
       (project) =>
-        project.host === host &&
-        normalizeRemoteDirectoryPath(project.remotePath) === remotePath,
+        project.host === host && normalizeRemoteDirectoryPath(project.remotePath) === remotePath,
     )?.localPath ?? null
   );
 }
@@ -148,7 +147,9 @@ async function previewRemoteResourceSync(input: {
     return { resources: [], blocked: [], hash: "" };
   }
   const effectiveResourceTypes =
-    resourceTypes.length > 0 ? resourceTypes : (["skills", "agents", "rules"] satisfies RemoteSyncResourceType[]);
+    resourceTypes.length > 0
+      ? resourceTypes
+      : (["skills", "agents", "rules"] satisfies RemoteSyncResourceType[]);
 
   const projectLocalPath = await findRemoteProjectLocalPath(input);
   const extraSources = projectLocalPath
@@ -172,7 +173,9 @@ async function previewRemoteResourceSync(input: {
           type,
           files: resource?.files ?? 0,
           bytes: resource?.bytes ?? 0,
-          sources: sources.filter((source) => source.type === type).map((source) => source.localPath),
+          sources: sources
+            .filter((source) => source.type === type)
+            .map((source) => source.localPath),
         };
       }),
     };

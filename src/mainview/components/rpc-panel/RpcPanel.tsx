@@ -18,8 +18,12 @@ const DIR_COLORS = {
 };
 
 function stringifyPayload(payload: unknown): string {
-  const value = JSON.stringify(payload, null, 2);
-  return value ?? String(payload);
+  try {
+    const value = JSON.stringify(payload, null, 2);
+    return value ?? String(payload);
+  } catch {
+    return String(payload);
+  }
 }
 
 function RpcEntry({ entry }: { entry: RpcLogEntry }) {

@@ -166,7 +166,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
 
     const rpcResponse =
       state.request.method === "askUserQuestion" &&
-        (response.action !== "responded" || !("answers" in response))
+      (response.action !== "responded" || !("answers" in response))
         ? { action: "responded", answers: response }
         : response;
 
@@ -207,9 +207,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
       });
 
     const response =
-      state.request.method === "askUserQuestion"
-        ? { cancelled: true }
-        : { cancelled: true };
+      state.request.method === "askUserQuestion" ? { cancelled: true } : { cancelled: true };
 
     const newStates = new Map(requestStates);
     newStates.set(requestId, { ...state, status: "dismissed", response });

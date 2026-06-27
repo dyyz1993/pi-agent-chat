@@ -559,9 +559,44 @@ describe("coordinator delegate operations", () => {
         steer,
         followUp: vi.fn(),
       }),
-    ).resolves.toEqual({ delivered: false, targetStatus: "not_found" });
+    ).resolves.toEqual({
+      delivered: false,
+      targetStatus: "not_found",
+      notFoundReason: "not_a_delegate_child",
+    });
 
     expect(steer).not.toHaveBeenCalled();
+  });
+
+  it("reports missing session files separately from removed delegate relationships", async () => {
+    const clients = new Map<string, ReturnType<typeof makeManaged>>();
+    const parentChildMap = new Map([["parent", new Set(["child"])]]);
+    const missingSessionPath = join(tmpdir(), `missing-child-${Date.now()}.jsonl`);
+
+    await expect(
+      handleCoordinatorDelegateSendOperation({
+        sourceSessionId: "parent",
+        msg: {
+          __call: "session_delegate_send",
+          targetSessionId: "child",
+          message: "hello",
+        },
+        clients,
+        sessionPaths: new Map([["child", missingSessionPath]]),
+        sessionProjectPaths: new Map([["child", tmpdir()]]),
+        delegateReplyCount: new Map(),
+        delegateCreatedAt: new Map(),
+        parentChildMap,
+        start: vi.fn(),
+        send: vi.fn(),
+        steer: vi.fn(),
+        followUp: vi.fn(),
+      }),
+    ).resolves.toEqual({
+      delivered: false,
+      targetStatus: "not_found",
+      notFoundReason: "session_file_missing",
+    });
   });
 
   it("restarts inactive delegate sessions from persisted paths before sending", async () => {
