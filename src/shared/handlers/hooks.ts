@@ -14,17 +14,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
   r("hooks.getLog", async (params) => {
-    const result = await forwardToChannel<R<"hooks.getLog">>(
-      params,
-      "hooks",
-      "hooks.getLog",
-      { limit: params.limit, event: params.event },
-    );
+    const result = await forwardToChannel<R<"hooks.getLog">>(params, "hooks", "hooks.getLog", {
+      limit: params.limit,
+      event: params.event,
+    });
     return result ?? EMPTY_RESULT;
   });
 
   r("hooks.getConfig", async (params) => {
-    const result = await forwardToChannel<R<"hooks.getConfig">>(params, "hooks", "hooks.getConfig", {});
+    const result = await forwardToChannel<R<"hooks.getConfig">>(
+      params,
+      "hooks",
+      "hooks.getConfig",
+      {},
+    );
     return result ?? EMPTY_RESULT;
   });
 
@@ -34,7 +37,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("hooks.getStatus", async (params) => {
-    const result = await forwardToChannel<R<"hooks.getStatus">>(params, "hooks", "hooks.getStatus", {});
+    const result = await forwardToChannel<R<"hooks.getStatus">>(
+      params,
+      "hooks",
+      "hooks.getStatus",
+      {},
+    );
     return result ?? { enabled: true };
   });
 
@@ -49,12 +57,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("hooks.skipRule", async (params) => {
-    const result = await forwardToChannel<R<"hooks.skipRule">>(
-      params,
-      "hooks",
-      "hooks.skipRule",
-      { event: params.event, matcher: params.matcher },
-    );
+    const result = await forwardToChannel<R<"hooks.skipRule">>(params, "hooks", "hooks.skipRule", {
+      event: params.event,
+      matcher: params.matcher,
+    });
     return result ?? { skipped: [] };
   });
 

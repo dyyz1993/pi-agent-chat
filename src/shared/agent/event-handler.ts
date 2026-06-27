@@ -1,8 +1,4 @@
-import type {
-  AgentEvent,
-  ChannelDataEvent,
-  ExtensionUIRequestEvent,
-} from "../modules/agent";
+import type { AgentEvent, ChannelDataEvent, ExtensionUIRequestEvent } from "../modules/agent";
 import type { AssistantMessageEvent } from "@dyyz1993/pi-ai";
 import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
@@ -60,7 +56,10 @@ export interface AgentEventHandlerDeps {
   getActiveManaged: (sessionId: string) => ManagedClient | undefined;
   findParentSession: (sessionId: string) => string | undefined;
   clients: Map<string, ManagedClient>;
-  lastLspState: Map<string, { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }>;
+  lastLspState: Map<
+    string,
+    { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }
+  >;
   leafIds: Map<string, string | null>;
   syncDelegateResolvers: Map<
     string,
@@ -139,19 +138,21 @@ export class AgentEventHandler {
       const ui = event as ExtensionUIRequestEvent;
       const action = classifyExtensionUiRequest(ui);
       if (action.type === "notify") {
-        this.deps.broadcastEvent(
-          "agent.notify",
-          {
-            sessionId,
-            ...action.payload,
-          },
-          { sessionId },
-        ).catch((err: unknown) => {
-          log.warn("broadcastEvent(agent.notify) error", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
+        this.deps
+          .broadcastEvent(
+            "agent.notify",
+            {
+              sessionId,
+              ...action.payload,
+            },
+            { sessionId },
+          )
+          .catch((err: unknown) => {
+            log.warn("broadcastEvent(agent.notify) error", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
           });
-        });
         return;
       }
       if (action.type === "ignore") return;
@@ -160,20 +161,22 @@ export class AgentEventHandler {
     // Notify user when a plugin/extension triggers an automatic continue
     if (event.type === "auto_continue") {
       const ac = event as { type: "auto_continue"; reason: string; iteration: number };
-      this.deps.broadcastEvent(
-        "agent.notify",
-        {
-          sessionId,
-          message: `Plugin triggered auto-continue (${ac.reason})`,
-          notifyType: "info",
-        },
-        { sessionId },
-      ).catch((err: unknown) => {
-        log.warn("broadcastEvent(agent.notify) error for auto_continue", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
+      this.deps
+        .broadcastEvent(
+          "agent.notify",
+          {
+            sessionId,
+            message: `Plugin triggered auto-continue (${ac.reason})`,
+            notifyType: "info",
+          },
+          { sessionId },
+        )
+        .catch((err: unknown) => {
+          log.warn("broadcastEvent(agent.notify) error for auto_continue", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
         });
-      });
     }
 
     if (event.type === "agent_start") {
@@ -201,14 +204,16 @@ export class AgentEventHandler {
       }
 
       if (config.sandboxEnabled && managed.info.projectPath) {
-        this.deps.broadcastEvent(
-          "file.changed",
-          {
-            changedPath: managed.info.projectPath,
-            type: "create",
-          },
-          { sessionId },
-        ).catch(() => {});
+        this.deps
+          .broadcastEvent(
+            "file.changed",
+            {
+              changedPath: managed.info.projectPath,
+              type: "create",
+            },
+            { sessionId },
+          )
+          .catch(() => {});
       }
 
       const resolver = this.deps.syncDelegateResolvers.get(sessionId);
@@ -241,16 +246,14 @@ export class AgentEventHandler {
       const name = (event as Record<string, unknown>).name;
       if (typeof name === "string" && name.length > 0) {
         const projectPath = managed.info.projectPath;
-        this.deps.broadcastEvent(
-          "agent.session_renamed",
-          { sessionId, projectPath, newName: name },
-          {},
-        ).catch((err: unknown) => {
-          log.warn("broadcastEvent(session_renamed from info_changed) error", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
+        this.deps
+          .broadcastEvent("agent.session_renamed", { sessionId, projectPath, newName: name }, {})
+          .catch((err: unknown) => {
+            log.warn("broadcastEvent(session_renamed from info_changed) error", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
           });
-        });
       }
       return;
     }
@@ -281,33 +284,37 @@ export class AgentEventHandler {
 
     const parentId = this.deps.findParentSession(sessionId);
     if (parentId) {
-      this.deps.broadcastEvent(
-        "coordinator.session_event",
-        {
-          parentSessionId: parentId,
-          childSessionId: sessionId,
-          event: sanitized,
-        },
-        { parentSessionId: parentId },
-      ).catch((err: unknown) => {
-        log.warn("broadcastEvent(coordinator.session_event) error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
-
-      if (this.deps.subagentSyncChildren.has(sessionId) && event.type !== "channel_data") {
-        const parentManaged = this.deps.clients.get(parentId);
-        this.deps.broadcastEvent(
-          "subagent.event",
+      this.deps
+        .broadcastEvent(
+          "coordinator.session_event",
           {
             parentSessionId: parentId,
-            parentSessionPath: parentManaged?.info.sessionPath ?? "",
-            subSessionId: sessionId,
+            childSessionId: sessionId,
             event: sanitized,
           },
           { parentSessionId: parentId },
-        ).catch(() => {});
+        )
+        .catch((err: unknown) => {
+          log.warn("broadcastEvent(coordinator.session_event) error", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+
+      if (this.deps.subagentSyncChildren.has(sessionId) && event.type !== "channel_data") {
+        const parentManaged = this.deps.clients.get(parentId);
+        this.deps
+          .broadcastEvent(
+            "subagent.event",
+            {
+              parentSessionId: parentId,
+              parentSessionPath: parentManaged?.info.sessionPath ?? "",
+              subSessionId: sessionId,
+              event: sanitized,
+            },
+            { parentSessionId: parentId },
+          )
+          .catch(() => {});
       }
     }
 
@@ -352,10 +359,7 @@ export class AgentEventHandler {
     );
   }
 
-  async handleTodoChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
+  async handleTodoChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {
     const data = channelMsg.data as unknown as TodoChannelEvent | undefined;
     if (!data) return;
 
@@ -368,10 +372,7 @@ export class AgentEventHandler {
     );
   }
 
-  async handleBashChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
+  async handleBashChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {
     const data = channelMsg.data as unknown as BashChannelEvent | undefined;
     if (!data) return;
 
@@ -401,10 +402,7 @@ export class AgentEventHandler {
     await this.deps.broadcastEvent("supervisor.event", { sessionId, event: data }, { sessionId });
   }
 
-  async handleLspChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
+  async handleLspChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {
     const data = channelMsg.data as unknown as LspChannelEvent | undefined;
     if (!data) return;
 
@@ -464,10 +462,7 @@ export class AgentEventHandler {
     }
   }
 
-  async handleRulesChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
+  async handleRulesChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {
     const data = channelMsg.data as RulesChannelEvent;
     if (!data) return;
 
@@ -476,10 +471,7 @@ export class AgentEventHandler {
     await this.deps.broadcastEvent("rules.event", { sessionId, event: data }, { sessionId });
   }
 
-  async handleMemoryChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
+  async handleMemoryChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {
     const data = channelMsg.data as Record<string, unknown> | undefined;
     if (!data) return;
 
@@ -533,10 +525,7 @@ export class AgentEventHandler {
     }
   }
 
-  async handleLearningChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
+  async handleLearningChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {
     const data = channelMsg.data as Record<string, unknown> | undefined;
     if (!data) return;
 

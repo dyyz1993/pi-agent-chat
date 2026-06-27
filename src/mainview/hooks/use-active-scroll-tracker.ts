@@ -50,10 +50,13 @@ export function chooseActiveTargetKeyForScroll(
   const orderedCandidates = candidates
     .map((candidate, index) => ({ ...candidate, order: candidate.order ?? index }))
     .sort((a, b) => a.order - b.order);
-  const anchorCandidate = candidates.reduce((best, item) => {
-    const distance = Math.abs(item.top - anchorY);
-    return distance < best.distance ? { candidate: item, distance } : best;
-  }, { candidate: candidates[0], distance: Math.abs(candidates[0].top - anchorY) }).candidate;
+  const anchorCandidate = candidates.reduce(
+    (best, item) => {
+      const distance = Math.abs(item.top - anchorY);
+      return distance < best.distance ? { candidate: item, distance } : best;
+    },
+    { candidate: candidates[0], distance: Math.abs(candidates[0].top - anchorY) },
+  ).candidate;
   const anchorOrder =
     anchorCandidate.order ??
     orderedCandidates.find((candidate) => candidate.key === anchorCandidate.key)?.order;
@@ -219,7 +222,11 @@ export function useActiveScrollTracker({
     )) {
       const blockId = element.dataset.blockId;
       const messageId = element.dataset.msgId;
-      const key = blockId ? blockToKey.get(blockId) : messageId ? messageToKey.get(messageId) : null;
+      const key = blockId
+        ? blockToKey.get(blockId)
+        : messageId
+          ? messageToKey.get(messageId)
+          : null;
       if (!key) continue;
 
       const rect = element.getBoundingClientRect();
@@ -409,12 +416,7 @@ export function useActiveScrollTracker({
         scrollDirectionRef.current = "towardNewer";
       }
 
-      if (
-        !isProgrammatic &&
-        didInitRef.current &&
-        autoScrollEnabledRef.current &&
-        !nearBottom
-      ) {
+      if (!isProgrammatic && didInitRef.current && autoScrollEnabledRef.current && !nearBottom) {
         autoScrollEnabledRef.current = false;
         userScrolledUpRef.current = true;
         nearBottom = false;

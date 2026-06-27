@@ -25,7 +25,11 @@ function statusTone(data: BashBackgroundProcessData): {
       bgClass: "bg-status-success/5",
     };
   }
-  if (data.reason === "user_cancel" || data.reason === "system_cancel" || data.status === "terminated") {
+  if (
+    data.reason === "user_cancel" ||
+    data.reason === "system_cancel" ||
+    data.status === "terminated"
+  ) {
     return {
       icon: OctagonPause,
       iconClass: "text-status-warning",
@@ -149,9 +153,7 @@ export const BashBackgroundProcessCard = memo(function BashBackgroundProcessCard
 
       {!compact && (
         <div className="border-t border-border-secondary/20 px-2.5 py-2 space-y-2">
-          <div className="text-[10px] font-medium uppercase text-text-tertiary">
-            命令
-          </div>
+          <div className="text-[10px] font-medium uppercase text-text-tertiary">命令</div>
           <div className="text-xs font-mono text-text-primary break-all leading-relaxed">
             {normalized.command}
           </div>

@@ -111,7 +111,12 @@ export type CoordinatorMethodCall =
   | { __call: "session_delegate_status"; sessionId: string; invokeId?: string }
   | { __call: "session_delegate_list"; invokeId?: string }
   | { __call: "session_delegate_stop"; sessionId: string; invokeId?: string }
-  | { __call: "session_delegate_remove"; sessionId: string; targetSessionId?: string; invokeId?: string }
+  | {
+      __call: "session_delegate_remove";
+      sessionId: string;
+      targetSessionId?: string;
+      invokeId?: string;
+    }
   | { __call: "session_delegate_clear_stopped"; sessionId?: string; invokeId?: string }
   | {
       __call: "session_delegate_fork";
@@ -184,7 +189,9 @@ export interface CoordinatorMethods {
     sessionId: string;
     invokeId?: string;
   }): Promise<{ ok: boolean; removed: boolean }>;
-  session_delegate_clear_stopped(params: { invokeId?: string }): Promise<{ cleared: string[]; removed: number }>;
+  session_delegate_clear_stopped(params: {
+    invokeId?: string;
+  }): Promise<{ cleared: string[]; removed: number }>;
   session_delegate_fork(params: {
     sessionId: string;
     task: string;

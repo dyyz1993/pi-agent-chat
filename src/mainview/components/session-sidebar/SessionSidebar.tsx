@@ -688,7 +688,11 @@ function SessionItem({
                 className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
                 title={t("sidebar:copyId")}
               >
-                {copiedId ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
+                {copiedId ? (
+                  <Check className="w-3 h-3 text-status-success" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
               </button>
               <button
                 onClick={handleStartRename}
@@ -940,7 +944,11 @@ function SubagentItem({
               className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
               title={t("sidebar:copyId")}
             >
-              {copiedId ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
+              {copiedId ? (
+                <Check className="w-3 h-3 text-status-success" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
             </button>
             <button
               onClick={handleStartRename}

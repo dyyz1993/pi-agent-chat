@@ -102,7 +102,9 @@ function normalizeRemoteResourceSyncConfig(
     enabled: input.enabled !== false,
   };
   if (Array.isArray(input.resourceTypes)) {
-    normalized.resourceTypes = input.resourceTypes.filter((type) => REMOTE_RESOURCE_TYPES.has(type));
+    normalized.resourceTypes = input.resourceTypes.filter((type) =>
+      REMOTE_RESOURCE_TYPES.has(type),
+    );
   }
   return normalized;
 }
@@ -614,9 +616,9 @@ export async function syncOpenTabs(
     const hydratedTabs = hydrateTabs(config, tabs);
     const hydratedActiveId = hydratedTabs.some((tab) => tab.id === activeTabId)
       ? activeTabId
-      : (activePath
-          ? (hydratedTabs.find((tab) => tab.path === activePath)?.id ?? null)
-          : null);
+      : activePath
+        ? (hydratedTabs.find((tab) => tab.path === activePath)?.id ?? null)
+        : null;
     config.openTabs = hydratedTabs;
     config.activeTabId = hydratedActiveId ?? hydratedTabs[0]?.id ?? null;
   });

@@ -98,12 +98,7 @@ export function buildScpArgs(options: {
   localPath: string;
   remotePath: string;
 }): string[] {
-  const args: string[] = [
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "StrictHostKeyChecking=accept-new",
-  ];
+  const args: string[] = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"];
   if (options.keyPath) args.push("-i", options.keyPath);
   if (options.port) args.push("-P", String(options.port));
   args.push(options.localPath, `${options.target}:${options.remotePath}`);
@@ -121,9 +116,7 @@ export function encodeRemoteInstanceId(userId: string): string {
 export function getRemoteAgentBundlePath(): string {
   const bundlePath = resolve(getProjectRoot(), "dist-server", "sandbox-agent.js");
   if (!existsSync(bundlePath)) {
-    throw new Error(
-      `Remote SSH runtime requires ${bundlePath}. Run: bash scripts/build-server.sh`,
-    );
+    throw new Error(`Remote SSH runtime requires ${bundlePath}. Run: bash scripts/build-server.sh`);
   }
   return bundlePath;
 }
@@ -166,9 +159,9 @@ export function getDefaultLocalPiPackagePath(): string {
 
 function readPackageName(packageDir: string): string | null {
   try {
-    const packageJson = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")) as
-      | { name?: unknown }
-      | null;
+    const packageJson = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")) as {
+      name?: unknown;
+    } | null;
     return typeof packageJson?.name === "string" ? packageJson.name : null;
   } catch {
     return null;
@@ -378,7 +371,10 @@ export class RemoteSshProvider implements ISandboxProvider {
     }
   }
 
-  private async installLocalScopePackages(remotePackageDir: string, tempDir: string): Promise<void> {
+  private async installLocalScopePackages(
+    remotePackageDir: string,
+    tempDir: string,
+  ): Promise<void> {
     const localPackages = getLocalScopePackages(
       this.options.localPiPackagePath,
       this.options.localWorkspacePackagesPath,

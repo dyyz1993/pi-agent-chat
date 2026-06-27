@@ -62,10 +62,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
       >
         <Virtualizer scrollRef={parentRef} itemSize={20}>
           {lines.map((line, index) => (
-            <div
-              key={index}
-              className="flex text-xs leading-5 font-mono"
-            >
+            <div key={index} className="flex text-xs leading-5 font-mono">
               <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
                 {index + 1}
               </span>
@@ -98,10 +95,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
                 const isLongLine = (lineText?.length ?? 0) > LONG_LINE_THRESHOLD;
 
                 return (
-                  <div
-                    key={index}
-                    className="flex text-xs leading-5 font-mono"
-                  >
+                  <div key={index} className="flex text-xs leading-5 font-mono">
                     <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
                       {index + 1}
                     </span>

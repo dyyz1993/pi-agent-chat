@@ -65,9 +65,7 @@ export interface DelegateSyncResult {
  * accurate reason instead of the generic "session not found / file may have
  * been deleted" message that is only true for one case.
  */
-export type DelegateSendNotFoundReason =
-  | "not_a_delegate_child"
-  | "session_file_missing";
+export type DelegateSendNotFoundReason = "not_a_delegate_child" | "session_file_missing";
 
 // ---------------------------------------------------------------------------
 // Shared delegate session bootstrap
@@ -288,13 +286,7 @@ export async function handleCoordinatorDelegateSendOperation<
 }> {
   const { targetSessionId, message } = options.msg;
 
-  if (
-    !canSendDelegateMessage(
-      options.parentChildMap,
-      options.sourceSessionId,
-      targetSessionId,
-    )
-  ) {
+  if (!canSendDelegateMessage(options.parentChildMap, options.sourceSessionId, targetSessionId)) {
     return {
       delivered: false,
       targetStatus: "not_found",
@@ -336,9 +328,7 @@ export async function handleCoordinatorDelegateSendOperation<
         delivered: false,
         targetStatus: "not_found",
         notFoundReason:
-          sessionPath && !existsSync(sessionPath)
-            ? "session_file_missing"
-            : "not_a_delegate_child",
+          sessionPath && !existsSync(sessionPath) ? "session_file_missing" : "not_a_delegate_child",
       };
     }
   }
@@ -586,13 +576,7 @@ export async function handleCoordinatorDelegateForkOperation<
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task, sessionId: targetSessionId } = options.msg;
-  if (
-    !canManageDelegateChild(
-      options.parentChildMap,
-      options.parentSessionId,
-      targetSessionId,
-    )
-  ) {
+  if (!canManageDelegateChild(options.parentChildMap, options.parentSessionId, targetSessionId)) {
     throw new Error(`Session not found: ${targetSessionId}`);
   }
   const base = options.clients.get(targetSessionId);

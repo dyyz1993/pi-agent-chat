@@ -299,7 +299,10 @@ class APIClientImpl {
       new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url");
     if (customUrl) {
-      return appendToken(rewriteLoopbackTargetForPageHost(customUrl, window.location.hostname), token);
+      return appendToken(
+        rewriteLoopbackTargetForPageHost(customUrl, window.location.hostname),
+        token,
+      );
     }
 
     const devTarget = getDevWebSocketTarget(token, window.location.hostname);

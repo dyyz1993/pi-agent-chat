@@ -5,9 +5,7 @@
  * but provides a valid `unifiedDiff` — we can extract the old/new content
  * from the diff itself.
  */
-export function parseUnifiedDiff(
-  diff: string,
-): { oldValue: string; newValue: string } | null {
+export function parseUnifiedDiff(diff: string): { oldValue: string; newValue: string } | null {
   if (!diff) return null;
   const oldLines: string[] = [];
   const newLines: string[] = [];

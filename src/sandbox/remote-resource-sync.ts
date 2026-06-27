@@ -65,14 +65,7 @@ export interface RemoteResourceSyncResult {
 
 export const DEFAULT_RESOURCE_TYPES: RemoteSyncResourceType[] = ["skills", "agents", "rules"];
 const REMOTE_RESOURCE_TYPES = new Set<RemoteSyncResourceType>(DEFAULT_RESOURCE_TYPES);
-const SKIP_DIR_NAMES = new Set([
-  ".git",
-  "node_modules",
-  ".DS_Store",
-  "__tests__",
-  "dist",
-  "build",
-]);
+const SKIP_DIR_NAMES = new Set([".git", "node_modules", ".DS_Store", "__tests__", "dist", "build"]);
 const BLOCKED_FILE_NAMES = new Set([
   ".env",
   ".env.local",

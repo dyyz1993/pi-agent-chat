@@ -954,11 +954,17 @@ export function ChatPanel() {
         }}
       />
 
-      {!goalMode && !isViewingSubagent && <QuickActionToolbar onGoalClick={() => startGoalMode()} />}
+      {!goalMode && !isViewingSubagent && (
+        <QuickActionToolbar onGoalClick={() => startGoalMode()} />
+      )}
 
       <div
         className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
-        style={isMobileOrTablet ? undefined : { paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }}
+        style={
+          isMobileOrTablet
+            ? undefined
+            : { paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }
+        }
         onPaste={handlePaste}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -1081,9 +1087,7 @@ export function ChatPanel() {
                       isPermissionPending ||
                       (goalMode
                         ? !inputText.trim()
-                        : !inputText.trim() &&
-                          attachmentCount === 0 &&
-                          !hasComposerPlaceholders) ||
+                        : !inputText.trim() && attachmentCount === 0 && !hasComposerPlaceholders) ||
                       !activeSessionId ||
                       hasNoModel
                     }

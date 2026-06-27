@@ -139,7 +139,12 @@ export interface LearningRun {
   version: 1;
   id: string;
   domain: LearningDomain;
-  type: "memory-extract" | "skill-distill" | "memory-curator" | "skill-curator" | "candidate-decision";
+  type:
+    | "memory-extract"
+    | "skill-distill"
+    | "memory-curator"
+    | "skill-curator"
+    | "candidate-decision";
   mode: LearningMode | LearningCuratorMode | "manual";
   status: "started" | "completed" | "failed";
   startedAt: number;
@@ -198,7 +203,12 @@ export interface LearningMethods {
     result: LearningSnapshot;
   };
   "learning.approveCandidate": {
-    params: { projectPath: string; sessionId?: string; candidateId: string; mergeTargetSkillName?: string };
+    params: {
+      projectPath: string;
+      sessionId?: string;
+      candidateId: string;
+      mergeTargetSkillName?: string;
+    };
     result: LearningSnapshot;
   };
   "learning.rejectCandidate": {
@@ -206,7 +216,12 @@ export interface LearningMethods {
     result: LearningSnapshot;
   };
   "learning.runCurator": {
-    params: { projectPath: string; sessionId?: string; domain: "memory" | "skill"; mode?: LearningCuratorMode };
+    params: {
+      projectPath: string;
+      sessionId?: string;
+      domain: "memory" | "skill";
+      mode?: LearningCuratorMode;
+    };
     result: LearningRun;
   };
 }

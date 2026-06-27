@@ -37,10 +37,7 @@ function createTextFence(value: string): string {
 }
 
 function compactTitle(text: string): string {
-  const firstLine = text
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 72);
+  const firstLine = text.replace(/\s+/g, " ").trim().slice(0, 72);
   return firstLine || "引用文本";
 }
 

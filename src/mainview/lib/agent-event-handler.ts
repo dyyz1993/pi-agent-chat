@@ -1396,7 +1396,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
         timestamp: getMemorySemanticTimestamp(resultData, Date.now()),
       };
-      chat.setMessagesForSession(sessionId, insertChatMessageByDisplayOrder(existingMsgs, customMsg));
+      chat.setMessagesForSession(
+        sessionId,
+        insertChatMessageByDisplayOrder(existingMsgs, customMsg),
+      );
       return;
     }
 

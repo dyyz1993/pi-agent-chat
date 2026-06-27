@@ -88,11 +88,7 @@ export async function forkOperation<TManaged extends ManagedClientLike>(options:
 }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) throw new Error("Client not found");
-  const result = await withTimeout(
-    managed.client.copyFork(options.entryId),
-    60_000,
-    "copyFork",
-  );
+  const result = await withTimeout(managed.client.copyFork(options.entryId), 60_000, "copyFork");
   if (result.newSessionFile) {
     stripParentSessionFromHeader(result.newSessionFile);
   }

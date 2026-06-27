@@ -1,8 +1,5 @@
 import { useDesktopMediaPreview } from "./use-desktop-media-preview";
-import {
-  getFileHttpUrl,
-  shouldUseRpcPreviewSource,
-} from "../components/chat/preview/types";
+import { getFileHttpUrl, shouldUseRpcPreviewSource } from "../components/chat/preview/types";
 
 interface PreviewRenderSourceState {
   src: string;

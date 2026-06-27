@@ -141,11 +141,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
       }
       removeDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId);
       removeSessionFromAllParents(deps.parentChildMap, targetSessionId);
-      clearDelegateTracking(
-        deps.delegateCreatedAt,
-        deps.delegateReplyCount,
-        targetSessionId,
-      );
+      clearDelegateTracking(deps.delegateCreatedAt, deps.delegateReplyCount, targetSessionId);
       deps.delegateRepliedSessions.delete(targetSessionId);
       void deps.stop(targetSessionId);
       return { ok: true, removed: true };

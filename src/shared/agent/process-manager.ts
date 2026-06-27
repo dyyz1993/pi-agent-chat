@@ -77,10 +77,7 @@ import {
   resolveActiveRuntimeSelection,
   shouldCreateLocalRuntimeCwd,
 } from "./remote-runtime-selection";
-import {
-  attachRemoteSessionMirror,
-  getRemoteChildSessionDir,
-} from "./remote-session-mirror";
+import { attachRemoteSessionMirror, getRemoteChildSessionDir } from "./remote-session-mirror";
 import { startModelProxy, type StartedModelProxy } from "./model-proxy";
 import {
   getRemoteProjectTrustArgs,
@@ -92,7 +89,10 @@ import {
 import { SandboxManager } from "../../sandbox/sandbox-manager";
 import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
 import { RemoteSshProvider } from "../../sandbox/providers/ssh";
-import { bootstrapRemoteChild, resolveRemoteChildLocalBinaryPath } from "../../sandbox/remote-child-bootstrap";
+import {
+  bootstrapRemoteChild,
+  resolveRemoteChildLocalBinaryPath,
+} from "../../sandbox/remote-child-bootstrap";
 import { syncRemoteAgentResources } from "../../sandbox/remote-resource-sync";
 import type { ISandboxProvider } from "../../sandbox/types";
 import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
@@ -314,7 +314,10 @@ function getRemoteExtensionArgs(
     const relativePath = path.relative(localExtensionsDir, localExtensionPath);
     const extName = relativePath.split(path.sep)[0] ?? "";
     if (excludeLsp && SUBAGENT_EXCLUDED_EXTENSIONS.has(extName)) continue;
-    remoteArgs.push("--extension", `${remoteExtensionsDir}/${relativePath.split(path.sep).join("/")}`);
+    remoteArgs.push(
+      "--extension",
+      `${remoteExtensionsDir}/${relativePath.split(path.sep).join("/")}`,
+    );
   }
   return ["--no-extensions", ...remoteArgs];
 }
@@ -429,8 +432,7 @@ async function createRpcClient(
   const t0 = performance.now();
   const runtime = await resolveActiveRuntimeSelection(cwd);
   const useRemoteChild = runtime.kind === "remote-agent-child";
-  const remoteChildRuntime =
-    runtime.kind === "remote-agent-child" ? runtime : undefined;
+  const remoteChildRuntime = runtime.kind === "remote-agent-child" ? runtime : undefined;
 
   // 沙箱模式：通过 SandboxRpcClient 转发到沙箱容器
   if (runtime.kind === "local" && config.sandboxEnabled && globalSandboxManager && userId) {
@@ -484,20 +486,22 @@ async function createRpcClient(
       : undefined;
   const remoteChildCliPath = remoteChildBootstrap?.remoteBinaryPath ?? config.remoteChildPiCliPath;
   const remoteChildNodePath = remoteChildBootstrap ? "" : config.remoteChildNodePath;
-  const remoteResourceSyncPlan = useRemoteChild && remoteChildRuntime
-    ? resolveRemoteResourceSyncPlan({ runtime: remoteChildRuntime, cwd })
-    : null;
-  const remoteResourceSync = remoteResourceSyncPlan && remoteChildRuntime
-    ? await syncRemoteAgentResources(toRemoteResourceSyncOptions(remoteResourceSyncPlan, remoteChildRuntime)).catch(
-        (err: unknown) => {
+  const remoteResourceSyncPlan =
+    useRemoteChild && remoteChildRuntime
+      ? resolveRemoteResourceSyncPlan({ runtime: remoteChildRuntime, cwd })
+      : null;
+  const remoteResourceSync =
+    remoteResourceSyncPlan && remoteChildRuntime
+      ? await syncRemoteAgentResources(
+          toRemoteResourceSyncOptions(remoteResourceSyncPlan, remoteChildRuntime),
+        ).catch((err: unknown) => {
           log.warn("[createRpcClient] optional remote resource sync failed; continuing", {
             cwd,
             err: err instanceof Error ? err.message : String(err),
           });
           return undefined;
-        },
-      )
-    : undefined;
+        })
+      : undefined;
   const runtimeRemotePiAgentDir = useRemoteChild ? runtime.remotePiAgentDir : undefined;
   const remotePiAgentDir = remoteResourceSync?.remoteAgentDir ?? runtimeRemotePiAgentDir;
   const modelProxy = useRemoteChild ? await startModelProxy() : undefined;
@@ -554,10 +558,7 @@ async function createRpcClient(
 
   // 子代理进程（forceNewProcess）跳过 MCP 连接，避免多进程竞争同一个 stdio MCP server
   const childEnv: Record<string, string> = {
-    ...applyExecutionSandboxEnv(
-      process.env,
-      readProjectExecutionSandbox(cwd).mode,
-    ),
+    ...applyExecutionSandboxEnv(process.env, readProjectExecutionSandbox(cwd).mode),
     NODE_OPTIONS: "--max-old-space-size=8192",
   };
   if (excludeLsp) {

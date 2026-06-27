@@ -3,7 +3,12 @@ import type { ReactNode } from "react";
 import { Play, Pause, ShieldCheck } from "lucide-react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import type { GoalState, SupervisorStatus, TaskReport, TriggerRecord } from "../../../shared/modules/supervisor";
+import type {
+  GoalState,
+  SupervisorStatus,
+  TaskReport,
+  TriggerRecord,
+} from "../../../shared/modules/supervisor";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 
@@ -49,7 +54,9 @@ function getGuardExecutionLabel(t: TFunction<"status">, guardType: string): stri
   }
 }
 
-function getChecklistStatusClass(status: NonNullable<GoalState["checklist"]>[number]["status"]): string {
+function getChecklistStatusClass(
+  status: NonNullable<GoalState["checklist"]>[number]["status"],
+): string {
   switch (status) {
     case "done":
       return "border-status-success/30 bg-status-success/10 text-status-success";
@@ -72,7 +79,9 @@ function getChecklistStatusLabel(
 export function SupervisorPanel() {
   const { t } = useTranslation("status");
   const sessionId = useSessionStore((s) => s.activeSessionId);
-  const sessionState = useSupervisorStore((s) => (sessionId ? s.bySession[sessionId] : null) ?? null);
+  const sessionState = useSupervisorStore(
+    (s) => (sessionId ? s.bySession[sessionId] : null) ?? null,
+  );
   const enable = useSupervisorStore((s) => s.enable);
   const disable = useSupervisorStore((s) => s.disable);
   const forceContinue = useSupervisorStore((s) => s.forceContinue);
@@ -86,7 +95,9 @@ export function SupervisorPanel() {
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-semantic-accent" />
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-text-primary">{t("supervisor.panelTitle")}</div>
+            <div className="text-sm font-semibold text-text-primary">
+              {t("supervisor.panelTitle")}
+            </div>
             <div className="text-[11px] text-text-tertiary">{t("supervisor.panelSubtitle")}</div>
           </div>
         </div>
@@ -120,7 +131,11 @@ interface SupervisorPanelContentProps {
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
-  fetchTriggerHistory: (sessionId: string, limit?: number, options?: { force?: boolean }) => Promise<void>;
+  fetchTriggerHistory: (
+    sessionId: string,
+    limit?: number,
+    options?: { force?: boolean },
+  ) => Promise<void>;
 }
 
 function SupervisorPanelContent({
@@ -191,7 +206,11 @@ function SupervisorPanelContent({
               >
                 {stateLabel}
               </span>
-              <span className={status.enabled ? "text-xs text-status-success" : "text-xs text-text-tertiary"}>
+              <span
+                className={
+                  status.enabled ? "text-xs text-status-success" : "text-xs text-text-tertiary"
+                }
+              >
                 {status.enabled ? t("supervisor.enabled") : t("supervisor.disabled")}
               </span>
             </div>
@@ -228,7 +247,9 @@ function SupervisorPanelContent({
               {t(`supervisor.goal.state.${status.goal.status}`)}
             </span>
           </div>
-          <div className="mt-1 break-words text-sm text-text-secondary">{status.goal.objective}</div>
+          <div className="mt-1 break-words text-sm text-text-secondary">
+            {status.goal.objective}
+          </div>
           {status.goal.checklist && status.goal.checklist.length > 0 && (
             <div className="mt-2 space-y-1.5">
               <div className="text-[11px] font-medium text-text-tertiary">
@@ -261,7 +282,9 @@ function SupervisorPanelContent({
         {status.lastGoldResult ? (
           <div className="rounded-md border border-border-primary bg-bg-elevated px-3 py-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-text-secondary">{t("supervisor.gold")}</span>
+              <span className="text-xs font-medium text-text-secondary">
+                {t("supervisor.gold")}
+              </span>
               <span
                 className={`text-xs ${
                   status.lastGoldResult.verdict === "complete"
@@ -274,7 +297,9 @@ function SupervisorPanelContent({
                 {t(`supervisor.gold.verdict.${status.lastGoldResult.verdict}`)}
               </span>
             </div>
-            <div className="mt-1 break-words text-xs text-text-tertiary">{status.lastGoldResult.reason}</div>
+            <div className="mt-1 break-words text-xs text-text-tertiary">
+              {status.lastGoldResult.reason}
+            </div>
             {status.lastGoldResult.evidence.length > 0 && (
               <div className="mt-1 text-[11px] text-text-tertiary">
                 {t("supervisor.gold.evidenceCount", {
@@ -303,7 +328,10 @@ function SupervisorPanelContent({
         {triggerRecords.length > 0 ? (
           <div className="space-y-1.5">
             {[...triggerRecords].reverse().map((rec) => (
-              <div key={rec.seq} className="rounded-md border border-border-primary bg-bg-elevated px-3 py-2">
+              <div
+                key={rec.seq}
+                className="rounded-md border border-border-primary bg-bg-elevated px-3 py-2"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-text-secondary">#{rec.seq}</span>
                   <div className="flex items-center gap-1.5">
@@ -329,7 +357,9 @@ function SupervisorPanelContent({
                   </div>
                 </div>
                 {rec.reason && (
-                  <div className="mt-1 break-words text-[11px] text-text-tertiary">{rec.reason}</div>
+                  <div className="mt-1 break-words text-[11px] text-text-tertiary">
+                    {rec.reason}
+                  </div>
                 )}
                 {rec.guardResults.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
@@ -352,7 +382,9 @@ function SupervisorPanelContent({
                   <div className="mt-1 text-[11px] text-text-tertiary">
                     {t("supervisor.trigger.modelCheck")}: {rec.modelCheck.passed ? "✓" : "✗"} (
                     {((rec.modelCheck.durationMs ?? 0) / 1000).toFixed(1)}s)
-                    {rec.modelCheck.model ? ` · ${t("supervisor.trigger.model")}: ${rec.modelCheck.model}` : ""}
+                    {rec.modelCheck.model
+                      ? ` · ${t("supervisor.trigger.model")}: ${rec.modelCheck.model}`
+                      : ""}
                   </div>
                 )}
               </div>
@@ -395,7 +427,10 @@ function SupervisorPanelContent({
                           : "bg-text-tertiary"
                   }`}
                 />
-                <span className="truncate text-text-tertiary" title={getGuardDescription(t, tr.guardName)}>
+                <span
+                  className="truncate text-text-tertiary"
+                  title={getGuardDescription(t, tr.guardName)}
+                >
                   {getGuardLabel(t, tr.guardName)}
                 </span>
                 <span className="shrink-0 text-[11px] text-text-tertiary">{tr.status}</span>
@@ -435,7 +470,8 @@ function SupervisorPanelContent({
 
       {status.pendingPause && (
         <div className="text-[11px] text-status-warning/80">
-          {t("supervisor.pause")}: {Math.ceil((status.pendingPause.scheduledAt - Date.now()) / 1000)}s
+          {t("supervisor.pause")}:{" "}
+          {Math.ceil((status.pendingPause.scheduledAt - Date.now()) / 1000)}s
           {status.pendingPause.reason ? ` - ${status.pendingPause.reason}` : ""}
         </div>
       )}
@@ -447,8 +483,12 @@ function DisabledIntro() {
   const { t } = useTranslation("status");
   return (
     <div className="rounded-md border border-border-primary bg-bg-elevated px-3 py-3">
-      <div className="text-sm font-medium text-text-primary">{t("supervisor.disabledByDefault")}</div>
-      <div className="mt-1 text-xs leading-5 text-text-tertiary">{t("supervisor.disabledByDefaultDesc")}</div>
+      <div className="text-sm font-medium text-text-primary">
+        {t("supervisor.disabledByDefault")}
+      </div>
+      <div className="mt-1 text-xs leading-5 text-text-tertiary">
+        {t("supervisor.disabledByDefaultDesc")}
+      </div>
     </div>
   );
 }

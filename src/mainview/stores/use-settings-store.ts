@@ -56,18 +56,15 @@ const MONO_STACK = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Cons
 
 const FONT_STACKS: Record<FontPreset, { sans: string; mono: string }> = {
   system: {
-    sans:
-      '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
+    sans: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
     mono: MONO_STACK,
   },
   rounded: {
-    sans:
-      '"SF Pro Rounded", ui-rounded, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
+    sans: '"SF Pro Rounded", ui-rounded, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
     mono: MONO_STACK,
   },
   compact: {
-    sans:
-      '"Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
+    sans: '"Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
     mono: MONO_STACK,
   },
 };

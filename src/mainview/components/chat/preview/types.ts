@@ -66,7 +66,10 @@ function resolvePreviewAbsolutePath(
   return undefined;
 }
 
-export function normalizePreviewDetails(raw: unknown, projectRoots?: string[]): PreviewDetails | null {
+export function normalizePreviewDetails(
+  raw: unknown,
+  projectRoots?: string[],
+): PreviewDetails | null {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Record<string, unknown>;
   const source = typeof data.source === "string" ? data.source : "";
@@ -112,7 +115,9 @@ export function isPreviewRemoteUrl(value: string | undefined): boolean {
 }
 
 export function shouldUseRpcPreviewSource(value: string | undefined): boolean {
-  return typeof value === "string" && !looksLikeHttpUrl(value) && apiClient.getTransport() === "ipc";
+  return (
+    typeof value === "string" && !looksLikeHttpUrl(value) && apiClient.getTransport() === "ipc"
+  );
 }
 
 export function getFileHttpUrl(absolutePath: string): string {

@@ -45,9 +45,7 @@ const gitPath = join(process.cwd(), ".git");
 if (existsSync(gitPath) && statSync(gitPath).isFile()) {
   const gitContent = readFileSync(gitPath, "utf-8");
   const match = gitContent.match(/^gitdir:\s*(.+)/m);
-  const mainRepo = match
-    ? resolve(dirname(match[1].trim()), "..")
-    : "(unknown)";
+  const mainRepo = match ? resolve(dirname(match[1].trim()), "..") : "(unknown)";
   log.info("┌─ Worktree detected ──────────────────────");
   log.info("│ worktree: " + process.cwd());
   log.info("│ main repo: " + mainRepo);
@@ -55,12 +53,16 @@ if (existsSync(gitPath) && statSync(gitPath).isFile()) {
     const gitDir = match ? match[1].trim() : "";
     const headPath = gitDir ? join(gitDir, "HEAD") : "";
     if (headPath && existsSync(headPath)) {
-      log.info("│ branch: " + readFileSync(headPath, "utf-8").trim().replace(/^ref: refs\/heads\//, ""));
+      log.info(
+        "│ branch: " +
+          readFileSync(headPath, "utf-8")
+            .trim()
+            .replace(/^ref: refs\/heads\//, ""),
+      );
     }
   } catch {}
   log.info("└───────────────────────────────────────────");
 }
-
 
 const httpServer = createServer();
 const wss = createWsHandler(httpServer, { config });

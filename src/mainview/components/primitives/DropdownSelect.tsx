@@ -154,7 +154,9 @@ export function DropdownSelect({
                         </span>
                       )}
                     </span>
-                    {selectedOption && <Check className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />}
+                    {selectedOption && (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />
+                    )}
                   </button>
                 </div>
               );

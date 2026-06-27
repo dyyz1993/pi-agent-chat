@@ -41,10 +41,7 @@ export interface RestoreFlowDeps {
   getLastActiveSessionByProject: () => Record<string, string | undefined>;
 
   /** Load session messages (chat store) */
-  loadSessionMessages: (
-    sessionId: string,
-    opts: { force: boolean; sessionPath: string },
-  ) => void;
+  loadSessionMessages: (sessionId: string, opts: { force: boolean; sessionPath: string }) => void;
 
   /** Logger */
   log: { info: (msg: string, ctx?: Record<string, unknown>) => void };
@@ -150,9 +147,7 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
         trace.done("url-session.ready", { sessionId: urlSessionId });
       } catch (err) {
         trace.error("url-session.failed", err);
-        addLog(
-          `Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        addLog(`Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`);
       }
       if (!isCancelled()) setRestoring(false);
       return;
@@ -198,10 +193,7 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
         const sessions = await Promise.race([
           loadSessionsForProject(tab.path),
           new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("loadSessionsForProject timed out (10s)")),
-              10_000,
-            ),
+            setTimeout(() => reject(new Error("loadSessionsForProject timed out (10s)")), 10_000),
           ),
         ]).catch((err) => {
           trace.error("active-project.sessions.failed", err, { projectPath: tab.path });

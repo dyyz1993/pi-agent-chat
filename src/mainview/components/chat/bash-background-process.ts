@@ -116,8 +116,10 @@ function readLogPreview(source: Record<string, unknown>): BashBackgroundLogPrevi
     totalLines: readNumber(preview, "totalLines") ?? readNumber(preview, "total_lines") ?? 0,
     totalBytes: readNumber(preview, "totalBytes") ?? readNumber(preview, "total_bytes") ?? 0,
     truncated: preview.truncated === true,
-    headLineCount: readNumber(preview, "headLineCount") ?? readNumber(preview, "head_line_count") ?? 0,
-    tailLineCount: readNumber(preview, "tailLineCount") ?? readNumber(preview, "tail_line_count") ?? 0,
+    headLineCount:
+      readNumber(preview, "headLineCount") ?? readNumber(preview, "head_line_count") ?? 0,
+    tailLineCount:
+      readNumber(preview, "tailLineCount") ?? readNumber(preview, "tail_line_count") ?? 0,
     segments,
   };
 }
@@ -162,9 +164,7 @@ function normalizeTrigger(source: Record<string, unknown>): BashBackgroundTrigge
   return "unknown";
 }
 
-export function normalizeBashBackgroundProcess(
-  value: unknown,
-): BashBackgroundProcessData | null {
+export function normalizeBashBackgroundProcess(value: unknown): BashBackgroundProcessData | null {
   const source = asRecord(value);
   const exitCode = readExitCode(source);
   const reason = normalizeReason(source, exitCode);

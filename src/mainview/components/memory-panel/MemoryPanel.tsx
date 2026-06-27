@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  Brain,
-  Search,
-  FileText,
-  History,
-  Shield,
-  X,
-  Maximize2,
-} from "lucide-react";
+import { Brain, Search, FileText, History, Shield, X, Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { useSessionStore } from "../../stores/use-session-store";

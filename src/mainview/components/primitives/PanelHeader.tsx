@@ -9,13 +9,7 @@ export interface PanelHeaderProps {
   className?: string;
 }
 
-export function PanelHeader({
-  icon: Icon,
-  iconCls,
-  title,
-  trailing,
-  className,
-}: PanelHeaderProps) {
+export function PanelHeader({ icon: Icon, iconCls, title, trailing, className }: PanelHeaderProps) {
   return (
     <div
       className={`flex items-center gap-2 px-2.5 py-2 border-b border-border-secondary dark:border-surface-code shrink-0 ${className ?? ""}`}
