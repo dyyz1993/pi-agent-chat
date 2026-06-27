@@ -155,13 +155,13 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const closeOverlay = useChatOverlayStore((s) => s.close);
 
   return (
-    <div className="h-screen bg-bg-primary text-text-primary flex flex-col overflow-hidden">
+    <div className="app-shell bg-bg-primary text-text-primary flex flex-col overflow-hidden">
       <ConnectionBanner />
       {/* === ROW 1: Top Tab Bar === */}
       <TabBar onAddProject={onAddProject} />
 
       {/* === ROW 2: Body - 5 columns === */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* ---- Mobile drawer backdrop ---- */}
         {isMobile && (sessionPanel === "visible" || statusPanel === "visible") && (
           <div
@@ -194,7 +194,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
         {/* ---- COL 2: Chat Area (center) ---- */}
         <div
-          className="flex-1 flex flex-col overflow-hidden relative min-w-[240px]"
+          className="flex-1 min-h-0 flex flex-col overflow-hidden relative min-w-[240px]"
           onClick={handleChatAreaClick}
         >
           <ChatPanel />

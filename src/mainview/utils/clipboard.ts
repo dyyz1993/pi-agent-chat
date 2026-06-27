@@ -3,6 +3,8 @@ import { createLogger } from "../../shared/lib/logger";
 const logger = createLogger("system");
 
 export async function copyToClipboard(text: string): Promise<boolean> {
+  if (await nativeCopy(text)) return true;
+
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
@@ -12,6 +14,18 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
   return fallbackCopy(text);
+}
+
+async function nativeCopy(text: string): Promise<boolean> {
+  if (typeof window === "undefined" || !window.__electrobunBunBridge) return false;
+  try {
+    const { apiClient } = await import("../lib/api-client");
+    const result = await apiClient.call("system.writeClipboard", { text });
+    return result.ok;
+  } catch (e) {
+    logger.warn("Native clipboard write failed", { error: String(e) });
+    return false;
+  }
 }
 
 function fallbackCopy(text: string): boolean {

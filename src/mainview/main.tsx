@@ -4,6 +4,8 @@ import { apiClient } from "./lib/api-client";
 import "./lib/i18n";
 import "./index.css";
 import App from "./App";
+import { installViewportCssVarSync } from "./lib/viewport-css-vars";
+import { installDesktopEditCommandBridge } from "./lib/desktop-edit-commands";
 import "./lib/channels/in-app-channel";
 import "./lib/channels/pwa-channel";
 import "./stores/use-theme-store";
@@ -33,6 +35,9 @@ if ("serviceWorker" in navigator) {
 const isElectrobun = typeof window !== "undefined" && !!window.__electrobunBunBridge;
 
 if (isElectrobun) {
+  document.documentElement.classList.add("electrobun-desktop");
+  installViewportCssVarSync();
+  installDesktopEditCommandBridge();
   apiClient.initSyncForDesktop();
 }
 

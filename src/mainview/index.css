@@ -93,7 +93,10 @@ html {
 }
 
 body {
+  height: 100dvh;
+  min-height: 0;
   min-width: 320px;
+  overflow: hidden;
   background-color: var(--color-bg-primary);
   background-image: var(--app-bg-texture);
   color: var(--color-text-primary);
@@ -106,8 +109,58 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background-color: transparent;
+}
+
+.app-shell {
+  height: 100dvh;
+  min-height: 0;
+}
+
+.electrobun-desktop,
+.electrobun-desktop body,
+.electrobun-desktop #root {
+  height: var(--app-viewport-height, 100vh);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.electrobun-desktop body {
+  background-image: none;
+}
+
+.electrobun-desktop .app-shell {
+  height: var(--app-viewport-height, 100vh);
+  min-height: 0;
+}
+
+.electrobun-titlebar-spacer {
+  display: none;
+}
+
+.electrobun-titlebar-drag-fill {
+  display: none;
+}
+
+.electrobun-desktop .app-tab-bar {
+  background-color: var(--color-bg-secondary);
+}
+
+.electrobun-desktop .electrobun-titlebar-spacer {
+  display: block;
+  width: 76px;
+  align-self: stretch;
+  flex: 0 0 76px;
+}
+
+.electrobun-desktop .electrobun-titlebar-drag-fill {
+  display: block;
+  align-self: stretch;
+  flex: 1 1 48px;
+  min-width: 48px;
 }
 
 button,
@@ -226,8 +279,8 @@ button {
   --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
 
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
-    "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --text-xs: 0.75rem;

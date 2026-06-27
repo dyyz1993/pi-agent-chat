@@ -1,6 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
+import { readClipboardImage, readClipboardText, writeClipboardText } from "../lib/native-clipboard";
 
 export function register(server: RPCServer, options: HandlerOptions): void {
   const r = createRegister(server);
@@ -17,4 +18,25 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   }));
 
   r("system.echo", async (params) => params);
+
+  r("system.writeClipboard", async (params) => {
+    if (options.platform !== "desktop") {
+      return { ok: false };
+    }
+    return { ok: await writeClipboardText(params.text) };
+  });
+
+  r("system.readClipboard", async () => {
+    if (options.platform !== "desktop") {
+      return { text: null };
+    }
+    return { text: await readClipboardText() };
+  });
+
+  r("system.readClipboardImage", async () => {
+    if (options.platform !== "desktop") {
+      return { pngBase64: null };
+    }
+    return { pngBase64: await readClipboardImage() };
+  });
 }

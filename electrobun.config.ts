@@ -1,5 +1,11 @@
 import type { ElectrobunConfig } from "electrobun";
 
+const desktopRenderer =
+	(process.env.PI_ELECTROBUN_RENDERER?.toLowerCase() === "native" ? "native" : "cef") as
+		| "native"
+		| "cef";
+const useCEFRenderer = desktopRenderer === "cef";
+
 export default {
 	app: {
 		name: "PiAgentChat",
@@ -15,7 +21,14 @@ export default {
 		// Ignore Vite output in watch mode — HMR handles view rebuilds separately
 		watchIgnore: ["dist/**"],
 		mac: {
-			bundleCEF: false,
+			bundleCEF: useCEFRenderer,
+			defaultRenderer: desktopRenderer,
+			entitlements: {
+				"com.apple.security.device.microphone":
+					"PiAgentChat uses microphone access for macOS dictation and voice input.",
+				"com.apple.security.personal-information.speech-recognition":
+					"PiAgentChat uses speech recognition access for macOS dictation and voice input.",
+			},
 		},
 		linux: {
 			bundleCEF: false,

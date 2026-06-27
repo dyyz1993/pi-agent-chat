@@ -2,6 +2,36 @@
 <html lang="en">
 
 <head>
+  <script>
+    (function () {
+      function showBootFailure(message) {
+        setTimeout(function () {
+          var root = document.getElementById("root");
+          if (!root || root.childNodes.length > 0) return;
+          var panel = document.createElement("pre");
+          panel.textContent = "Pi Agent Chat failed to render.\n\n" + message;
+          panel.style.cssText =
+            "box-sizing:border-box;margin:24px;padding:16px;max-width:calc(100vw - 48px);white-space:pre-wrap;color:#fecaca;background:#450a0a;border:1px solid #dc2626;border-radius:8px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;";
+          root.appendChild(panel);
+        }, 0);
+      }
+      window.addEventListener("error", function (event) {
+        showBootFailure(event.message || String(event.error || "Unknown script error"));
+      });
+      window.addEventListener("unhandledrejection", function (event) {
+        var reason = event.reason;
+        showBootFailure(reason && (reason.stack || reason.message) ? reason.stack || reason.message : String(reason));
+      });
+      window.addEventListener("DOMContentLoaded", function () {
+        setTimeout(function () {
+          var root = document.getElementById("root");
+          if (root && root.childNodes.length === 0) {
+            showBootFailure("No React content was mounted after startup.");
+          }
+        }, 2000);
+      });
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 

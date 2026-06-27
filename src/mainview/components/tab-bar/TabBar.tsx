@@ -89,7 +89,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const reorderProjectTabs = useSessionStore((s) => s.reorderProjectTabs);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
-  const lastActiveSessionByProject = useSessionStore((s) => s.lastActiveSessionByProject);
+  const lastActiveSessionByProject = useSessionStore((s) => s.lastActiveSessionByProject ?? {});
   const remoteRuntimeBySession = useStatusStore((s) => s.remoteRuntimeBySession);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
   const allPending = useUIDialogStore((s) => s.pending);
@@ -303,12 +303,16 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   return (
     <div
       data-testid="tab-bar"
-      className="h-9 bg-bg-secondary border-b border-border-primary flex items-center flex-shrink-0"
+      className="app-tab-bar h-9 bg-bg-secondary border-b border-border-primary flex items-center flex-shrink-0"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         height: "calc(2.25rem + env(safe-area-inset-top))",
       }}
     >
+      <div
+        aria-hidden="true"
+        className="electrobun-titlebar-spacer electrobun-webkit-app-region-drag"
+      />
       <div
         className={`flex-1 flex items-center gap-1 px-1.5 min-w-0 ${
           dragIndex !== null ? "overflow-x-hidden" : "overflow-x-auto"
@@ -458,6 +462,10 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             </div>
           );
         })}
+        <div
+          aria-hidden="true"
+          className="electrobun-titlebar-drag-fill electrobun-webkit-app-region-drag"
+        />
       </div>
 
       <div className="flex items-center gap-1 px-2 shrink-0 border-l border-border-primary h-full">

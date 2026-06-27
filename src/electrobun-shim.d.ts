@@ -1,7 +1,14 @@
 declare module "electrobun/bun" {
+  export interface BrowserViewInstance {
+    executeJavascript(js: string): void;
+    on(name: string, handler: (event: any) => void): void;
+  }
+
   export class BrowserWindow {
     constructor(options: any);
-    webview: any;
+    webview: BrowserViewInstance;
+    getSize(): { width: number; height: number };
+    on(name: string, handler: (event: any) => void): void;
   }
   export class BrowserView {
     static defineRPC(options: any): any;
