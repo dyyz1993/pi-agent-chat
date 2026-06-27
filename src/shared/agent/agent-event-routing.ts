@@ -44,7 +44,6 @@ function throttleEventType(
   eventType: string,
   throttleMs: number,
   pendingMap: Map<string, PendingBuffer>,
-  otherPendingMaps: Map<string, PendingBuffer>[],
   emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>,
 ): boolean {
   if (sanitized.type !== eventType) return false;
@@ -74,7 +73,6 @@ function emitAgentEventThrottled(
       "message_update",
       MESSAGE_UPDATE_THROTTLE_MS,
       pendingMessageUpdates,
-      [pendingToolUpdates],
       emitAgentEvent,
     )
   ) {
@@ -88,7 +86,6 @@ function emitAgentEventThrottled(
       "tool_execution_update",
       TOOL_UPDATE_THROTTLE_MS,
       pendingToolUpdates,
-      [pendingMessageUpdates],
       emitAgentEvent,
     )
   ) {

@@ -37,6 +37,11 @@ export type LogModule =
   | "project-config"
   | "render-cache"
   | "hooks"
+  | "learning"
+  | "usage"
+  | "usage-index"
+  | "usage-store"
+  | "model-proxy"
   | "gateway:debug"
   | "gateway:proxy";
 type LogLevel = "debug" | "info" | "warn" | "error";

@@ -74,7 +74,9 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
     const meta = req.permissionMeta;
     const ScopeIcon = meta.scope === "write" ? Pencil : Eye;
     const scopePattern = `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`;
-    const rememberScope = useStatusStore.getState().projectTrust?.trusted ? "project" : "session";
+    const rememberScope: "project" | "session" = useStatusStore.getState().projectTrust?.trusted
+      ? "project"
+      : "session";
     const rememberOptions = [
       {
         id: "path-boundary-scope",

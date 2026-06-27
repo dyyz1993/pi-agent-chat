@@ -273,7 +273,7 @@ export function createModelProxyServer(options: {
       const response = await fetch(upstreamUrl, {
         method: req.method,
         headers: upstreamHeaders,
-        body: requestBody,
+        body: requestBody ? new Uint8Array(requestBody) : null,
       });
 
       res.writeHead(response.status, stripUpstreamResponseHeaders(response.headers));

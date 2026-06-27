@@ -852,7 +852,9 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
   const scopePattern = meta
     ? `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`
     : null;
-  const rememberScope = useStatusStore((s) => (s.projectTrust?.trusted ? "project" : "session"));
+  const rememberScope: "project" | "session" = useStatusStore((s) =>
+    s.projectTrust?.trusted ? "project" : "session",
+  );
   const rememberOptions =
     meta && scopePattern
       ? [

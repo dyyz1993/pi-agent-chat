@@ -13,6 +13,7 @@ import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 import { classifyExtensionUiRequest } from "./agent-event-lifecycle";
 import { createMemoryBroadcast } from "./agent-channel-state";
+import type { DelegateReplyMode } from "./coordinator-delegate-utils";
 
 const log = createLogger("agent");
 
@@ -75,6 +76,7 @@ export interface AgentEventHandlerDeps {
   parentChildMap: Map<string, Set<string>>;
   delegateReplyCount: Map<string, number>;
   delegateCreatedAt: Map<string, number>;
+  delegateReplyMode: Map<string, DelegateReplyMode>;
   delegateRepliedSessions: Set<string>;
   sendDelegateFallbackReply: (sessionId: string) => Promise<boolean>;
 }

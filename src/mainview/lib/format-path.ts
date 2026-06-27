@@ -90,7 +90,7 @@ function shortPath(p: string, maxLen?: number): string {
   if (!maxLen || p.length <= maxLen) return p;
 
   const parts = splitPathSegments(p);
-  const basename = parts.at(-1) ?? p;
+  const basename = parts.length > 0 ? parts[parts.length - 1] : p;
   if (maxLen <= 1) return "…".slice(0, maxLen);
 
   if (basename.length >= maxLen) {
@@ -138,7 +138,8 @@ function splitPathSegments(path: string): string[] {
 }
 
 function getLastPathSegment(path: string): string {
-  return splitPathSegments(path).at(-1) ?? path;
+  const segments = splitPathSegments(path);
+  return segments.length > 0 ? segments[segments.length - 1] : path;
 }
 
 function isPathLikeText(text: string): boolean {

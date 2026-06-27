@@ -90,24 +90,26 @@ function readLogPreview(source: Record<string, unknown>): BashBackgroundLogPrevi
   const value = source.logPreview ?? source.log_preview;
   const preview = asRecord(value);
   const rawSegments = Array.isArray(preview.segments) ? preview.segments : [];
-  const segments: BashBackgroundLogPreviewSegment[] = rawSegments.flatMap((segment) => {
-    const item = asRecord(segment);
-    if (item.kind === "omitted") {
-      const lineCount = readNumber(item, "lineCount") ?? readNumber(item, "line_count") ?? 0;
-      return lineCount > 0 ? [{ kind: "omitted" as const, lineCount }] : [];
-    }
-    if (item.kind === "line" && typeof item.text === "string") {
-      const repeatCount = readNumber(item, "repeatCount") ?? readNumber(item, "repeat_count");
-      return [
-        {
-          kind: "line" as const,
-          text: item.text,
-          ...(repeatCount && repeatCount > 1 ? { repeatCount } : {}),
-        },
-      ];
-    }
-    return [];
-  });
+  const segments: BashBackgroundLogPreviewSegment[] = rawSegments.flatMap(
+    (segment: unknown): BashBackgroundLogPreviewSegment[] => {
+      const item = asRecord(segment);
+      if (item.kind === "omitted") {
+        const lineCount = readNumber(item, "lineCount") ?? readNumber(item, "line_count") ?? 0;
+        return lineCount > 0 ? [{ kind: "omitted" as const, lineCount }] : [];
+      }
+      if (item.kind === "line" && typeof item.text === "string") {
+        const repeatCount = readNumber(item, "repeatCount") ?? readNumber(item, "repeat_count");
+        return [
+          {
+            kind: "line" as const,
+            text: item.text,
+            ...(repeatCount && repeatCount > 1 ? { repeatCount } : {}),
+          },
+        ];
+      }
+      return [];
+    },
+  );
   if (segments.length === 0) return undefined;
 
   return {
