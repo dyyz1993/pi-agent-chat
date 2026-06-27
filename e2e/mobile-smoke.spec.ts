@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const BASE_URL = "http://localhost:5173?token=test-ci-token";
+const BASE_URL = "/?token=test-ci-token";
 
 test.describe("T26 Mobile Features — ui-tester Guided", () => {
   test.describe("T26.1 QuickActionToolbar", () => {

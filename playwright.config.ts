@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2eHost = process.env.E2E_HOST ?? "127.0.0.1";
+const appPort = process.env.E2E_APP_PORT ?? "5173";
+const apiPort = process.env.E2E_API_PORT ?? "3100";
+const authToken = process.env.E2E_AUTH_TOKEN ?? "test-ci-token";
+const appBaseUrl = `http://${e2eHost}:${appPort}`;
+const apiBaseUrl = `http://${e2eHost}:${apiPort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -8,7 +15,7 @@ export default defineConfig({
   workers: process.env.CI ? 3 : undefined,
   reporter: process.env.CI ? "html" : "list",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: appBaseUrl,
     trace: "on-first-retry",
     headless: true,
     screenshot: "only-on-failure",
@@ -22,18 +29,18 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "PORT=3100 AUTH_TOKEN=test-ci-token bun src/server.ts",
-      url: "http://localhost:3100/health",
+      command: `PORT=${apiPort} AUTH_TOKEN=${authToken} bun src/server.ts`,
+      url: `${apiBaseUrl}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 15000,
       env: {
-        PORT: "3100",
-        AUTH_TOKEN: "test-ci-token",
+        PORT: apiPort,
+        AUTH_TOKEN: authToken,
       },
     },
     {
-      command: "npx vite --port 5173 --strictPort",
-      url: "http://localhost:5173",
+      command: `VITE_API_TARGET=${apiBaseUrl} VITE_AUTH_TOKEN=${authToken} npx vite --host ${e2eHost} --port ${appPort} --strictPort`,
+      url: appBaseUrl,
       reuseExistingServer: !process.env.CI,
       timeout: 30000,
     },
