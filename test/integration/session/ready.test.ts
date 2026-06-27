@@ -241,13 +241,6 @@ describe("Session Ready Lifecycle", () => {
 
       await new Promise((r) => setTimeout(r, 200));
 
-      const startResp = await sendRPC(ws, "agent.start", {
-        sessionId,
-        projectPath: PROJECT_PATH,
-        sessionPath,
-      });
-      expect(startResp.error).toBeUndefined();
-
       const agentStartEventPromise = waitForEvent(
         ws,
         "agent.event",
@@ -258,6 +251,14 @@ describe("Session Ready Lifecycle", () => {
         },
         10000,
       );
+
+      const startResp = await sendRPC(ws, "agent.start", {
+        sessionId,
+        projectPath: PROJECT_PATH,
+        sessionPath,
+      });
+      expect(startResp.error).toBeUndefined();
+
       await sendRPC(ws, "agent.send", {
         sessionId,
         content: "echo hello",
