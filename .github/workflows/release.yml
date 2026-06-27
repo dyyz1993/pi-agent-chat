@@ -23,6 +23,7 @@ jobs:
         run: |
           # Disable postinstall (patch-package not available in CI)
           node -e 'const p=require("./package.json");p.scripts.postinstall="";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
+          node scripts/ci-hydrate-yalc.mjs
           rm -f bun.lockb && bun install
 
       - name: Build Vite frontend
@@ -52,19 +53,19 @@ jobs:
           APP_PATH="${{ steps.locate.outputs.app_path }}"
           APP_NAME="${{ steps.locate.outputs.app_name }}"
           DMG_NAME="PiAgentChat-${GITHUB_REF_NAME}-macos-arm64.dmg"
-          
+
           # Ad-hoc sign the app (removes "damaged" error on download)
           codesign --force --deep --sign - "$APP_PATH"
-          
+
           # Create a temporary DMG folder
           mkdir -p dmg-staging
           cp -R "$APP_PATH" dmg-staging/
-          
+
           # Create DMG
           hdiutil create -volname "$APP_NAME" -srcfolder dmg-staging -ov -format UDZO "$DMG_NAME"
-          
+
           echo "dmg_path=$DMG_NAME" >> "$GITHUB_OUTPUT"
-          
+
           # Cleanup
           rm -rf dmg-staging
 
@@ -89,6 +90,7 @@ jobs:
         shell: bash
         run: |
           node -e 'const p=require("./package.json");p.scripts.postinstall="";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
+          node scripts/ci-hydrate-yalc.mjs
           rm -f bun.lockb && bun install
 
       - name: Build Vite frontend
