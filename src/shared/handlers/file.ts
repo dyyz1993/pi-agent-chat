@@ -435,6 +435,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { content: content.toString(), size: content.length };
   });
 
+  r("file.readBinaryFile", async (params) => {
+    const target = await resolveFileTarget(params.path);
+    if (target.kind === "ssh") {
+      const result = runSshCommand(target.remote, `base64 < ${shellQuote(target.path)} | tr -d '\\n'`);
+      const base64 = result.stdout.trim();
+      return {
+        base64,
+        size: Buffer.byteLength(base64, "base64"),
+      };
+    }
+    const filePath = target.path;
+    const content = await readFile(filePath);
+    return { base64: content.toString("base64"), size: content.length };
+  });
+
   r("file.writeFile", async (params) => {
     const target = await resolveFileTarget(params.path);
     const filePath = target.path;

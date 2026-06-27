@@ -15,7 +15,26 @@ export interface FileProbeResult {
 export async function probeFileError(absolutePath: string): Promise<FileProbeResult> {
   const baseUrl = apiClient.getBaseUrl();
   const token = apiClient.getAuthToken();
-  if (!baseUrl) return { ok: false, error: "network", detail: "No server connection" };
+  if (!baseUrl) {
+    try {
+      await apiClient.call("file.readFile", { path: absolutePath });
+      return {
+        ok: false,
+        error: "server_error",
+        detail: "Local file exists but renderer failed to load it",
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const lowered = detail.toLowerCase();
+      if (lowered.includes("enoent") || lowered.includes("not found")) {
+        return { ok: false, error: "not_found", detail };
+      }
+      if (lowered.includes("eacces") || lowered.includes("permission")) {
+        return { ok: false, error: "forbidden", detail };
+      }
+      return { ok: false, error: "server_error", detail };
+    }
+  }
 
   try {
     const res = await fetch(`${baseUrl}/info/${encodeURIComponent(absolutePath)}?token=${token}`);

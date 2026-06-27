@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import type { AgentAvatar as AgentAvatarValue } from "../../stores/use-agent-store";
 import { apiClient } from "../../lib/api-client";
 import { cx } from "../../lib/classes";
+import { toLocalFileUrl } from "../../lib/file-url";
 import { agentColorStyle } from "../../utils/agent-color";
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
@@ -52,7 +53,7 @@ function resolveImageSrc(src: string, agentFilePath?: string): string {
     return baseUrl ? `${baseUrl}/fs${filePath}?token=${token}` : `/fs${filePath}?token=${token}`;
   }
   if (URL_SCHEME.test(filePath)) return filePath;
-  return `file://${filePath}`;
+  return toLocalFileUrl(filePath);
 }
 
 export function AgentAvatar({

@@ -52,6 +52,10 @@ export interface FileMethods {
     params: { path: string };
     result: { content: string; size: number };
   };
+  "file.readBinaryFile": {
+    params: { path: string };
+    result: { base64: string; size: number };
+  };
   "file.writeFile": {
     params: { path: string; content: string };
     result: { ok: boolean };

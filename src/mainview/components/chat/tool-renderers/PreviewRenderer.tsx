@@ -4,6 +4,7 @@ import type { ContentBlock } from "../../../types";
 import { PreviewCard, type PreviewDetails } from "../preview";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { formatToolHeaderPath, useKnownProjectRoots } from "../../../lib/format-path";
+import { normalizePreviewDetails } from "../preview/types";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -16,8 +17,8 @@ export const PreviewRenderer = memo(function PreviewRenderer({
   block: Block;
   blockId?: string;
 }) {
-  const details = block.details as PreviewDetails | undefined;
   const projectRoots = useKnownProjectRoots();
+  const details = normalizePreviewDetails(block.details, projectRoots) as PreviewDetails | null;
 
   if (!details || details.status === "error" || details.status === "not_found") {
     const isRunning = block.status === "running";
