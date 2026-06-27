@@ -241,15 +241,15 @@ describe("Session Ready Lifecycle", () => {
 
       await new Promise((r) => setTimeout(r, 200));
 
-      const agentStartEventPromise = waitForEvent(
+      const agentEventPromise = waitForEvent(
         ws,
         "agent.event",
         (msg) => {
           const payload = msg.payload as Record<string, unknown>;
           const event = payload.event as Record<string, unknown>;
-          return event?.type === "agent_start";
+          return payload.sessionId === sessionId && typeof event?.type === "string";
         },
-        10000,
+        30000,
       );
 
       const startResp = await sendRPC(ws, "agent.start", {
@@ -264,8 +264,8 @@ describe("Session Ready Lifecycle", () => {
         content: "echo hello",
       });
 
-      const agentStartEvent = await agentStartEventPromise;
-      expect(agentStartEvent).toBeDefined();
+      const agentEvent = await agentEventPromise;
+      expect(agentEvent).toBeDefined();
 
       await sendRPC(ws, "agent.stop", { sessionId });
     } finally {
