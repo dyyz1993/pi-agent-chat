@@ -498,6 +498,7 @@ describe("coordinator delegate operations", () => {
     ]);
     const parentChildMap = new Map([["parent", new Set(["child"])]]);
     const steer = vi.fn();
+    const delegateReplyCount = new Map<string, number>();
     const delegateRepliedSessions = new Set<string>();
 
     await expect(
@@ -511,8 +512,8 @@ describe("coordinator delegate operations", () => {
         clients,
         sessionPaths: new Map(),
         sessionProjectPaths: new Map(),
-        delegateReplyCount: new Map(),
-        delegateCreatedAt: new Map([["parent", 1000]]),
+        delegateReplyCount,
+        delegateCreatedAt: new Map([["child", 1000]]),
         delegateRepliedSessions,
         parentChildMap,
         start: vi.fn(),
@@ -529,6 +530,9 @@ describe("coordinator delegate operations", () => {
         '<delegate-reply from="child" sessionId="child" targetSessionId="parent"',
       ),
     );
+    expect(steer).toHaveBeenCalledWith("parent", expect.stringContaining('elapsed="2s"'));
+    expect(delegateReplyCount.get("child")).toBe(1);
+    expect(delegateReplyCount.has("parent")).toBe(false);
     expect(delegateRepliedSessions.has("child")).toBe(true);
   });
 

@@ -38,6 +38,18 @@ interface DelegateSendManaged {
   };
 }
 
+function resolveDelegateMetadataSessionId(
+  parentChildMap: DelegateChildMap,
+  sourceSessionId: string,
+  targetSessionId: string,
+): string {
+  if (parentChildMap.get(sourceSessionId)?.has(targetSessionId)) return targetSessionId;
+  if (findParentSession(parentChildMap, sourceSessionId) === targetSessionId) {
+    return sourceSessionId;
+  }
+  return targetSessionId;
+}
+
 interface DelegateSyncParentManaged {
   info: {
     projectPath: string;
@@ -333,11 +345,17 @@ export async function handleCoordinatorDelegateSendOperation<
     }
   }
 
-  const count = (options.delegateReplyCount.get(targetSessionId) ?? 0) + 1;
-  options.delegateReplyCount.set(targetSessionId, count);
+  const metadataSessionId = resolveDelegateMetadataSessionId(
+    options.parentChildMap,
+    options.sourceSessionId,
+    targetSessionId,
+  );
+
+  const count = (options.delegateReplyCount.get(metadataSessionId) ?? 0) + 1;
+  options.delegateReplyCount.set(metadataSessionId, count);
 
   const now = options.now ?? Date.now;
-  const createdAt = options.delegateCreatedAt.get(targetSessionId) ?? now();
+  const createdAt = options.delegateCreatedAt.get(metadataSessionId) ?? now();
   const elapsed = formatDelegateElapsed(createdAt, now());
 
   const parentSessionId = findParentSession(options.parentChildMap, targetSessionId);
