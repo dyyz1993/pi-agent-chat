@@ -1,5 +1,13 @@
 #!/usr/bin/env node
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -56,8 +64,7 @@ function disablePostinstallInCi() {
   }
 }
 
-function pinCodingAgentTransitiveDependencies() {
-  const codingAgentPath = packageYalcPath("@dyyz1993/pi-coding-agent");
+function patchCodingAgentPackage(codingAgentPath) {
   const packageJsonPath = join(codingAgentPath, "package.json");
   if (!existsSync(packageJsonPath)) {
     return;
@@ -77,9 +84,44 @@ function pinCodingAgentTransitiveDependencies() {
   if (existsSync(shrinkwrapPath)) {
     rmSync(shrinkwrapPath, { force: true });
   }
+}
+
+function pinCodingAgentTransitiveDependencies() {
+  const codingAgentPath = packageYalcPath("@dyyz1993/pi-coding-agent");
+  const tuiPackage = packages.find((pkg) => pkg.name === "@dyyz1993/pi-tui");
+  if (!tuiPackage) {
+    return;
+  }
+
+  patchCodingAgentPackage(codingAgentPath);
   console.log(
     `[ci-hydrate-yalc] pinned @dyyz1993/pi-coding-agent -> @dyyz1993/pi-tui@${tuiPackage.version}`,
   );
+}
+
+function repairInstalledCodingAgentDependencies() {
+  const installedCodingAgentPath = join(
+    process.cwd(),
+    "node_modules",
+    "@dyyz1993",
+    "pi-coding-agent",
+  );
+  if (!existsSync(join(installedCodingAgentPath, "package.json"))) {
+    return;
+  }
+
+  const source = packageYalcPath("@dyyz1993/pi-tui");
+  if (!existsSync(join(source, "dist", "index.js"))) {
+    return;
+  }
+
+  patchCodingAgentPackage(installedCodingAgentPath);
+
+  const target = join(installedCodingAgentPath, "node_modules", "@dyyz1993", "pi-tui");
+  rmSync(target, { recursive: true, force: true });
+  mkdirSync(dirname(target), { recursive: true });
+  cpSync(source, target, { recursive: true });
+  console.log(`[ci-hydrate-yalc] repaired installed nested pi-tui at ${target}`);
 }
 
 disablePostinstallInCi();
@@ -89,3 +131,4 @@ for (const pkg of packages) {
 }
 
 pinCodingAgentTransitiveDependencies();
+repairInstalledCodingAgentDependencies();
