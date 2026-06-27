@@ -325,11 +325,6 @@ export function createSetActiveSessionAction({
                 loadPromise
                   .catch(() => {})
                   .then(() => {
-                    return useChatStore
-                      .getState()
-                      ._backgroundRefreshMessages(id, session.sessionPath);
-                  })
-                  .then(() => {
                     return apiClient
                       .call("agent.getContextUsage", { sessionId: id })
                       .then((r) => {
