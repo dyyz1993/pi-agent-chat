@@ -10,7 +10,7 @@ interface ManagedClientLike {
     RpcClientAPI,
     | "getLastAssistantText"
     | "getForkMessages"
-    | "copyFork"
+    | "fork"
     | "previewRollback"
     | "getModifiedFiles"
     | "getFileDiff"
@@ -21,6 +21,15 @@ interface ManagedClientLike {
     | "exportHtml"
   >;
 }
+
+type CopyForkResult = {
+  newSessionFile?: string;
+  newSessionId?: string;
+};
+
+type CopyForkClient = {
+  copyFork: (entryId: string) => Promise<CopyForkResult>;
+};
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -33,6 +42,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function hasCopyFork(client: unknown): client is CopyForkClient {
+  return typeof (client as { copyFork?: unknown }).copyFork === "function";
 }
 
 export async function getLastAssistantTextOperation<TManaged extends ManagedClientLike>(options: {
@@ -88,11 +101,21 @@ export async function forkOperation<TManaged extends ManagedClientLike>(options:
 }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) throw new Error("Client not found");
-  const result = await withTimeout(managed.client.copyFork(options.entryId), 60_000, "copyFork");
-  if (result.newSessionFile) {
-    stripParentSessionFromHeader(result.newSessionFile);
+
+  if (hasCopyFork(managed.client)) {
+    const result = await withTimeout(managed.client.copyFork(options.entryId), 60_000, "copyFork");
+    if (result.newSessionFile) {
+      stripParentSessionFromHeader(result.newSessionFile);
+    }
+    return { ...result, text: "", cancelled: false };
   }
-  return { ...result, text: "", cancelled: false };
+
+  const result = await withTimeout(
+    managed.client.fork(options.entryId, options.forkOptions),
+    60_000,
+    "fork",
+  );
+  return { text: result.text ?? "", cancelled: Boolean(result.cancelled) };
 }
 
 export async function previewRollbackOperation<TManaged extends ManagedClientLike>(options: {

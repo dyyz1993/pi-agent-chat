@@ -6,7 +6,8 @@ import { execFileSync } from "node:child_process";
 
 const packages = [
   { name: "@dyyz1993/pi-coding-agent", version: "0.78.2" },
-  { name: "@dyyz1993/pi-tui", version: "0.78.1" },
+  // 0.78.1 is the latest npm tag, but that tarball currently lacks dist/index.js.
+  { name: "@dyyz1993/pi-tui", version: "0.74.56" },
 ];
 
 function packageYalcPath(name) {
