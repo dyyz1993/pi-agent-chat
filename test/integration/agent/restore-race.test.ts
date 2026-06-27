@@ -96,6 +96,7 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
       setSessionCurrentTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
       setSessionTierModels: vi.fn(),
+      fetchTierConfig: vi.fn().mockResolvedValue(undefined),
       getCurrentTier: vi.fn(() => null),
       getTierModels: vi.fn(() => ({})),
       dataBySession: {},
@@ -282,6 +283,7 @@ describe("agent runtime client recovery", () => {
         "/tmp/project": [
           {
             id: SID,
+            sessionId: SID,
             title: "Recovered session",
             projectPath: "/tmp/project",
             sessionPath: "/tmp/project/.pi/session.jsonl",
