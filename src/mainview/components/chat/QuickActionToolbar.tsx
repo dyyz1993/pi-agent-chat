@@ -496,7 +496,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   };
 
   return (
-    <div className="relative px-3 pt-1">
+    <div className="relative px-3 pt-1" data-testid="quick-action-toolbar">
       <div className="flex items-center gap-1 min-h-[40px]">
         <div className="flex items-center gap-0.5">
           <input

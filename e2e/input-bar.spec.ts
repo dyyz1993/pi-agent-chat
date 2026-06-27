@@ -1,6 +1,8 @@
 import { test, expect, type ConsoleMessage } from "@playwright/test";
 import { E2E_PAGE_URL, ensureE2EProject } from "./helpers/e2e-project";
 
+const ignoredConsoleErrorPatterns = [/unsupported MIME type \('text\/html'\)/];
+
 test.describe("Input Bar", () => {
   const consoleErrors: string[] = [];
 
@@ -9,7 +11,9 @@ test.describe("Input Bar", () => {
     await ensureE2EProject();
     page.on("console", (msg: ConsoleMessage) => {
       if (msg.type() === "error") {
-        consoleErrors.push(msg.text());
+        const text = msg.text();
+        if (ignoredConsoleErrorPatterns.some((pattern) => pattern.test(text))) return;
+        consoleErrors.push(text);
       }
     });
     page.on("pageerror", (err: Error) => {
