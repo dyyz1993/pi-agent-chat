@@ -14,6 +14,10 @@ Keep `pi-agent-chat` focused on product code, while preserving the standalone re
 
 Do not keep the full repro app in the main `pi-agent-chat` repository long term.
 
+Published standalone repo:
+
+- `https://github.com/dyyz1993/electrobun-voice-input-repro`
+
 Preferred end state:
 
 1. Publish the repro into a separate repository.
@@ -103,7 +107,7 @@ Suggested reference content:
 ```md
 Desktop third-party macOS voice input was isolated into a standalone Electrobun repro.
 
-- External repro: <REPO_URL>
+- External repro: https://github.com/dyyz1993/electrobun-voice-input-repro
 - Scope: native renderer vs CEF renderer voice-input compatibility
 - Current conclusion: browser works, CEF works, native renderer fails
 ```
