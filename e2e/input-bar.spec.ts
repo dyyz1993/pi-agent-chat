@@ -1,10 +1,12 @@
 import { test, expect, type ConsoleMessage } from "@playwright/test";
+import { E2E_PAGE_URL, ensureE2EProject } from "./helpers/e2e-project";
 
 test.describe("Input Bar", () => {
   const consoleErrors: string[] = [];
 
-  test.beforeEach(({ page }) => {
+  test.beforeEach(async ({ page }) => {
     consoleErrors.length = 0;
+    await ensureE2EProject();
     page.on("console", (msg: ConsoleMessage) => {
       if (msg.type() === "error") {
         consoleErrors.push(msg.text());
@@ -16,7 +18,7 @@ test.describe("Input Bar", () => {
   });
 
   test("should show chat input after loading", async ({ page }) => {
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const input = page.locator('[data-testid="chat-input"]');
@@ -25,7 +27,7 @@ test.describe("Input Bar", () => {
   });
 
   test("should allow typing text into the input", async ({ page }) => {
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const input = page.locator('[data-testid="chat-input"]');
@@ -40,7 +42,7 @@ test.describe("Input Bar", () => {
   });
 
   test("should show send button", async ({ page }) => {
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     // The send button has aria-label "Send" (en) or "发送" (zh)
@@ -51,7 +53,7 @@ test.describe("Input Bar", () => {
   });
 
   test("should show settings button", async ({ page }) => {
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const settingsBtn = page.locator('[data-testid="settings-open-btn"]');
@@ -59,7 +61,7 @@ test.describe("Input Bar", () => {
   });
 
   test("send button should be disabled when input is empty", async ({ page }) => {
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const input = page.locator('[data-testid="chat-input"]');
@@ -76,7 +78,7 @@ test.describe("Input Bar", () => {
   });
 
   test("should have no console errors", async ({ page }) => {
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const input = page.locator('[data-testid="chat-input"]');

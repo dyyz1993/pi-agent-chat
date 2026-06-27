@@ -1,13 +1,16 @@
 import { test, expect } from "@playwright/test";
-
-const BASE_URL = "/?token=test-ci-token";
+import { E2E_PAGE_URL, ensureE2EProject } from "./helpers/e2e-project";
 
 test.describe("T26 Mobile Features — ui-tester Guided", () => {
+  test.beforeEach(async () => {
+    await ensureE2EProject();
+  });
+
   test.describe("T26.1 QuickActionToolbar", () => {
     test.use({ viewport: { width: 375, height: 812 } }); // iPhone X
 
     test("QuickActionToolbar appears on mobile input focus", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       // Tap on the chat input
@@ -27,7 +30,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("@ popup shows Agents/Files/Memory tabs", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       const toolbar = page.locator('[data-testid="quick-action-toolbar"]');
@@ -51,7 +54,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("/ popup shows Commands/Skills tabs", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       const toolbar = page.locator('[data-testid="quick-action-toolbar"]');
@@ -72,7 +75,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("Sidebar becomes overlay on mobile", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       // Toggle sidebar
@@ -98,7 +101,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("Tab close button always visible on mobile", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
       const tabBar = page.locator('[data-testid="tab-bar"]');
@@ -115,7 +118,7 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test("Diff viewer forces unified view on mobile", async ({ page }) => {
-      await page.goto(BASE_URL);
+      await page.goto(E2E_PAGE_URL);
       await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
       // This test requires the diff panel to be open,
       // which requires git state - skipped in basic smoke
