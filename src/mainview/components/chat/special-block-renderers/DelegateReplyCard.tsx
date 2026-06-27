@@ -12,7 +12,6 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
   block,
 }: SpecialBlockRendererProps) {
   const { from, sessionId, title, elapsed, historyCount } = block.attrs;
-  const displayElapsed = elapsed === "0s" ? "1s" : elapsed;
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
@@ -47,9 +46,7 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
           委托回复
         </span>
         {title && <span className="font-medium text-text-primary truncate">{title}</span>}
-        {displayElapsed && (
-          <span className="text-text-tertiary text-[10px] shrink-0">{displayElapsed}</span>
-        )}
+        {elapsed && <span className="text-text-tertiary text-[10px] shrink-0">{elapsed}</span>}
         {historyCount && (
           <span className="text-text-tertiary text-[10px] shrink-0">({historyCount}条历史)</span>
         )}
