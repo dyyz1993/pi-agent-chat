@@ -382,6 +382,56 @@ logs/dev.log shows PORT=<stack api port>
 logs/dev.log shows PI_CLI_PATH=<stack dependency worktree>/packages/coding-agent/dist/cli.js
 ```
 
+### White Screen Troubleshooting
+
+If the stack appears to be "half connected", verify the registry before trusting whatever ports happen to be open globally.
+
+Example from the current stack:
+
+```text
+app worktree: /Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat
+registry api: 3102
+registry vite: 5175
+```
+
+If `localhost:3100` from another checkout is also running, it can look like `5175` is "using 3100". Confirm the actual pairing from:
+
+- `./scripts/worktree-dev.sh list`
+- the stack registry file under `~/.pi-agent-chat/worktrees/registry/`
+- the Vite process environment (`VITE_API_TARGET`)
+- `curl http://localhost:<vite-port>/health`
+
+If the page is not stuck on a loading or retry state and instead shows a blank root, check browser runtime errors before blaming the backend. In the `5466` stack we hit:
+
+```text
+TypeError: Cannot read properties of null (reading 'useContext')
+at useTranslation(...)
+at App (...)
+```
+
+Root cause:
+
+- the app worktree used symlinked `node_modules` from another checkout,
+- Vite dev resolution loaded React more than once,
+- `react-i18next` then saw a different React instance from the renderer, so hooks failed during initial render.
+
+The worktree-safe mitigation is to dedupe React in Vite:
+
+```ts
+cacheDir: `../../.vite/vite-${VITE_PORT}`,
+resolve: {
+  dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+}
+```
+
+Why `cacheDir` matters:
+
+- when multiple worktrees share `node_modules` via symlink, Vite's default cache directory (`node_modules/.vite`) is also shared,
+- two dev servers can then overwrite each other's prebundled React chunks and browser hashes,
+- symptoms include blank screens, `virtua` / `react-i18next` hook crashes, and browser errors such as `unsupported MIME type ('text/html')` for dependency chunks.
+
+After changing this, restart the stack through `scripts/worktree-dev.sh` so Vite picks up the new resolve behavior and rebuilds a per-worktree cache.
+
 ### Cleanup
 
 Before removing a stack:

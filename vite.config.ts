@@ -11,6 +11,12 @@ const VITE_STRICT_PORT = process.env.VITE_STRICT_PORT !== "false";
 
 export default defineConfig({
   plugins: [react()],
+  // Worktrees may share node_modules via symlink. Keep Vite's prebundle cache
+  // local to this checkout so parallel dev servers don't overwrite each other.
+  cacheDir: `../../.vite/vite-${VITE_PORT}`,
+  resolve: {
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+  },
   root: "src/mainview",
   publicDir: "public",
   build: {
