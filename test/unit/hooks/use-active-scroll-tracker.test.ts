@@ -38,7 +38,9 @@ interface MockHandle {
   scrollOffset: number;
   viewportSize: number;
   scrollToIndex: ReturnType<typeof vi.fn>;
+  scrollTo: ReturnType<typeof vi.fn>;
   findItemIndex: ReturnType<typeof vi.fn>;
+  getItemSize: ReturnType<typeof vi.fn>;
 }
 
 function createMockHandle(overrides?: Partial<MockHandle>): MockHandle {
@@ -57,6 +59,11 @@ function createMockHandle(overrides?: Partial<MockHandle>): MockHandle {
         handle.scrollOffset = index * 200;
       }
     }),
+    scrollTo: vi.fn((offset: number) => {
+      const handle = mockHandleRef.current;
+      if (handle) handle.scrollOffset = offset;
+    }),
+    getItemSize: vi.fn(() => 200),
     findItemIndex: vi.fn((offset: number) => {
       // Approximate: each item is 200px
       return Math.floor(offset / 200);
@@ -518,6 +525,45 @@ describe("useActiveScrollTracker — streaming follow (A/B)", () => {
     // Should have scrolled to bottom and set active to last message
     expect(mockHandle.scrollToIndex).toHaveBeenCalled();
     expect(setActive).toHaveBeenCalledWith(MESSAGE_IDS[MESSAGE_IDS.length - 1]);
+  });
+
+  it("uses raw scrollTo when the last item height is not measured yet (#23)", () => {
+    const setActive = vi.fn();
+    const mockHandle = createMockHandle({ scrollSize: 5000, viewportSize: 500 });
+    // Simulate virtua not having measured the streaming last item yet.
+    mockHandle.getItemSize = vi.fn(() => 0);
+    mockHandleRef.current = mockHandle;
+
+    const { rerender } = renderHook(
+      (props: { sv: number }) => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef(mockHandle);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          sessionId: "test-session",
+          setActive,
+          streamVersion: props.sv,
+          initialScrollReady: true,
+        });
+      },
+      { initialProps: { sv: 0 } },
+    );
+
+    act(() => vi.advanceTimersByTime(200));
+    setActive.mockClear();
+    mockHandle.scrollToIndex.mockClear();
+    mockHandle.scrollTo.mockClear();
+
+    // Streaming update while the last item is still unmeasured.
+    rerender({ sv: 1 });
+    act(() => vi.advanceTimersByTime(100));
+
+    // Must NOT use index-aligned scrollToIndex (which computes a stale offset
+    // and lets virtua snap back). Falls back to scrolling the content end.
+    expect(mockHandle.scrollToIndex).not.toHaveBeenCalled();
+    expect(mockHandle.scrollTo).toHaveBeenCalledWith(expect.any(Number));
   });
 
   it("does NOT follow streaming when user has scrolled up", () => {

@@ -363,7 +363,20 @@ export function useActiveScrollTracker({
     const ids = messageIdsRef.current;
     if (!handle || ids.length === 0) return;
     if (userScrolledUpRef.current) return;
-    markProgrammatic(() => handle.scrollToIndex(ids.length - 1, { align: "end" }));
+    // Guard against virtua's deferred dynamic-height measurement. While the last
+    // message is streaming its height grows; virtua measures it asynchronously
+    // (ResizeObserver). If we scrollToIndex before the size is known, virtua
+    // computes the offset from a stale/zero size and then $fixScrollJump snaps
+    // the viewport back, so the user sees the list bounce away from the bottom.
+    // When the last item has no measured size yet, fall back to scrolling the
+    // raw content end instead of an index-aligned jump.
+    const lastIndex = ids.length - 1;
+    const lastMeasured = handle.getItemSize(lastIndex);
+    if (lastMeasured > 0) {
+      markProgrammatic(() => handle.scrollToIndex(lastIndex, { align: "end" }));
+    } else {
+      markProgrammatic(() => handle.scrollTo(handle.scrollSize));
+    }
     lastScrollTopRef.current = handle.scrollOffset;
     const lastId = getLastActiveTargetKey();
     setActive(lastId);
