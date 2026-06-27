@@ -789,6 +789,8 @@ export function SidebarBottomControls() {
                         if (open) refreshModelsForActiveSession();
                       }}
                       placement="up"
+                      dropdownMinWidth={420}
+                      dropdownMaxWidth={520}
                       placeholder={
                         currentModel
                           ? t("tierConfigDefault", "默认 ({{model}})", {
