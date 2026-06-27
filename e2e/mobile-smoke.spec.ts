@@ -39,13 +39,9 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
         const popup = page.locator('[data-testid="mention-popup"]');
         await expect(popup).toBeVisible({ timeout: 3000 });
 
-        // Check for the three tabs
-        await expect(
-          popup
-            .locator("text=Agents")
-            .or(popup.locator("text=Files"))
-            .or(popup.locator("text=Memory")),
-        ).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Agents" })).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Files" })).toBeVisible();
+        await expect(popup.getByRole("button", { name: "Memory" })).toBeVisible();
       }
     });
   });
@@ -62,10 +58,8 @@ test.describe("T26 Mobile Features — ui-tester Guided", () => {
         await toolbar.locator('button[aria-label*="/"]').click();
         const popup = page.locator('[data-testid="command-popup"]');
         if (await popup.isVisible({ timeout: 2000 }).catch(() => false)) {
-          // Check for Commands and Skills tabs
-          await expect(
-            popup.locator("text=Commands").or(popup.locator("text=Skills")),
-          ).toBeVisible();
+          await expect(popup.getByRole("button", { name: "Commands" })).toBeVisible();
+          await expect(popup.getByRole("button", { name: "Skills" })).toBeVisible();
         }
       }
     });
