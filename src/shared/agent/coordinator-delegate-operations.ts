@@ -312,11 +312,11 @@ export async function handleCoordinatorDelegateSendOperation<
     }
   }
 
-  const count = (options.delegateReplyCount.get(targetSessionId) ?? 0) + 1;
-  options.delegateReplyCount.set(targetSessionId, count);
+  const count = (options.delegateReplyCount.get(options.sourceSessionId) ?? 0) + 1;
+  options.delegateReplyCount.set(options.sourceSessionId, count);
 
   const now = options.now ?? Date.now;
-  const createdAt = options.delegateCreatedAt.get(targetSessionId) ?? now();
+  const createdAt = options.delegateCreatedAt.get(options.sourceSessionId) ?? now();
   const elapsed = formatDelegateElapsed(createdAt, now());
 
   const parentSessionId = findParentSession(options.parentChildMap, targetSessionId);

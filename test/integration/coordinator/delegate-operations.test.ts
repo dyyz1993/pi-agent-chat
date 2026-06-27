@@ -499,6 +499,10 @@ describe("coordinator delegate operations", () => {
     const parentChildMap = new Map([["parent", new Set(["child"])]]);
     const steer = vi.fn();
     const delegateRepliedSessions = new Set<string>();
+    const delegateReplyCount = new Map<string, number>();
+    // delegateCreatedAt is keyed by the child (source) session id, since that is the
+    // delegate session whose creation time the elapsed timer must measure.
+    const delegateCreatedAt = new Map<string, number>([["child", 1000]]);
 
     await expect(
       handleCoordinatorDelegateSendOperation({
@@ -511,15 +515,15 @@ describe("coordinator delegate operations", () => {
         clients,
         sessionPaths: new Map(),
         sessionProjectPaths: new Map(),
-        delegateReplyCount: new Map(),
-        delegateCreatedAt: new Map([["parent", 1000]]),
+        delegateReplyCount,
+        delegateCreatedAt,
         delegateRepliedSessions,
         parentChildMap,
         start: vi.fn(),
         send: vi.fn(),
         steer,
         followUp: vi.fn(),
-        now: () => 3000,
+        now: () => 62000,
       }),
     ).resolves.toEqual({ delivered: true, targetStatus: "active" });
 
@@ -529,6 +533,13 @@ describe("coordinator delegate operations", () => {
         '<delegate-reply from="child" sessionId="child" targetSessionId="parent"',
       ),
     );
+    // Elapsed must be computed from the child's createdAt (1000) to now (62000) = 61s → "1m",
+    // not fallback to ~1s which was the bug when the parent key was used.
+    expect(steer).toHaveBeenCalledWith(
+      "parent",
+      expect.stringContaining('elapsed="1m"'),
+    );
+    expect(delegateReplyCount.get("child")).toBe(1);
     expect(delegateRepliedSessions.has("child")).toBe(true);
   });
 
