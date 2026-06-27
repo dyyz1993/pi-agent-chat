@@ -1,9 +1,10 @@
 import { memo, useState } from "react";
-import { ExternalLink, ChevronDown } from "lucide-react";
+import { ExternalLink, ChevronDown, Maximize2 } from "lucide-react";
 import type { SpecialBlockRendererProps } from "../special-block-registry";
 import { registerSpecialBlock } from "../special-block-registry";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useAgentStore } from "../../../stores/use-agent-store";
+import { useChatOverlayStore } from "../../../stores/use-chat-overlay-store";
 import { useJumpToSession } from "../primitives/useJumpToSession";
 import { SessionJumpButton } from "../primitives/SessionJumpButton";
 import { agentColorStyle } from "../../../utils/agent-color";
@@ -16,12 +17,17 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
+  const openMarkdown = useChatOverlayStore((s) => s.openMarkdown);
   const cs = activeSessionId ? agentColorStyle(agentDetailBySession[activeSessionId]?.color) : null;
 
   const [collapsed, setCollapsed] = useState(true);
   const { canJump, handleJump } = useJumpToSession(sessionId ?? from);
 
   const hasBody = !!block.body;
+  const expandBody = () => {
+    if (!block.body) return;
+    openMarkdown(title || "委托回复", block.body);
+  };
 
   return (
     <div
@@ -58,14 +64,27 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
             className={`w-3 h-3 shrink-0 text-text-tertiary transition-transform ${collapsed ? "" : "rotate-180"}`}
           />
         )}
+        {hasBody && (
+          <button
+            type="button"
+            aria-label="放大查看"
+            className="ml-auto shrink-0 rounded p-0.5 text-text-tertiary hover:bg-surface-hover hover:text-text-secondary"
+            onClick={(e) => {
+              e.stopPropagation();
+              expandBody();
+            }}
+          >
+            <Maximize2 className="w-3 h-3" />
+          </button>
+        )}
         {canJump && (
-          <span className="ml-auto shrink-0">
+          <span className="shrink-0">
             <SessionJumpButton onJump={handleJump} />
           </span>
         )}
       </div>
       {block.body && !collapsed && (
-        <div className="px-2.5 pb-2 pt-0.5 border-t border-border-secondary/30 text-xs text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
+        <div className="max-h-64 overflow-y-auto px-2.5 pb-2 pt-0.5 border-t border-border-secondary/30 text-xs text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
           {block.body}
         </div>
       )}
