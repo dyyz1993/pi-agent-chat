@@ -446,6 +446,23 @@ export interface ProjectMethods {
       remote: RemoteProjectRecord;
     };
   };
+  "project.saveTierConfig": {
+    params: {
+      projectPath: string;
+      tierModels: Record<string, string>;
+      currentTier: string | null;
+    };
+    result: { ok: boolean };
+  };
+  "project.loadTierConfig": {
+    params: { projectPath: string };
+    result: {
+      config: {
+        tierModels: Record<string, string>;
+        currentTier: string | null;
+      } | null;
+    };
+  };
 }
 
 export interface RecentProject {

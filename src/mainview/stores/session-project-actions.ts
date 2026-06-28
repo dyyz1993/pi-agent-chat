@@ -192,34 +192,18 @@ export function createCreateNewSessionAction({
       get().setActiveSession(result.sessionId);
       set({ newSessionCreatedAt: Date.now() });
 
-      const prevSessionId = get().activeSessionId;
-      if (prevSessionId) {
-        const tierStore = useTierStore.getState();
-        const prevTierModels = tierStore.getTierModels(prevSessionId);
-        const prevTier = tierStore.getCurrentTier(prevSessionId);
-        const prevModel = get().currentModel;
+      // 从项目级 tier 配置读取，同一项目下所有 session 共享
+      const projectTier = useTierStore.getState().getCurrentTier(targetPath);
+      const prevModel = get().currentModel;
 
-        useTierStore.getState().setSessionTierModels(result.sessionId, { ...prevTierModels });
-        useTierStore.getState().setSessionCurrentTier(result.sessionId, prevTier);
-
-        apiClient
-          .call("session.saveTierConfig", {
-            sessionPath: result.sessionPath,
-            tierModels: prevTierModels,
-            currentTier: prevTier,
-            currentModel: prevModel,
-          })
-          .catch(() => {});
-
-        if (prevTier) {
-          await useTierStore.getState().switchToTier(prevTier, result.sessionId);
-        } else if (prevModel) {
-          await apiClient.call("agent.setModel", {
-            sessionId: result.sessionId,
-            provider: prevModel.provider,
-            modelId: prevModel.id,
-          });
-        }
+      if (projectTier) {
+        await useTierStore.getState().switchToTier(projectTier, result.sessionId);
+      } else if (prevModel) {
+        await apiClient.call("agent.setModel", {
+          sessionId: result.sessionId,
+          provider: prevModel.provider,
+          modelId: prevModel.id,
+        });
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);

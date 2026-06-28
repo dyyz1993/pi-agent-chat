@@ -636,35 +636,21 @@ export function createFetchInitialStateAction({
         const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
         const tierPromise = useTierStore.getState().fetchTierConfig(sessionId);
         const favoritesPromise = apiClient.call("project.getModelFavorites", {});
-        const persistedTierPromise = currentSessionMeta
-          ? apiClient
-              .call("session.loadTierConfig", { sessionPath: currentSessionMeta.sessionPath })
-              .catch(() => ({ config: null }))
-          : Promise.resolve({ config: null as unknown });
 
-        Promise.all([statePromise, tierPromise, persistedTierPromise])
-          .then(([rawState, , rawPersisted]) => {
-            const persisted = rawPersisted as {
-              config: { tierModels: Record<string, string>; currentTier: string | null } | null;
-            };
-            if (persisted.config) {
-              useTierStore.getState().setSessionTierModels(sessionId, persisted.config.tierModels);
-              useTierStore
-                .getState()
-                .setSessionCurrentTier(
-                  sessionId,
-                  persisted.config.currentTier as "fast" | "pro" | "max" | null,
-                );
-            }
+        Promise.all([statePromise, tierPromise])
+          .then(([rawState]) => {
             const stateResult = rawState as AgentStateResult;
             if (stateResult?.model) {
-              useTierStore
-                .getState()
-                .syncTierFromModel(
-                  sessionId,
-                  stateResult.model.provider ?? "",
-                  stateResult.model.id ?? "",
-                );
+              const projectPath = currentSessionMeta?.projectPath;
+              if (projectPath) {
+                useTierStore
+                  .getState()
+                  .syncTierFromModel(
+                    projectPath,
+                    stateResult.model.provider ?? "",
+                    stateResult.model.id ?? "",
+                  );
+              }
             }
           })
           .catch(() => {});

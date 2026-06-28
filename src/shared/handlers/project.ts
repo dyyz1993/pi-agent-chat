@@ -1,7 +1,8 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import { existsSync, rmSync } from "fs";
+import { existsSync, rmSync, mkdirSync } from "fs";
+import { readFile, writeFile } from "fs/promises";
 import { execFile } from "child_process";
 import { basename, join } from "path";
 import { promisify } from "util";
@@ -655,5 +656,52 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       profile: opened.profile,
       remote: opened.remote,
     };
+  });
+
+  r("project.saveTierConfig", async (params) => {
+    const { projectPath, tierModels, currentTier } = params;
+    const stateDir = getProjectUserStateDir(projectPath);
+    const configFilePath = join(stateDir, "tier-config.json");
+    try {
+      if (!existsSync(stateDir)) {
+        mkdirSync(stateDir, { recursive: true });
+      }
+      const payload = { tierModels, currentTier, updatedAt: new Date().toISOString() };
+      await writeFile(configFilePath, JSON.stringify(payload, null, 2), "utf-8");
+      return { ok: true };
+    } catch (err) {
+      log.warn("project.saveTierConfig failed", {
+        projectPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { ok: false };
+    }
+  });
+
+  r("project.loadTierConfig", async (params) => {
+    const { projectPath } = params;
+    const configFilePath = join(getProjectUserStateDir(projectPath), "tier-config.json");
+    if (!existsSync(configFilePath)) {
+      return { config: null };
+    }
+    try {
+      const raw = await readFile(configFilePath, "utf-8");
+      const parsed = JSON.parse(raw) as {
+        tierModels: Record<string, string>;
+        currentTier: string | null;
+      };
+      return {
+        config: {
+          tierModels: parsed.tierModels,
+          currentTier: parsed.currentTier,
+        },
+      };
+    } catch (err) {
+      log.warn("project.loadTierConfig failed", {
+        projectPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { config: null };
+    }
   });
 }

@@ -11,121 +11,155 @@ type TierKey = (typeof TIER_KEYS)[number];
 
 const tierConfigPromises = new Map<string, Promise<void>>();
 
-interface TierSessionData {
+interface TierProjectData {
   tierModels: Record<string, string>;
   currentTier: TierKey | null;
 }
 
 interface TierState {
   globalDefaults: Record<string, string>;
-  dataBySession: Record<string, TierSessionData>;
+  dataByProject: Record<string, TierProjectData>;
   switching: boolean;
 
-  getTierModels: (sessionId: string) => Record<string, string>;
-  getCurrentTier: (sessionId: string) => TierKey | null;
+  getTierModels: (projectPath: string) => Record<string, string>;
+  getCurrentTier: (projectPath: string) => TierKey | null;
 
   setGlobalDefaults: (models: Record<string, string>) => void;
-  setSessionTierModels: (sessionId: string, models: Record<string, string>) => void;
-  setSessionCurrentTier: (sessionId: string, tier: TierKey | null) => void;
-  syncTierFromModel: (sessionId: string, provider: string, modelId: string) => void;
+  setProjectTierModels: (projectPath: string, models: Record<string, string>) => void;
+  setProjectCurrentTier: (projectPath: string, tier: TierKey | null) => void;
+  syncTierFromModel: (projectPath: string, provider: string, modelId: string) => void;
   switchToTier: (tier: TierKey, sessionId: string) => Promise<void>;
   fetchTierConfig: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
-  loadPersistedConfig: (sessionId: string, sessionPath: string) => Promise<void>;
-  savePersistedConfig: (sessionId: string, sessionPath: string) => Promise<void>;
+  loadProjectTierConfig: (projectPath: string) => Promise<void>;
+  saveProjectTierConfig: (projectPath: string) => Promise<void>;
   savePersistedConfigForSession: (sessionId: string) => void;
-  clearSession: (sessionId: string) => void;
+  clearSession: (_sessionId: string) => void;
+}
+
+/**
+ * 从 sessionId 查找对应的 projectPath。
+ * 遍历 sessionsByProject 找到 session 所属的项目。
+ */
+function findProjectPathBySessionId(sessionId: string): string | null {
+  const storeState = useSessionStore.getState();
+  if (!storeState?.sessionsByProject) return null;
+  for (const [projectPath, sessions] of Object.entries(storeState.sessionsByProject)) {
+    if (sessions.some((s) => s.sessionId === sessionId)) {
+      return projectPath;
+    }
+  }
+  return null;
 }
 
 export { TIER_KEYS };
-export type { TierKey, TierSessionData };
+export type { TierKey, TierProjectData };
 
 export const useTierStore = create<TierState>()((set, get) => ({
   globalDefaults: {},
-  dataBySession: {},
+  dataByProject: {},
   switching: false,
 
-  getTierModels: (sessionId) => {
-    const { globalDefaults, dataBySession } = get();
-    return dataBySession[sessionId]?.tierModels ?? globalDefaults;
+  getTierModels: (projectPath) => {
+    const { globalDefaults, dataByProject } = get();
+    return dataByProject[projectPath]?.tierModels ?? globalDefaults;
   },
 
-  getCurrentTier: (sessionId) => {
-    const { dataBySession } = get();
-    return dataBySession[sessionId]?.currentTier ?? null;
+  getCurrentTier: (projectPath) => {
+    const { dataByProject } = get();
+    return dataByProject[projectPath]?.currentTier ?? null;
   },
 
   setGlobalDefaults: (models) => set({ globalDefaults: models }),
 
-  setSessionTierModels: (sessionId, models) => {
+  setProjectTierModels: (projectPath, models) => {
     set((s) => ({
-      dataBySession: {
-        ...s.dataBySession,
-        [sessionId]: {
+      dataByProject: {
+        ...s.dataByProject,
+        [projectPath]: {
           tierModels: models,
-          currentTier: s.dataBySession[sessionId]?.currentTier ?? null,
+          currentTier: s.dataByProject[projectPath]?.currentTier ?? null,
         },
       },
     }));
   },
 
-  setSessionCurrentTier: (sessionId, tier) => {
+  setProjectCurrentTier: (projectPath, tier) => {
     set((s) => ({
-      dataBySession: {
-        ...s.dataBySession,
-        [sessionId]: {
-          tierModels: s.dataBySession[sessionId]?.tierModels ?? s.globalDefaults,
+      dataByProject: {
+        ...s.dataByProject,
+        [projectPath]: {
+          tierModels: s.dataByProject[projectPath]?.tierModels ?? s.globalDefaults,
           currentTier: tier,
         },
       },
     }));
   },
 
-  syncTierFromModel: (sessionId, provider, modelId) => {
+  syncTierFromModel: (projectPath, provider, modelId) => {
     const fullName = `${provider}/${modelId}`;
-    const models = get().getTierModels(sessionId);
+    const models = get().getTierModels(projectPath);
     for (const tier of TIER_KEYS) {
       if (models[tier] && models[tier] === fullName) {
-        get().setSessionCurrentTier(sessionId, tier);
+        get().setProjectCurrentTier(projectPath, tier);
         return;
       }
     }
-    get().setSessionCurrentTier(sessionId, null);
+    get().setProjectCurrentTier(projectPath, null);
   },
 
   fetchTierConfig: async (sessionId, options) => {
-    if (!options?.force && get().dataBySession[sessionId]?.tierModels) {
+    const projectPath = findProjectPathBySessionId(sessionId);
+    if (!projectPath) {
+      log.warn("fetchTierConfig: cannot resolve projectPath for session", { sessionId });
       return;
     }
 
-    const existingPromise = tierConfigPromises.get(sessionId);
+    if (!options?.force && get().dataByProject[projectPath]?.tierModels) {
+      return;
+    }
+
+    const existingPromise = tierConfigPromises.get(projectPath);
     if (existingPromise) return existingPromise;
 
     const promise = (async () => {
       try {
-        const result = (await apiClient.call("agent.getTierModels", { sessionId })) as {
-          models: Record<string, string>;
-        };
-        set({ globalDefaults: result.models });
-        get().setSessionTierModels(sessionId, result.models);
+        // 先加载项目级持久化配置
+        await get().loadProjectTierConfig(projectPath);
+
+        // 如果项目级配置不存在，用全局默认
+        if (!get().dataByProject[projectPath]?.tierModels) {
+          const result = (await apiClient.call("agent.getTierModels", { sessionId })) as {
+            models: Record<string, string>;
+          };
+          set({ globalDefaults: result.models });
+          get().setProjectTierModels(projectPath, result.models);
+        }
+
         const currentModel = useSessionStore.getState().currentModel;
         if (currentModel) {
-          get().syncTierFromModel(sessionId, currentModel.provider, currentModel.id);
+          get().syncTierFromModel(projectPath, currentModel.provider, currentModel.id);
         }
-        log.info("fetched tier config as global defaults", { models: result.models });
+        log.info("fetched tier config for project", { projectPath });
       } catch (err) {
         log.warn("failed to fetch tier config", {
           error: err instanceof Error ? err.message : String(err),
         });
       } finally {
-        tierConfigPromises.delete(sessionId);
+        tierConfigPromises.delete(projectPath);
       }
     })();
 
-    tierConfigPromises.set(sessionId, promise);
+    tierConfigPromises.set(projectPath, promise);
     return promise;
   },
 
   switchToTier: async (tier, sessionId) => {
+    const projectPath = findProjectPathBySessionId(sessionId);
+    if (!projectPath) {
+      log.warn("switchToTier: cannot resolve projectPath for session", { sessionId });
+      return;
+    }
+
     set({ switching: true });
     try {
       const result = await apiClient.call("agent.switchTier", {
@@ -133,11 +167,11 @@ export const useTierStore = create<TierState>()((set, get) => ({
         tier,
       });
       const model = result as { provider: string; id: string; tier?: TierKey };
-      get().setSessionCurrentTier(sessionId, model.tier ?? tier);
+      get().setProjectCurrentTier(projectPath, model.tier ?? tier);
       useSessionStore.getState().setCurrentModel(model.provider ?? "", model.id ?? "");
       log.info("switched to tier", { tier, resolved: model });
 
-      get().savePersistedConfigForSession(sessionId);
+      get().saveProjectTierConfig(projectPath);
     } catch (err) {
       log.warn("tier switch failed, staying on current model", {
         tier,
@@ -153,61 +187,53 @@ export const useTierStore = create<TierState>()((set, get) => ({
     }
   },
 
-  loadPersistedConfig: async (sessionId, sessionPath) => {
+  loadProjectTierConfig: async (projectPath) => {
     try {
-      const result = (await apiClient.call("session.loadTierConfig", {
-        sessionPath,
+      const result = (await apiClient.call("project.loadTierConfig", {
+        projectPath,
       })) as {
         config: {
           tierModels: Record<string, string>;
           currentTier: string | null;
-          currentModel: { provider: string; id: string } | null;
         } | null;
       };
       if (result.config) {
-        get().setSessionTierModels(sessionId, result.config.tierModels);
-        get().setSessionCurrentTier(sessionId, result.config.currentTier as TierKey | null);
-        log.info("loaded persisted tier config", { sessionId });
-        return;
+        get().setProjectTierModels(projectPath, result.config.tierModels);
+        get().setProjectCurrentTier(
+          projectPath,
+          result.config.currentTier as TierKey | null,
+        );
+        log.info("loaded project tier config", { projectPath });
       }
     } catch {
       // fallback to global defaults
     }
-    log.info("no persisted tier config, using global defaults", { sessionId });
   },
 
-  savePersistedConfig: async (sessionId, sessionPath) => {
-    const data = get().dataBySession[sessionId];
-    const currentModel = useSessionStore.getState().currentModel;
+  saveProjectTierConfig: async (projectPath) => {
+    const data = get().dataByProject[projectPath];
     try {
-      await apiClient.call("session.saveTierConfig", {
-        sessionPath,
+      await apiClient.call("project.saveTierConfig", {
+        projectPath,
         tierModels: data?.tierModels ?? get().globalDefaults,
         currentTier: data?.currentTier ?? null,
-        currentModel,
       });
     } catch (err) {
-      log.warn("failed to persist tier config", {
+      log.warn("failed to persist project tier config", {
+        projectPath,
         error: err instanceof Error ? err.message : String(err),
       });
     }
   },
 
   savePersistedConfigForSession: (sessionId) => {
-    const sessions = useSessionStore.getState().sessionsByProject;
-    for (const sessionsList of Object.values(sessions)) {
-      const session = sessionsList.find((s) => s.sessionId === sessionId);
-      if (session) {
-        get().savePersistedConfig(sessionId, session.sessionPath);
-        return;
-      }
+    const projectPath = findProjectPathBySessionId(sessionId);
+    if (projectPath) {
+      get().saveProjectTierConfig(projectPath);
     }
   },
 
-  clearSession: (sessionId) => {
-    set((s) => {
-      const { [sessionId]: _, ...rest } = s.dataBySession;
-      return { dataBySession: rest };
-    });
+  clearSession: (_sessionId: string) => {
+    // 项目级配置不随 session 清除，保留在 dataByProject 中
   },
 }));

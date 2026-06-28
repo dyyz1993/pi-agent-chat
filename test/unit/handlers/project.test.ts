@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { existsSync, rmSync } from "fs";
 
 const projectMocks = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
@@ -246,6 +247,11 @@ const fakeProcessManager = {
 };
 vi.mock("../../../src/shared/handlers/agent", () => ({
   getProcessManager: () => fakeProcessManager,
+}));
+
+vi.mock("../../../src/shared/lib/pi-agent-paths", () => ({
+  getProjectUserStateDir: (projectPath: string) =>
+    `/tmp/pi-tier-test-${Buffer.from(projectPath).toString("base64url").slice(0, 32)}`,
 }));
 
 import { register } from "../../../src/shared/handlers/project";
@@ -1127,6 +1133,111 @@ describe("project handler", () => {
         error: stderr.trim(),
         errorCode: code,
       });
+    });
+  });
+});
+
+describe("project.saveTierConfig", () => {
+  let server: MockServer;
+  const TEST_PROJECT = "/tmp/test-project-tier-config";
+
+  function tierConfigDir(projectPath: string): string {
+    return `/tmp/pi-tier-test-${Buffer.from(projectPath).toString("base64url").slice(0, 32)}`;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createMockServer();
+    register(
+      server as unknown as Parameters<typeof register>[0],
+      { platform: "desktop" } as Parameters<typeof register>[1],
+    );
+  });
+
+  afterEach(() => {
+    // Clean up temp dirs created during tests
+    const dirs = [tierConfigDir(TEST_PROJECT)];
+    for (const dir of dirs) {
+      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes tier-config.json and returns ok", async () => {
+    const handler = server.handlers.get("project.saveTierConfig")!;
+    const result = await handler({
+      projectPath: TEST_PROJECT,
+      tierModels: { fast: "a/fast", pro: "a/pro", max: "a/max" },
+      currentTier: "pro",
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("written file is readable by loadTierConfig", async () => {
+    // Save
+    const saveHandler = server.handlers.get("project.saveTierConfig")!;
+    await saveHandler({
+      projectPath: TEST_PROJECT,
+      tierModels: { fast: "fast/model", pro: "pro/model" },
+      currentTier: "fast",
+    });
+
+    // Load
+    const loadHandler = server.handlers.get("project.loadTierConfig")!;
+    const result = await loadHandler({ projectPath: TEST_PROJECT });
+    expect(result).toEqual({
+      config: {
+        tierModels: { fast: "fast/model", pro: "pro/model" },
+        currentTier: "fast",
+      },
+    });
+  });
+
+  it("returns ok even when projectPath has special chars", async () => {
+    const handler = server.handlers.get("project.saveTierConfig")!;
+    const result = await handler({
+      projectPath: "/path/with spaces/and-üñîçødé",
+      tierModels: { fast: "m" },
+      currentTier: "fast",
+    });
+    expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("project.loadTierConfig", () => {
+  let server: MockServer;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createMockServer();
+    register(
+      server as unknown as Parameters<typeof register>[0],
+      { platform: "desktop" } as Parameters<typeof register>[1],
+    );
+  });
+
+  it("returns null when tier-config.json does not exist", async () => {
+    const handler = server.handlers.get("project.loadTierConfig")!;
+    const result = await handler({ projectPath: "/nonexistent/path" });
+    expect(result).toEqual({ config: null });
+  });
+
+  it("returns config after save", async () => {
+    const saveHandler = server.handlers.get("project.saveTierConfig")!;
+    const loadHandler = server.handlers.get("project.loadTierConfig")!;
+    const testPath = `/tmp/test-load-${Date.now()}`;
+
+    await saveHandler({
+      projectPath: testPath,
+      tierModels: { fast: "f", pro: "p", max: "m" },
+      currentTier: "max",
+    });
+
+    const result = await loadHandler({ projectPath: testPath });
+    expect(result).toEqual({
+      config: {
+        tierModels: { fast: "f", pro: "p", max: "m" },
+        currentTier: "max",
+      },
     });
   });
 });
