@@ -214,7 +214,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           await useTierStore.getState().switchToTier(activeTier, sessionId);
         }
       }
-      setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
+      if (!projectPath) {
+        setTierSaveMessage({ type: "error", text: "配置已应用到后端，但无法关联到项目。请尝试刷新页面。" });
+      } else {
+        setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
+      }
     } catch (err) {
       log.warn("save tier config failed", {
         error: err instanceof Error ? err.message : String(err),

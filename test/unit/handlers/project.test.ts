@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { existsSync, rmSync } from "fs";
 
 const projectMocks = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
@@ -1140,6 +1141,10 @@ describe("project.saveTierConfig", () => {
   let server: MockServer;
   const TEST_PROJECT = "/tmp/test-project-tier-config";
 
+  function tierConfigDir(projectPath: string): string {
+    return `/tmp/pi-tier-test-${Buffer.from(projectPath).toString("base64url").slice(0, 32)}`;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     server = createMockServer();
@@ -1147,6 +1152,14 @@ describe("project.saveTierConfig", () => {
       server as unknown as Parameters<typeof register>[0],
       { platform: "desktop" } as Parameters<typeof register>[1],
     );
+  });
+
+  afterEach(() => {
+    // Clean up temp dirs created during tests
+    const dirs = [tierConfigDir(TEST_PROJECT)];
+    for (const dir of dirs) {
+      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("writes tier-config.json and returns ok", async () => {

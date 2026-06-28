@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({
+  mockSetCurrentModel: vi.fn(),
+}));
+
 vi.mock("../../../src/mainview/lib/api-client", () => ({
   apiClient: { call: vi.fn() },
 }));
@@ -8,7 +12,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => ({
-      setCurrentModel: vi.fn(),
+      setCurrentModel: mocks.mockSetCurrentModel,
       sessionsByProject: {
         "/test/project-a": [
           { sessionId: "sess-1", sessionPath: "/tmp/sess-1.jsonl", projectPath: "/test/project-a" },
@@ -155,5 +159,42 @@ describe("useTierStore", () => {
     // Project config should remain after session clear
     expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("fast");
     expect(useTierStore.getState().getTierModels(PROJECT_PATH)).toEqual({ fast: "f" });
+  });
+
+  it("switchToTier updates session store model on success", async () => {
+    mockedCall.mockResolvedValueOnce({ provider: "anthropic", id: "claude-haiku-4" });
+    await useTierStore.getState().switchToTier("fast", "sess-1");
+    expect(mocks.mockSetCurrentModel).toHaveBeenCalledWith("anthropic", "claude-haiku-4");
+  });
+
+  it("switchToTier does not change tier on failure", async () => {
+    useTierStore.getState().setProjectCurrentTier(PROJECT_PATH, "pro");
+    mockedCall.mockRejectedValueOnce(new Error("Model not found"));
+    await useTierStore.getState().switchToTier("max", "sess-1");
+    expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("pro");
+    expect(useTierStore.getState().switching).toBe(false);
+  });
+
+  it("fetchTierConfig keeps globalDefaults unchanged on failure", async () => {
+    useTierStore.setState({ globalDefaults: { fast: "a/haiku" } });
+    mockedCall.mockRejectedValueOnce(new Error("network error"));
+    await useTierStore.getState().fetchTierConfig("sess-1");
+    expect(useTierStore.getState().globalDefaults).toEqual({ fast: "a/haiku" });
+  });
+
+  it("fetchTierConfig deduplicates concurrent fetches for the same project", async () => {
+    mockedCall
+      .mockResolvedValueOnce({ config: null })
+      .mockResolvedValue({ models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" } });
+
+    await Promise.all([
+      useTierStore.getState().fetchTierConfig("sess-1"),
+      useTierStore.getState().fetchTierConfig("sess-1"),
+    ]);
+
+    const agentCalls = mockedCall.mock.calls.filter(
+      ([name]: [string]) => name === "agent.getTierModels",
+    );
+    expect(agentCalls).toHaveLength(1);
   });
 });
