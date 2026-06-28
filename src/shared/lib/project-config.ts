@@ -372,7 +372,15 @@ function hydrateTabs(config: ProjectConfig, tabs: PersistedTab[]): PersistedTab[
     const remoteRecord = remoteByLocalPath.get(tab.path);
     const remote = tab.remote ?? remoteRecord;
     if (!remote) {
-      return isRemoteProjectLocalPath(tab.path) ? [] : [tab];
+      // 对于 SSH 远程项目的 Tab，如果 remote 记录丢失，保留 Tab 而不是静默丢弃
+      // 避免用户在刷新/重连后 Tab 消失 (#42)
+      if (isRemoteProjectLocalPath(tab.path)) {
+        log.warn("hydrateTabs: SSH tab missing remote record, keeping tab", {
+          path: tab.path,
+          name: tab.name,
+        });
+      }
+      return [tab];
     }
 
     const wasLegacyRemote = tab.runtime !== "ssh" || !tab.remote;
