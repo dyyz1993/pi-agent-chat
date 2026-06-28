@@ -46,6 +46,7 @@
   "tierSaveSuccess": "Tier model mapping saved",
   "tierSaveFailed": "Could not save. Try again later.",
   "tierSaveNoSession": "No active session to save",
+  "tierSaveNoProject": "Config saved but could not be linked to a project. Please refresh.",
   "proxyTitle": "Local Proxy",
   "proxyEnabled": "Enable Proxy",
   "proxyEnabledDesc": "Convert localhost / LAN addresses to public HTTPS URLs (used when previewing images, HTML, etc.)",

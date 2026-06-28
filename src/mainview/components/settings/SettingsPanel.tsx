@@ -215,7 +215,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         }
       }
       if (!projectPath) {
-        setTierSaveMessage({ type: "error", text: "配置已应用到后端，但无法关联到项目。请尝试刷新页面。" });
+        setTierSaveMessage({ type: "error", text: t("tierSaveNoProject") });
       } else {
         setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
       }
