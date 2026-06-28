@@ -57,7 +57,7 @@ Remote machine
 | User settings           | Remote for remote child runtime, local for local UI              | The remote child reads its own runtime config; the local UI keeps its own app config.     |
 | Session history         | Remote                                                           | The child runtime owns the session JSONL for remote work.                                 |
 | Memory                  | Remote for remote child runtime                                  | Project/runtime memory follows the runtime that owns the session.                         |
-| UI tabs/profiles        | Local                                                            | App-level indexes stay in `~/.pi-agent-chat/config.json`.                                 |
+| UI tabs/profiles        | Local                                                            | App-level indexes stay in `~/.pi/chat/config.json`.                                 |
 | Auth proxy state        | Local, ephemeral                                                 | Bound to the current SSH session or local app process.                                    |
 
 ### Message Flow

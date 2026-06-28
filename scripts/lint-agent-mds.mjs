@@ -269,7 +269,7 @@ const args = process.argv.slice(2);
 const DEFAULT_DIRS = [
   ".opencode/agent",
   // Add more paths here if agents are defined elsewhere, e.g.:
-  // join(homedir(), ".pi-agent-chat", "agents"),
+  // join(homedir(), ".pi/chat", "agents"),
 ];
 
 const dirsToScan = args.length > 0 && !args[0].startsWith("--")

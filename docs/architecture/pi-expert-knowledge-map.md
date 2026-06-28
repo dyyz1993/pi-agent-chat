@@ -27,7 +27,7 @@ Current app source:
 | Area | Source of truth | Notes |
 | --- | --- | --- |
 | Global Pi config | `packages/coding-agent/src/config.ts` | `PI_CODING_AGENT_DIR ?? ~/.pi/agent`; owns `settings.json`, `models.json`, `auth.json`, sessions, extensions, agents, skills. |
-| App config | `src/server-config.ts`, `src/shared/lib/project-config.ts` | `.env` drives app server, proxy, sandbox, SSH runtime; `~/.pi-agent-chat/config.json` is app-level UI state only. |
+| App config | `src/server-config.ts`, `src/shared/lib/project-config.ts` | `.env` drives app server, proxy, sandbox, SSH runtime; `~/.pi/chat/config.json` is app-level UI state only. |
 | Project shared config | `<project>/.pi/settings.json`, `<project>/.pi/agents/`, `<project>/.pi/rules/`, `<project>/.pi/skills/` | Repository-state config; write only after project trust. |
 | Project-private user state | `<PI_AGENT_DIR>/projects/<PROJECT_KEY>/...` | Trust, path permissions, asset metadata, learning/memory state, local-only project caches. |
 | Agent definitions | `packages/coding-agent/src/core/agent-types.ts` | Frontmatter parser, known fields, priority, `formatAgentsForPrompt`. |
@@ -41,6 +41,7 @@ Current app source:
 | Delegate / fork / subagent | `extensions/coordinator/`, `src/core/subtask.ts`, `src/mainview/components/chat/tool-renderers/CoordinatorRenderer.tsx`, `SubagentRenderer.tsx` | `session_delegate*` is persistent coordinator delegation; `subagent` is child task execution. |
 | UI preview surfaces | `AGENTS.md`, `docs/ui/button-density.md`, `src/mainview/components/file-preview/`, `src/mainview/components/chat/preview/` | Chat-scoped previews stay in content surface; review/editing/full workspace flows use fullscreen workspace surfaces. |
 | Worktree stack workflow | `docs/workflows/local-paired-worktree-stack.md` | Distinguish current consuming app worktree and bottom fork source worktree; use `build + yalc push`. |
+| Worktree capability boundary | `docs/architecture/worktree-capability-boundary.md` | Separates runtime primitives, app state, project orchestration, plugin boundaries, and future `pi worktree` command scope. |
 
 ## Role Split Recommendation
 
@@ -89,7 +90,7 @@ SANDBOX_PROVIDER=local|sandbox-box|ssh|cloudflare
 REMOTE_* / SANDBOX_* for remote runtimes
 ```
 
-`~/.pi-agent-chat/config.json` is app-level state only: recent projects, open tabs, pinned sessions, favorites, disabled skills/plugins. Do not store project trust, path permission caches, or asset metadata there.
+`~/.pi/chat/config.json` is app-level state only: recent projects, open tabs, pinned sessions, favorites, disabled skills/plugins. Do not store project trust, path permission caches, or asset metadata there.
 
 ## Asset / OSS Policy
 
@@ -229,6 +230,8 @@ Do not use the deprecated OpenCode-style `permission: "*": allow` map for Pi age
 Workflow details live in `docs/workflows/project-issue-orchestration.md`.
 
 These agents are intentionally project-scoped because they encode this repository's paired app/fork topology, port registry, yalc/build loop, and PR-style cleanup workflow. Do not move them to `~/.pi/agent/agents/` unless the project-specific paths and assumptions are extracted into variables or docs that another project can safely override. Associated fork changes target the current associated fork branch/PR-style change set by default, not upstream PRs unless explicitly requested.
+
+Worktree capability ownership is documented in `docs/architecture/worktree-capability-boundary.md`: the current paired stack is project orchestration, not a plugin feature and not a generic `pi --worktree` runtime contract. Runtime-level worktree support should stay limited to generic primitives such as worktree-aware git identity, explicit `cwd`, and isolated `agentDir` until app ports, yalc, and paired fork assumptions are extracted.
 
 Current policy: project orchestration agents should have complete tool permission (`permissionMode: always-allow`) and rely on workflow instructions for behavior boundaries. Do not hide capabilities via narrow tool lists when the role may need issue fetching, port diagnostics, worktree setup, build/test, yalc, or cleanup coordination. In the current Agent parser, omitting `tools` means no tool restriction and therefore all registered tools; setting `tools` creates a whitelist.
 

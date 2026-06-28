@@ -1,9 +1,10 @@
 import { readFile, writeFile, mkdir, readdir, copyFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
-import { join, dirname, basename, resolve } from "path";
 import { homedir } from "os";
+import { join, dirname, basename, resolve } from "path";
 import { createHash } from "crypto";
 import { createLogger } from "./logger";
+import { PI_APP_CONFIG_DIR } from "./app-paths";
 import type {
   RecentProject,
   ConfiguredPath,
@@ -21,11 +22,9 @@ const log = createLogger("config");
 /**
  * 配置根目录。通过 PI_APP_CONFIG_DIR 环境变量可覆盖，
  * 主要用于 worktree 场景下多实例隔离。
- * 主仓库默认 ~/.pi-agent-chat，worktree 可设为独立路径。
+ * 主仓库默认 ~/.pi/chat，worktree 可设为独立路径。
  */
-const CONFIG_DIR = process.env.PI_APP_CONFIG_DIR
-  ? resolve(process.env.PI_APP_CONFIG_DIR)
-  : join(homedir(), ".pi-agent-chat");
+const CONFIG_DIR = resolve(PI_APP_CONFIG_DIR);
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const BACKUP_PATH = join(CONFIG_DIR, "config.json.bak");
 

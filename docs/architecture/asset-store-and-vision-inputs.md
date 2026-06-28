@@ -15,7 +15,7 @@ This project treats file reading, asset storage, model input conversion, and vis
 <PI_AGENT_DIR>/projects/<PROJECT_KEY>/assets/images/
 ```
 
-Do not store project-private asset state in `~/.pi-agent-chat/config.json`, and do not write it into repository files unless the user explicitly requests export.
+Do not store project-private asset state in `~/.pi/chat/config.json`, and do not write it into repository files unless the user explicitly requests export.
 
 ## Plugin Boundary
 

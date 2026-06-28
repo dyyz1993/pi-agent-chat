@@ -56,13 +56,13 @@ metadata-only fallback
 App worktree:
 
 ```text
-/Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat
+/Users/xuyingzhou/Project/temporary/pi-agent-chat
 ```
 
 Paired fork:
 
 ```text
-/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork
+/Users/xuyingzhou/Project/temporary/pi-momo-fork
 ```
 
 Important implementation files:
@@ -79,9 +79,9 @@ packages/coding-agent/src/cli/file-processor.ts
 From the app worktree:
 
 ```bash
-./scripts/worktree-dev.sh /Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat \
+./scripts/worktree-dev.sh /Users/xuyingzhou/Project/temporary/pi-agent-chat \
   --with-agent-fork \
-  --agent-path /Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork
+  --agent-path /Users/xuyingzhou/Project/temporary/pi-momo-fork
 ```
 
 Then verify:
@@ -97,7 +97,7 @@ Expected pairing:
 ```text
 API_PORT=3102
 VITE_PORT=5175
-PI_CLI_PATH=/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork/packages/coding-agent/dist/cli.js
+PI_CLI_PATH=/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/cli.js
 ```
 
 ## Where Runtime State Lives
@@ -105,13 +105,13 @@ PI_CLI_PATH=/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork/packages/coding
 App UI state for this worktree:
 
 ```text
-~/.pi-agent-chat/worktrees/pi-agent-chat-8fd216f23c71/config.json
+~/.pi/chat/worktrees/pi-agent-chat-8fd216f23c71/config.json
 ```
 
 Agent runtime state for this worktree:
 
 ```text
-~/.pi-agent-chat/worktrees/pi-agent-chat-8fd216f23c71/agent
+~/.pi/chat/worktrees/pi-agent-chat-8fd216f23c71/agent
 ```
 
 That agent dir is used as:
@@ -147,17 +147,17 @@ It should not become a place where every file type grows its own custom branch.
 If you edit the paired fork:
 
 ```bash
-cd /Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork/packages/coding-agent
+cd /Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent
 npm run build
 ```
 
 Then restart the app stack:
 
 ```bash
-cd /Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat
-./scripts/worktree-dev.sh /Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat \
+cd /Users/xuyingzhou/Project/temporary/pi-agent-chat
+./scripts/worktree-dev.sh /Users/xuyingzhou/Project/temporary/pi-agent-chat \
   --with-agent-fork \
-  --agent-path /Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork
+  --agent-path /Users/xuyingzhou/Project/temporary/pi-momo-fork
 ```
 
 Do not edit:
