@@ -78,6 +78,38 @@ export async function runHotSwitchMessageLoad(params: HotSwitchMessageLoadParams
   }
 }
 
+interface ReconnectMessageLoadParams {
+  sessionId: string;
+  sessionPath: string;
+  loadSessionMessages: (
+    sessionId: string,
+    options: { force: boolean; sessionPath: string },
+  ) => Promise<void>;
+  backgroundRefresh: (sessionId: string, sessionPath: string) => Promise<void>;
+  getContextUsage: (sessionId: string) => Promise<{ tokens?: number | null }>;
+  updateSessionContext: (sessionId: string, usage: { tokens?: number | null }) => void;
+}
+
+/**
+ * Reconnect 消息加载逻辑，从 onReconnect 抽取以便测试。
+ * 保证 _backgroundRefreshMessages 不被额外调用（#37 root cause #2/#3）。
+ */
+export async function runReconnectMessageLoad(params: ReconnectMessageLoadParams): Promise<void> {
+  const { sessionId, sessionPath, loadSessionMessages, getContextUsage, updateSessionContext } = params;
+
+  // loadSessionMessages(force: true) 已经做了完整加载，不需要额外 _backgroundRefreshMessages (#37)
+  await loadSessionMessages(sessionId, { force: true, sessionPath }).catch(() => {});
+
+  try {
+    const r = await getContextUsage(sessionId);
+    if (r && r.tokens != null) {
+      updateSessionContext(sessionId, r);
+    }
+  } catch {
+    // context usage 获取失败不影响主流程
+  }
+}
+
 export function createSetActiveSessionAction({
   get,
   set,
