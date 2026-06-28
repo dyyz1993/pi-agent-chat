@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   mockSetCurrentModel: vi.fn(),
+  mockCurrentModel: null as { provider: string; id: string } | null,
 }));
 
 vi.mock("../../../src/mainview/lib/api-client", () => ({
@@ -13,6 +14,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   useSessionStore: {
     getState: () => ({
       setCurrentModel: mocks.mockSetCurrentModel,
+      currentModel: mocks.mockCurrentModel,
       sessionsByProject: {
         "/test/project-a": [
           { sessionId: "sess-1", sessionPath: "/tmp/sess-1.jsonl", projectPath: "/test/project-a" },
@@ -41,6 +43,7 @@ const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.mockCurrentModel = null;
   useTierStore.setState({ globalDefaults: {}, dataByProject: {}, switching: false });
 });
 
@@ -196,5 +199,49 @@ describe("useTierStore", () => {
       ([name]: [string]) => name === "agent.getTierModels",
     );
     expect(agentCalls).toHaveLength(1);
+  });
+
+  it("#53: cache hit with changed model → syncTierFromModel still runs", async () => {
+    // 第一次 fetch：加载 tier 配置
+    mockedCall
+      .mockResolvedValueOnce({ config: null })
+      .mockResolvedValueOnce({
+        models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" },
+      });
+    mocks.mockCurrentModel = { provider: "a", id: "haiku" };
+    await useTierStore.getState().fetchTierConfig("sess-1");
+    expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("fast");
+
+    // 模拟用户手动切换到 pro 模型
+    mocks.mockCurrentModel = { provider: "a", id: "sonnet" };
+
+    // 第二次 fetch（缓存命中）：不应请求 API，但应 sync 到新模型
+    await useTierStore.getState().fetchTierConfig("sess-1");
+
+    // 选中态应更新为 pro
+    expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("pro");
+
+    // API 不应被重复调用
+    const loadCalls = mockedCall.mock.calls.filter(
+      ([name]: [string]) => name === "project.loadTierConfig",
+    );
+    expect(loadCalls).toHaveLength(1);
+  });
+
+  it("#53: cache hit with no currentModel → does not crash", async () => {
+    mockedCall
+      .mockResolvedValueOnce({ config: null })
+      .mockResolvedValueOnce({
+        models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" },
+      });
+    mocks.mockCurrentModel = { provider: "a", id: "haiku" };
+    await useTierStore.getState().fetchTierConfig("sess-1");
+
+    // currentModel 为 null（例如刚启动尚未获取模型状态）
+    mocks.mockCurrentModel = null;
+
+    // 不应抛出异常
+    await useTierStore.getState().fetchTierConfig("sess-1");
+    expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("fast");
   });
 });

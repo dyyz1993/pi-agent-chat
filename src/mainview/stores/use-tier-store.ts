@@ -114,7 +114,13 @@ export const useTierStore = create<TierState>()((set, get) => ({
       return;
     }
 
+    // 缓存命中时跳过 API 请求，但仍执行 syncTierFromModel
+    // 防止模型切换后 tier 选中态不更新（#53）
     if (!options?.force && get().dataByProject[projectPath]?.tierModels) {
+      const currentModel = useSessionStore.getState().currentModel;
+      if (currentModel) {
+        get().syncTierFromModel(projectPath, currentModel.provider, currentModel.id);
+      }
       return;
     }
 
