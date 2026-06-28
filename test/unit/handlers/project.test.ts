@@ -54,12 +54,12 @@ const projectMocks = vi.hoisted(() => ({
         { type: "skills", hash: "skills-hash", files: 3, bytes: 1234 },
         { type: "agents", hash: "agents-hash", files: 2, bytes: 456 },
       ],
-      blocked: [{ path: "/local/.agents/skills/private/.env", reason: "blocked sensitive filename" }],
+      blocked: [
+        { path: "/local/.agents/skills/private/.env", reason: "blocked sensitive filename" },
+      ],
     },
   })),
-  mockResolveRemoteSyncedAgentDir: vi.fn(
-    () => "~/.pi/agent/remote-runtime/child/agent-resources",
-  ),
+  mockResolveRemoteSyncedAgentDir: vi.fn(() => "~/.pi/agent/remote-runtime/child/agent-resources"),
   mockListSshProfiles: vi.fn(async () => []),
   mockGetSshProfile: vi.fn(async () => null),
   mockUpsertSshProfile: vi.fn(async (profile) => ({
@@ -86,6 +86,68 @@ const projectMocks = vi.hoisted(() => ({
       lastOpened: 1,
     },
   })),
+  mockReadWorktreeStackManifest: vi.fn(async (projectPath: string) => ({
+    manifestPath: `${projectPath}/manifest.json`,
+    manifest: null,
+  })),
+  mockUpdateWorktreeStackOrchestration: vi.fn(async (projectPath: string, input: unknown) => ({
+    manifestPath: `${projectPath}/manifest.json`,
+    manifest: {
+      version: 1,
+      id: "stack-1",
+      kind: "paired-worktree-stack",
+      name: "demo",
+      createdAt: "2026-06-28T00:00:00.000Z",
+      updatedAt: "2026-06-28T00:00:00.000Z",
+      repos: [],
+      services: [],
+      appConfigDir: `${projectPath}/.state`,
+      agentDir: `${projectPath}/.state/agent`,
+      runtime: { piCliPath: "" },
+      orchestration: {
+        leaderSessionId: (input as { leaderSessionId?: string | null }).leaderSessionId ?? null,
+        batches: [],
+        issues: [],
+        workers: [],
+        cleanup: { removeWorktrees: false, removeRegistry: false },
+      },
+    },
+  })),
+  mockGetWorktreeStackExecutionContext: vi.fn(
+    async (input: { projectPath: string; issueId?: string }) => ({
+      manifestPath: `${input.projectPath}/manifest.json`,
+      manifest: {
+        version: 1,
+        id: "stack-1",
+        kind: "paired-worktree-stack",
+        name: "demo",
+        createdAt: "2026-06-28T00:00:00.000Z",
+        updatedAt: "2026-06-28T00:00:00.000Z",
+        repos: [],
+        services: [],
+        appConfigDir: `${input.projectPath}/.state`,
+        agentDir: `${input.projectPath}/.state/agent`,
+        runtime: { piCliPath: "" },
+        orchestration: {
+          leaderSessionId: null,
+          batches: [],
+          issues: [],
+          workers: [],
+          cleanup: { removeWorktrees: false, removeRegistry: false },
+        },
+      },
+      appRepo: null,
+      runtimeForkRepo: null,
+      apiService: null,
+      webService: null,
+      batch: null,
+      issue: input.issueId ? { id: input.issueId } : null,
+      worker: null,
+      targetRepoRoles: ["app"],
+      targetAppWorktreePath: input.projectPath,
+      targetRuntimeForkWorktreePath: null,
+    }),
+  ),
 }));
 const {
   mockExecFile,
@@ -105,6 +167,9 @@ const {
   mockUnlinkProject,
   mockGetLinkedProjects,
   mockSyncRemoteAgentResources,
+  mockReadWorktreeStackManifest,
+  mockUpdateWorktreeStackOrchestration,
+  mockGetWorktreeStackExecutionContext,
 } = projectMocks;
 
 vi.mock("child_process", () => ({
@@ -168,6 +233,12 @@ vi.mock("../../../src/sandbox/remote-resource-sync", () => ({
   resolveRemoteSyncedAgentDir: projectMocks.mockResolveRemoteSyncedAgentDir,
 }));
 
+vi.mock("../../../src/shared/lib/worktree-stack-manifest", () => ({
+  getWorktreeStackExecutionContext: projectMocks.mockGetWorktreeStackExecutionContext,
+  readWorktreeStackManifest: projectMocks.mockReadWorktreeStackManifest,
+  updateWorktreeStackOrchestration: projectMocks.mockUpdateWorktreeStackOrchestration,
+}));
+
 const fakeProcessManager = {
   batchGetSessionsStatus: vi.fn((ids: string[]) =>
     ids.map((sessionId) => ({ sessionId, status: "idle" as const })),
@@ -178,7 +249,8 @@ vi.mock("../../../src/shared/handlers/agent", () => ({
 }));
 
 import { register } from "../../../src/shared/handlers/project";
-import { createMockServer, type MockServer } from "../../helpers/mock-server";
+import { createMockServer } from "../../helpers/mock-server";
+import type { MockServer } from "../../helpers/mock-server";
 
 describe("project handler", () => {
   let server: MockServer;
@@ -256,6 +328,101 @@ describe("project handler", () => {
 
       expect(result).toEqual({ ok: true });
       expect(mockRemoveRecent).toHaveBeenCalledWith("/remove/me");
+    });
+  });
+
+  describe("project.getWorktreeStackManifest", () => {
+    it("returns the shared manifest lookup result", async () => {
+      const handler = server.handlers.get("project.getWorktreeStackManifest")!;
+      mockReadWorktreeStackManifest.mockResolvedValueOnce({
+        manifestPath: "/tmp/worktree/manifest.json",
+        manifest: {
+          version: 1,
+          id: "stack-1",
+          kind: "paired-worktree-stack",
+          name: "demo",
+          createdAt: "2026-06-28T00:00:00.000Z",
+          updatedAt: "2026-06-28T00:00:00.000Z",
+          repos: [],
+          services: [],
+          appConfigDir: "/tmp/worktree",
+          agentDir: "/tmp/worktree/agent",
+          runtime: { piCliPath: "" },
+          orchestration: {
+            leaderSessionId: null,
+            batches: [],
+            issues: [],
+            workers: [],
+            cleanup: { removeWorktrees: false, removeRegistry: false },
+          },
+        },
+      });
+
+      const result = await handler({ projectPath: "/tmp/worktree" });
+
+      expect(mockReadWorktreeStackManifest).toHaveBeenCalledWith("/tmp/worktree");
+      expect(result).toMatchObject({
+        manifestPath: "/tmp/worktree/manifest.json",
+        manifest: {
+          id: "stack-1",
+        },
+      });
+    });
+  });
+
+  describe("project.updateWorktreeStackOrchestration", () => {
+    it("forwards orchestration updates to the shared manifest helper", async () => {
+      const handler = server.handlers.get("project.updateWorktreeStackOrchestration")!;
+
+      const result = await handler({
+        projectPath: "/tmp/worktree",
+        leaderSessionId: "leader-1",
+        upsertIssues: [{ id: "issue-1", title: "Test issue", status: "planned" }],
+      });
+
+      expect(mockUpdateWorktreeStackOrchestration).toHaveBeenCalledWith("/tmp/worktree", {
+        leaderSessionId: "leader-1",
+        upsertBatches: undefined,
+        removeBatchIds: undefined,
+        cleanup: undefined,
+        upsertIssues: [{ id: "issue-1", title: "Test issue", status: "planned" }],
+        removeIssueIds: undefined,
+        upsertWorkers: undefined,
+        removeWorkerIds: undefined,
+      });
+      expect(result).toMatchObject({
+        manifestPath: "/tmp/worktree/manifest.json",
+        manifest: {
+          orchestration: {
+            leaderSessionId: "leader-1",
+          },
+        },
+      });
+    });
+  });
+
+  describe("project.getWorktreeStackExecutionContext", () => {
+    it("returns the derived repo/worktree execution context", async () => {
+      const handler = server.handlers.get("project.getWorktreeStackExecutionContext")!;
+
+      const result = await handler({
+        projectPath: "/tmp/worktree",
+        issueId: "issue-1",
+      });
+
+      expect(mockGetWorktreeStackExecutionContext).toHaveBeenCalledWith({
+        projectPath: "/tmp/worktree",
+        issueId: "issue-1",
+        workerId: undefined,
+      });
+      expect(result).toMatchObject({
+        manifestPath: "/tmp/worktree/manifest.json",
+        issue: {
+          id: "issue-1",
+        },
+        targetRepoRoles: ["app"],
+        targetAppWorktreePath: "/tmp/worktree",
+      });
     });
   });
 
@@ -819,9 +986,7 @@ describe("project handler", () => {
           lastOpened: 2,
         },
       });
-      mockSyncRemoteAgentResources.mockRejectedValueOnce(
-        new Error("remote tar command not found"),
-      );
+      mockSyncRemoteAgentResources.mockRejectedValueOnce(new Error("remote tar command not found"));
 
       const result = await handler({
         host: "xyz-mac",

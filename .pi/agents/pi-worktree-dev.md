@@ -25,14 +25,14 @@ skills:
 - `AGENTS.md`
 - `docs/workflows/project-issue-orchestration.md`
 - `docs/workflows/local-paired-worktree-stack.md`
-- 如果涉及底层 fork：`/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork/packages/coding-agent`
+- 如果涉及底层 fork：`/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent`
 - 如果涉及配置/Agent/视觉/AssetStore/Preview/Proxy/委派：`/Users/xuyingzhou/.pi/agent/agents/pi-expert.md` 中对应章节
 
 ## 项目拓扑
 
-- App worktree: `/Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat`
-- Paired fork worktree: `/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork`
-- App dev stack registry: `~/.pi-agent-chat/worktrees/registry/`
+- App worktree: `/Users/xuyingzhou/Project/temporary/pi-agent-chat`
+- Paired fork worktree: `/Users/xuyingzhou/Project/temporary/pi-momo-fork`
+- App dev stack state: `~/.pi/chat/worktrees/`
 - Current known app stack: API `3102`, Vite `5175`
 - App runtime env: `.env`, `PI_CLI_PATH`, `PI_APP_CONFIG_DIR`, `VITE_API_TARGET`
 - Fork package: `packages/coding-agent`
@@ -48,7 +48,8 @@ skills:
 - 涉及 app 和 fork 双仓时，明确记录两个仓库的分支、worktree、build 产物和验证顺序。
 - 关联 fork 的交付目标默认是当前关联 fork 的分支/PR-style change set；不要把它说成 upstream PR，除非 leader 或用户明确要求。
 - 启动服务前先看 registry，不猜端口。不要抢 `3100/5173`。
-- 端口和配对关系从 `./scripts/worktree-dev.sh list`、`~/.pi-agent-chat/worktrees/registry/*.env`、`.env` 和 `logs/dev.log` 交叉确认；必要时用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 查占用。
+- 端口和配对关系从 `./scripts/worktree-dev.sh list`、`~/.pi/chat/worktrees/<worktree-id>/manifest.json`、`~/.pi/chat/worktrees/registry/*.env`、`.env` 和 `logs/dev.log` 交叉确认；必要时用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 查占用。
+- 如果 manifest 里已有 `batches[*] / issues[*].batchId / dependsOnIssueIds / assigneeWorkerId / workers[*]`，先尊重 manifest 的编排状态，再决定是否接手、复用或迁移当前 stack。
 - 共享 `node_modules` 的 worktree 必须保持 Vite cache 隔离，确认 `vite.config.ts` 的 `cacheDir` 和 React `dedupe` 没被破坏。
 - 修改底层 fork 后必须在 paired fork worktree 中 build；如果 app 通过 yalc/file package 消费，必须说明 `npm run build`、`yalc push`、`.yalc`、`node_modules`、`PI_CLI_PATH`、session reload/restart 的状态。
 - UI 改动必须按现有 design tokens、button density、popover/menu、fullscreen surface 规则实现。
@@ -66,6 +67,8 @@ skills:
    - 如需新建并启动 app worktree，使用 `scripts/worktree-create.sh <branch-or-slug> --dev --start --with-agent-fork`。
    - 如需启动或修复已有 app worktree，使用 `scripts/worktree-dev.sh <worktree> --with-agent-fork --agent-path <paired-fork> --agent-branch <branch-or-slug> --agent-build`。
    - 只准备环境但不启动时，使用 `scripts/worktree-dev.sh <worktree> --no-start`。
+   - 如需把 worker 分配、issue 状态、cleanup 意图落盘到 stack，优先直接读取/更新 `~/.pi/chat/worktrees/<worktree-id>/manifest.json`；如果当前运行环境还暴露了 app 侧 RPC，再补用 `project.getWorktreeStackManifest` / `project.updateWorktreeStackOrchestration`。
+   - 如果是按 manifest 委派的任务，先定位 `batchId`、`issueId`、`workerId`，再整理 app/fork worktree 与 api/web 服务上下文后开始执行；不要跳过这一层直接靠猜路径。
    - 确认 registry 中 API/Vite/config/agent path 配对正确。
    - `.env` 由脚本从主仓 `.env` 派生并重写 stack 变量；不要手工复制密钥或凭记忆新建 `.env`。
    - 必须确认 `PORT`、`PI_CLI_PATH`、`PI_APP_CONFIG_DIR`、`PI_CODING_AGENT_DIR`、`VITE_API_TARGET`、`VITE_PORT` 指向当前隔离 stack。
@@ -99,6 +102,7 @@ skills:
    - 用 `session_delegate_send` 回报给 leader。
    - 回报内容必须包含：
      - issue/task id
+     - batch id（如果有）
      - 当前分支/worktree
      - 修改文件摘要
      - 测试命令和结果

@@ -9,6 +9,10 @@ export interface PersistedTab {
 export type ProjectRuntime = "local" | "ssh";
 export type SshRuntimeKind = "remote-agent-child" | "ssh-command";
 export type RemoteSyncResourceType = "skills" | "agents" | "rules";
+export type WorktreeIssueStatus = "planned" | "ready" | "in_progress" | "blocked" | "done";
+export type WorktreeWorkerStatus = "idle" | "assigned" | "running" | "blocked" | "done";
+export type WorktreeIssuePriority = "low" | "medium" | "high";
+export type WorktreeBatchStatus = "planned" | "active" | "blocked" | "done";
 
 export interface RemoteResourceSyncConfig {
   enabled?: boolean;
@@ -27,6 +31,138 @@ export interface RemoteResourceSyncPreview {
     reason: string;
   }>;
   hash: string;
+}
+
+export interface WorktreeStackRepoEntry {
+  name: string;
+  role: "app" | "runtime-fork";
+  repoPath: string;
+  worktreePath: string;
+  branch: string;
+}
+
+export interface WorktreeStackServiceEntry {
+  name: string;
+  role: "api" | "web";
+  cwd: string;
+  command: string;
+  port: number;
+  healthUrl: string;
+}
+
+export interface WorktreeStackIssueEntry {
+  id: string;
+  title: string;
+  status: WorktreeIssueStatus;
+  priority: WorktreeIssuePriority;
+  repo?: "app" | "fork" | "both";
+  batchId?: string | null;
+  dependsOnIssueIds: string[];
+  assigneeWorkerId?: string | null;
+  branch?: string | null;
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorktreeStackBatchEntry {
+  id: string;
+  title: string;
+  status: WorktreeBatchStatus;
+  issueIds: string[];
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorktreeStackWorkerEntry {
+  id: string;
+  agent: string;
+  status: WorktreeWorkerStatus;
+  issueId?: string | null;
+  sessionId?: string | null;
+  repo?: "app" | "fork" | "both";
+  branch?: string | null;
+  worktreePath?: string | null;
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorktreeStackCleanupPlan {
+  removeWorktrees: boolean;
+  removeRegistry: boolean;
+}
+
+export interface WorktreeStackExecutionContext {
+  manifestPath: string;
+  manifest: WorktreeStackManifest;
+  appRepo: WorktreeStackRepoEntry | null;
+  runtimeForkRepo: WorktreeStackRepoEntry | null;
+  apiService: WorktreeStackServiceEntry | null;
+  webService: WorktreeStackServiceEntry | null;
+  batch: WorktreeStackBatchEntry | null;
+  issue: WorktreeStackIssueEntry | null;
+  worker: WorktreeStackWorkerEntry | null;
+  targetRepoRoles: Array<"app" | "runtime-fork">;
+  targetAppWorktreePath: string | null;
+  targetRuntimeForkWorktreePath: string | null;
+}
+
+export interface WorktreeStackManifest {
+  version: 1;
+  id: string;
+  kind: "paired-worktree-stack";
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  repos: WorktreeStackRepoEntry[];
+  services: WorktreeStackServiceEntry[];
+  appConfigDir: string;
+  agentDir: string;
+  runtime: {
+    piCliPath: string;
+  };
+  orchestration: {
+    leaderSessionId: string | null;
+    batches: WorktreeStackBatchEntry[];
+    issues: WorktreeStackIssueEntry[];
+    workers: WorktreeStackWorkerEntry[];
+    cleanup: WorktreeStackCleanupPlan;
+  };
+}
+
+export interface WorktreeStackIssuePatch {
+  id: string;
+  title?: string;
+  status?: WorktreeIssueStatus;
+  priority?: WorktreeIssuePriority;
+  repo?: "app" | "fork" | "both";
+  batchId?: string | null;
+  dependsOnIssueIds?: string[];
+  assigneeWorkerId?: string | null;
+  branch?: string | null;
+  note?: string | null;
+}
+
+export interface WorktreeStackBatchPatch {
+  id: string;
+  title?: string;
+  status?: WorktreeBatchStatus;
+  issueIds?: string[];
+  note?: string | null;
+}
+
+export interface WorktreeStackWorkerPatch {
+  id: string;
+  agent?: string;
+  status?: WorktreeWorkerStatus;
+  issueId?: string | null;
+  sessionId?: string | null;
+  repo?: "app" | "fork" | "both";
+  branch?: string | null;
+  worktreePath?: string | null;
+  note?: string | null;
 }
 
 export interface SshProfile {
@@ -265,6 +401,28 @@ export interface ProjectMethods {
       resourceTypes?: RemoteSyncResourceType[];
     };
     result: RemoteResourceSyncPreview;
+  };
+  "project.getWorktreeStackManifest": {
+    params: { projectPath: string };
+    result: { manifestPath: string; manifest: WorktreeStackManifest | null };
+  };
+  "project.updateWorktreeStackOrchestration": {
+    params: {
+      projectPath: string;
+      leaderSessionId?: string | null;
+      cleanup?: Partial<WorktreeStackCleanupPlan>;
+      upsertBatches?: WorktreeStackBatchPatch[];
+      removeBatchIds?: string[];
+      upsertIssues?: WorktreeStackIssuePatch[];
+      removeIssueIds?: string[];
+      upsertWorkers?: WorktreeStackWorkerPatch[];
+      removeWorkerIds?: string[];
+    };
+    result: { manifestPath: string; manifest: WorktreeStackManifest };
+  };
+  "project.getWorktreeStackExecutionContext": {
+    params: { projectPath: string; issueId?: string; workerId?: string };
+    result: WorktreeStackExecutionContext;
   };
   "project.openSshProject": {
     params: {
