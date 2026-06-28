@@ -17,13 +17,13 @@ It is intentionally project-specific. It encodes the current app repository, pai
 
 ## Project Topology
 
-| Role | Repository / worktree | Notes |
-| --- | --- | --- |
-| App | `/Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat` | UI, gateway, app server, scripts, docs |
-| Associated fork | `/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork` | Local fork that provides `packages/coding-agent` |
-| Fork package | `packages/coding-agent` | Runtime, extensions, CLI, Agent definition parser |
-| Stack registry | `~/.pi-agent-chat/worktrees/registry/` | Port and pairing records |
-| Current stack | API `3102`, Vite `5175` | Current interactive stack, not a global default |
+| Role            | Repository / worktree                               | Notes                                             |
+| --------------- | --------------------------------------------------- | ------------------------------------------------- |
+| App             | `/Users/xuyingzhou/Project/temporary/pi-agent-chat` | UI, gateway, app server, scripts, docs            |
+| Associated fork | `/Users/xuyingzhou/Project/temporary/pi-momo-fork`  | Local fork that provides `packages/coding-agent`  |
+| Fork package    | `packages/coding-agent`                             | Runtime, extensions, CLI, Agent definition parser |
+| Stack registry  | `~/.pi/chat/worktrees/registry/`                    | Port and pairing records                          |
+| Current stack   | API `3102`, Vite `5175`                             | Current interactive stack, not a global default   |
 
 The associated fork is treated as the active development target for fork-side changes. Do not describe fork changes as PRs to an upstream project unless the user explicitly asks for that. The normal local outcome is a branch/PR-style change set against the associated fork repository.
 
@@ -44,13 +44,13 @@ Do not create a new issue after every merge by default. Create a follow-up issue
 
 ## Agents
 
-| Agent | Scope | Responsibility |
-| --- | --- | --- |
-| `pi-issue-leader` | Project | Intake issues, split work, allocate stacks/ports, delegate, track, review, plan merge and cleanup |
-| `pi-worktree-dev` | Project | Implement one issue/slice in an isolated app/fork worktree stack and report back |
-| `pi-expert` | Global | Framework/config/runtime expert; consulted for Pi internals and cross-repo architecture |
-| `explore` | Built-in | Read-only investigation |
-| `plan` | Built-in | Planning-only analysis |
+| Agent             | Scope    | Responsibility                                                                                    |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `pi-issue-leader` | Project  | Intake issues, split work, allocate stacks/ports, delegate, track, review, plan merge and cleanup |
+| `pi-worktree-dev` | Project  | Implement one issue/slice in an isolated app/fork worktree stack and report back                  |
+| `pi-expert`       | Global   | Framework/config/runtime expert; consulted for Pi internals and cross-repo architecture           |
+| `explore`         | Built-in | Read-only investigation                                                                           |
+| `plan`            | Built-in | Planning-only analysis                                                                            |
 
 ## High-Level Flow
 
@@ -126,11 +126,82 @@ Port and stack information must be read from the real sources:
 
 ```text
 ./scripts/worktree-dev.sh list
-~/.pi-agent-chat/worktrees/registry/*.env
+~/.pi/chat/worktrees/<worktree-id>/manifest.json
+~/.pi/chat/worktrees/registry/*.env
 <app-worktree>/.env
 <app-worktree>/logs/dev.log
 lsof -nP -iTCP:<port> -sTCP:LISTEN
 ```
+
+Leaders should prefer `manifest.json` for structured repo/service/worker context,
+then use the `.env` registry, app `.env`, logs, and listeners to verify that the
+stack is actually running as described.
+
+The ground-truth artifact is `~/.pi/chat/worktrees/<worktree-id>/manifest.json`.
+For app-level automation or UI-driven coordination, the structured entry points
+are `project.getWorktreeStackManifest` and
+`project.updateWorktreeStackOrchestration`. The scripts still own stack
+creation/startup, but orchestration state should not live only in free-form
+chat.
+
+Current orchestration MVP fields:
+
+- `batches[*]`: explicit leader-owned batch board with `id / title / status / issueIds`.
+- `issues[*].batchId`: leader-assigned batch bucket for parallel planning.
+- `issues[*].dependsOnIssueIds`: issue dependencies inside the same stack board.
+- `issues[*].priority`: `low | medium | high`.
+- `issues[*].assigneeWorkerId`: current worker owner when assigned.
+- `workers[*].issueId / sessionId / repo / worktreePath`: current execution binding.
+- `project.getWorktreeStackExecutionContext`: app-side derived view that resolves
+  the selected issue/worker plus app repo, paired fork repo, and api/web
+  service context into one payload for execution handoff or debugging.
+
+The manifest update path also enforces basic state flow:
+
+- issue: `planned -> ready -> in_progress -> done`, with `blocked` as a side branch
+- worker: `idle -> assigned -> running -> done`, with `blocked` as a side branch
+
+Invalid transitions or missing dependency references should be treated as board
+corruption and fixed before dispatch continues.
+
+### 3.0 Manifest-Orchestration Smoke
+
+The current MVP smoke path should prove this sequence on a real or temporary
+stack manifest:
+
+1. `project.getWorktreeStackManifest` returns the existing empty board.
+2. `project.updateWorktreeStackOrchestration` writes:
+   - one `batch`
+   - one `issue` with `batchId`
+   - one `worker` assigned to that issue
+3. after the first write, the issue is `ready`, the worker is `assigned`, and
+   the batch is already `active` because it now contains actionable work
+4. a second update moves the worker to `running`, which drives the issue to
+   `in_progress` while the batch remains `active`
+5. a third update moves the worker to `done`, which drives the issue and batch
+   to `done`
+6. `project.getWorktreeStackExecutionContext` resolves the final batch, issue,
+   worker, app worktree, paired fork worktree, and api/web service ports in one
+   payload
+
+The current automated proof for that flow lives in:
+
+```text
+test/unit/handlers/project-worktree-stack.test.ts
+```
+
+The repeatable repo-level acceptance command for the same flow is:
+
+```bash
+bun run verify:worktree-stack
+```
+
+It exercises two layers in order:
+
+1. real `scripts/worktree-common.sh` registry + manifest generation
+2. real `project.getWorktreeStackManifest` /
+   `project.updateWorktreeStackOrchestration` /
+   `project.getWorktreeStackExecutionContext` handler flow
 
 Registry entries usually contain:
 
@@ -189,7 +260,7 @@ Environment handling:
 - Do not hand-copy secrets or invent a new `.env` by memory. The scripts derive the worktree `.env` from the main repo `.env`, remove stack-specific values, and rewrite `PORT`, `PI_CLI_PATH`, `PI_CODING_AGENT_DIR`, and app config paths.
 - The app backend uses `PORT=<api-port>`.
 - The frontend start path exports `VITE_API_TARGET=http://localhost:<api-port>`, `VITE_PORT=<vite-port>`, `VITE_AUTH_TOKEN`, and `VITE_STRICT_PORT=false`.
-- `PI_APP_CONFIG_DIR` must point at the per-stack config directory under `~/.pi-agent-chat/worktrees/...`, not the main `~/.pi-agent-chat` app config.
+- `PI_APP_CONFIG_DIR` must point at the per-stack config directory under `~/.pi/chat/worktrees/...`, not the main `~/.pi/chat` app config.
 - `PI_CLI_PATH` must point at the paired fork's `packages/coding-agent/dist/cli.js` when the issue needs fork isolation.
 - `PI_CODING_AGENT_DIR` / `AGENT_DIR` should point inside the per-stack config dir so runtime-owned agent state is isolated from the user's active app session.
 

@@ -19,8 +19,8 @@ maxTurns: 80
 
 你只服务当前项目栈：
 
-- App repo: `/Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat`
-- Paired fork: `/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork`
+- App repo: `/Users/xuyingzhou/Project/temporary/pi-agent-chat`
+- Paired fork: `/Users/xuyingzhou/Project/temporary/pi-momo-fork`
 - App source root: `pi-agent-chat`
 - Core runtime fork package: `pi-momo-fork/packages/coding-agent`
 - Local stack docs: `AGENTS.md` and `docs/workflows/local-paired-worktree-stack.md`
@@ -66,23 +66,27 @@ maxTurns: 80
 
 3. Dispatch
    - 使用 `session_delegate` 或 `session_delegate_fork` 派发给 `pi-worktree-dev`。
-   - 派发前先检查当前 stack/端口状态：`./scripts/worktree-dev.sh list`、`~/.pi-agent-chat/worktrees/registry/`、必要时 `lsof -nP -iTCP:<port> -sTCP:LISTEN`。
-   - 派发前先决定资源策略：leader 预分配端口/路径，或要求 worker 通过 registry/scripts 自行分配并回报；无论哪种，不能靠猜。
-   - 派发前明确启动策略：新建 stack 用 `scripts/worktree-create.sh ... --dev --start --with-agent-fork`，已有 stack 用 `scripts/worktree-dev.sh ... --with-agent-fork --agent-build`，只准备环境用 `--no-start`。
-   - 派发前明确 ENV 策略：`.env` 必须由脚本从主仓 `.env` 派生和修复，worker 需要验证 `PORT`、`PI_CLI_PATH`、`PI_APP_CONFIG_DIR`、`PI_CODING_AGENT_DIR`、`VITE_API_TARGET`、`VITE_PORT`。
-   - 派发前明确依赖策略：默认 app `--link`、fork `--agent-link`；改依赖/lockfile/native deps 时使用 `--install` 或 `--agent-install`。
-   - 派发前明确 yalc 判断：CLI/runtime-only fork 改动通常只需要 fork build + `PI_CLI_PATH`；app import 的 package API/type 改动才要求 `yalc push` 和 app 侧验证。
-   - 每条委派必须包含：
-     - issue id/title
-     - 目标 repo/worktree
-     - 是否需要 paired fork
-     - 预期分支名
-     - 端口/config 隔离要求
-     - PR target：当前关联项目/关联 fork 的分支或 PR-style change set
-     - 需要阅读的 docs
-     - 验收 checklist
-     - validation packet 要求：automated cases、manual cases、evidence、negative/edge cases、residual risk
-     - 回报格式
+   - 派发前先检查当前 stack/端口状态：`./scripts/worktree-dev.sh list`、`~/.pi/chat/worktrees/<worktree-id>/manifest.json`、`~/.pi/chat/worktrees/registry/`、必要时 `lsof -nP -iTCP:<port> -sTCP:LISTEN`。
+
+   - 以 `~/.pi/chat/worktrees/<worktree-id>/manifest.json` 作为 leader 自己最稳的事实源；如果当前运行环境还暴露了 app 侧 RPC，则可额外使用 `project.getWorktreeStackManifest` 与 `project.updateWorktreeStackOrchestration` 做结构化读取/更新。
+   - 规划 issue batch 时，把 `batches[*]`、`issues[*].batchId`、`dependsOnIssueIds`、`priority`、`assigneeWorkerId` 写进 manifest；不要只在 leader 自己的临时 todo 里维护依赖顺序。
+
+- 派发前先决定资源策略：leader 预分配端口/路径，或要求 worker 通过 registry/scripts 自行分配并回报；无论哪种，不能靠猜。
+- 派发前明确启动策略：新建 stack 用 `scripts/worktree-create.sh ... --dev --start --with-agent-fork`，已有 stack 用 `scripts/worktree-dev.sh ... --with-agent-fork --agent-build`，只准备环境用 `--no-start`。
+- 派发前明确 ENV 策略：`.env` 必须由脚本从主仓 `.env` 派生和修复，worker 需要验证 `PORT`、`PI_CLI_PATH`、`PI_APP_CONFIG_DIR`、`PI_CODING_AGENT_DIR`、`VITE_API_TARGET`、`VITE_PORT`。
+- 派发前明确依赖策略：默认 app `--link`、fork `--agent-link`；改依赖/lockfile/native deps 时使用 `--install` 或 `--agent-install`。
+- 派发前明确 yalc 判断：CLI/runtime-only fork 改动通常只需要 fork build + `PI_CLI_PATH`；app import 的 package API/type 改动才要求 `yalc push` 和 app 侧验证。
+- 每条委派必须包含：
+  - issue id/title
+  - 目标 repo/worktree
+  - 是否需要 paired fork
+  - 预期分支名
+  - 端口/config 隔离要求
+  - PR target：当前关联项目/关联 fork 的分支或 PR-style change set
+  - 需要阅读的 docs
+  - 验收 checklist
+  - validation packet 要求：automated cases、manual cases、evidence、negative/edge cases、residual risk
+  - 回报格式
 
 4. Track
    - 用 todo 维护任务板。
@@ -120,10 +124,11 @@ maxTurns: 80
 - 使用 docs/workflows/local-paired-worktree-stack.md
 - 启动新 stack 用 scripts/worktree-create.sh <slug> --dev --start --with-agent-fork；启动已有 stack 用 scripts/worktree-dev.sh <app-worktree> --with-agent-fork --agent-path <paired-fork> --agent-build
 - 如涉及底层 fork，使用 paired fork worktree，不要直接改共享 fork checkout
-- 端口从 ./scripts/worktree-dev.sh list 和 ~/.pi-agent-chat/worktrees/registry/ 查；不复用 3100/5173；必要时用 lsof 核对
+- 端口从 ./scripts/worktree-dev.sh list、~/.pi/chat/worktrees/<worktree-id>/manifest.json 和 ~/.pi/chat/worktrees/registry/ 查；不复用 3100/5173；必要时用 lsof 核对
 - ENV 由脚本派生和修复；回报 PORT/PI_CLI_PATH/PI_APP_CONFIG_DIR/PI_CODING_AGENT_DIR/VITE_API_TARGET/VITE_PORT
 - 依赖默认 link；如果改 package deps/lockfile/native deps，使用 install/agent-install 并回报
 - fork 代码改完后按 npm run build / 是否需要 yalc push / 重启或 reload 的链路处理
+- 如果已有 manifest 编排，委派时明确 batch id、依赖 issue、worker id，以及从 manifest 派生出的 app/fork worktree 与 api/web 服务上下文
 【上下文】
 - <相关文件/文档/前置任务>
 【验收标准】

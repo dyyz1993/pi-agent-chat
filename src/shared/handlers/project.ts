@@ -63,6 +63,11 @@ import type {
 import { listDetectedSshHosts } from "../lib/ssh-config";
 import { classifySshErrorMessage } from "../lib/ssh-error-classification";
 import { getProjectUserStateDir } from "../lib/pi-agent-paths";
+import {
+  getWorktreeStackExecutionContext,
+  readWorktreeStackManifest,
+  updateWorktreeStackOrchestration,
+} from "../lib/worktree-stack-manifest";
 
 const log = createLogger("config");
 const execFileAsync = promisify(execFile);
@@ -149,7 +154,7 @@ async function previewRemoteResourceSync(input: {
   const effectiveResourceTypes =
     resourceTypes.length > 0
       ? resourceTypes
-      : (["skills", "agents", "rules"] satisfies RemoteSyncResourceType[]);
+      : (["skills", "agents", "rules"] as RemoteSyncResourceType[]);
 
   const projectLocalPath = await findRemoteProjectLocalPath(input);
   const extraSources = projectLocalPath
@@ -535,6 +540,35 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       host,
       remotePath: params.remotePath,
       resourceTypes: params.resourceTypes,
+    });
+  });
+
+  r("project.getWorktreeStackManifest", async (params) => {
+    return readWorktreeStackManifest(params.projectPath);
+  });
+
+  r("project.updateWorktreeStackOrchestration", async (params) => {
+    const result = await updateWorktreeStackOrchestration(params.projectPath, {
+      leaderSessionId: params.leaderSessionId,
+      cleanup: params.cleanup,
+      upsertBatches: params.upsertBatches,
+      removeBatchIds: params.removeBatchIds,
+      upsertIssues: params.upsertIssues,
+      removeIssueIds: params.removeIssueIds,
+      upsertWorkers: params.upsertWorkers,
+      removeWorkerIds: params.removeWorkerIds,
+    });
+    if (!result.manifest) {
+      throw new Error(`Worktree stack manifest not found for ${params.projectPath}`);
+    }
+    return { manifestPath: result.manifestPath, manifest: result.manifest };
+  });
+
+  r("project.getWorktreeStackExecutionContext", async (params) => {
+    return getWorktreeStackExecutionContext({
+      projectPath: params.projectPath,
+      issueId: params.issueId,
+      workerId: params.workerId,
     });
   });
 

@@ -1,7 +1,10 @@
 #!/bin/bash
 # Shared helpers for pi-agent-chat worktree development.
 
-WORKTREE_REGISTRY_ROOT="${PI_WORKTREE_REGISTRY_DIR:-${HOME}/.pi-agent-chat/worktrees/registry}"
+PI_HOME="${PI_HOME:-${HOME}/.pi}"
+PI_CHAT_HOME="${PI_CHAT_HOME:-${PI_HOME}/chat}"
+PI_WORKTREE_STATE_DIR="${PI_WORKTREE_STATE_DIR:-${PI_CHAT_HOME}/worktrees}"
+WORKTREE_REGISTRY_ROOT="${PI_WORKTREE_REGISTRY_DIR:-${PI_WORKTREE_STATE_DIR}/registry}"
 DEFAULT_AGENT_SOURCE_ROOT="${PI_MOMO_FORK_ROOT:-/Users/xuyingzhou/Project/temporary/pi-momo-fork}"
 
 wt_now() {
@@ -131,7 +134,123 @@ wt_app_config_dir() {
   local app_path="$1"
   local id
   id=$(wt_id_for_path "$app_path")
-  printf "%s/%s" "${HOME}/.pi-agent-chat/worktrees" "$id"
+  printf "%s/%s" "$PI_WORKTREE_STATE_DIR" "$id"
+}
+
+wt_write_stack_manifest() {
+  local app_path="$1"
+  local api_port="$2"
+  local vite_port="$3"
+  local config_dir="$4"
+  local agent_source_root="${5:-}"
+  local agent_worktree_path="${6:-}"
+  local agent_branch="${7:-}"
+  local agent_cli_path="${8:-}"
+  local agent_dir="${9:-}"
+  local id app_name app_branch app_repo_root manifest_path
+  id=$(wt_id_for_path "$app_path")
+  app_name=$(basename "$app_path")
+  app_branch=$(git -C "$app_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+  app_repo_root=$(git -C "$app_path" rev-parse --show-toplevel 2>/dev/null || echo "$app_path")
+  manifest_path="$config_dir/manifest.json"
+
+  mkdir -p "$config_dir"
+  node - "$manifest_path" "$id" "$app_name" "$app_path" "$app_repo_root" "$app_branch" "$api_port" "$vite_port" "$config_dir" "$agent_dir" "$agent_source_root" "$agent_worktree_path" "$agent_branch" "$agent_cli_path" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const [
+  manifestPath,
+  id,
+  appName,
+  appPath,
+  appRepoRoot,
+  appBranch,
+  apiPort,
+  vitePort,
+  configDir,
+  agentDir,
+  agentSourceRoot,
+  agentWorktreePath,
+  agentBranch,
+  agentCliPath,
+] = process.argv.slice(2);
+
+const now = new Date().toISOString();
+const repos = [
+  {
+    name: appName,
+    role: "app",
+    repoPath: appRepoRoot,
+    worktreePath: appPath,
+    branch: appBranch,
+  },
+];
+
+if (agentWorktreePath) {
+  repos.push({
+    name: path.basename(agentWorktreePath),
+    role: "runtime-fork",
+    repoPath: agentSourceRoot || agentWorktreePath,
+    worktreePath: agentWorktreePath,
+    branch: agentBranch || "",
+  });
+}
+
+const services = [
+  {
+    name: `${appName}-api`,
+    role: "api",
+    cwd: appPath,
+    command: "bun --bun src/server.ts",
+    port: Number(apiPort),
+    healthUrl: `http://localhost:${apiPort}/health`,
+  },
+  {
+    name: `${appName}-vite`,
+    role: "web",
+    cwd: appPath,
+    command: "vite",
+    port: Number(vitePort),
+    healthUrl: `http://localhost:${vitePort}/`,
+  },
+];
+
+const manifest = {
+  version: 1,
+  id,
+  kind: "paired-worktree-stack",
+  name: appName,
+  createdAt: now,
+  updatedAt: now,
+  repos,
+  services,
+  appConfigDir: configDir,
+  agentDir,
+  runtime: {
+    piCliPath: agentCliPath || "",
+  },
+  orchestration: {
+    leaderSessionId: null,
+    batches: [],
+    issues: [],
+    workers: [],
+    cleanup: {
+      removeWorktrees: false,
+      removeRegistry: false,
+    },
+  },
+};
+
+try {
+  const existing = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.createdAt = existing.createdAt || manifest.createdAt;
+  manifest.orchestration = existing.orchestration || manifest.orchestration;
+} catch {}
+
+fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+NODE
 }
 
 wt_write_registry() {
@@ -163,6 +282,7 @@ AGENT_BRANCH=$agent_branch
 AGENT_CLI_PATH=$agent_cli_path
 UPDATED_AT=$(wt_now)
 EOF
+  wt_write_stack_manifest "$app_path" "$api_port" "$vite_port" "$config_dir" "$agent_source_root" "$agent_worktree_path" "$agent_branch" "$agent_cli_path" "$agent_dir"
 }
 
 wt_write_app_env() {
@@ -191,7 +311,7 @@ wt_write_app_env() {
 wt_seed_app_config() {
   local config_dir="$1"
   local worktree_path="$2"
-  local source_dir="${PI_APP_CONFIG_SOURCE_DIR:-${HOME}/.pi-agent-chat}"
+  local source_dir="${PI_APP_CONFIG_SOURCE_DIR:-${PI_CHAT_HOME}}"
   local source_config="$source_dir/config.json"
   local target_config="$config_dir/config.json"
   local marker="$config_dir/.worktree-config-prepared"
@@ -316,16 +436,17 @@ wt_default_agent_worktree_path() {
   local app_path="$1"
   local branch="$2"
   local source_root="$3"
-  local app_parent app_name source_parent source_name
+  local app_parent app_name source_parent source_name branch_slug
   app_parent=$(dirname "$app_path")
   app_name=$(basename "$app_path")
   source_parent=$(dirname "$source_root")
   source_name=$(basename "$source_root")
+  branch_slug=$(wt_sanitize "$branch")
 
   if [ "$app_name" = "pi-agent-chat" ]; then
     printf "%s/pi-momo-fork" "$app_parent"
   else
-    printf "%s/%s-%s" "$source_parent" "$source_name" "$branch"
+    printf "%s/%s-%s" "$source_parent" "$source_name" "$branch_slug"
   fi
 }
 

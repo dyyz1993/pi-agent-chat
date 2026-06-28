@@ -5,7 +5,7 @@ import { homedir } from "os";
 import { existsSync } from "fs";
 
 // 使用真实文件系统测试，写入临时目录
-const TEST_CONFIG_DIR = join(homedir(), ".pi-agent-chat");
+const TEST_CONFIG_DIR = join(homedir(), ".pi", "chat");
 const TEST_CONFIG_PATH = join(TEST_CONFIG_DIR, "config.json");
 const TEST_BACKUP_PATH = join(TEST_CONFIG_DIR, "config.json.bak");
 

@@ -79,9 +79,10 @@ pi-momo-fork/packages/coding-agent/
 
 ### Local paired worktree stack
 
+- Worktree 能力归属和目录命名先读 `docs/architecture/worktree-capability-boundary.md`。当前完整 paired worktree stack 是项目级 orchestration，不是插件能力，也还不是底层 runtime 完整能力；不要把 `pi-agent-chat` + `pi-momo-fork` 的端口、yalc、paired fork 规则直接塞进 `pi --worktree`。
 - 如果任务需要 app worktree 与本地依赖 fork 一起隔离运行，先读 `docs/workflows/local-paired-worktree-stack.md`。
 - 这类任务不只创建 Git worktree；还必须显式处理源码拓扑、依赖安装策略、yalc/local package、`.env`、`PI_CLI_PATH`、`PI_APP_CONFIG_DIR`、端口 registry、全局命令/bin、build/dist、logs/pid、敏感配置和验证流程。
-- 本机 Web dev 默认使用 `scripts/worktree-create.sh` / `scripts/worktree-dev.sh` / `scripts/worktree-common.sh` 管理 stack；端口和配对关系记录在 `~/.pi-agent-chat/worktrees/registry/`。
+- 本机 Web dev 默认使用 `scripts/worktree-create.sh` / `scripts/worktree-dev.sh` / `scripts/worktree-common.sh` 管理 stack；端口和配对关系记录在 `~/.pi/chat/worktrees/registry/`，结构化 stack 视图记录在 `~/.pi/chat/worktrees/<worktree-id>/manifest.json`。
 - `docs/workflows/apple-container-paired-worktree-sandbox.md` 是容器隔离方案；本机多端口、多 worktree 启动优先使用 `local-paired-worktree-stack.md`。
 
 ### Remote runtime 架构参考
@@ -125,7 +126,7 @@ pi-momo-fork/packages/coding-agent/
 - 能插件化的文件处理必须走 `FileResolver` / `AssetStore` / vision provider，不要把 pdf/csv/video/docx/OCR/OSS 等类型逻辑继续硬编码进 `read` 或 CLI `@file`。
 - `read` 工具和 CLI `@file` 可以保留 base64 兼容，但文件类型处理应由 resolver 接管，并尽量附带 asset metadata，方便 UI 预览、重放、远程上传和后续视觉工具调用。
 - 大文本、CSV、log、JSONL 等非二进制文件也必须走文本 resolver 的共享预算；`@file` 不允许绕过截断把整文件直接注入模型上下文。默认上限与 `read` 对齐：2000 行或 50KB，超出后用 offset/search/parser/resolver 继续读取。
-- 项目私有 asset 状态写入 `<PROJECT_USER_STATE_DIR>/assets/...`；不要写进 `~/.pi-agent-chat/config.json`，也不要默认写进仓库。
+- 项目私有 asset 状态写入 `<PROJECT_USER_STATE_DIR>/assets/...`；不要写进 `~/.pi/chat/config.json`，也不要默认写进仓库。
 - 接 OSS/S3/UCloud 等对象存储时必须作为 `AssetStore` backend 接入，默认 signed URL，不能把公网 URL 作为唯一来源；保留本地 fallback 以支持重放和 URL 过期恢复。
 - 视觉识别入口必须作为 provider/router 配置处理，不要硬编码进 `read` 或 `@file`。目标路由顺序是 native model vision、OCR、MCP vision、xBrowser/Doubao、Bash CLI provider/fallback；当前如果还没有统一开关，必须在文档和 `pi-expert` 中明确“未实现统一开关”和临时调用方式。
 - Bash 可以调用配置好的 CLI 解析图片/视频，但必须使用 allowlisted argv 模板、超时、输出预算和结构化结果；不能把用户路径或 prompt 拼成 shell 字符串，也不能把普通元数据工具伪装成语义视觉能力。
@@ -151,7 +152,7 @@ pi-momo-fork/packages/coding-agent/
 - UI/产品行为变更必须提供可执行的人工验收 case：Setup、Steps、Expected、Evidence、Status。截图或浏览器自动识别只能作为辅助证据，除非用户明确授权代验收，否则人工验收状态仍为 pending。
 - 关联 fork 的开发结果默认面向当前关联 fork 的分支/PR-style change set，不要写成 upstream PR，除非用户明确要求。
 - 关联 fork 并行开发也必须用 worktree：一个 issue/slice 对应 app worktree + paired fork worktree。fork 代码改完后按 `npm run build`、必要时 `yalc push`、再重启/reload app/Agent session 的顺序处理。
-- 端口和配对关系从 `./scripts/worktree-dev.sh list`、`~/.pi-agent-chat/worktrees/registry/*.env`、worktree `.env`、`logs/dev.log` 和 `lsof` 查询；不要让 Agent 猜端口。
+- 端口和配对关系从 `./scripts/worktree-dev.sh list`、`~/.pi/chat/worktrees/<worktree-id>/manifest.json`、`~/.pi/chat/worktrees/registry/*.env`、worktree `.env`、`logs/dev.log` 和 `lsof` 查询；不要让 Agent 猜端口。
 - 启动项目 stack 时不要手工复制 env 或猜端口。新建并启动用 `scripts/worktree-create.sh <slug> --dev --start --with-agent-fork`；启动/修复已有 worktree 用 `scripts/worktree-dev.sh <app-worktree> --with-agent-fork --agent-path <paired-fork> --agent-build`；只准备 env/registry 用 `--no-start`。
 - 启动脚本会从主仓 `.env` 派生 worktree `.env` 并重写 `PORT`、`PI_CLI_PATH`、`PI_CODING_AGENT_DIR`、`PI_APP_CONFIG_DIR`，启动时导出 `VITE_API_TARGET`、`VITE_PORT`、`VITE_AUTH_TOKEN`。worker 必须在回报里列出这些实际值。
 - 默认依赖策略是 app `--link` / fork `--agent-link`；改依赖、lockfile 或 native deps 时才用 `--install` / `--agent-install`。仅 CLI/runtime fork 改动通常 build + `PI_CLI_PATH` 即可；app import 的 package API/type 改动才需要 `yalc push`。
@@ -333,7 +334,7 @@ src/
       agent-stop-operations.ts   # 停止流程操作
       # ... (37 files total: runtime client, channel system, adapters)
     lib/
-      project-config.ts      # ~/.pi-agent-chat/config.json 读写（串行队列 + 备份保护）
+      project-config.ts      # ~/.pi/chat/config.json 读写（串行队列 + 备份保护）
       session-scanner.ts     # 磁盘 session 扫描器（用于进程恢复）
       logger.ts              # createLogger 工厂
       with-timeout.ts        # Promise 超时包装
@@ -468,7 +469,7 @@ Session 文件（`<sessionPath>`）是 JSONL 格式，每行一个 JSON 条目�
 
 ## 数据持久化
 
-### 前端持久化：`~/.pi-agent-chat/config.json`
+### 前端持久化：`~/.pi/chat/config.json`
 
 通过 `src/shared/lib/project-config.ts` 管理，使用串行队列（`loadAndSave`）防止并发写竞争，写入前自动备份到 `config.json.bak`。
 
@@ -522,11 +523,11 @@ Session 文件（`<sessionPath>`）是 JSONL 格式，每行一个 JSON 条目�
 
 ### 持久化路径变量
 
-所有持久化路径必须用下面变量描述。新增变量前先补本节和“写入路径注册表”，再写代码；不要在业务代码里直接手写 `~/.pi/agent/...`、`~/.pi-agent-chat/...` 或 `<cwd>/.pi/...` 的新变体。
+所有持久化路径必须用下面变量描述。新增变量前先补本节和“写入路径注册表”，再写代码；不要在业务代码里直接手写 `~/.pi/agent/...`、`~/.pi/chat/...` 或 `<cwd>/.pi/...` 的新变体。
 
 | 变量                           | 生成规则                                                                                     | 说明                                                                                                                                                                                |
 | ------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<PI_APP_CONFIG_DIR>`          | `~/.pi-agent-chat`                                                                           | pi-agent-chat app 级 UI 状态目录，只保存 UI 索引和偏好。                                                                                                                            |
+| `<PI_APP_CONFIG_DIR>`          | `~/.pi/chat`                                                                                 | pi-agent-chat app 级 UI 状态目录，只保存 UI 索引和偏好。                                                                                                                            |
 | `<PI_AGENT_DIR>`               | `process.env.PI_CODING_AGENT_DIR ?? ~/.pi/agent`                                             | fork CLI 的用户态根目录。所有 agent 私有状态都必须从这里派生。                                                                                                                      |
 | `<PROJECT_ROOT>`               | 当前会话的 canonical project path                                                            | 用户正在操作的项目根目录。普通目录是自身路径；git worktree 见下方规则。写入前必须经过 path guard / trust 规则。                                                                     |
 | `<PROJECT_SHARED_DIR>`         | `<PROJECT_ROOT>/.pi`                                                                         | 项目共享配置目录，可进仓库。写入前必须确认 project trusted。                                                                                                                        |
@@ -665,6 +666,8 @@ branch   = permission-runtime
 ```
 
 如果未来支持自定义 worktree 根目录，必须新增变量，例如 `<WORKTREE_ROOT>`，并登记默认值、配置来源和沙盒挂载策略；不要在 git handler 里临时拼另一个路径规则。
+
+目录命名原则见 `docs/architecture/worktree-capability-boundary.md`：app 状态推荐收敛到 `~/.pi/chat`，runtime 状态保留 `~/.pi/agent`；源码 worktree 默认不要藏进 app config dotdir，除非它是明确的 Pi managed 临时工作区。
 
 路径来源：
 

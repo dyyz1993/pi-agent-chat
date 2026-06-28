@@ -336,7 +336,7 @@ Current SSH project UX is a remote execution workflow with local UI ownership.
 | Session history             | Runtime-owned                    | For remote-agent-child, the child runtime owns remote session JSONL; local UI can index/open it.                |
 | Memory                      | Runtime-owned                    | Remote child memory follows the remote agent dir; local Codex memories are not automatically mounted or synced. |
 | Project `.pi/settings.json` | Remote project                   | Shared project config belongs beside the remote project and still needs trust/permission boundaries.            |
-| Local app config            | Local                            | `~/.pi-agent-chat/config.json` is only an app index/preference store, not a permission/trust rule store.        |
+| Local app config            | Local                            | `~/.pi/chat/config.json` is only an app index/preference store, not a permission/trust rule store.              |
 
 Do not silently synchronize local memories, sessions, model files, or plugin
 state to the remote host. If a later feature needs synchronization, make it an

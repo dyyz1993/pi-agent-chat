@@ -61,6 +61,7 @@
     "test:settings": "bash run-tests.sh run settings",
     "test:list": "bash run-tests.sh list",
     "verify:remote-child": "bun tools/verify-remote-child-runtime.ts",
+    "verify:worktree-stack": "bun tools/verify-worktree-stack-orchestration.ts",
     "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {
