@@ -118,6 +118,45 @@ pi-momo-fork/packages/coding-agent/
 - `buildPrompt()` 应展示当前 store 中的委派任务，不要按年龄过滤，否则父 Agent 刷新、重连或长时间运行后会失去委派历史。
 - 如果将来必须新增清理机制，必须是显式、可配置、可观测的行为，并向前端/父会话发出状态变化事件，不能静默删除。
 
+### Asset Store / 视觉输入规则
+
+- 涉及图片、二进制文件、OCR、视频帧、模型视觉输入、OSS/signed URL 或文件预览的改动，先读 `docs/architecture/asset-store-and-vision-inputs.md`。
+- 内部优先沉淀 `AssetRef`；provider adapter 作为最后一层再决定传 base64、data URL、remote URL 或调用视觉 fallback。
+- 能插件化的文件处理必须走 `FileResolver` / `AssetStore` / vision provider，不要把 pdf/csv/video/docx/OCR/OSS 等类型逻辑继续硬编码进 `read` 或 CLI `@file`。
+- `read` 工具和 CLI `@file` 可以保留 base64 兼容，但文件类型处理应由 resolver 接管，并尽量附带 asset metadata，方便 UI 预览、重放、远程上传和后续视觉工具调用。
+- 大文本、CSV、log、JSONL 等非二进制文件也必须走文本 resolver 的共享预算；`@file` 不允许绕过截断把整文件直接注入模型上下文。默认上限与 `read` 对齐：2000 行或 50KB，超出后用 offset/search/parser/resolver 继续读取。
+- 项目私有 asset 状态写入 `<PROJECT_USER_STATE_DIR>/assets/...`；不要写进 `~/.pi-agent-chat/config.json`，也不要默认写进仓库。
+- 接 OSS/S3/UCloud 等对象存储时必须作为 `AssetStore` backend 接入，默认 signed URL，不能把公网 URL 作为唯一来源；保留本地 fallback 以支持重放和 URL 过期恢复。
+- 视觉识别入口必须作为 provider/router 配置处理，不要硬编码进 `read` 或 `@file`。目标路由顺序是 native model vision、OCR、MCP vision、xBrowser/Doubao、Bash CLI provider/fallback；当前如果还没有统一开关，必须在文档和 `pi-expert` 中明确“未实现统一开关”和临时调用方式。
+- Bash 可以调用配置好的 CLI 解析图片/视频，但必须使用 allowlisted argv 模板、超时、输出预算和结构化结果；不能把用户路径或 prompt 拼成 shell 字符串，也不能把普通元数据工具伪装成语义视觉能力。
+
+### Pi Expert 角色同步规则
+
+- 全局 Pi 专家角色是 `~/.pi/agent/agents/pi-expert.md`；它必须掌握当前 Pi 框架的配置、模型、代理、preview、hooks、Agent 定义、委派/子任务、插件、worktree/yalc 开发流程。
+- 维护大纲见 `docs/architecture/pi-expert-knowledge-map.md`。任何改动如果涉及以下内容，必须同步更新该文档和 `~/.pi/agent/agents/pi-expert.md`：OSS/AssetStore/FileResolver、`@file`/`read` 文件处理、视觉 provider/OCR/MCP/xBrowser 路由、模型/auth/settings 配置、Bridge/Preview/Proxy URL、hooks 配置来源、Agent frontmatter 字段、session/委派/subagent/fork 语义、worktree/端口/yalc 流程、持久化路径。
+- 如果新增“使用型 Agent”和“开发型 Agent”，开发型 Agent 必须引用或继承 pi-expert 的知识入口；使用型 Agent 可以只引用必要的运行/配置说明，不需要包含底层构建细节。
+- 不要把 OpenCode 风格的 `permission: "*": allow` 当作 Pi Agent 文件格式；Pi Agent 以 `permissionMode` / `permissionProfile` 和 `packages/coding-agent/src/core/agent-types.ts` 的字段解析为准。
+
+### Project Issue Orchestration Agents
+
+- 当前项目级 Agent 放在 `.pi/agents/`，只服务本仓库及其 paired fork，不应提升为全局 Agent，除非角色已经抽象成通用能力。
+- 项目级 issue 处理 workflow 见 `docs/workflows/project-issue-orchestration.md`；角色提示词只保留入口和职责，流程细节以该文档为准。
+- `.pi/agents/pi-issue-leader.md` 是项目 Issue 协调者：负责拉取/理解 issue、拆分并行任务、指定执行 Agent、追踪 delegate、组织 Review、规划合并和 worktree 清理；它不直接写代码、不运行 bash。
+- `.pi/agents/pi-worktree-dev.md` 是项目开发执行者：负责单个 issue 的隔离 worktree/paired fork 开发、端口 registry、yalc/build、验证和 PR 风格收口。
+- `pi-issue-leader` 委派开发任务时默认指定 `agent: "pi-worktree-dev"`；涉及底层框架、Agent 格式、AssetStore/FileResolver、Preview/Proxy、hooks、配置或 worktree 流程时，任务说明必须要求执行者阅读 `AGENTS.md`、`docs/workflows/local-paired-worktree-stack.md` 和 `~/.pi/agent/agents/pi-expert.md` 的相关章节。
+- `pi-issue-leader` 和 `pi-worktree-dev` 默认给完整工具权限；不要通过工具白名单隐藏能力。行为边界写在 workflow/prompt 中，权限层保持足够完整，避免端口诊断、构建、测试、issue 拉取或收口时被卡住。
+- 在当前 Agent parser 中，省略 `tools` 表示不限制工具、可使用全部已注册工具；写 `tools` 会变成白名单。项目编排/开发 Agent 不要为了消除 recommended-field 提示而写窄工具列表。
+- 每个 issue/PR-style change set 必须有 validation packet：自动测试 case、人工验收 case、证据、negative/edge case 和未测风险。没有 validation packet 不能进入合并；用户可以显式 waive，但不能静默跳过。
+- 默认生命周期是 issue/local ledger → branch/PR-style change set → Review → User Acceptance → merge/close issue。merge 后不默认再开 issue；只有遗留、回归、用户新要求或 acceptance 失败时才创建 follow-up issue。
+- UI/产品行为变更必须提供可执行的人工验收 case：Setup、Steps、Expected、Evidence、Status。截图或浏览器自动识别只能作为辅助证据，除非用户明确授权代验收，否则人工验收状态仍为 pending。
+- 关联 fork 的开发结果默认面向当前关联 fork 的分支/PR-style change set，不要写成 upstream PR，除非用户明确要求。
+- 关联 fork 并行开发也必须用 worktree：一个 issue/slice 对应 app worktree + paired fork worktree。fork 代码改完后按 `npm run build`、必要时 `yalc push`、再重启/reload app/Agent session 的顺序处理。
+- 端口和配对关系从 `./scripts/worktree-dev.sh list`、`~/.pi-agent-chat/worktrees/registry/*.env`、worktree `.env`、`logs/dev.log` 和 `lsof` 查询；不要让 Agent 猜端口。
+- 启动项目 stack 时不要手工复制 env 或猜端口。新建并启动用 `scripts/worktree-create.sh <slug> --dev --start --with-agent-fork`；启动/修复已有 worktree 用 `scripts/worktree-dev.sh <app-worktree> --with-agent-fork --agent-path <paired-fork> --agent-build`；只准备 env/registry 用 `--no-start`。
+- 启动脚本会从主仓 `.env` 派生 worktree `.env` 并重写 `PORT`、`PI_CLI_PATH`、`PI_CODING_AGENT_DIR`、`PI_APP_CONFIG_DIR`，启动时导出 `VITE_API_TARGET`、`VITE_PORT`、`VITE_AUTH_TOKEN`。worker 必须在回报里列出这些实际值。
+- 默认依赖策略是 app `--link` / fork `--agent-link`；改依赖、lockfile 或 native deps 时才用 `--install` / `--agent-install`。仅 CLI/runtime fork 改动通常 build + `PI_CLI_PATH` 即可；app import 的 package API/type 改动才需要 `yalc push`。
+- 新增或修改这类项目级 Agent 时，需要同步检查：frontmatter 是否只使用 `agent-types.ts` 支持的字段、是否声明当前项目拓扑、是否说明 app/fork 双仓边界、是否包含回报格式、是否避免直接合并/删除 worktree。
+
 ## Theme & Design System
 
 ### Token Location
