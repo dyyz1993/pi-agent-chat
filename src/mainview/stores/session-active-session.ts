@@ -41,6 +41,43 @@ interface ActiveSessionLogger {
   error: (message: string, data?: Record<string, unknown>) => void;
 }
 
+interface HotSwitchMessageLoadParams {
+  sessionId: string;
+  sessionPath: string;
+  hasCached: boolean;
+  backgroundRefresh: (sessionId: string, sessionPath: string) => Promise<void>;
+  loadSessionMessages: (
+    sessionId: string,
+    options: { force: boolean; sessionPath: string },
+  ) => Promise<void>;
+  getContextUsage: (sessionId: string) => Promise<{ tokens?: number | null }>;
+  updateSessionContext: (sessionId: string, usage: { tokens?: number | null }) => void;
+}
+
+/**
+ * Hot switch 消息加载逻辑，从 session-active-session.ts 抽取以便测试。
+ * 保证 _backgroundRefreshMessages 只调用一次（#37）。
+ */
+export async function runHotSwitchMessageLoad(params: HotSwitchMessageLoadParams): Promise<void> {
+  const { sessionId, sessionPath, hasCached, backgroundRefresh, loadSessionMessages, getContextUsage, updateSessionContext } = params;
+
+  const loadPromise: Promise<void> = hasCached
+    ? backgroundRefresh(sessionId, sessionPath)
+    : loadSessionMessages(sessionId, { force: true, sessionPath });
+
+  await loadPromise.catch(() => {});
+
+  // 不重复调用 _backgroundRefreshMessages — loadPromise 已包含它 (#37)
+  try {
+    const r = await getContextUsage(sessionId);
+    if (r && r.tokens != null) {
+      updateSessionContext(sessionId, r);
+    }
+  } catch {
+    // context usage 获取失败不影响主流程
+  }
+}
+
 export function createSetActiveSessionAction({
   get,
   set,
@@ -315,30 +352,20 @@ export function createSetActiveSessionAction({
                   (m: { role: string; tokenUsage?: unknown }) =>
                     m.role === "user" || (m.role === "assistant" && m.tokenUsage),
                 );
-                const loadPromise: Promise<void> = hasCached
-                  ? useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath)
-                  : useChatStore.getState().loadSessionMessages(id, {
-                      force: true,
-                      sessionPath: session.sessionPath,
-                    });
 
-                loadPromise
-                  .catch(() => {})
-                  .then(() => {
-                    return useChatStore
-                      .getState()
-                      ._backgroundRefreshMessages(id, session.sessionPath);
-                  })
-                  .then(() => {
-                    return apiClient
-                      .call("agent.getContextUsage", { sessionId: id })
-                      .then((r) => {
-                        if (r && r.tokens != null) {
-                          useSessionStore.getState().updateSessionContext(id, r);
-                        }
-                      })
-                      .catch(() => {});
-                  })
+                runHotSwitchMessageLoad({
+                  sessionId: id,
+                  sessionPath: session.sessionPath,
+                  hasCached,
+                  backgroundRefresh: (sid, sPath) =>
+                    useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
+                  loadSessionMessages: (sid, opts) =>
+                    useChatStore.getState().loadSessionMessages(sid, opts),
+                  getContextUsage: (sid) =>
+                    apiClient.call("agent.getContextUsage", { sessionId: sid }),
+                  updateSessionContext: (sid, usage) =>
+                    useSessionStore.getState().updateSessionContext(sid, usage),
+                })
                   .then(() => {
                     perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
                       sessionId: id,
