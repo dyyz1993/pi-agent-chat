@@ -41,8 +41,9 @@ interface TierState {
  * 遍历 sessionsByProject 找到 session 所属的项目。
  */
 function findProjectPathBySessionId(sessionId: string): string | null {
-  const { sessionsByProject } = useSessionStore.getState();
-  for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
+  const storeState = useSessionStore.getState();
+  if (!storeState?.sessionsByProject) return null;
+  for (const [projectPath, sessions] of Object.entries(storeState.sessionsByProject)) {
     if (sessions.some((s) => s.sessionId === sessionId)) {
       return projectPath;
     }
