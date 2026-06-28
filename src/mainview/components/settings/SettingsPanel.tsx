@@ -550,7 +550,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         </IconButton>
       </div>
 
-      <div className="min-h-0 flex-1 bg-bg-primary md:flex">
+      <div className="min-h-0 flex flex-1 flex-col bg-bg-primary md:flex-row">
         <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 md:flex md:w-[288px] md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-0">
           <div className="flex gap-1 overflow-x-auto scrollbar-none md:hidden">
             {SETTINGS_TABS.map((tab) => {
