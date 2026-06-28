@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { ExternalLink, ChevronDown } from "lucide-react";
 import type { SpecialBlockRendererProps } from "../special-block-registry";
 import { registerSpecialBlock } from "../special-block-registry";
+import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useAgentStore } from "../../../stores/use-agent-store";
 import { useJumpToSession } from "../primitives/useJumpToSession";
@@ -62,8 +63,8 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
         )}
       </div>
       {block.body && !collapsed && (
-        <div className="px-2.5 pb-2 pt-0.5 border-t border-border-secondary/30 text-xs text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
-          {block.body}
+        <div className="px-2.5 pb-2 pt-0.5 border-t border-border-secondary/30 text-xs text-text-secondary break-words leading-relaxed prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:my-1 prose-headings:my-1">
+          <CachedReactMarkdown>{block.body}</CachedReactMarkdown>
         </div>
       )}
     </div>
