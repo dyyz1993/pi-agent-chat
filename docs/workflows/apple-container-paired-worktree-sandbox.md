@@ -156,22 +156,22 @@ Treat host global directories as seed material, not as the worker's live writabl
 
 Recommended mapping:
 
-| Host source                                  | Sandbox target                                     | Mode                       | Why                                                                             |
-| -------------------------------------------- | -------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------- |
-| `~/.pi/agent/auth.json`                      | `$APP_WT/.sandbox/pi-agent/auth.json`              | Copy                       | Gives the worker credentials without writing back to the main auth file.        |
-| `~/.pi/agent/models.json`                    | `$APP_WT/.sandbox/pi-agent/models.json`            | Copy                       | Keeps model/provider setup realistic and isolated.                              |
-| `~/.pi/agent/settings.json`                  | `$APP_WT/.sandbox/pi-agent/settings.json`          | Copy                       | Allows per-worker extension/model/settings experiments.                         |
-| `~/.pi/agent/mcp.json`                       | `$APP_WT/.sandbox/pi-agent/mcp.json`               | Copy if present            | MCP enablement can be worker-specific.                                          |
-| `~/.pi/agent/keybindings.json`               | `$APP_WT/.sandbox/pi-agent/keybindings.json`       | Copy if present            | UI/runtime convenience, low risk.                                               |
-| `~/.pi/agent/agents/`                        | `$APP_WT/.sandbox/pi-agent/agents/`                | Copy                       | Worker gets the same global agents but can test edits independently.            |
-| `~/.pi/agent/extensions/` and `extensions2/` | `$APP_WT/.sandbox/pi-agent/extensions*/`           | Copy by default            | Extensions are code; copying avoids one worker mutating global extension state. |
-| `~/.pi/agent/bin/`                           | `$APP_WT/.sandbox/pi-agent/bin/`                   | Copy or read-only mount    | Useful helper binaries. Prefer copy unless large.                               |
-| `~/.pi/chat/config.json`               | `$APP_WT/.sandbox/home/.pi/chat/config.json` | Generate, not copy blindly | Must point `activeProject`/tabs to container paths such as `/workspace`.        |
-| package caches                               | named volumes such as `acws-npm-cache`             | Shared cache               | Cache contents are not project state. Sharing saves install time.               |
-| `~/.pi/agent/sessions/`                      | do not copy by default                             | Isolated per worker        | Sessions are exact-`projectPath` history; copying can confuse project buckets.  |
-| `~/.pi/agent/file-store/`                    | do not copy by default                             | Isolated per worker        | Snapshot/object-store state is tied to sessions and can be huge.                |
-| `~/.pi/agent/memory/`                        | do not copy by default                             | Isolated per worker        | Memory writes should not leak back to main unless intentionally testing memory. |
-| `~/.pi/agent/tmp/`, logs, update files       | do not copy                                        | Runtime noise              | Recreated by the worker.                                                        |
+| Host source                                  | Sandbox target                               | Mode                       | Why                                                                             |
+| -------------------------------------------- | -------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| `~/.pi/agent/auth.json`                      | `$APP_WT/.sandbox/pi-agent/auth.json`        | Copy                       | Gives the worker credentials without writing back to the main auth file.        |
+| `~/.pi/agent/models.json`                    | `$APP_WT/.sandbox/pi-agent/models.json`      | Copy                       | Keeps model/provider setup realistic and isolated.                              |
+| `~/.pi/agent/settings.json`                  | `$APP_WT/.sandbox/pi-agent/settings.json`    | Copy                       | Allows per-worker extension/model/settings experiments.                         |
+| `~/.pi/agent/mcp.json`                       | `$APP_WT/.sandbox/pi-agent/mcp.json`         | Copy if present            | MCP enablement can be worker-specific.                                          |
+| `~/.pi/agent/keybindings.json`               | `$APP_WT/.sandbox/pi-agent/keybindings.json` | Copy if present            | UI/runtime convenience, low risk.                                               |
+| `~/.pi/agent/agents/`                        | `$APP_WT/.sandbox/pi-agent/agents/`          | Copy                       | Worker gets the same global agents but can test edits independently.            |
+| `~/.pi/agent/extensions/` and `extensions2/` | `$APP_WT/.sandbox/pi-agent/extensions*/`     | Copy by default            | Extensions are code; copying avoids one worker mutating global extension state. |
+| `~/.pi/agent/bin/`                           | `$APP_WT/.sandbox/pi-agent/bin/`             | Copy or read-only mount    | Useful helper binaries. Prefer copy unless large.                               |
+| `~/.pi/chat/config.json`                     | `$APP_WT/.sandbox/home/.pi/chat/config.json` | Generate, not copy blindly | Must point `activeProject`/tabs to container paths such as `/workspace`.        |
+| package caches                               | named volumes such as `acws-npm-cache`       | Shared cache               | Cache contents are not project state. Sharing saves install time.               |
+| `~/.pi/agent/sessions/`                      | do not copy by default                       | Isolated per worker        | Sessions are exact-`projectPath` history; copying can confuse project buckets.  |
+| `~/.pi/agent/file-store/`                    | do not copy by default                       | Isolated per worker        | Snapshot/object-store state is tied to sessions and can be huge.                |
+| `~/.pi/agent/memory/`                        | do not copy by default                       | Isolated per worker        | Memory writes should not leak back to main unless intentionally testing memory. |
+| `~/.pi/agent/tmp/`, logs, update files       | do not copy                                  | Runtime noise              | Recreated by the worker.                                                        |
 
 For a realistic worker, seed with this pattern:
 

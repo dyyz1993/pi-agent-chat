@@ -8,10 +8,10 @@ app is released.
 
 Worktree support is currently split across three layers:
 
-| Layer | Current owner | What exists today |
-| --- | --- | --- |
-| Runtime awareness | `pi-coding-agent` | The runtime understands Git worktree metadata, branch state, and canonical git roots. |
-| App primitive | `pi-agent-chat` RPC | `git.worktreeList` and `git.worktreeAdd` call Git and return worktree paths. |
+| Layer                 | Current owner                              | What exists today                                                                                                 |
+| --------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Runtime awareness     | `pi-coding-agent`                          | The runtime understands Git worktree metadata, branch state, and canonical git roots.                             |
+| App primitive         | `pi-agent-chat` RPC                        | `git.worktreeList` and `git.worktreeAdd` call Git and return worktree paths.                                      |
 | Project orchestration | `scripts/worktree-*.sh` and project agents | Paired app/fork worktrees, ports, app config isolation, `PI_CLI_PATH`, `PI_CODING_AGENT_DIR`, logs, and registry. |
 
 So worktree is not a plugin feature, but the complete paired worktree stack is
@@ -29,17 +29,17 @@ or project-scoped agents, it should remain in this repository's workflow layer.
 
 ## Capability Split
 
-| Capability | Should live in | Reason |
-| --- | --- | --- |
-| Detect current repo is a Git worktree | Runtime | Every agent invocation benefits from correct Git identity. |
-| Resolve active working directory vs canonical git root | Runtime | Tools need both values to avoid writing to the wrong project. |
-| Run an agent with an isolated agent dir | Runtime | This is generic isolation, not app-specific orchestration. |
-| Create/list/remove raw Git worktrees | App or shared Git module first; runtime later if generalized | Useful primitive, but UI and path policy still matter. |
-| Allocate API/Vite ports | App workflow | Specific to `pi-agent-chat` dev servers. |
-| Seed `PI_APP_CONFIG_DIR` | App workflow | The config schema belongs to the app shell. |
-| Pair `pi-agent-chat` with `pi-momo-fork` | Project workflow | This is repository topology, not a framework invariant. |
-| Build `packages/coding-agent` and wire `PI_CLI_PATH` | Project workflow | Local fork development detail. |
-| Maintain issue-worker registry | Project workflow | Depends on local dev server and PR-style review flow. |
+| Capability                                             | Should live in                                               | Reason                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
+| Detect current repo is a Git worktree                  | Runtime                                                      | Every agent invocation benefits from correct Git identity.    |
+| Resolve active working directory vs canonical git root | Runtime                                                      | Tools need both values to avoid writing to the wrong project. |
+| Run an agent with an isolated agent dir                | Runtime                                                      | This is generic isolation, not app-specific orchestration.    |
+| Create/list/remove raw Git worktrees                   | App or shared Git module first; runtime later if generalized | Useful primitive, but UI and path policy still matter.        |
+| Allocate API/Vite ports                                | App workflow                                                 | Specific to `pi-agent-chat` dev servers.                      |
+| Seed `PI_APP_CONFIG_DIR`                               | App workflow                                                 | The config schema belongs to the app shell.                   |
+| Pair `pi-agent-chat` with `pi-momo-fork`               | Project workflow                                             | This is repository topology, not a framework invariant.       |
+| Build `packages/coding-agent` and wire `PI_CLI_PATH`   | Project workflow                                             | Local fork development detail.                                |
+| Maintain issue-worker registry                         | Project workflow                                             | Depends on local dev server and PR-style review flow.         |
 
 ## `pi --worktree` Direction
 
@@ -89,14 +89,14 @@ Use one Pi home namespace:
 
 Recommended app/runtime split:
 
-| Variable | Recommended default | Meaning |
-| --- | --- | --- |
-| `<PI_HOME>` | `~/.pi` | Shared Pi namespace. |
-| `<PI_AGENT_DIR>` | `~/.pi/agent` | Runtime-owned agent state: sessions, memory, skills, rules, auth, settings. |
-| `<PI_APP_CONFIG_DIR>` | `~/.pi/chat` | App-shell state: recent projects, tabs, favorites, UI preferences, remote project records. |
-| `<PI_WORKTREE_STATE_DIR>` | `~/.pi/chat/worktrees` | App-owned worktree stack state: registry, per-stack app config, agent runtime dir, logs that are not source code. |
-| `<PI_WORKTREE_REGISTRY_DIR>` | `~/.pi/chat/worktrees/registry` | Port and app/fork pairing records. |
-| `<PI_MANAGED_WORKTREE_ROOT>` | `~/.pi/worktrees` | Optional future root for framework-managed source worktrees. |
+| Variable                     | Recommended default             | Meaning                                                                                                           |
+| ---------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `<PI_HOME>`                  | `~/.pi`                         | Shared Pi namespace.                                                                                              |
+| `<PI_AGENT_DIR>`             | `~/.pi/agent`                   | Runtime-owned agent state: sessions, memory, skills, rules, auth, settings.                                       |
+| `<PI_APP_CONFIG_DIR>`        | `~/.pi/chat`                    | App-shell state: recent projects, tabs, favorites, UI preferences, remote project records.                        |
+| `<PI_WORKTREE_STATE_DIR>`    | `~/.pi/chat/worktrees`          | App-owned worktree stack state: registry, per-stack app config, agent runtime dir, logs that are not source code. |
+| `<PI_WORKTREE_REGISTRY_DIR>` | `~/.pi/chat/worktrees/registry` | Port and app/fork pairing records.                                                                                |
+| `<PI_MANAGED_WORKTREE_ROOT>` | `~/.pi/worktrees`               | Optional future root for framework-managed source worktrees.                                                      |
 
 Do not use `~/.pi-agent-chat` for new code. The app has not been released, so the
 clean target should be `~/.pi/chat`.

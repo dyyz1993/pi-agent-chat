@@ -21,13 +21,13 @@ Do not store project-private asset state in `~/.pi/chat/config.json`, and do not
 
 The stable core owns the protocol and dispatch points. Feature-specific behavior should be pluginized whenever possible.
 
-| Layer | Core-owned | Plugin/provider-owned |
-| --- | --- | --- |
-| Asset protocol | `AssetRef`, JSONL-safe metadata, provider-facing content blocks | None |
-| File handling | `FileResolver` interface, resolver ordering, safe text truncation | image/pdf/csv/video/docx resolvers, thumbnails, metadata extraction |
-| Storage | `AssetStore` interface, local fallback backend | UCloud/OSS/S3/R2/custom signed URL backends |
-| Vision | vision request/result contract | OCR, xbrowser Doubao, MCP vision, local vision models, video frame analyzers |
-| UI | asset rendering contract and authenticated preview route | Optional renderer extensions only after core UI has safe defaults |
+| Layer          | Core-owned                                                        | Plugin/provider-owned                                                        |
+| -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Asset protocol | `AssetRef`, JSONL-safe metadata, provider-facing content blocks   | None                                                                         |
+| File handling  | `FileResolver` interface, resolver ordering, safe text truncation | image/pdf/csv/video/docx resolvers, thumbnails, metadata extraction          |
+| Storage        | `AssetStore` interface, local fallback backend                    | UCloud/OSS/S3/R2/custom signed URL backends                                  |
+| Vision         | vision request/result contract                                    | OCR, xbrowser Doubao, MCP vision, local vision models, video frame analyzers |
+| UI             | asset rendering contract and authenticated preview route          | Optional renderer extensions only after core UI has safe defaults            |
 
 `@file` is an entry syntax, not a file-type implementation. It should call the same resolver registry as the `read` tool.
 
@@ -118,7 +118,18 @@ vision:
           argv: ["ffmpeg", "-i", "{{localPath}}", "-vf", "fps=1", "{{tempDir}}/frame-%03d.png"]
           output: assets
         externalVision:
-          argv: ["xbrowser", "doubao", "chat", "--cdp", "9221", "--image", "{{localPath}}", "--prompt", "{{prompt}}"]
+          argv:
+            [
+              "xbrowser",
+              "doubao",
+              "chat",
+              "--cdp",
+              "9221",
+              "--image",
+              "{{localPath}}",
+              "--prompt",
+              "{{prompt}}",
+            ]
           output: json
 ```
 
