@@ -190,6 +190,19 @@ The current automated proof for that flow lives in:
 test/unit/handlers/project-worktree-stack.test.ts
 ```
 
+The repeatable repo-level acceptance command for the same flow is:
+
+```bash
+bun run verify:worktree-stack
+```
+
+It exercises two layers in order:
+
+1. real `scripts/worktree-common.sh` registry + manifest generation
+2. real `project.getWorktreeStackManifest` /
+   `project.updateWorktreeStackOrchestration` /
+   `project.getWorktreeStackExecutionContext` handler flow
+
 Registry entries usually contain:
 
 ```text
