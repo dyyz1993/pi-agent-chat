@@ -97,4 +97,63 @@ describe("useTierStore", () => {
     expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("fast");
     expect(useTierStore.getState().switching).toBe(false);
   });
+
+  it("loadProjectTierConfig updates store when config exists", async () => {
+    mockedCall.mockResolvedValueOnce({
+      config: { tierModels: { fast: "x/fast", pro: "x/pro" }, currentTier: "pro" },
+    });
+    await useTierStore.getState().loadProjectTierConfig(PROJECT_PATH);
+    expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("pro");
+    expect(useTierStore.getState().getTierModels(PROJECT_PATH)).toEqual({ fast: "x/fast", pro: "x/pro" });
+    expect(mockedCall).toHaveBeenCalledWith("project.loadTierConfig", { projectPath: PROJECT_PATH });
+  });
+
+  it("loadProjectTierConfig skips when config is null (not persisted)", async () => {
+    mockedCall.mockResolvedValueOnce({ config: null });
+    const prev = useTierStore.getState().dataByProject[PROJECT_PATH];
+    await useTierStore.getState().loadProjectTierConfig(PROJECT_PATH);
+    // store unchanged
+    expect(useTierStore.getState().dataByProject[PROJECT_PATH]).toBe(prev);
+  });
+
+  it("saveProjectTierConfig calls RPC with current state", async () => {
+    useTierStore.getState().setProjectTierModels(PROJECT_PATH, {
+      fast: "a/fast", pro: "a/pro", max: "a/max",
+    });
+    useTierStore.getState().setProjectCurrentTier(PROJECT_PATH, "max");
+    await useTierStore.getState().saveProjectTierConfig(PROJECT_PATH);
+    expect(mockedCall).toHaveBeenCalledWith("project.saveTierConfig", {
+      projectPath: PROJECT_PATH,
+      tierModels: { fast: "a/fast", pro: "a/pro", max: "a/max" },
+      currentTier: "max",
+    });
+  });
+
+  it("same project path shares tier config across lookups", () => {
+    useTierStore.getState().setProjectTierModels("/shared/proj", { fast: "f", pro: "p", max: "m" });
+    useTierStore.getState().setProjectCurrentTier("/shared/proj", "fast");
+    expect(useTierStore.getState().getCurrentTier("/shared/proj")).toBe("fast");
+    expect(useTierStore.getState().getTierModels("/shared/proj")).toEqual({ fast: "f", pro: "p", max: "m" });
+  });
+
+  it("different projects have isolated tier configs", () => {
+    useTierStore.getState().setProjectTierModels("/proj-a", { fast: "a/fast" });
+    useTierStore.getState().setProjectCurrentTier("/proj-a", "fast");
+    useTierStore.getState().setProjectTierModels("/proj-b", { pro: "b/pro" });
+    useTierStore.getState().setProjectCurrentTier("/proj-b", "pro");
+
+    expect(useTierStore.getState().getCurrentTier("/proj-a")).toBe("fast");
+    expect(useTierStore.getState().getCurrentTier("/proj-b")).toBe("pro");
+    expect(useTierStore.getState().getTierModels("/proj-a")).toEqual({ fast: "a/fast" });
+    expect(useTierStore.getState().getTierModels("/proj-b")).toEqual({ pro: "b/pro" });
+  });
+
+  it("clearSession does not remove project tier config", () => {
+    useTierStore.getState().setProjectTierModels(PROJECT_PATH, { fast: "f" });
+    useTierStore.getState().setProjectCurrentTier(PROJECT_PATH, "fast");
+    useTierStore.getState().clearSession("sess-1");
+    // Project config should remain after session clear
+    expect(useTierStore.getState().getCurrentTier(PROJECT_PATH)).toBe("fast");
+    expect(useTierStore.getState().getTierModels(PROJECT_PATH)).toEqual({ fast: "f" });
+  });
 });
