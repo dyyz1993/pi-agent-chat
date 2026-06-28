@@ -325,11 +325,7 @@ export function createSetActiveSessionAction({
                 loadPromise
                   .catch(() => {})
                   .then(() => {
-                    return useChatStore
-                      .getState()
-                      ._backgroundRefreshMessages(id, session.sessionPath);
-                  })
-                  .then(() => {
+                    // 不重复调用 _backgroundRefreshMessages — loadPromise 已包含它
                     return apiClient
                       .call("agent.getContextUsage", { sessionId: id })
                       .then((r) => {
