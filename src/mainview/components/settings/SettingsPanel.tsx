@@ -148,8 +148,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const availableModels = useSessionStore((s) => s.availableModels);
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
 
+  // 查找当前 session 所属的项目路径
+  const projectPath = useSessionStore((s) => {
+    if (!sessionId) return null;
+    for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
+      if (sessions.some((sess) => sess.sessionId === sessionId)) return path;
+    }
+    return null;
+  });
+
   const tierModels = useTierStore((s) =>
-    sessionId ? s.dataBySession[sessionId]?.tierModels : undefined,
+    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
   );
   const globalDefaults = useTierStore((s) => s.globalDefaults);
   const effectiveTierModels = tierModels ?? globalDefaults;
@@ -192,14 +201,18 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         sessionId,
         models: localTierModels,
       });
-      useTierStore.getState().setSessionTierModels(sessionId, localTierModels);
+      if (projectPath) {
+        useTierStore.getState().setProjectTierModels(projectPath, localTierModels);
+      }
       await fetchTierConfig(sessionId, { force: true });
-      const { dataBySession, globalDefaults } = useTierStore.getState();
-      const sessionData = dataBySession[sessionId];
-      const activeTier = sessionData?.currentTier ?? null;
-      const updatedModels = sessionData?.tierModels ?? globalDefaults;
-      if (activeTier && updatedModels[activeTier]) {
-        await useTierStore.getState().switchToTier(activeTier, sessionId);
+      if (projectPath) {
+        const { dataByProject, globalDefaults } = useTierStore.getState();
+        const projectData = dataByProject[projectPath];
+        const activeTier = projectData?.currentTier ?? null;
+        const updatedModels = projectData?.tierModels ?? globalDefaults;
+        if (activeTier && updatedModels[activeTier]) {
+          await useTierStore.getState().switchToTier(activeTier, sessionId);
+        }
       }
       setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
     } catch (err) {
@@ -210,7 +223,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     } finally {
       setTierSaving(false);
     }
-  }, [sessionId, localTierModels, fetchTierConfig, t]);
+  }, [sessionId, projectPath, localTierModels, fetchTierConfig, t]);
 
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
   const [proxyStatusLoading, setProxyStatusLoading] = useState(false);

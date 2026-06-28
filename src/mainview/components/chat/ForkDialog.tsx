@@ -34,11 +34,21 @@ export const ForkDialog = memo(function ForkDialog() {
 
   const agents = useAgentStore((s) => s.agents);
   const forkSessionId = useForkDialogStore((s) => s.config?.sessionId);
+
+  // 从 sessionId 解析 projectPath
+  const projectPath = useSessionStore((s) => {
+    if (!forkSessionId) return null;
+    for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
+      if (sessions.some((sess) => sess.sessionId === forkSessionId)) return path;
+    }
+    return null;
+  });
+
   const currentTier = useTierStore((s) =>
-    forkSessionId ? (s.dataBySession[forkSessionId]?.currentTier ?? null) : null,
+    projectPath ? (s.dataByProject[projectPath]?.currentTier ?? null) : null,
   );
   const forkTierModels = useTierStore((s) =>
-    forkSessionId ? s.dataBySession[forkSessionId]?.tierModels : undefined,
+    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
   );
   const globalDefaults = useTierStore((s) => s.globalDefaults);
   const tierModels = forkTierModels ?? globalDefaults;
@@ -51,10 +61,10 @@ export const ForkDialog = memo(function ForkDialog() {
       const agent = useAgentStore.getState().getCurrentAgentForSession(config.sessionId);
       setSelectedAgent(agent);
       const tier =
-        (forkSessionId ? useTierStore.getState().getCurrentTier(forkSessionId) : null) ?? "pro";
+        (projectPath ? useTierStore.getState().getCurrentTier(projectPath) : null) ?? "pro";
       setSelectedTier(tier as TierKey);
     }
-  }, [open, config]);
+  }, [open, config, projectPath]);
 
   const handleFork = useCallback(async () => {
     const cfg = useForkDialogStore.getState().config;
