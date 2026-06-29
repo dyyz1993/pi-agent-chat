@@ -9,12 +9,19 @@ registerShellPrismLanguage(Prism);
 
 interface HastNode {
   type: string;
+  tagName?: string;
   value?: string;
   children?: HastNode[];
   properties?: {
     className?: string[];
     [key: string]: unknown;
   };
+}
+
+function findCodeElement(node?: HastNode): HastNode | undefined {
+  if (!node) return undefined;
+  if (node.type === "element" && node.tagName === "code") return node;
+  return node.children?.find((child) => child.type === "element" && child.tagName === "code");
 }
 
 function extractTextFromNode(node: HastNode): string {
@@ -46,9 +53,10 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.github;
 
-  if (node?.children) {
-    const codeEl = node.children.find((c) => c.type === "element" && "tagName" in c);
-    if (codeEl && codeEl.properties?.className) {
+  const codeEl = findCodeElement(node);
+
+  if (codeEl) {
+    if (codeEl.properties?.className) {
       const langClass = codeEl.properties.className.find((cls) => cls.startsWith("language-"));
       if (langClass) {
         const lang = langClass.replace("language-", "");

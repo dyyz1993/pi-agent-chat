@@ -35,7 +35,7 @@ export function WelcomePage({
   }, []);
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-bg-primary text-text-primary">
+    <div className="h-screen overflow-y-auto bg-bg-primary text-text-primary">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-10">
         <div className="mb-8 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border-secondary bg-bg-elevated text-semantic-accent">

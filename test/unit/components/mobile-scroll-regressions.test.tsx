@@ -191,6 +191,8 @@ describe("mobile scroll regressions", () => {
     const root = container.firstElementChild;
     expect(root).not.toBeNull();
     expect(root?.className).toContain("overflow-y-auto");
+    expect(root?.className).toContain("h-screen");
+    expect(root?.className).not.toMatch(/\bmin-h-screen\b/);
   });
 
   it("keeps SettingsPanel content area flex-driven on mobile so main content can scroll", () => {

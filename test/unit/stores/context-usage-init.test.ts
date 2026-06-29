@@ -83,6 +83,22 @@ function nextSid() {
   return `sess-ctx-${++_sidCounter}`;
 }
 
+function seedSessionProject(sessionId: string, projectPath = "/tmp/pi-agent-chat-test") {
+  useSessionStore.setState({
+    sessionsByProject: {
+      [projectPath]: [
+        {
+          sessionId,
+          name: sessionId,
+          createdAt: new Date().toISOString(),
+          status: "idle",
+          projectPath,
+        },
+      ],
+    },
+  });
+}
+
 const AGENT_STATE = {
   model: { provider: "test", id: "model-1", name: "Test Model", contextWindow: 200000 },
   thinkingLevel: "medium",
@@ -163,20 +179,7 @@ beforeEach(() => {
 describe("fetchInitialState context usage retry", () => {
   it("shares startup model and tier fetches with component store entrypoints", async () => {
     const sid = nextSid();
-    useSessionStore.setState({
-      sessionsByProject: {
-        "/tmp/project": [
-          {
-            sessionId: sid,
-            sessionPath: "/tmp/project/.pi/sessions/sess.jsonl",
-            projectPath: "/tmp/project",
-            name: "test",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-      },
-    });
+    seedSessionProject(sid);
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
 
     await Promise.all([

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { lazy, memo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2 } from "lucide-react";
 
@@ -15,6 +15,8 @@ import {
   extractHookInterventionSegments,
   type HookIntervention,
 } from "./HookInterventionCard";
+
+const StreamingMarkdownContent = lazy(() => import("./StreamingMarkdownContent"));
 
 /** A flattened text/hook/references segment used for rendering. */
 type RenderSegment =
@@ -74,19 +76,29 @@ export const TextContentCard = memo(function TextContentCard({
     return (
       <div
         data-block-id={blockId}
-        className="my-0.5 group relative px-3 pr-10 text-sm text-text-primary whitespace-pre-wrap break-words select-text"
+        className="my-0.5 group relative px-3 pr-10 text-sm text-text-primary break-words select-text"
       >
         <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <CopyButton text={visibleText} size="xs" />
         </div>
-        {segments.map((segment, index) =>
-          segment.type === "references" ? (
-            <ContextReferenceCard key={`ref-${index}`} references={segment.references} />
-          ) : segment.type === "hook" ? (
-            <HookInterventionCard key={`hook-${index}`} intervention={segment.intervention} />
-          ) : (
-            <span key={`text-${index}`}>{segment.text}</span>
-          ),
+        {!hasInternalReferences && visibleText.trim() ? (
+          <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent prose-hr:my-0.5">
+            <Suspense fallback={<span className="whitespace-pre-wrap">{visibleText}</span>}>
+              <StreamingMarkdownContent text={visibleText} />
+            </Suspense>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap">
+            {segments.map((segment, index) =>
+              segment.type === "references" ? (
+                <ContextReferenceCard key={`ref-${index}`} references={segment.references} />
+              ) : segment.type === "hook" ? (
+                <HookInterventionCard key={`hook-${index}`} intervention={segment.intervention} />
+              ) : (
+                <span key={`text-${index}`}>{segment.text}</span>
+              ),
+            )}
+          </div>
         )}
       </div>
     );
