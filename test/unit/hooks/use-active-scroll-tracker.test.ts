@@ -39,6 +39,7 @@ interface MockHandle {
   viewportSize: number;
   scrollToIndex: ReturnType<typeof vi.fn>;
   findItemIndex: ReturnType<typeof vi.fn>;
+  getItemSize: ReturnType<typeof vi.fn>;
 }
 
 function createMockHandle(overrides?: Partial<MockHandle>): MockHandle {
@@ -61,6 +62,7 @@ function createMockHandle(overrides?: Partial<MockHandle>): MockHandle {
       // Approximate: each item is 200px
       return Math.floor(offset / 200);
     }),
+    getItemSize: vi.fn(() => 200),
     ...overrides,
   };
 }
@@ -517,6 +519,51 @@ describe("useActiveScrollTracker — streaming follow (A/B)", () => {
 
     // Should have scrolled to bottom and set active to last message
     expect(mockHandle.scrollToIndex).toHaveBeenCalled();
+    expect(setActive).toHaveBeenCalledWith(MESSAGE_IDS[MESSAGE_IDS.length - 1]);
+  });
+
+  it("waits for the last item measurement to settle before following streaming", () => {
+    const setActive = vi.fn();
+    let lastItemSize = 200;
+    const mockHandle = createMockHandle({
+      scrollSize: 1000,
+      viewportSize: 500,
+      getItemSize: vi.fn(() => lastItemSize),
+    });
+    mockHandleRef.current = mockHandle;
+
+    const { rerender } = renderHook(
+      (props: { sv: number }) => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef(mockHandle);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          sessionId: "test-session",
+          setActive,
+          streamVersion: props.sv,
+          initialScrollReady: true,
+        });
+      },
+      { initialProps: { sv: 0 } },
+    );
+
+    act(() => vi.advanceTimersByTime(200));
+    setActive.mockClear();
+    mockHandle.scrollToIndex.mockClear();
+
+    lastItemSize = 320;
+    mockHandle.scrollSize = 1120;
+    rerender({ sv: 1 });
+
+    act(() => vi.advanceTimersToNextTimer());
+    expect(mockHandle.scrollToIndex).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersToNextTimer());
+    expect(mockHandle.scrollToIndex).toHaveBeenCalledWith(MESSAGE_IDS.length - 1, {
+      align: "end",
+    });
     expect(setActive).toHaveBeenCalledWith(MESSAGE_IDS[MESSAGE_IDS.length - 1]);
   });
 
