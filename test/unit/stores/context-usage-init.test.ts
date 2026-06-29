@@ -156,12 +156,30 @@ beforeEach(() => {
     modelFavorites: new Set(),
   });
   useSupervisorStore.setState({ bySession: {} });
-  useTierStore.setState({ globalDefaults: {}, dataBySession: {}, switching: false });
+  useTierStore.setState({ globalDefaults: {}, dataByProject: {}, switching: false });
 });
 
 describe("fetchInitialState context usage retry", () => {
   it("shares startup model and tier fetches with component store entrypoints", async () => {
     const sid = nextSid();
+    useSessionStore.setState({
+      sessionsByProject: {
+        "/fake/project": [
+          {
+            sessionId: sid,
+            name: "Session",
+            sessionPath: `/fake/${sid}.jsonl`,
+            projectPath: "/fake/project",
+            parentSessionPath: null,
+            messageCount: 0,
+            firstMessage: "",
+            createdAt: 1,
+            updatedAt: 1,
+            status: "idle",
+          },
+        ],
+      },
+    });
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
 
     await Promise.all([
