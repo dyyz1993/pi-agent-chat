@@ -43,21 +43,22 @@ describe("openSidebarSubagentSession", () => {
     vi.clearAllMocks();
   });
 
-  it("prefers the shared jumpToSessionById flow", async () => {
+  it("opens known sidebar subagents through the parent session view", async () => {
     hoisted.jumpToSessionById.mockResolvedValueOnce();
 
     await openSidebarSubagentSession("parent-1", "sub-1");
 
-    expect(hoisted.jumpToSessionById).toHaveBeenCalledWith("sub-1");
-    expect(hoisted.setActiveSession).not.toHaveBeenCalled();
-    expect(hoisted.setActiveSubsession).not.toHaveBeenCalled();
+    expect(hoisted.jumpToSessionById).not.toHaveBeenCalled();
+    expect(hoisted.setActiveSession).toHaveBeenCalledWith("parent-1", true);
+    expect(hoisted.setActiveSubsession).toHaveBeenCalledWith("parent-1", "sub-1");
   });
 
-  it("falls back to parent + activeSubsession activation when shared jump fails", async () => {
+  it("does not depend on generic jump resolution for sidebar subagents", async () => {
     hoisted.jumpToSessionById.mockRejectedValueOnce(new Error("not found"));
 
     await openSidebarSubagentSession("parent-1", "sub-1");
 
+    expect(hoisted.jumpToSessionById).not.toHaveBeenCalled();
     expect(hoisted.setActiveSession).toHaveBeenCalledWith("parent-1", true);
     expect(hoisted.setActiveSubsession).toHaveBeenCalledWith("parent-1", "sub-1");
   });

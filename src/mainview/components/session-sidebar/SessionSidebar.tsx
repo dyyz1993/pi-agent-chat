@@ -878,12 +878,8 @@ export async function openSidebarSubagentSession(
   parentSessionId: string,
   subSessionId: string,
 ): Promise<void> {
-  try {
-    await jumpToSessionById(subSessionId);
-  } catch {
-    useSessionStore.getState().setActiveSession(parentSessionId, true);
-    useSubagentStore.getState().setActiveSubsession(parentSessionId, subSessionId);
-  }
+  useSessionStore.getState().setActiveSession(parentSessionId, true);
+  useSubagentStore.getState().setActiveSubsession(parentSessionId, subSessionId);
 }
 
 function SubagentItem({
