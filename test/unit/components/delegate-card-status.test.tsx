@@ -328,6 +328,24 @@ describe("DelegateCard", () => {
     expect(container.textContent).toContain("Long delegate task");
   });
 
+  it("uses agentName as the requested agent badge", () => {
+    render(
+      <DelegateCard
+        block={makeDelegateBlock({
+          args: JSON.stringify({
+            task: "Long delegate task",
+            title: "Long delegate task",
+            projectPath: "/fake/project",
+            agentName: "explore",
+          }),
+        })}
+      />,
+    );
+
+    expect(screen.getByText("explore")).toBeInTheDocument();
+    expect(screen.queryByText("build")).not.toBeInTheDocument();
+  });
+
   it("falls back to the active project tier when delegate metadata has no model context", () => {
     render(
       <DelegateCard
@@ -375,6 +393,23 @@ describe("ForkCard", () => {
     expect(badge).toHaveStyle({ color: "#F97316" });
     expect(screen.getByText("gpt-4.1")).toBeInTheDocument();
     expect(container.textContent).toContain("Long fork task");
+  });
+
+  it("uses agentName as the requested fork agent badge", () => {
+    render(
+      <ForkCard
+        block={makeForkBlock({
+          args: JSON.stringify({
+            task: "Long fork task",
+            title: "Long fork task",
+            agentName: "explore",
+          }),
+        })}
+      />,
+    );
+
+    expect(screen.getByText("explore")).toBeInTheDocument();
+    expect(screen.queryByText("build")).not.toBeInTheDocument();
   });
 
   it("keeps the card in running state when the forked session is still streaming", () => {

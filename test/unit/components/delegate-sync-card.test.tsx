@@ -230,6 +230,21 @@ describe("DelegateSyncCard", () => {
     expect(screen.getByText("Think medium")).toBeInTheDocument();
   });
 
+  it("uses agentName as the requested agent badge instead of falling back to build", () => {
+    const block = makeSyncBlock({
+      args: JSON.stringify({
+        title: "Agent name smoke test",
+        task: "只读检查当前目录",
+        agentName: "explore",
+      }),
+    });
+
+    render(<DelegateSyncCard block={block} />);
+
+    expect(screen.getByText("explore")).toBeInTheDocument();
+    expect(screen.queryByText("build")).not.toBeInTheDocument();
+  });
+
   it("renders task, result, child session metadata, and a jump control when expanded", () => {
     hoisted.sub = {
       sessionId: "sess_sub_test_001",
