@@ -72,6 +72,25 @@ function findParentSessionIdByPath(parentSessionPath: string): string | undefine
   return undefined;
 }
 
+function findSessionPathById(sessionId: string): string | undefined {
+  for (const sessions of Object.values(useSessionStore.getState().sessionsByProject ?? {})) {
+    const match = sessions.find((session) => session.sessionId === sessionId);
+    if (match) return match.sessionPath;
+  }
+  return undefined;
+}
+
+function findKnownSubsession(
+  subsessionsByParent: Record<string, SubagentSessionInfo[]>,
+  subId: string,
+): SubagentSessionInfo | undefined {
+  for (const subs of Object.values(subsessionsByParent)) {
+    const match = subs.find((sub) => sub.sessionId === subId);
+    if (match) return match;
+  }
+  return undefined;
+}
+
 async function restoreSubagentRuntimeState(
   sub: SubagentSessionInfo,
   parentSessionId?: string,
@@ -185,7 +204,14 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
       }));
       const parentSessionId = findParentSessionIdByPath(parentSessionPath);
-      await Promise.all(subs.map((sub) => restoreSubagentRuntimeState(sub, parentSessionId)));
+      const activeSubId = get().activeSubsessionId;
+      const activeSub = activeSubId ? subs.find((sub) => sub.sessionId === activeSubId) : null;
+      await Promise.all([
+        ...subs.map((sub) => restoreSubagentRuntimeState(sub, parentSessionId)),
+        activeSub?.sessionPath
+          ? get().loadSubHistory(activeSub.sessionPath, activeSub.sessionId)
+          : Promise.resolve(),
+      ]);
       return subs;
     } catch (e) {
       log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
@@ -199,13 +225,15 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
     if (!subId) return;
 
-    const { subsessionsByParent } = get();
-    for (const subs of Object.values(subsessionsByParent)) {
-      const match = subs.find((s) => s.sessionId === subId);
-      if (match && match.sessionPath) {
-        get().loadSubHistory(match.sessionPath, subId);
-        break;
-      }
+    const match = findKnownSubsession(get().subsessionsByParent, subId);
+    if (match?.sessionPath) {
+      get().loadSubHistory(match.sessionPath, subId);
+      return;
+    }
+
+    const parentSessionPath = findSessionPathById(_parentSessionId);
+    if (parentSessionPath) {
+      void get().loadSubsessions(parentSessionPath, true);
     }
   },
 

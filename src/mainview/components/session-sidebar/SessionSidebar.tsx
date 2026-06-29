@@ -878,7 +878,16 @@ export async function openSidebarSubagentSession(
   parentSessionId: string,
   subSessionId: string,
 ): Promise<void> {
-  useSessionStore.getState().setActiveSession(parentSessionId, true);
+  const sessionStore = useSessionStore.getState();
+  sessionStore.setActiveSession(parentSessionId, true);
+
+  const parentSession = Object.values(sessionStore.sessionsByProject ?? {})
+    .flat()
+    .find((session) => session.sessionId === parentSessionId);
+  if (parentSession?.sessionPath) {
+    await useSubagentStore.getState().loadSubsessions(parentSession.sessionPath);
+  }
+
   useSubagentStore.getState().setActiveSubsession(parentSessionId, subSessionId);
 }
 
