@@ -107,6 +107,7 @@ function setupMock(contextUsageHandler: () => Promise<unknown>) {
     if (method === "agent.getCurrentAgent") return Promise.resolve(null);
     if (method === "agent.getMcpServers") return Promise.resolve([]);
     if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+    if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
     if (method === "agent.getSettings") return Promise.resolve({});
     if (method === "supervisor.getStatus")
       return Promise.resolve({
@@ -162,6 +163,20 @@ beforeEach(() => {
 describe("fetchInitialState context usage retry", () => {
   it("shares startup model and tier fetches with component store entrypoints", async () => {
     const sid = nextSid();
+    useSessionStore.setState({
+      sessionsByProject: {
+        "/tmp/project": [
+          {
+            sessionId: sid,
+            sessionPath: "/tmp/project/.pi/sessions/sess.jsonl",
+            projectPath: "/tmp/project",
+            name: "test",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+      },
+    });
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
 
     await Promise.all([
@@ -312,6 +327,7 @@ describe("fetchInitialState context usage retry", () => {
       if (method === "agent.getCurrentAgent") return Promise.resolve(null);
       if (method === "agent.getMcpServers") return Promise.resolve([]);
       if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
       if (method === "agent.getSettings") return Promise.resolve({});
       if (method === "supervisor.getStatus")
         return Promise.resolve({

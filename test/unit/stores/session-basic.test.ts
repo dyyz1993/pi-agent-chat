@@ -178,6 +178,7 @@ describe("useSessionStore - basic state", () => {
         ]);
       }
       if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
       return Promise.resolve({});
     });
 
@@ -209,6 +210,7 @@ describe("useSessionStore - basic state", () => {
         ]);
       }
       if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
       return Promise.resolve({});
     });
 
