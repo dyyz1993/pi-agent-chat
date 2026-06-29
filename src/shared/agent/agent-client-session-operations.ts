@@ -6,6 +6,8 @@ const log = createLogger("agent");
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
+export type QueueItemRef = { type: "steering" | "followUp"; index: number; text: string };
+
 interface ManagedClientLike {
   client: Pick<
     RpcClientAPI,
@@ -19,7 +21,6 @@ interface ManagedClientLike {
     | "getActiveTools"
     | "setActiveTools"
     | "getQueue"
-    | "clearQueue"
     | "getExtensions"
     | "getSkills"
     | "reload"
@@ -28,10 +29,10 @@ interface ManagedClientLike {
     | "toggleMcpServer"
     | "restartMcpServer"
     | "getContextUsage"
-  >;
+  > & {
+    clearQueue(item?: QueueItemRef): Promise<{ steering: string[]; followUp: string[] }>;
+  };
 }
-
-export type QueueItemRef = { type: "steering" | "followUp"; index: number; text: string };
 
 interface ManagedClientAccess<TManaged extends ManagedClientLike> {
   sessionId: string;
