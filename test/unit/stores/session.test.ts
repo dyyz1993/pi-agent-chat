@@ -129,12 +129,17 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
   syncTabsToBackend: vi.fn(),
 }));
 
-import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import {
+  clearAgentStarted,
+  markAgentStarted,
+  useSessionStore,
+} from "../../../src/mainview/stores/use-session-store";
 import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useExplorerStore } from "../../../src/mainview/stores/use-explorer-store";
 import { useGitStore } from "../../../src/mainview/stores/use-git-store";
 import { setupSubscriptions } from "../../../src/mainview/stores/session-subscriptions";
+import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
@@ -161,6 +166,8 @@ function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearAgentStarted("sess-1");
+  clearAgentStarted("sess-2");
   vi.mocked(useExplorerStore.getState).mockReturnValue({
     setCurrentPath: vi.fn(),
     listRootDir: vi.fn(),
@@ -413,6 +420,61 @@ describe("setActiveProject", () => {
 });
 
 describe("setActiveSession", () => {
+  it("refreshes permission state when switching to a known running session", async () => {
+    const applyPermissionProfileSnapshot = vi.fn();
+    vi.mocked(useStatusStore.getState).mockReturnValue({
+      setPlugins: vi.fn(),
+      setSkills: vi.fn(),
+      getRememberedPermissionProfile: vi.fn(() => "yolo"),
+      applyPermissionProfileSnapshot,
+    });
+
+    const session = makeSession({ sessionId: "sess-1", projectPath: TAB_A.path });
+    markAgentStarted("sess-1");
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getState") {
+        return Promise.resolve({
+          permissionMode: "yolo",
+          isStreaming: false,
+          isCompacting: false,
+          messageCount: 0,
+        });
+      }
+      if (method === "agent.getContextUsage")
+        return Promise.resolve({ tokens: null, contextWindow: 0 });
+      if (method === "agent.getAvailableModels") return Promise.resolve({ models: [] });
+      if (method === "agent.getSettings") return Promise.resolve({});
+      if (method === "agent.getExtensions") return Promise.resolve({ extensions: [] });
+      if (method === "agent.getSkills") return Promise.resolve({ skills: [] });
+      if (method === "agent.getDisabledSkills") return Promise.resolve({ disabledSkills: [] });
+      if (method === "agent.getDisabledPlugins") return Promise.resolve({ disabledPlugins: [] });
+      return Promise.resolve({});
+    });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: null,
+      sessionsByProject: { [TAB_A.path]: [session] },
+      projectStartFailed: { [TAB_A.id]: false },
+      projectStartError: { [TAB_A.id]: "" },
+      sessionReady: {},
+      agentReady: {},
+    });
+
+    useSessionStore.getState().setActiveSession("sess-1", true);
+
+    await vi.waitFor(() => {
+      expect(applyPermissionProfileSnapshot).toHaveBeenCalledWith("yolo", "sess-1");
+      expect(mockedCall).toHaveBeenCalledWith("agent.getState", { sessionId: "sess-1" });
+    });
+
+    expect(mockedCall).not.toHaveBeenCalledWith(
+      "agent.start",
+      expect.objectContaining({ sessionId: "sess-1" }),
+    );
+  });
+
   it("ignores stale agent.start timeout after a newer start succeeds", async () => {
     vi.useFakeTimers();
 
@@ -689,12 +751,16 @@ describe("deleteSession", () => {
 
 describe("setSessionTodos", () => {
   it("sets todos for a session", () => {
-    useSessionTodoStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
+    useSessionTodoStore
+      .getState()
+      .setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
     expect(useSessionTodoStore.getState().todosBySession["sess-1"]).toHaveLength(1);
   });
 
   it("overwrites existing todos", () => {
-    useSessionTodoStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
+    useSessionTodoStore
+      .getState()
+      .setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
     useSessionTodoStore.getState().setSessionTodos("sess-1", [
       { id: 2, text: "Task 2", done: true },
       { id: 3, text: "Task 3", done: false },

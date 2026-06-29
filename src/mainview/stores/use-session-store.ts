@@ -249,7 +249,7 @@ interface SessionState {
   refreshSessionContext: (sessionId: string) => Promise<void>;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   restoreContextFromHistory: (sessionId: string) => void;
-  fetchInitialState: (sessionId: string) => void;
+  fetchInitialState: (sessionId: string, options?: { force?: boolean }) => void;
   fetchModelState: (
     sessionId: string,
     options?: { force?: boolean; includeFavorites?: boolean },
@@ -1120,8 +1120,7 @@ apiClient.onReconnect(() => {
                 useChatStore.getState().loadSessionMessages(sid, opts),
               backgroundRefresh: (sid, sPath) =>
                 useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
-              getContextUsage: (sid) =>
-                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              getContextUsage: (sid) => apiClient.call("agent.getContextUsage", { sessionId: sid }),
               updateSessionContext: (sid, usage) =>
                 useSessionStore.getState().updateSessionContext(sid, usage),
             }).catch((err) => {
@@ -1138,8 +1137,7 @@ apiClient.onReconnect(() => {
                 useChatStore.getState().loadSessionMessages(sid, opts),
               backgroundRefresh: (sid, sPath) =>
                 useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
-              getContextUsage: (sid) =>
-                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              getContextUsage: (sid) => apiClient.call("agent.getContextUsage", { sessionId: sid }),
               updateSessionContext: (sid, usage) =>
                 useSessionStore.getState().updateSessionContext(sid, usage),
             }).catch((err) => {
