@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2 } from "lucide-react";
 
@@ -22,7 +22,7 @@ type RenderSegment =
   | { type: "references"; references: ContextReference[] }
   | { type: "hook"; intervention: HookIntervention };
 
-const STREAMING_MARKDOWN_DEBOUNCE_MS = 800;
+const STREAMING_MARKDOWN_SNAPSHOT_MS = 800;
 
 function buildRenderSegments(text: string): RenderSegment[] {
   const refSegments = extractContextReferenceSegments(text);
@@ -47,25 +47,33 @@ function isLongContent(text: string): boolean {
   return lineCount > 20;
 }
 
-function useDebouncedStreamingMarkdownText(text: string, enabled: boolean): string | null {
+function useStreamingMarkdownSnapshotText(text: string, enabled: boolean): string | null {
   const [markdownText, setMarkdownText] = useState<string | null>(null);
+  const latestTextRef = useRef(text);
 
   useEffect(() => {
+    latestTextRef.current = text;
+
     if (!enabled) {
       setMarkdownText(null);
       return;
     }
 
     setMarkdownText((current) => (current && text.startsWith(current) ? current : null));
+  }, [enabled, text]);
 
-    const timer = window.setTimeout(() => {
-      setMarkdownText(text);
-    }, STREAMING_MARKDOWN_DEBOUNCE_MS);
+  useEffect(() => {
+    if (!enabled) return;
+
+    const timer = window.setInterval(() => {
+      const nextText = latestTextRef.current;
+      setMarkdownText((current) => (current === nextText ? current : nextText));
+    }, STREAMING_MARKDOWN_SNAPSHOT_MS);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearInterval(timer);
     };
-  }, [enabled, text]);
+  }, [enabled]);
 
   return markdownText;
 }
@@ -94,7 +102,7 @@ export const TextContentCard = memo(function TextContentCard({
         .replace(/\n{3,}/g, "\n\n")
         .trim()
     : text;
-  const streamingMarkdownText = useDebouncedStreamingMarkdownText(
+  const streamingMarkdownText = useStreamingMarkdownSnapshotText(
     visibleText,
     Boolean(isStreaming && !hasInternalReferences && visibleText.trim()),
   );

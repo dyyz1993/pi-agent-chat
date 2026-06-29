@@ -74,6 +74,45 @@ describe("extracted message bubble components", () => {
     expect(screen.getByText("bold").tagName).toBe("STRONG");
   });
 
+  it("updates the streaming markdown snapshot even when text keeps changing", () => {
+    vi.useFakeTimers();
+
+    const { rerender } = render(
+      <TextContentCard text={"# Streaming title\n\n**bo"} isStreaming blockId="msg-1-2" />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    rerender(
+      <TextContentCard
+        text={"# Streaming title\n\n**bold** text\n\n- item one"}
+        isStreaming
+        blockId="msg-1-2"
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(399);
+    });
+    expect(screen.queryByRole("heading", { name: "Streaming title" })).not.toBeInTheDocument();
+
+    rerender(
+      <TextContentCard
+        text={"# Streaming title\n\n**bold** text\n\n- item one\n- item two"}
+        isStreaming
+        blockId="msg-1-2"
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
+    expect(screen.getByText("bold").tagName).toBe("STRONG");
+    expect(screen.getByText("item two").tagName).toBe("LI");
+  });
+
   it("renders memory prefetch searching details after expansion", () => {
     render(
       <MemoryCard
