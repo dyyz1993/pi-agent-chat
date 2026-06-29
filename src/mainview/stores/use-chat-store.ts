@@ -64,7 +64,7 @@ export function getMemoryQueryFromData(data: unknown): string | undefined {
         ? record.query
         : undefined;
   const normalized = query?.trim().replace(/\s+/g, " ");
-  return normalized || undefined;
+  return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
 function getMemorySelectedFileCount(data: unknown): number {
