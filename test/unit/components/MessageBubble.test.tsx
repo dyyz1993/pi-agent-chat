@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryCard } from "../../../src/mainview/components/chat/MemoryCard";
@@ -79,6 +79,25 @@ describe("extracted message bubble components", () => {
 
     expect(screen.getByText("bold")).toHaveAttribute("data-streamdown", "strong");
     expect(screen.getByText("item one").closest("li")).not.toBeNull();
+  });
+
+  it("uses the shared code block renderer while text content is streaming", async () => {
+    render(
+      <TextContentCard
+        text={"```ts\nconst ok = true;\n```"}
+        isStreaming
+        blockId="msg-1-code"
+      />,
+    );
+
+    await waitFor(() => {
+      const root = document.querySelector('[data-block-id="msg-1-code"]');
+      expect(root?.querySelector("pre")).not.toBeNull();
+      expect(root?.querySelector('[data-streamdown="code-block"]')).toBeNull();
+      expect(root?.querySelector(".table-row")).not.toBeNull();
+      expect(root?.textContent).toContain("const");
+      expect(root?.textContent).toContain("ok");
+    });
   });
 
   it("renders memory prefetch searching details after expansion", () => {
