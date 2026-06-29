@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryCard } from "../../../src/mainview/components/chat/MemoryCard";
@@ -31,6 +31,7 @@ vi.mock("../../../src/mainview/utils/clipboard", () => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   useChatOverlayStore.getState().close();
   useExplorerStore.setState({ selectedPath: null, filePreview: null, loadingFile: false });
@@ -50,6 +51,27 @@ describe("extracted message bubble components", () => {
     expect(overlay.overlay).toBe("markdown");
     expect(overlay.markdownContent).toBe(text);
     expect(overlay.markdownTitle).toContain("messageContentLineCount");
+  });
+
+  it("renders a debounced markdown snapshot while text content is streaming", () => {
+    vi.useFakeTimers();
+
+    render(
+      <TextContentCard text={"# Streaming title\n\n**bold** text"} isStreaming blockId="msg-1-1" />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Streaming title" })).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(799);
+    });
+    expect(screen.queryByRole("heading", { name: "Streaming title" })).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
+    expect(screen.getByText("bold").tagName).toBe("STRONG");
   });
 
   it("renders memory prefetch searching details after expansion", () => {

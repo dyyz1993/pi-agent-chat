@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2 } from "lucide-react";
 
@@ -22,6 +22,8 @@ type RenderSegment =
   | { type: "references"; references: ContextReference[] }
   | { type: "hook"; intervention: HookIntervention };
 
+const STREAMING_MARKDOWN_DEBOUNCE_MS = 800;
+
 function buildRenderSegments(text: string): RenderSegment[] {
   const refSegments = extractContextReferenceSegments(text);
   const result: RenderSegment[] = [];
@@ -43,6 +45,29 @@ function buildRenderSegments(text: string): RenderSegment[] {
 function isLongContent(text: string): boolean {
   const lineCount = text.split("\n").length;
   return lineCount > 20;
+}
+
+function useDebouncedStreamingMarkdownText(text: string, enabled: boolean): string | null {
+  const [markdownText, setMarkdownText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setMarkdownText(null);
+      return;
+    }
+
+    setMarkdownText((current) => (current && text.startsWith(current) ? current : null));
+
+    const timer = window.setTimeout(() => {
+      setMarkdownText(text);
+    }, STREAMING_MARKDOWN_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [enabled, text]);
+
+  return markdownText;
 }
 
 export const TextContentCard = memo(function TextContentCard({
@@ -69,24 +94,44 @@ export const TextContentCard = memo(function TextContentCard({
         .replace(/\n{3,}/g, "\n\n")
         .trim()
     : text;
+  const streamingMarkdownText = useDebouncedStreamingMarkdownText(
+    visibleText,
+    Boolean(isStreaming && !hasInternalReferences && visibleText.trim()),
+  );
 
   if (isStreaming) {
+    const streamingPlainRemainder =
+      streamingMarkdownText && visibleText.startsWith(streamingMarkdownText)
+        ? visibleText.slice(streamingMarkdownText.length)
+        : null;
+
     return (
       <div
         data-block-id={blockId}
-        className="my-0.5 group relative px-3 pr-10 text-sm text-text-primary whitespace-pre-wrap break-words select-text"
+        className="my-0.5 group relative px-3 pr-10 text-sm text-text-primary break-words select-text"
       >
         <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <CopyButton text={visibleText} size="xs" />
         </div>
-        {segments.map((segment, index) =>
-          segment.type === "references" ? (
-            <ContextReferenceCard key={`ref-${index}`} references={segment.references} />
-          ) : segment.type === "hook" ? (
-            <HookInterventionCard key={`hook-${index}`} intervention={segment.intervention} />
-          ) : (
-            <span key={`text-${index}`}>{segment.text}</span>
-          ),
+        {streamingMarkdownText ? (
+          <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent prose-hr:my-0.5">
+            <CachedReactMarkdown>{streamingMarkdownText}</CachedReactMarkdown>
+            {streamingPlainRemainder && (
+              <span className="whitespace-pre-wrap">{streamingPlainRemainder}</span>
+            )}
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap">
+            {segments.map((segment, index) =>
+              segment.type === "references" ? (
+                <ContextReferenceCard key={`ref-${index}`} references={segment.references} />
+              ) : segment.type === "hook" ? (
+                <HookInterventionCard key={`hook-${index}`} intervention={segment.intervention} />
+              ) : (
+                <span key={`text-${index}`}>{segment.text}</span>
+              ),
+            )}
+          </div>
         )}
       </div>
     );
