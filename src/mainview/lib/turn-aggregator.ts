@@ -5,6 +5,8 @@ import {
   toolExecutionItemToBlock,
 } from "./tool-execution-reconciler";
 
+type CustomTimelineItem = Extract<TimelineItem, { itemType: "customEntry" }>;
+
 function shouldAttachCustomEntryToCurrentTurn(
   customType: string,
   currentTurn: Partial<TimelineTurn> | null,
@@ -12,6 +14,52 @@ function shouldAttachCustomEntryToCurrentTurn(
   if (!currentTurn?.userMessageId) return false;
   if (ALL_MEMORY_TYPE_KEYS.has(customType)) return true;
   return Boolean(currentTurn.assistantMessageId);
+}
+
+function shouldMergeMemoryEntry(customType: string): boolean {
+  return customType === "memory_prefetch_result" || customType === "memory_inject";
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function getMergedMemoryEntries(item: CustomTimelineItem): CustomTimelineItem[] {
+  const entries = asRecord(item.data)._mergedMemoryEntries;
+  return Array.isArray(entries) ? (entries as CustomTimelineItem[]) : [item];
+}
+
+function appendCustomEntry(
+  items: TimelineItem[],
+  entry: CustomTimelineItem,
+): TimelineItem[] {
+  if (!shouldMergeMemoryEntry(entry.customType)) return [...items, entry];
+
+  const existingIdx = items.findIndex(
+    (item) => item.itemType === "customEntry" && shouldMergeMemoryEntry(item.customType),
+  );
+  if (existingIdx < 0) return [...items, entry];
+
+  const existing = items[existingIdx] as CustomTimelineItem;
+  const mergedEntries = [...getMergedMemoryEntries(existing), entry];
+  const merged: CustomTimelineItem = {
+    ...existing,
+    entryId: `${existing.entryId}+${entry.entryId}`,
+    timestamp: Math.max(existing.timestamp, entry.timestamp),
+    data: {
+      ...asRecord(existing.data),
+      ...asRecord(entry.data),
+      _mergedMemoryEntries: mergedEntries.map((item) => ({
+        customType: item.customType,
+        data: item.data,
+        timestamp: item.timestamp,
+      })),
+    },
+  };
+
+  const next = [...items];
+  next[existingIdx] = merged;
+  return next;
 }
 
 export function aggregateTurns(messages: ChatMessage[]): {
@@ -113,7 +161,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
             }
           } else if (block.type === "custom") {
             currentTurn.items = currentTurn.items ?? [];
-            currentTurn.items.push({
+            currentTurn.items = appendCustomEntry(currentTurn.items, {
               itemType: "customEntry",
               entryId: `${msg.id}_${bi}`,
               customType: block.customType,
@@ -140,7 +188,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
 
         if (currentTurn && shouldAttachCustomEntryToCurrentTurn(customBlock.customType, currentTurn)) {
           currentTurn.items = currentTurn.items ?? [];
-          currentTurn.items.push({
+          currentTurn.items = appendCustomEntry(currentTurn.items, {
             itemType: "customEntry",
             entryId: msg.id,
             customType: customBlock.customType,

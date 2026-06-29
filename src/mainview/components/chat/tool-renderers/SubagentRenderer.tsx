@@ -46,8 +46,14 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
 
   let description = "";
   let instruction = "";
+  let requestedAgent = "";
   try {
-    const parsed = JSON.parse(block.args ?? "{}") as { description?: string; instruction?: string };
+    const parsed = JSON.parse(block.args ?? "{}") as {
+      agent?: string;
+      description?: string;
+      instruction?: string;
+    };
+    requestedAgent = parsed.agent ?? "";
     description = parsed.description ?? "";
     instruction = parsed.instruction ?? "";
   } catch (e) {
@@ -74,13 +80,14 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const subagentStatus = useSubagentStore((s) =>
     subSessionId ? s.subagentStatusMap?.[subSessionId] : undefined,
   );
+  const hasFinalOutput = Boolean(block.output?.trim());
   const subagentHasCompleted = Boolean(matchedSub?.completedAt);
   const subagentHasError =
     block.status === "error" ||
     Boolean(matchedSub?.error) ||
     (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0);
   const hasLiveSignal = isLiveSubagentStatus(subagentStatus) || block.status === "running";
-  const isRunning = !subagentHasCompleted && !subagentHasError && hasLiveSignal;
+  const isRunning = !hasFinalOutput && !subagentHasCompleted && !subagentHasError && hasLiveSignal;
   const isError = !isRunning && subagentHasError;
   const isDone = !isRunning && !isError;
 
@@ -147,7 +154,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   else statusColorClass = "text-status-error";
 
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
-  const isTerminal = subagentHasCompleted || subagentHasError;
+  const isTerminal = hasFinalOutput || subagentHasCompleted || subagentHasError;
   const activityRounds = useMemo(
     () =>
       buildActivityRoundsFromMessages(subMessages, activityRoundLabels, undefined, {
@@ -155,11 +162,16 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
       }),
     [activityRoundLabels, isTerminal, subMessages],
   );
-  const isLive = !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
+  const isLive =
+    !hasFinalOutput && !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
+  const agentName = matchedSub?.agent ?? requestedAgent;
+  const shortSessionId = matchedSub?.sessionId
+    ? matchedSub.sessionId.replace(/^sess_/, "").slice(0, 12)
+    : "";
 
   const badgeContent = (
     <>
-      {matchedSub?.agent && (
+      {agentName && (
         <span
           className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono"
           style={
@@ -168,7 +180,12 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
               : undefined
           }
         >
-          {matchedSub.agent}
+          {agentName}
+        </span>
+      )}
+      {shortSessionId && (
+        <span className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono text-text-tertiary bg-surface-hover/60">
+          {shortSessionId}
         </span>
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>

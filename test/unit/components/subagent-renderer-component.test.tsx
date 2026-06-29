@@ -279,7 +279,7 @@ describe("SubagentExecutionCard — 状态文案", () => {
     expect(statusText.className).toContain("text-status-success");
   });
 
-  it("已有阶段性输出但子会话仍在流式运行时，仍显示 'Running'", () => {
+  it("已有最终输出时，即使子会话状态仍是 streaming，也显示 'Completed'", () => {
     setupMockStore(
       {
         status: "running",
@@ -292,8 +292,20 @@ describe("SubagentExecutionCard — 状态文案", () => {
     const block = makeBlock({ status: "done", output: "Phase 1 complete" });
     render(<SubagentExecutionCard block={block} />);
 
-    const statusText = screen.getByText("Running");
-    expect(statusText.className).toContain("animate-pulse");
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
+  });
+
+  it("折叠态展示智能体名称和短会话 ID", () => {
+    setupMockStore({
+      status: "done",
+      agent: "frontend-dev",
+    });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("frontend-dev")).toBeTruthy();
+    expect(screen.getByText("sub_test_001")).toBeTruthy();
   });
 });
 
@@ -446,7 +458,7 @@ describe("SubagentExecutionCard — 输出渲染", () => {
     expect(container.querySelector("strong")?.textContent).toBe("done");
   });
 
-  it("已有阶段性输出但子会话仍在运行时，展开后仍保留已产出的输出内容", () => {
+  it("已有最终输出但子会话状态仍在运行时，展开后仍保留输出且不显示 Running", () => {
     setupMockStore({ status: "running", finalText: "done", completedAt: undefined });
     hoisted.subagentStatus = "streaming";
     const block = makeBlock({ status: "done", output: "done" });
@@ -456,7 +468,8 @@ describe("SubagentExecutionCard — 输出渲染", () => {
     if (!screen.queryByText("Output")) {
       fireEvent.click(header);
     }
-    expect(screen.getByText("Running")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
+    expect(screen.getByText("Completed")).toBeTruthy();
     expect(screen.getByText("Output")).toBeTruthy();
     expect(screen.getByText("done")).toBeTruthy();
   });
