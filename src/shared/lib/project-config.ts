@@ -1,9 +1,10 @@
 import { readFile, writeFile, mkdir, readdir, copyFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
-import { join, dirname, basename, resolve } from "path";
 import { homedir } from "os";
+import { join, dirname, basename, resolve } from "path";
 import { createHash } from "crypto";
 import { createLogger } from "./logger";
+import { PI_APP_CONFIG_DIR } from "./app-paths";
 import type {
   RecentProject,
   ConfiguredPath,
@@ -21,11 +22,9 @@ const log = createLogger("config");
 /**
  * 配置根目录。通过 PI_APP_CONFIG_DIR 环境变量可覆盖，
  * 主要用于 worktree 场景下多实例隔离。
- * 主仓库默认 ~/.pi-agent-chat，worktree 可设为独立路径。
+ * 主仓库默认 ~/.pi/chat，worktree 可设为独立路径。
  */
-const CONFIG_DIR = process.env.PI_APP_CONFIG_DIR
-  ? resolve(process.env.PI_APP_CONFIG_DIR)
-  : join(homedir(), ".pi-agent-chat");
+const CONFIG_DIR = resolve(PI_APP_CONFIG_DIR);
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const BACKUP_PATH = join(CONFIG_DIR, "config.json.bak");
 
@@ -102,7 +101,9 @@ function normalizeRemoteResourceSyncConfig(
     enabled: input.enabled !== false,
   };
   if (Array.isArray(input.resourceTypes)) {
-    normalized.resourceTypes = input.resourceTypes.filter((type) => REMOTE_RESOURCE_TYPES.has(type));
+    normalized.resourceTypes = input.resourceTypes.filter((type) =>
+      REMOTE_RESOURCE_TYPES.has(type),
+    );
   }
   return normalized;
 }
@@ -371,7 +372,15 @@ function hydrateTabs(config: ProjectConfig, tabs: PersistedTab[]): PersistedTab[
     const remoteRecord = remoteByLocalPath.get(tab.path);
     const remote = tab.remote ?? remoteRecord;
     if (!remote) {
-      return isRemoteProjectLocalPath(tab.path) ? [] : [tab];
+      // 对于 SSH 远程项目的 Tab，如果 remote 记录丢失，保留 Tab 而不是静默丢弃
+      // 避免用户在刷新/重连后 Tab 消失 (#42)
+      if (isRemoteProjectLocalPath(tab.path)) {
+        log.warn("hydrateTabs: SSH tab missing remote record, keeping tab", {
+          path: tab.path,
+          name: tab.name,
+        });
+      }
+      return [tab];
     }
 
     const wasLegacyRemote = tab.runtime !== "ssh" || !tab.remote;
@@ -614,9 +623,9 @@ export async function syncOpenTabs(
     const hydratedTabs = hydrateTabs(config, tabs);
     const hydratedActiveId = hydratedTabs.some((tab) => tab.id === activeTabId)
       ? activeTabId
-      : (activePath
-          ? (hydratedTabs.find((tab) => tab.path === activePath)?.id ?? null)
-          : null);
+      : activePath
+        ? (hydratedTabs.find((tab) => tab.path === activePath)?.id ?? null)
+        : null;
     config.openTabs = hydratedTabs;
     config.activeTabId = hydratedActiveId ?? hydratedTabs[0]?.id ?? null;
   });

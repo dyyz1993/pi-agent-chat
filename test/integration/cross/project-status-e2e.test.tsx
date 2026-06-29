@@ -41,8 +41,8 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
       syncTierFromModel: vi.fn(),
       switchToTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
-      setSessionTierModels: vi.fn(),
-      setSessionCurrentTier: vi.fn(),
+      setProjectTierModels: vi.fn(),
+      setProjectCurrentTier: vi.fn(),
       dataBySession: {},
       globalDefaults: {},
     }),
@@ -68,11 +68,24 @@ vi.mock("../../../src/mainview/stores/use-explorer-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-git-store", () => ({
-  useGitStore: { getState: () => ({ fetchWorktrees: vi.fn(), fetchStatus: vi.fn(), fetchBranches: vi.fn() }) },
+  useGitStore: {
+    getState: () => ({ fetchWorktrees: vi.fn(), fetchStatus: vi.fn(), fetchBranches: vi.fn() }),
+  },
 }));
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
-  useStatusStore: { getState: () => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() }) },
+  useStatusStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({ remoteRuntimeBySession: {} }),
+    {
+      getState: () => ({
+        remoteRuntimeBySession: {},
+        setPlugins: vi.fn(),
+        setSkills: vi.fn(),
+        setMcpServers: vi.fn(),
+      }),
+    },
+  ),
   deriveSkillScope: () => "project" as const,
   derivePluginScope: () => "project" as const,
 }));
@@ -251,21 +264,19 @@ describe("TabBar E2E：project.scanSessions 同源返回 status，dot 立即反�
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(
-      async (method: string, params: { projectPath?: string }) => {
-        if (method === "project.scanSessions") {
-          if (params?.projectPath === "/project-b") {
-            // 关键：statuses 与 sessions 同一 RPC 返回
-            return {
-              sessions: [bSess],
-              statuses: [{ sessionId: "b1", status: "streaming" }],
-            };
-          }
-          return { sessions: [] };
+    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string }) => {
+      if (method === "project.scanSessions") {
+        if (params?.projectPath === "/project-b") {
+          // 关键：statuses 与 sessions 同一 RPC 返回
+          return {
+            sessions: [bSess],
+            statuses: [{ sessionId: "b1", status: "streaming" }],
+          };
         }
-        return {};
-      },
-    );
+        return { sessions: [] };
+      }
+      return {};
+    });
 
     render(<TabBar onAddProject={vi.fn()} />);
 
@@ -313,20 +324,18 @@ describe("TabBar E2E：project.scanSessions 同源返回 status，dot 立即反�
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(
-      async (method: string, params: { projectPath?: string }) => {
-        if (method === "project.scanSessions") {
-          if (params?.projectPath === "/project-b") {
-            return {
-              sessions: [bSess],
-              statuses: [{ sessionId: "b1", status: "permission" }],
-            };
-          }
-          return { sessions: [] };
+    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string }) => {
+      if (method === "project.scanSessions") {
+        if (params?.projectPath === "/project-b") {
+          return {
+            sessions: [bSess],
+            statuses: [{ sessionId: "b1", status: "permission" }],
+          };
         }
-        return {};
-      },
-    );
+        return { sessions: [] };
+      }
+      return {};
+    });
 
     render(<TabBar onAddProject={vi.fn()} />);
 
@@ -395,15 +404,11 @@ describe("TabBar E2E：project.scanSessions 同源返回 status，dot 立即反�
       `Beta dot must be neutral gray when not loaded, got: ${betaClass}`,
     ).toBe(true);
     // 显式断言不是绿/黄/红（这三种是 streaming/idle/permission，会让人误判）
-    expect(betaClass, "Beta dot must not be green when unknown").not.toContain(
-      "bg-status-success",
-    );
+    expect(betaClass, "Beta dot must not be green when unknown").not.toContain("bg-status-success");
     expect(betaClass, "Beta dot must not be yellow when unknown").not.toContain(
       "bg-status-warning",
     );
-    expect(betaClass, "Beta dot must not be red when unknown").not.toContain(
-      "bg-status-error",
-    );
+    expect(betaClass, "Beta dot must not be red when unknown").not.toContain("bg-status-error");
     // 也不应该有 pulse 动画
     expect(betaClass).not.toContain("animate-pulse");
   });

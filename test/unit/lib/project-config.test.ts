@@ -5,7 +5,7 @@ import { homedir } from "os";
 import { existsSync } from "fs";
 
 // 使用真实文件系统测试，写入临时目录
-const TEST_CONFIG_DIR = join(homedir(), ".pi-agent-chat");
+const TEST_CONFIG_DIR = join(homedir(), ".pi", "chat");
 const TEST_CONFIG_PATH = join(TEST_CONFIG_DIR, "config.json");
 const TEST_BACKUP_PATH = join(TEST_CONFIG_DIR, "config.json.bak");
 
@@ -281,6 +281,32 @@ describe("getRemoteProjectByPath", () => {
 });
 
 describe("restoreOpenTabs", () => {
+  it("SSH tab survives when remoteProjects entry is missing", async () => {
+    // 模拟 SSH Tab 但 remoteProjects 数组为空（记录丢失）
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify({
+        openTabs: [
+          {
+            id: "remote-ssh-1",
+            name: "我的服务器",
+            path: join(TEST_CONFIG_DIR, "remote-projects", "ssh-my-server"),
+            runtime: "ssh",
+          },
+        ],
+      }),
+      "utf-8",
+    );
+
+    const { restoreOpenTabs } = await import("../../../src/shared/lib/project-config");
+    const result = await restoreOpenTabs();
+
+    // SSH Tab 不应该被静默丢弃
+    expect(result.tabs).toHaveLength(1);
+    expect(result.tabs[0].path).toContain("ssh-my-server");
+    expect(result.tabs[0].name).toBe("我的服务器");
+  });
+
   it("hydrates legacy SSH tabs from remote project records", async () => {
     const localPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-legacy-tab");
 
@@ -340,7 +366,7 @@ describe("restoreOpenTabs", () => {
     });
   });
 
-  it("filters orphan SSH shadow tabs without remote metadata", async () => {
+  it("preserves orphan SSH tabs even without remote metadata", async () => {
     const orphanLocalPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-orphan-tab");
 
     await writeFile(
@@ -371,18 +397,12 @@ describe("restoreOpenTabs", () => {
     const { restoreOpenTabs } = await import("../../../src/shared/lib/project-config");
     const restored = await restoreOpenTabs();
 
-    expect(restored).toEqual({
-      activeTabId: "local",
-      tabs: [
-        {
-          id: "local",
-          name: "local",
-          path: "/Users/xuyingzhou/Project/local",
-        },
-      ],
+    // SSH orphan Tab 不应被静默丢弃 (#42)
+    expect(restored.tabs).toHaveLength(2);
+    expect(restored.tabs.map((t: { id: string }) => t.id)).toContain("orphan");
+    expect(restored.tabs.map((t: { id: string }) => t.id)).toContain("local");
     });
   });
-});
 
 describe("syncOpenTabs", () => {
   it("hydrates SSH shadow tabs before persisting them", async () => {

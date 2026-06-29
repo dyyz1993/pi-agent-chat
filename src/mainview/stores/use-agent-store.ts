@@ -333,9 +333,20 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
 
       if (result.tier) {
         const { useTierStore } = await import("./use-tier-store");
-        useTierStore
-          .getState()
-          .setSessionCurrentTier(sessionId, result.tier as "fast" | "pro" | "max");
+        // 从 sessionId 查找 projectPath
+        const sessionsByProject = useSessionStore.getState().sessionsByProject;
+        let resolvedProjectPath: string | null = null;
+        for (const [path, sessions] of Object.entries(sessionsByProject)) {
+          if (sessions.some((s) => s.sessionId === sessionId)) {
+            resolvedProjectPath = path;
+            break;
+          }
+        }
+        if (resolvedProjectPath) {
+          useTierStore
+            .getState()
+            .setProjectCurrentTier(resolvedProjectPath, result.tier as "fast" | "pro" | "max");
+        }
       }
       if (result.thinkingLevel) {
         useSessionStore.getState().setThinkingLevel(result.thinkingLevel);

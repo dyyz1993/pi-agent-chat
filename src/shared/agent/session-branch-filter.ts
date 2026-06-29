@@ -85,9 +85,7 @@ function extractToolCallIds(message: unknown): string[] {
 
 function extractToolResultId(message: unknown): string | null {
   if (!isRecord(message) || message.role !== "toolResult") return null;
-  return typeof message.toolCallId === "string" && message.toolCallId
-    ? message.toolCallId
-    : null;
+  return typeof message.toolCallId === "string" && message.toolCallId ? message.toolCallId : null;
 }
 
 function expandToolPairWindow(

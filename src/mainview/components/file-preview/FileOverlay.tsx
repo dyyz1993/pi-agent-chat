@@ -208,7 +208,8 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
   };
 
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-  const hasToolbarButtons = isHtml || (preview.isText && !preview.editable && onToggleEdit) || preview.editable;
+  const hasToolbarButtons =
+    isHtml || (preview.isText && !preview.editable && onToggleEdit) || preview.editable;
 
   const actions = hasToolbarButtons ? (
     <div className="flex items-center gap-1 mr-1 pr-2 border-r border-border-secondary">

@@ -15,6 +15,7 @@ import {
   handleCoordinatorDelegateSyncOperation,
   handleCoordinatorDelegateStatusOperation,
   handleCoordinatorDelegateStopOperation,
+  type DelegateSendNotFoundReason,
   type DelegateSyncResult,
 } from "./coordinator-delegate-operations";
 import type { DelegateReplyMode } from "./coordinator-delegate-utils";
@@ -47,7 +48,11 @@ export interface CoordinatorHandlerAdapter {
   handleDelegateSend: (
     sourceSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
-  ) => Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }>;
+  ) => Promise<{
+    delivered: boolean;
+    targetStatus: "active" | "started" | "not_found";
+    notFoundReason?: DelegateSendNotFoundReason;
+  }>;
   handleDelegateStatus: (
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
@@ -136,11 +141,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
       }
       removeDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId);
       removeSessionFromAllParents(deps.parentChildMap, targetSessionId);
-      clearDelegateTracking(
-        deps.delegateCreatedAt,
-        deps.delegateReplyCount,
-        targetSessionId,
-      );
+      clearDelegateTracking(deps.delegateCreatedAt, deps.delegateReplyCount, targetSessionId);
       deps.delegateRepliedSessions.delete(targetSessionId);
       void deps.stop(targetSessionId);
       return { ok: true, removed: true };

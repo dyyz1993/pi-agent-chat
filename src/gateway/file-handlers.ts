@@ -97,7 +97,9 @@ function runSshFileCommand(
   return { stdout: result.stdout ?? Buffer.alloc(0), stderr };
 }
 
-function getRemoteFileSize(target: Extract<HttpFileTarget, { kind: "ssh" }>): number | "missing" | "directory" {
+function getRemoteFileSize(
+  target: Extract<HttpFileTarget, { kind: "ssh" }>,
+): number | "missing" | "directory" {
   const quoted = shellQuote(target.path);
   const result = runSshFileCommand(
     target.remote,
@@ -382,7 +384,10 @@ export async function handleFileUpload(
   }
 }
 
-export async function handleFileDelete(filePath: string | null, res: ServerResponse): Promise<void> {
+export async function handleFileDelete(
+  filePath: string | null,
+  res: ServerResponse,
+): Promise<void> {
   if (!filePath) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Missing path parameter" }));

@@ -97,7 +97,7 @@ describe("rollback scenarios", () => {
 
       const manager1 = new AgentProcessManager(new MockRPC() as never);
       mgr(manager1).sessionPaths.set("s1", sf);
-      await manager1.navigateTree("s1", "m2");
+      await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
       const r1 = await manager1.getFullMessages("s1", sf);
       expect(r1.totalCount).toBe(2);
@@ -125,7 +125,7 @@ describe("rollback scenarios", () => {
 
       const manager1 = new AgentProcessManager(new MockRPC() as never);
       mgr(manager1).sessionPaths.set("s1", sf);
-      await manager1.navigateTree("s1", "m2");
+      await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
       // CLI startup writes a tier_config AFTER leaf_pointer
       appendFileSync(sf, "\n" + tierConfig());
@@ -157,7 +157,7 @@ describe("rollback scenarios", () => {
       mgr(manager).sessionPaths.set("s1", sf);
 
       // First rollback to m2
-      await manager.navigateTree("s1", "m2");
+      await manager.navigateTree("s1", "m2", { skipFiles: true });
       const r1 = await manager.getFullMessages("s1", sf);
       expect(r1.totalCount).toBe(2);
 
@@ -169,7 +169,7 @@ describe("rollback scenarios", () => {
       expect(r2.totalCount).toBe(4);
 
       // Second rollback to m2
-      await manager.navigateTree("s1", "m2");
+      await manager.navigateTree("s1", "m2", { skipFiles: true });
       const r3 = await manager.getFullMessages("s1", sf);
       expect(r3.totalCount).toBe(2);
       expect(r3.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
@@ -190,20 +190,21 @@ describe("rollback scenarios", () => {
       const manager = new AgentProcessManager(new MockRPC() as never);
       mgr(manager).sessionPaths.set("s1", sf);
 
-      // First rollback to m3
-      await manager.navigateTree("s1", "m3");
+      // First rollback to user message m3. Current rollback semantics restore to
+      // the branch point before that user turn, so the active leaf becomes m2.
+      await manager.navigateTree("s1", "m3", { skipFiles: true });
       const r1 = await manager.getFullMessages("s1", sf);
-      expect(r1.totalCount).toBe(3);
+      expect(r1.totalCount).toBe(2);
 
-      // User chats from m3
-      appendFileSync(sf, "\n" + msg("m5", "m3", "user"));
+      // User chats from the restored branch point m2
+      appendFileSync(sf, "\n" + msg("m5", "m2", "user"));
       appendFileSync(sf, "\n" + msg("m6", "m5", "assistant"));
 
       const r2 = await manager.getFullMessages("s1", sf);
-      expect(r2.totalCount).toBe(5);
+      expect(r2.totalCount).toBe(4);
 
       // Second rollback to m2 (deeper)
-      await manager.navigateTree("s1", "m2");
+      await manager.navigateTree("s1", "m2", { skipFiles: true });
       const r3 = await manager.getFullMessages("s1", sf);
       expect(r3.totalCount).toBe(2);
       expect(r3.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
@@ -226,10 +227,10 @@ describe("rollback scenarios", () => {
       const manager1 = new AgentProcessManager(new MockRPC() as never);
       mgr(manager1).sessionPaths.set("s1", sf);
 
-      await manager1.navigateTree("s1", "m3");
+      await manager1.navigateTree("s1", "m3", { skipFiles: true });
       appendFileSync(sf, "\n" + msg("m5", "m3", "user"));
       appendFileSync(sf, "\n" + msg("m6", "m5", "assistant"));
-      await manager1.navigateTree("s1", "m2");
+      await manager1.navigateTree("s1", "m2", { skipFiles: true });
 
       // Simulate restart
       const manager2 = new AgentProcessManager(new MockRPC() as never);

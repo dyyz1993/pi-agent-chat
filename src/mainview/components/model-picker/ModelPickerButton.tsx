@@ -19,6 +19,8 @@ interface ModelPickerButtonProps {
   placement?: "up" | "down";
   placeholder?: string;
   disabled?: boolean;
+  dropdownMinWidth?: number;
+  dropdownMaxWidth?: number;
   renderTrigger?: (props: { open: boolean }) => React.ReactNode;
   onOpenChange?: (open: boolean) => void;
 }
@@ -38,6 +40,8 @@ export function ModelPickerButton({
   placement = "down",
   placeholder = "--",
   disabled = false,
+  dropdownMinWidth = 280,
+  dropdownMaxWidth,
   renderTrigger,
   onOpenChange,
 }: ModelPickerButtonProps) {
@@ -136,7 +140,8 @@ export function ModelPickerButton({
         onClose={() => setOpen(false)}
         placement={placement === "up" ? "top" : "bottom"}
         align="start"
-        minWidth={280}
+        minWidth={dropdownMinWidth}
+        maxWidth={dropdownMaxWidth}
         maxHeight={280}
         className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col"
         data-model-picker-dropdown
@@ -169,7 +174,7 @@ export function ModelPickerButton({
         </div>
 
         {/* Model list */}
-        <div className="overflow-y-auto flex-1 py-1">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 py-1">
           {models.length === 0 ? (
             <div className="text-text-tertiary text-xs text-center py-3">没有可用模型</div>
           ) : displayModels.length === 0 ? (
@@ -205,7 +210,7 @@ export function ModelPickerButton({
                     )}
                     <div className="flex flex-col min-w-0">
                       <span className="truncate text-xs">{m.name ?? formatModelName(m.id)}</span>
-                      <span className="text-[10px] text-semantic-tool/60 font-mono">
+                      <span className="text-[10px] text-semantic-tool/60 font-mono truncate">
                         {m.provider} · {m.id}
                       </span>
                     </div>

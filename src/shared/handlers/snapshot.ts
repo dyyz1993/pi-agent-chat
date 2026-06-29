@@ -90,7 +90,10 @@ async function readSnapshotEntries(sessionPath: string): Promise<SnapshotEntries
           }
         }
       } catch (e) {
-        log.debug("readSnapshotEntries: skipping malformed line", { sessionPath, error: String(e) });
+        log.debug("readSnapshotEntries: skipping malformed line", {
+          sessionPath,
+          error: String(e),
+        });
       }
     }
   } catch (err) {

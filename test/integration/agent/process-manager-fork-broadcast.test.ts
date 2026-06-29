@@ -56,11 +56,13 @@ interface InternalAPM {
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   processByCwd: Map<string, ManagedClientShape>;
-  parentChildMap: Map<string, Set<string>>;
-  handleCoordinatorDelegateFork: (
-    parentSessionId: string,
-    msg: Record<string, unknown>,
-  ) => Promise<{ sessionId: string; status: string }>;
+  coordinatorHandler: {
+    parentChildMap: Map<string, Set<string>>;
+    handleCoordinatorDelegateFork: (
+      parentSessionId: string,
+      msg: never,
+    ) => Promise<{ sessionId: string; status: string }>;
+  };
   start: (
     sessionId: string,
     projectPath: string,
@@ -152,6 +154,7 @@ describe("AgentProcessManager — coordinator fork broadcast", () => {
     });
     const m = internals(manager);
     m.clients.set(parentId, parentManaged);
+    m.coordinatorHandler.parentChildMap.set(parentId, new Set([parentId]));
 
     vi.spyOn(manager, "start").mockImplementation(async (sid: string, pp: string, sp: string) => {
       const mm = makeMockManaged({
@@ -170,7 +173,7 @@ describe("AgentProcessManager — coordinator fork broadcast", () => {
       title: "Fork Test",
     };
 
-    const result = await m.handleCoordinatorDelegateFork(parentId, msg);
+    const result = await m.coordinatorHandler.handleCoordinatorDelegateFork(parentId, msg as never);
 
     expect(result.sessionId).toMatch(/^sess_fork_/);
     expect(result.status).toBe("started");

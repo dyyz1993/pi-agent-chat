@@ -412,25 +412,26 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             <div className="px-3 pb-2 relative">
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionAnchor block={uiBlock} />
-              ) : (() => {
-                // Fall back to the live bash process output when the chat
-                // store hasn't picked it up yet (e.g., after a page refresh
-                // before reconcileChatToolFromBashEvent has run).
-                const liveOutput = !block.output && bashProcess?.output
-                  ? bashProcess.output
-                  : block.output;
-                return liveOutput ? (
-                  <div
-                    ref={outputScrollRef}
-                    onScroll={handleScroll}
-                    className="overflow-y-auto max-h-36"
-                  >
-                    <OutputHighlighter content={liveOutput} isRunning={isRunning} />
-                  </div>
-                ) : isRunning ? (
-                  <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
-                ) : null;
-              })()}
+              ) : (
+                (() => {
+                  // Fall back to the live bash process output when the chat
+                  // store hasn't picked it up yet (e.g., after a page refresh
+                  // before reconcileChatToolFromBashEvent has run).
+                  const liveOutput =
+                    !block.output && bashProcess?.output ? bashProcess.output : block.output;
+                  return liveOutput ? (
+                    <div
+                      ref={outputScrollRef}
+                      onScroll={handleScroll}
+                      className="overflow-y-auto max-h-36"
+                    >
+                      <OutputHighlighter content={liveOutput} isRunning={isRunning} />
+                    </div>
+                  ) : isRunning ? (
+                    <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
+                  ) : null;
+                })()
+              )}
               {isRunning && !autoScroll && (
                 <button
                   onClick={() => {

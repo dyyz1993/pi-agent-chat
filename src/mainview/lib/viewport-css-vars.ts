@@ -17,7 +17,10 @@ export function getCurrentViewportSize(win: Window = window): ViewportSize {
   return { width, height };
 }
 
-export function syncViewportCssVars(size: ViewportSize, root: HTMLElement = document.documentElement): void {
+export function syncViewportCssVars(
+  size: ViewportSize,
+  root: HTMLElement = document.documentElement,
+): void {
   const width = Math.round(size.width);
   const height = Math.round(size.height);
   if (!isPositiveFinite(width) || !isPositiveFinite(height)) return;

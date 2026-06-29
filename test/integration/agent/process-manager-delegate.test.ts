@@ -63,16 +63,21 @@ interface InternalAPM {
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   processByCwd: Map<string, Set<ManagedClientShape>>;
-  parentChildMap: Map<string, Set<string>>;
-  handleCoordinatorDelegateStatus: (msg: Record<string, unknown>) => Promise<{
-    status: string;
-    isCompacting: boolean;
-    contextUsage: unknown;
-  }>;
-  handleCoordinatorDelegateFork: (
-    parentSessionId: string,
-    msg: Record<string, unknown>,
-  ) => Promise<{ sessionId: string; status: "started" | "already_running" }>;
+  coordinatorHandler: {
+    parentChildMap: Map<string, Set<string>>;
+    handleCoordinatorDelegateStatus: (
+      parentSessionId: string,
+      msg: never,
+    ) => Promise<{
+      status: string;
+      isCompacting: boolean;
+      contextUsage: unknown;
+    }>;
+    handleCoordinatorDelegateFork: (
+      parentSessionId: string,
+      msg: never,
+    ) => Promise<{ sessionId: string; status: "started" | "already_running" }>;
+  };
   start: (
     sessionId: string,
     projectPath: string,
@@ -155,7 +160,10 @@ describe("BUG-1: handleCoordinatorDelegateStatus — non-existent sessionId", ()
 
     // BEFORE FIX: returns { status: "stopped" } — misleading
     // AFTER FIX:  should return { status: "not_found" }
-    const result = await m.handleCoordinatorDelegateStatus(msg);
+    const result = await m.coordinatorHandler.handleCoordinatorDelegateStatus(
+      "parent-session",
+      msg as never,
+    );
 
     expect(result.status).toBe("not_found");
   });
@@ -181,6 +189,7 @@ describe("BUG-1: handleCoordinatorDelegateStatus — non-existent sessionId", ()
     // Register in sessionPaths (session existed) but NOT in clients (not active)
     m.sessionPaths.set(sid, realPath);
     m.sessionProjectPaths.set(sid, "/fake/project");
+    m.coordinatorHandler.parentChildMap.set("parent-session", new Set([sid]));
 
     const msg = {
       __call: "session_delegate_status" as const,
@@ -189,7 +198,10 @@ describe("BUG-1: handleCoordinatorDelegateStatus — non-existent sessionId", ()
     };
 
     // This session DID exist — should still return "stopped"
-    const result = await m.handleCoordinatorDelegateStatus(msg);
+    const result = await m.coordinatorHandler.handleCoordinatorDelegateStatus(
+      "parent-session",
+      msg as never,
+    );
     expect(result.status).toBe("stopped");
   });
 
@@ -213,6 +225,7 @@ describe("BUG-1: handleCoordinatorDelegateStatus — non-existent sessionId", ()
     );
     m.sessionPaths.set(realStopped, realPath);
     m.sessionProjectPaths.set(realStopped, "/fake/project");
+    m.coordinatorHandler.parentChildMap.set("parent-session", new Set([realStopped]));
 
     // Query the non-existent one — must NOT get "stopped"
     const ghost = "sess_totally_ghost_88888";
@@ -222,7 +235,10 @@ describe("BUG-1: handleCoordinatorDelegateStatus — non-existent sessionId", ()
       invokeId: "inv_ghost2",
     };
 
-    const result = await m.handleCoordinatorDelegateStatus(msg);
+    const result = await m.coordinatorHandler.handleCoordinatorDelegateStatus(
+      "parent-session",
+      msg as never,
+    );
     expect(result.status).toBe("not_found");
 
     // Query the real stopped one — must get "stopped"
@@ -231,7 +247,10 @@ describe("BUG-1: handleCoordinatorDelegateStatus — non-existent sessionId", ()
       sessionId: realStopped,
       invokeId: "inv_real2",
     };
-    const result2 = await m.handleCoordinatorDelegateStatus(msg2);
+    const result2 = await m.coordinatorHandler.handleCoordinatorDelegateStatus(
+      "parent-session",
+      msg2 as never,
+    );
     expect(result2.status).toBe("stopped");
   });
 });
@@ -278,7 +297,9 @@ describe("BUG-2: handleCoordinatorDelegateFork — non-existent target sessionId
 
     // BEFORE FIX: silently forks parent's session (msg.sessionId ignored)
     // AFTER FIX:  should throw because target session not found
-    await expect(m.handleCoordinatorDelegateFork(parentSid, msg)).rejects.toThrow(/not found/i);
+    await expect(
+      m.coordinatorHandler.handleCoordinatorDelegateFork(parentSid, msg as never),
+    ).rejects.toThrow(/not found/i);
   });
 
   it("forks successfully when msg.sessionId points to an active session", async () => {
@@ -316,6 +337,7 @@ describe("BUG-2: handleCoordinatorDelegateFork — non-existent target sessionId
     m.clients.set(targetSid, targetManaged);
     m.sessionPaths.set(parentSid, join(TMP_DIR, `${parentSid}.jsonl`));
     m.sessionPaths.set(targetSid, targetPath);
+    m.coordinatorHandler.parentChildMap.set(parentSid, new Set([targetSid]));
 
     // Mock start to avoid real process spawning
     vi.spyOn(m, "start").mockResolvedValue({ agentId: "agent_fork", status: "idle" });
@@ -328,7 +350,10 @@ describe("BUG-2: handleCoordinatorDelegateFork — non-existent target sessionId
       invokeId: "inv_good_fork",
     };
 
-    const result = await m.handleCoordinatorDelegateFork(parentSid, msg);
+    const result = await m.coordinatorHandler.handleCoordinatorDelegateFork(
+      parentSid,
+      msg as never,
+    );
     expect(result.sessionId).toMatch(/^sess_fork_/);
     expect(result.status).toBe("idle");
   });

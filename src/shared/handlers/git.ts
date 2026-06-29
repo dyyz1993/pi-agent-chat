@@ -281,10 +281,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!isGitRepo(target)) return { commits: [] };
     const repoRoot = getRepoRoot(target);
     const count = params.maxCount ?? 50;
-    const output = execGit(
-      ["log", `--max-count=${count}`, "--pretty=format:%H|%h|%s|%an|%aI"],
-      { ...target, cwd: repoRoot },
-    );
+    const output = execGit(["log", `--max-count=${count}`, "--pretty=format:%H|%h|%s|%an|%aI"], {
+      ...target,
+      cwd: repoRoot,
+    });
 
     const commits = output
       .split("\n")
@@ -301,10 +301,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const target = await resolveGitTarget(params.repoPath);
     if (!isGitRepo(target)) return { files: [] };
     const repoRoot = getRepoRoot(target);
-    const output = execGit(
-      ["diff-tree", "--no-commit-id", "--name-status", "-r", params.hash],
-      { ...target, cwd: repoRoot },
-    );
+    const output = execGit(["diff-tree", "--no-commit-id", "--name-status", "-r", params.hash], {
+      ...target,
+      cwd: repoRoot,
+    });
 
     const statusMap: Record<string, GitFileChange["status"]> = {
       M: "modified",

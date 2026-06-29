@@ -204,17 +204,10 @@ export const MessageCard = memo(function MessageCard({
     if (allHidden) return null;
   }
 
-  if (
-    hasCustomContent &&
-    customBlock &&
-    customBlock.customType === "supervisor_goal_complete"
-  ) {
+  if (hasCustomContent && customBlock && customBlock.customType === "supervisor_goal_complete") {
     return (
       <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
-        <GoalCompleteCard
-          data={(customBlock as { data?: unknown }).data}
-          blockId={message.id}
-        />
+        <GoalCompleteCard data={(customBlock as { data?: unknown }).data} blockId={message.id} />
       </div>
     );
   }

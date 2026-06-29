@@ -113,20 +113,16 @@ function App() {
       isCancelled: () => cancelled,
       setRestoring,
       addLog,
-      callApi: (method, params) =>
-        apiClient.call(method as never, params as never),
+      callApi: (method, params) => apiClient.call(method as never, params as never),
       loadSessionsForProject,
       addProjectTab,
-      setActiveProject: (id, opts) =>
-        useSessionStore.getState().setActiveProject(id, opts),
+      setActiveProject: (id, opts) => useSessionStore.getState().setActiveProject(id, opts),
       setActiveSession: (id, skipFetch) =>
         useSessionStore.getState().setActiveSession(id, skipFetch),
       createNewSession: () => useSessionStore.getState().createNewSession(),
       getProjectTabs: () => useSessionStore.getState().projectTabs,
-      getLastActiveSessionByProject: () =>
-        useSessionStore.getState().lastActiveSessionByProject,
-      loadSessionMessages: (sid, opts) =>
-        useChatStore.getState().loadSessionMessages(sid, opts),
+      getLastActiveSessionByProject: () => useSessionStore.getState().lastActiveSessionByProject,
+      loadSessionMessages: (sid, opts) => useChatStore.getState().loadSessionMessages(sid, opts),
       log,
       trace,
     });

@@ -62,11 +62,12 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
     getState: () => ({
       getCurrentTier: vi.fn(() => null),
       getTierModels: vi.fn(() => ({})),
+      fetchTierConfig: vi.fn(() => Promise.resolve()),
       syncTierFromModel: vi.fn(),
       switchToTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
-      setSessionTierModels: vi.fn(),
-      setSessionCurrentTier: vi.fn(),
+      setProjectTierModels: vi.fn(),
+      setProjectCurrentTier: vi.fn(),
       dataBySession: {},
       globalDefaults: {},
     }),
@@ -85,7 +86,13 @@ vi.mock("../../../src/mainview/stores/use-git-store", () => ({
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
-    getState: () => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() }),
+    getState: () => ({
+      setPlugins: vi.fn(),
+      setSkills: vi.fn(),
+      setMcpServers: vi.fn(),
+      setProjectTrustState: vi.fn(),
+      applyPermissionProfileSnapshot: vi.fn(),
+    }),
   },
   deriveSkillScope: () => "project" as const,
   derivePluginScope: () => "project" as const,
@@ -166,15 +173,16 @@ describe("Scenario 1: sendMessage should update sessionStatusMap to streaming", 
   });
 });
 
-describe("Scenario 2: sendMessage failure should restore status to idle", () => {
-  it("calls updateSessionStatus with ('sess-1', 'idle') when apiClient.call rejects", async () => {
+describe("Scenario 2: sendMessage failure keeps last runtime status", () => {
+  it("does not force status back to idle when apiClient.call rejects", async () => {
     useChatStore.setState({ inputText: "hello" });
     const statusSpy = vi.spyOn(useSessionStore.getState(), "updateSessionStatus");
     (apiClient.call as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("network error"));
 
     await useChatStore.getState().sendMessage();
 
-    expect(statusSpy).toHaveBeenCalledWith("sess-1", "idle");
+    expect(statusSpy).toHaveBeenCalledWith("sess-1", "streaming");
+    expect(statusSpy).not.toHaveBeenCalledWith("sess-1", "idle");
   });
 });
 

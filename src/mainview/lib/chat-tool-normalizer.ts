@@ -1,8 +1,5 @@
 import type { ChatMessage, ContentBlock } from "../types";
-import {
-  formatArgsFromRawInput,
-  getToolCallInput,
-} from "./tool-execution-reconciler";
+import { formatArgsFromRawInput, getToolCallInput } from "./tool-execution-reconciler";
 
 export {
   buildPreservedStreamingMessage,

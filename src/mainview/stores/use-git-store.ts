@@ -228,9 +228,7 @@ export const useGitStore = create<GitState>((set, get) => ({
         });
       } else {
         // Agent process exited — fall back to change-review store data
-        const pending = useChangeReviewStore.getState().changes.find(
-          (c) => c.path === filePath,
-        );
+        const pending = useChangeReviewStore.getState().changes.find((c) => c.path === filePath);
         if (pending) {
           set({
             currentDiff: {

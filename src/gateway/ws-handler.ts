@@ -75,8 +75,14 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
           // RPC responses must wait for buffer to drain
           await new Promise<void>((resolve) => {
             const check = () => {
-              if (ws.readyState !== WebSocket.OPEN) { resolve(); return; }
-              if (ws.bufferedAmount < BACKPRESSURE_DRAIN_TARGET) { resolve(); return; }
+              if (ws.readyState !== WebSocket.OPEN) {
+                resolve();
+                return;
+              }
+              if (ws.bufferedAmount < BACKPRESSURE_DRAIN_TARGET) {
+                resolve();
+                return;
+              }
               setTimeout(check, 10);
             };
             setTimeout(check, 10);

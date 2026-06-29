@@ -224,9 +224,7 @@ function renderBadge(
           {statusLabel}
         </span>
       )}
-      {canJump && (
-        <SessionJumpButton onJump={handleJump} />
-      )}
+      {canJump && <SessionJumpButton onJump={handleJump} />}
     </>
   );
 }
@@ -267,7 +265,11 @@ export const DelegateCard = memo(function DelegateCard({
 
   const statusLabel =
     sessionStatusLabel(sessionStatus, t) ||
-    (matchedSession ? t("coordinator.dispatched") : isRunning ? t("coordinator.creating") : undefined);
+    (matchedSession
+      ? t("coordinator.dispatched")
+      : isRunning
+        ? t("coordinator.creating")
+        : undefined);
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
@@ -445,9 +447,7 @@ export const DelegateSendCard = memo(function DelegateSendCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && (
-              <SessionJumpButton onJump={handleJump} />
-            )}
+            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
       />
@@ -591,9 +591,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
         badge={
           <>
             <span className={`shrink-0 text-[10px] ${badgeColor}`}>{statusLabel}</span>
-            {canJump && (
-              <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />
-            )}
+            {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
             <CopyButton text={fullExecutionText} size="xs" />
           </>
         }
@@ -725,9 +723,7 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && (
-              <SessionJumpButton onJump={handleJump} />
-            )}
+            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
       />
@@ -804,9 +800,7 @@ export const DelegateStopCard = memo(function DelegateStopCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && (
-              <SessionJumpButton onJump={handleJump} />
-            )}
+            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
       />
@@ -883,9 +877,7 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && (
-              <SessionJumpButton onJump={handleJump} />
-            )}
+            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
       />

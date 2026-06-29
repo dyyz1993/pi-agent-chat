@@ -1,13 +1,6 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import { existsSync } from "fs";
-import {
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  stat,
-  writeFile,
-} from "fs/promises";
+import { mkdir, readdir, readFile, rename, stat, writeFile } from "fs/promises";
 import { basename, dirname, join, normalize, relative, resolve, sep } from "path";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
@@ -162,7 +155,11 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function fileRef(path: string, label: string, kind: LearningFileKind): Promise<LearningFileRef> {
+async function fileRef(
+  path: string,
+  label: string,
+  kind: LearningFileKind,
+): Promise<LearningFileRef> {
   try {
     const s = await stat(path);
     return { path, label, kind, exists: true, size: s.size, mtimeMs: s.mtimeMs };
@@ -209,19 +206,28 @@ async function getConfig(paths: LearningPaths): Promise<LearningConfig> {
   );
 }
 
-async function setConfig(paths: LearningPaths, patch: Partial<LearningConfig>): Promise<LearningConfig> {
+async function setConfig(
+  paths: LearningPaths,
+  patch: Partial<LearningConfig>,
+): Promise<LearningConfig> {
   await ensureDirs(paths);
   const next = mergeConfig(await getConfig(paths), patch);
   await writeJson(join(paths.learningDir, "config.json"), next);
   return next;
 }
 
-async function listCandidates(paths: LearningPaths, includeDecided = false): Promise<LearningCandidate[]> {
+async function listCandidates(
+  paths: LearningPaths,
+  includeDecided = false,
+): Promise<LearningCandidate[]> {
   if (!(await pathExists(paths.candidatesDir))) return [];
   const candidates: LearningCandidate[] = [];
   for (const entry of await readdir(paths.candidatesDir)) {
     if (!entry.endsWith(".json")) continue;
-    const candidate = await readJson<LearningCandidate | null>(join(paths.candidatesDir, entry), null);
+    const candidate = await readJson<LearningCandidate | null>(
+      join(paths.candidatesDir, entry),
+      null,
+    );
     if (!candidate) continue;
     if (!includeDecided && candidate.status !== "pending") continue;
     candidates.push(candidate);
@@ -407,7 +413,10 @@ async function getSnapshot(projectPath: string): Promise<LearningSnapshot> {
 }
 
 async function updateCandidate(paths: LearningPaths, candidate: LearningCandidate): Promise<void> {
-  await writeJson(safeJoin(paths.candidatesDir, `${slugify(candidate.id, "candidate")}.json`), candidate);
+  await writeJson(
+    safeJoin(paths.candidatesDir, `${slugify(candidate.id, "candidate")}.json`),
+    candidate,
+  );
 }
 
 async function getCandidate(paths: LearningPaths, candidateId: string): Promise<LearningCandidate> {
@@ -419,7 +428,10 @@ async function getCandidate(paths: LearningPaths, candidateId: string): Promise<
   return candidate;
 }
 
-function serializeMemory(payload: LearningMemoryCandidatePayload, sourceSessionId?: string): string {
+function serializeMemory(
+  payload: LearningMemoryCandidatePayload,
+  sourceSessionId?: string,
+): string {
   const source = sourceSessionId ? `sourceSession: ${sourceSessionId}\n` : "";
   return `---\nname: ${payload.description}\ndescription: ${payload.description}\ntype: ${payload.memoryType}\n${source}createdAt: ${new Date().toISOString()}\n---\n\n${payload.content.trim()}\n`;
 }
@@ -506,7 +518,11 @@ async function mergeSkill(
     return createSkillPackage(paths, { ...payload, name: skillName });
   }
   const original = await readFile(skillPath, "utf-8");
-  await writeFile(skillPath, `${original.trim()}\n\n## Learned Update\n\n${payload.body.trim()}\n`, "utf-8");
+  await writeFile(
+    skillPath,
+    `${original.trim()}\n\n## Learned Update\n\n${payload.body.trim()}\n`,
+    "utf-8",
+  );
   const refs = [await fileRef(skillPath, "SKILL.md", "skill-entrypoint")];
   refs.push(...(await writeSkillExtras(skillDir, payload.files)));
   const usage = await loadUsage(paths);
@@ -554,7 +570,11 @@ async function approveCandidateFallback(
   } else if (candidate.payload.type === "skill") {
     if (candidate.action === "archive-skill") {
       fileRefs = await archiveSkill(paths, candidate.targetId ?? candidate.payload.name);
-    } else if (candidate.action === "merge-skill" || mergeTargetSkillName || candidate.payload.targetSkillName) {
+    } else if (
+      candidate.action === "merge-skill" ||
+      mergeTargetSkillName ||
+      candidate.payload.targetSkillName
+    ) {
       fileRefs = await mergeSkill(
         paths,
         mergeTargetSkillName ?? candidate.payload.targetSkillName ?? candidate.payload.name,
@@ -595,7 +615,10 @@ async function approveCandidateFallback(
   return getSnapshot(projectPath);
 }
 
-async function rejectCandidateFallback(projectPath: string, candidateId: string): Promise<LearningSnapshot> {
+async function rejectCandidateFallback(
+  projectPath: string,
+  candidateId: string,
+): Promise<LearningSnapshot> {
   const paths = getLearningPaths(projectPath);
   await ensureDirs(paths);
   const candidate = await getCandidate(paths, candidateId);
@@ -665,7 +688,8 @@ async function runCuratorFallback(
   const paths = getLearningPaths(projectPath);
   await ensureDirs(paths);
   const config = await getConfig(paths);
-  const resolvedMode = mode ?? (domain === "memory" ? config.memory.curatorMode : config.skills.curatorMode);
+  const resolvedMode =
+    mode ?? (domain === "memory" ? config.memory.curatorMode : config.skills.curatorMode);
   let actions: CuratorAction[] = [];
   if (domain === "memory") {
     const memoryFiles = await listMemoryFiles(paths);
@@ -683,7 +707,9 @@ async function runCuratorFallback(
     ];
   } else {
     const skills = await listSkills(paths);
-    const stale = skills.filter((skill) => !skill.pinned && skill.state === "active" && skill.usageCount === 0);
+    const stale = skills.filter(
+      (skill) => !skill.pinned && skill.state === "active" && skill.usageCount === 0,
+    );
     actions = stale.map((skill) => ({
       action: "archive-skill" as const,
       targetId: skill.name,
@@ -700,7 +726,8 @@ async function runCuratorFallback(
         await archiveSkill(paths, skill.name);
       }
     }
-    if (actions.length === 0) actions = [{ action: "none", summary: "No skill curator actions proposed." }];
+    if (actions.length === 0)
+      actions = [{ action: "none", summary: "No skill curator actions proposed." }];
   }
   const run: LearningRun = {
     version: 1,
@@ -768,7 +795,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         mergeTargetSkillName: params.mergeTargetSkillName,
       },
     );
-    return result ?? approveCandidateFallback(params.projectPath, params.candidateId, params.mergeTargetSkillName);
+    return (
+      result ??
+      approveCandidateFallback(params.projectPath, params.candidateId, params.mergeTargetSkillName)
+    );
   });
 
   r("learning.rejectCandidate", async (params) => {

@@ -77,13 +77,23 @@ export function SidebarBottomControls() {
   const thinkingRef = useRef<HTMLDivElement>(null);
   const [switching, setSwitching] = useState(false);
 
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+
+  // 当前项目路径
+  const projectPath = useSessionStore((s) => {
+    const tab = s.projectTabs.find((t) => t.id === s.activeProjectId);
+    return tab?.path ?? null;
+  });
+
   const currentTier = useTierStore((s) =>
-    activeSessionId ? (s.dataBySession[activeSessionId]?.currentTier ?? null) : null,
+    projectPath ? (s.dataByProject[projectPath]?.currentTier ?? null) : null,
   );
   const switchToTier = useTierStore((s) => s.switchToTier);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
   const sessionTierModels = useTierStore((s) =>
-    activeSessionId ? s.dataBySession[activeSessionId]?.tierModels : undefined,
+    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
   );
   const globalDefaults = useTierStore((s) => s.globalDefaults);
   const tierModels = sessionTierModels ?? globalDefaults;
@@ -105,9 +115,6 @@ export function SidebarBottomControls() {
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
 
-  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
-  const projectTabs = useSessionStore((s) => s.projectTabs);
-  const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
 
   const worktrees = useGitStore((s) => s.worktrees);
@@ -275,21 +282,21 @@ export function SidebarBottomControls() {
   }, [activeSessionId, refreshModelsForActiveSession, tierModels]);
 
   const handleSaveTierConfig = useCallback(async () => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !projectPath) return;
     setTierConfigSaving(true);
     try {
       await apiClient.call("agent.setTierModels", {
         sessionId: activeSessionId,
         models: tierConfigModels,
       });
-      useTierStore.getState().setSessionTierModels(activeSessionId, tierConfigModels);
+      useTierStore.getState().setProjectTierModels(projectPath, tierConfigModels);
       setTierConfigOpen(false);
       await fetchTierConfig(activeSessionId, { force: true });
       // If the currently active tier exists, re-apply it to switch to the new model
-      const { dataBySession, globalDefaults } = useTierStore.getState();
-      const sessionData = dataBySession[activeSessionId ?? ""];
-      const activeTier = sessionData?.currentTier ?? null;
-      const updatedModels = sessionData?.tierModels ?? globalDefaults;
+      const { dataByProject, globalDefaults } = useTierStore.getState();
+      const projectData = dataByProject[projectPath];
+      const activeTier = projectData?.currentTier ?? null;
+      const updatedModels = projectData?.tierModels ?? globalDefaults;
       if (activeTier && updatedModels[activeTier]) {
         await switchToTier(activeTier, activeSessionId);
       }
@@ -298,7 +305,7 @@ export function SidebarBottomControls() {
       log.warn("save tier config failed", { error: msg });
     }
     setTierConfigSaving(false);
-  }, [activeSessionId, tierConfigModels, fetchTierConfig, switchToTier]);
+  }, [activeSessionId, projectPath, tierConfigModels, fetchTierConfig, switchToTier]);
 
   const handleSelectModel = useCallback(
     async (key: string) => {
@@ -315,7 +322,9 @@ export function SidebarBottomControls() {
           modelId,
         });
         setCurrentModel(provider, modelId);
-        useTierStore.getState().syncTierFromModel(activeSessionId ?? "", provider, modelId);
+        if (projectPath) {
+          useTierStore.getState().syncTierFromModel(projectPath, provider, modelId);
+        }
         fetchModelState(activeSessionId);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -789,6 +798,8 @@ export function SidebarBottomControls() {
                         if (open) refreshModelsForActiveSession();
                       }}
                       placement="up"
+                      dropdownMinWidth={420}
+                      dropdownMaxWidth={520}
                       placeholder={
                         currentModel
                           ? t("tierConfigDefault", "默认 ({{model}})", {

@@ -3,6 +3,26 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@dyyz1993/pi-coding-agent", () => ({
+  AuthStorage: {
+    create: vi.fn(() => ({})),
+  },
+  ModelRegistry: {
+    create: vi.fn(() => ({
+      getAvailable: () => [
+        {
+          provider: "deepseek",
+          id: "deepseek-v4-flash",
+          name: "DeepSeek V4 Flash",
+          contextWindow: 64_000,
+          reasoning: false,
+          input: ["text"],
+        },
+      ],
+    })),
+  },
+}));
+
 import {
   cycleModelOperation,
   getAvailableModelsOperation,
@@ -74,10 +94,7 @@ describe("agent client model operations", () => {
         }),
       ]),
     );
-    expect(cleanupDeadClient).toHaveBeenCalledWith(
-      "sess-1",
-      "getAvailableModels failed: boom",
-    );
+    expect(cleanupDeadClient).toHaveBeenCalledWith("sess-1", "getAvailableModels failed: boom");
   });
 
   it("sets model and resolves tier mappings", async () => {

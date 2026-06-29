@@ -14,9 +14,8 @@ export const VideoCard = memo(function VideoCard({ details }: { details: Preview
   const renderableSource = getPreviewRenderableSource(details);
   const localProbePath = isPreviewRemoteUrl(renderableSource) ? undefined : renderableSource;
   const previewSource = usePreviewRenderSource(renderableSource, details.mimeType, reloadKey);
-  const { error, errorKind, errorDetail, handleError, handleRetry, retryKey } = useMediaCardError(
-    localProbePath,
-  );
+  const { error, errorKind, errorDetail, handleError, handleRetry, retryKey } =
+    useMediaCardError(localProbePath);
 
   const handleRetryAndReload = () => {
     if (previewSource.usesRpcPreview) setReloadKey((k) => k + 1);
@@ -44,7 +43,9 @@ export const VideoCard = memo(function VideoCard({ details }: { details: Preview
         onRetry={error || !!previewSource.error ? handleRetryAndReload : undefined}
       />
       {previewSource.loading ? (
-        <div className="px-3 py-4 text-xs text-text-tertiary animate-pulse">{t("loadingImage")}</div>
+        <div className="px-3 py-4 text-xs text-text-tertiary animate-pulse">
+          {t("loadingImage")}
+        </div>
       ) : previewSource.error ? (
         <div className="bg-surface-dim dark:bg-black/30">
           <MediaCardError

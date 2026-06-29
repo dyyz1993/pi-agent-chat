@@ -46,11 +46,11 @@ For `pi-agent-chat`, the paired fork source defaults to:
 
 Choose separately for the app and for each dependency worktree:
 
-| Strategy | Meaning | Use When |
-| --- | --- | --- |
-| `link` | Symlink existing `node_modules` / `.yalc` from the main checkout | Fast local UI/runtime testing without package dependency changes |
-| `install` | Run package install in the worktree | Package deps or lockfiles may change |
-| `skip` | Leave dependencies untouched | Caller manages dependencies manually |
+| Strategy  | Meaning                                                          | Use When                                                         |
+| --------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `link`    | Symlink existing `node_modules` / `.yalc` from the main checkout | Fast local UI/runtime testing without package dependency changes |
+| `install` | Run package install in the worktree                              | Package deps or lockfiles may change                             |
+| `skip`    | Leave dependencies untouched                                     | Caller manages dependencies manually                             |
 
 For `pi-momo-fork`, remember both root and package-level dependencies can exist:
 
@@ -74,11 +74,11 @@ Avoid broad `yalc push` during isolated worktree testing unless you intentionall
 
 Keep these env classes distinct:
 
-| Env Class | Examples | Owner |
-| --- | --- | --- |
-| Server env | `AUTH_TOKEN`, `PORT`, `PI_CLI_PATH`, `LOG_DIR` | Bun server |
-| Frontend dev env | `VITE_API_TARGET`, `VITE_AUTH_TOKEN`, `VITE_PORT` | Vite/browser |
-| Agent runtime env | `PI_CODING_AGENT_DIR`, model/proxy env, tool dirs | spawned CLI |
+| Env Class         | Examples                                          | Owner        |
+| ----------------- | ------------------------------------------------- | ------------ |
+| Server env        | `AUTH_TOKEN`, `PORT`, `PI_CLI_PATH`, `LOG_DIR`    | Bun server   |
+| Frontend dev env  | `VITE_API_TARGET`, `VITE_AUTH_TOKEN`, `VITE_PORT` | Vite/browser |
+| Agent runtime env | `PI_CODING_AGENT_DIR`, model/proxy env, tool dirs | spawned CLI  |
 
 For local worktree dev, the scripts generate `.env` from the main `.env`, override `PORT`, and optionally override `PI_CLI_PATH`. The start path exports `VITE_API_TARGET` and `VITE_AUTH_TOKEN` so the browser connects to the paired worktree backend without manual token entry.
 
@@ -89,13 +89,13 @@ For local worktree dev, the scripts generate `.env` from the main `.env`, overri
 The local scripts use:
 
 ```text
-~/.pi-agent-chat/worktrees/<worktree-id>/config.json
+~/.pi/chat/worktrees/<worktree-id>/config.json
 ```
 
 On first start, the script seeds this file from:
 
 ```text
-~/.pi-agent-chat/config.json
+~/.pi/chat/config.json
 ```
 
 After seeding, the worktree config is independent.
@@ -106,11 +106,11 @@ The spawned CLI can read and write agent state under `PI_CODING_AGENT_DIR` / `~/
 
 Supported policy should be explicit:
 
-| Policy | Meaning |
-| --- | --- |
-| `shared` | Use the normal user agent dir; closest to real app behavior |
+| Policy     | Meaning                                                               |
+| ---------- | --------------------------------------------------------------------- |
+| `shared`   | Use the normal user agent dir; closest to real app behavior           |
 | `isolated` | Use a per-stack agent dir; safest for destructive runtime experiments |
-| `seed` | Copy selected non-secret settings/resources once, then isolate writes |
+| `seed`     | Copy selected non-secret settings/resources once, then isolate writes |
 
 Current local scripts primarily isolate app config and ports. Add an explicit `PI_CODING_AGENT_DIR` mode before testing changes that may rewrite agent settings, sessions, memory, trust, permissions, model auth, MCP, hooks, or plugin state.
 
@@ -119,7 +119,8 @@ Current local scripts primarily isolate app config and ports. Add an explicit `P
 Port allocation must account for running processes and reserved worktree stacks. The local scripts write stack metadata under:
 
 ```text
-~/.pi-agent-chat/worktrees/registry/<worktree-id>.env
+~/.pi/chat/worktrees/registry/<worktree-id>.env
+~/.pi/chat/worktrees/<worktree-id>/manifest.json
 ```
 
 Registry entries include:
@@ -135,6 +136,11 @@ AGENT_WORKTREE_PATH
 AGENT_BRANCH
 AGENT_CLI_PATH
 ```
+
+The `.env` registry file is optimized for shell scripts and port reuse. The
+`manifest.json` file is the structured stack view for leaders, workers, and UI
+panels. It records repos, services, ports, app config dir, agent dir, runtime CLI
+path, and orchestration placeholders such as issues and worker assignments.
 
 Rules:
 
@@ -217,7 +223,7 @@ Use this checklist before handing a stack to another person, another agent, or a
 
 - [ ] Confirm `scripts/worktree-dev.sh list` shows the app worktree, API port, Vite port, and paired agent worktree.
 - [ ] Confirm the app `.env` contains the expected `PORT` and `PI_CLI_PATH`.
-- [ ] Confirm the registry entry under `~/.pi-agent-chat/worktrees/registry/` matches the stack.
+- [ ] Confirm the registry entry under `~/.pi/chat/worktrees/registry/` matches the stack.
 - [ ] Confirm `<PI_APP_CONFIG_DIR>/config.json` exists and points at the intended isolated app config.
 - [ ] Confirm the paired fork branch and path are correct.
 - [ ] If the paired fork was created, run or confirm `npm --prefix <agent-worktree>/packages/coding-agent run build`.
@@ -382,6 +388,56 @@ logs/dev.log shows PORT=<stack api port>
 logs/dev.log shows PI_CLI_PATH=<stack dependency worktree>/packages/coding-agent/dist/cli.js
 ```
 
+### White Screen Troubleshooting
+
+If the stack appears to be "half connected", verify the registry before trusting whatever ports happen to be open globally.
+
+Example from the current stack:
+
+```text
+app worktree: /Users/xuyingzhou/Project/temporary/pi-agent-chat
+registry api: 3102
+registry vite: 5175
+```
+
+If `localhost:3100` from another checkout is also running, it can look like `5175` is "using 3100". Confirm the actual pairing from:
+
+- `./scripts/worktree-dev.sh list`
+- the stack registry file under `~/.pi/chat/worktrees/registry/`
+- the Vite process environment (`VITE_API_TARGET`)
+- `curl http://localhost:<vite-port>/health`
+
+If the page is not stuck on a loading or retry state and instead shows a blank root, check browser runtime errors before blaming the backend. In the `5466` stack we hit:
+
+```text
+TypeError: Cannot read properties of null (reading 'useContext')
+at useTranslation(...)
+at App (...)
+```
+
+Root cause:
+
+- the app worktree used symlinked `node_modules` from another checkout,
+- Vite dev resolution loaded React more than once,
+- `react-i18next` then saw a different React instance from the renderer, so hooks failed during initial render.
+
+The worktree-safe mitigation is to dedupe React in Vite:
+
+```ts
+cacheDir: `../../.vite/vite-${VITE_PORT}`,
+resolve: {
+  dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+}
+```
+
+Why `cacheDir` matters:
+
+- when multiple worktrees share `node_modules` via symlink, Vite's default cache directory (`node_modules/.vite`) is also shared,
+- two dev servers can then overwrite each other's prebundled React chunks and browser hashes,
+- symptoms include blank screens, `virtua` / `react-i18next` hook crashes, and browser errors such as `unsupported MIME type ('text/html')` for dependency chunks.
+
+After changing this, restart the stack through `scripts/worktree-dev.sh` so Vite picks up the new resolve behavior and rebuilds a per-worktree cache.
+
 ### Cleanup
 
 Before removing a stack:
@@ -396,13 +452,13 @@ Before removing a stack:
 
 ```text
 app:
-  /Users/xuyingzhou/.codex/worktrees/5466/pi-agent-chat
+  /Users/xuyingzhou/Project/temporary/pi-agent-chat
 
 paired agent fork:
-  /Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork
+  /Users/xuyingzhou/Project/temporary/pi-momo-fork
 
 registry:
-  ~/.pi-agent-chat/worktrees/registry/pi-agent-chat-8fd216f23c71.env
+  ~/.pi/chat/worktrees/registry/pi-agent-chat-8fd216f23c71.env
 ```
 
 The corresponding runtime should show:
@@ -410,6 +466,6 @@ The corresponding runtime should show:
 ```text
 API_PORT=3102
 VITE_PORT=5175
-PI_CLI_PATH=/Users/xuyingzhou/.codex/worktrees/5466/pi-momo-fork/packages/coding-agent/dist/cli.js
-PI_APP_CONFIG_DIR=~/.pi-agent-chat/worktrees/pi-agent-chat-8fd216f23c71
+PI_CLI_PATH=/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/cli.js
+PI_APP_CONFIG_DIR=~/.pi/chat/worktrees/pi-agent-chat-8fd216f23c71
 ```

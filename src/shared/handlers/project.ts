@@ -1,7 +1,8 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import { existsSync, rmSync } from "fs";
+import { existsSync, rmSync, mkdirSync } from "fs";
+import { readFile, writeFile } from "fs/promises";
 import { execFile } from "child_process";
 import { basename, join } from "path";
 import { promisify } from "util";
@@ -63,6 +64,11 @@ import type {
 import { listDetectedSshHosts } from "../lib/ssh-config";
 import { classifySshErrorMessage } from "../lib/ssh-error-classification";
 import { getProjectUserStateDir } from "../lib/pi-agent-paths";
+import {
+  getWorktreeStackExecutionContext,
+  readWorktreeStackManifest,
+  updateWorktreeStackOrchestration,
+} from "../lib/worktree-stack-manifest";
 
 const log = createLogger("config");
 const execFileAsync = promisify(execFile);
@@ -132,8 +138,7 @@ async function findRemoteProjectLocalPath(input: {
   return (
     projects.find(
       (project) =>
-        project.host === host &&
-        normalizeRemoteDirectoryPath(project.remotePath) === remotePath,
+        project.host === host && normalizeRemoteDirectoryPath(project.remotePath) === remotePath,
     )?.localPath ?? null
   );
 }
@@ -148,7 +153,9 @@ async function previewRemoteResourceSync(input: {
     return { resources: [], blocked: [], hash: "" };
   }
   const effectiveResourceTypes =
-    resourceTypes.length > 0 ? resourceTypes : (["skills", "agents", "rules"] satisfies RemoteSyncResourceType[]);
+    resourceTypes.length > 0
+      ? resourceTypes
+      : (["skills", "agents", "rules"] as RemoteSyncResourceType[]);
 
   const projectLocalPath = await findRemoteProjectLocalPath(input);
   const extraSources = projectLocalPath
@@ -172,7 +179,9 @@ async function previewRemoteResourceSync(input: {
           type,
           files: resource?.files ?? 0,
           bytes: resource?.bytes ?? 0,
-          sources: sources.filter((source) => source.type === type).map((source) => source.localPath),
+          sources: sources
+            .filter((source) => source.type === type)
+            .map((source) => source.localPath),
         };
       }),
     };
@@ -535,6 +544,35 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     });
   });
 
+  r("project.getWorktreeStackManifest", async (params) => {
+    return readWorktreeStackManifest(params.projectPath);
+  });
+
+  r("project.updateWorktreeStackOrchestration", async (params) => {
+    const result = await updateWorktreeStackOrchestration(params.projectPath, {
+      leaderSessionId: params.leaderSessionId,
+      cleanup: params.cleanup,
+      upsertBatches: params.upsertBatches,
+      removeBatchIds: params.removeBatchIds,
+      upsertIssues: params.upsertIssues,
+      removeIssueIds: params.removeIssueIds,
+      upsertWorkers: params.upsertWorkers,
+      removeWorkerIds: params.removeWorkerIds,
+    });
+    if (!result.manifest) {
+      throw new Error(`Worktree stack manifest not found for ${params.projectPath}`);
+    }
+    return { manifestPath: result.manifestPath, manifest: result.manifest };
+  });
+
+  r("project.getWorktreeStackExecutionContext", async (params) => {
+    return getWorktreeStackExecutionContext({
+      projectPath: params.projectPath,
+      issueId: params.issueId,
+      workerId: params.workerId,
+    });
+  });
+
   r("project.openSshProject", async (params) => {
     const { host, sshArgs, shell } = await resolveSshConnection(params);
     const connection = await testSshConnection({ host, remotePath: params.remotePath, sshArgs });
@@ -618,5 +656,52 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       profile: opened.profile,
       remote: opened.remote,
     };
+  });
+
+  r("project.saveTierConfig", async (params) => {
+    const { projectPath, tierModels, currentTier } = params;
+    const stateDir = getProjectUserStateDir(projectPath);
+    const configFilePath = join(stateDir, "tier-config.json");
+    try {
+      if (!existsSync(stateDir)) {
+        mkdirSync(stateDir, { recursive: true });
+      }
+      const payload = { tierModels, currentTier, updatedAt: new Date().toISOString() };
+      await writeFile(configFilePath, JSON.stringify(payload, null, 2), "utf-8");
+      return { ok: true };
+    } catch (err) {
+      log.warn("project.saveTierConfig failed", {
+        projectPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { ok: false };
+    }
+  });
+
+  r("project.loadTierConfig", async (params) => {
+    const { projectPath } = params;
+    const configFilePath = join(getProjectUserStateDir(projectPath), "tier-config.json");
+    if (!existsSync(configFilePath)) {
+      return { config: null };
+    }
+    try {
+      const raw = await readFile(configFilePath, "utf-8");
+      const parsed = JSON.parse(raw) as {
+        tierModels: Record<string, string>;
+        currentTier: string | null;
+      };
+      return {
+        config: {
+          tierModels: parsed.tierModels,
+          currentTier: parsed.currentTier,
+        },
+      };
+    } catch (err) {
+      log.warn("project.loadTierConfig failed", {
+        projectPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { config: null };
+    }
   });
 }

@@ -30,9 +30,7 @@ export function useActiveSessionActionGuard(
   const isReady = useSessionStore((s) =>
     sessionId ? (s.sessionReady?.[sessionId] ?? false) : false,
   );
-  const status = useSessionStore((s) =>
-    sessionId ? s.sessionStatusMap?.[sessionId] : undefined,
-  );
+  const status = useSessionStore((s) => (sessionId ? s.sessionStatusMap?.[sessionId] : undefined));
   const push = useNotificationStore((s) => s.push);
   const isBusy = status ? DEFAULT_BUSY_STATUSES.has(status) : false;
   const requireReady = defaultOptions.requireReady ?? true;

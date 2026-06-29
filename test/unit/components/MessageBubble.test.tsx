@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryCard } from "../../../src/mainview/components/chat/MemoryCard";
@@ -31,6 +31,7 @@ vi.mock("../../../src/mainview/utils/clipboard", () => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   useChatOverlayStore.getState().close();
   useExplorerStore.setState({ selectedPath: null, filePreview: null, loadingFile: false });
@@ -50,6 +51,75 @@ describe("extracted message bubble components", () => {
     expect(overlay.overlay).toBe("markdown");
     expect(overlay.markdownContent).toBe(text);
     expect(overlay.markdownTitle).toContain("messageContentLineCount");
+  });
+
+  it("renders markdown while text content is streaming", async () => {
+    render(
+      <TextContentCard text={"# Streaming title\n\n**bold** text"} isStreaming blockId="msg-1-1" />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
+    expect(screen.getByText("bold")).toHaveAttribute("data-streamdown", "strong");
+  });
+
+  it("updates the streaming markdown snapshot even when text keeps changing", async () => {
+    const { rerender } = render(
+      <TextContentCard text={"# Streaming title\n\n**bo"} isStreaming blockId="msg-1-2" />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
+
+    rerender(
+      <TextContentCard
+        text={"# Streaming title\n\n**bold** text\n\n- item one"}
+        isStreaming
+        blockId="msg-1-2"
+      />,
+    );
+
+    expect(screen.getByText("bold")).toHaveAttribute("data-streamdown", "strong");
+    expect(screen.getByText("item one").closest("li")).not.toBeNull();
+  });
+
+  it("uses the shared code block renderer while text content is streaming", async () => {
+    render(
+      <TextContentCard
+        text={"```ts\nconst ok = true;\n```"}
+        isStreaming
+        blockId="msg-1-code"
+      />,
+    );
+
+    await waitFor(() => {
+      const root = document.querySelector('[data-block-id="msg-1-code"]');
+      expect(root?.querySelector("pre")).not.toBeNull();
+      expect(root?.querySelector('[data-streamdown="code-block"]')).toBeNull();
+      expect(root?.querySelector(".table-row")).not.toBeNull();
+      expect(root?.textContent).toContain("const");
+      expect(root?.textContent).toContain("ok");
+    });
+  });
+
+  it("uses prose table elements while text content is streaming", async () => {
+    render(
+      <TextContentCard
+        text={
+          "| 原则 | 全称 | 核心思想 |\n| --- | --- | --- |\n| KISS | Keep It Simple | 保持简单 |"
+        }
+        isStreaming
+        blockId="msg-1-table"
+      />,
+    );
+
+    await waitFor(() => {
+      const root = document.querySelector('[data-block-id="msg-1-table"]');
+      const table = root?.querySelector("table");
+      expect(table).not.toBeNull();
+      expect(root?.querySelector('[data-streamdown="table-wrapper"]')).toBeNull();
+      expect(root?.querySelector('[data-streamdown="table"]')).toBeNull();
+      expect(table?.querySelectorAll("th")).toHaveLength(3);
+      expect(table?.textContent).toContain("KISS");
+    });
   });
 
   it("renders memory prefetch searching details after expansion", () => {

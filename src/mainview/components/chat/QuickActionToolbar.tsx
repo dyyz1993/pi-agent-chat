@@ -496,7 +496,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   };
 
   return (
-    <div className="relative px-3 pt-1">
+    <div className="relative px-3 pt-1" data-testid="quick-action-toolbar">
       <div className="flex items-center gap-1 min-h-[40px]">
         <div className="flex items-center gap-0.5">
           <input
@@ -537,6 +537,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
         <div className="ml-auto flex items-center gap-0.5">
           <button
             onClick={handleOpenAt}
+            aria-label={t("quickAction.atMention")}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
               popupMode === "at"
                 ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
@@ -551,6 +552,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
           </button>
           <button
             onClick={handleOpenSlash}
+            aria-label={`/${t("quickAction.commandsAndSkills")}`}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "slash"
                 ? "bg-semantic-notify/30 text-semantic-notify border border-semantic-notify/50"
@@ -588,6 +590,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
       {popupMode && (
         <div
           ref={panelRef}
+          data-testid={popupMode === "at" ? "mention-popup" : "command-popup"}
           className="absolute left-3 right-3 bottom-full mb-1 bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-popover"
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">

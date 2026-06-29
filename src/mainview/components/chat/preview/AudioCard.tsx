@@ -2,11 +2,7 @@ import { memo, useState } from "react";
 import { Music } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
-import {
-  formatFileSize,
-  getPreviewRenderableSource,
-  isPreviewRemoteUrl,
-} from "./types";
+import { formatFileSize, getPreviewRenderableSource, isPreviewRemoteUrl } from "./types";
 import { CardHeader } from "./CardHeader";
 import { MediaCardError } from "./MediaCardError";
 import { useMediaCardError } from "../../../hooks/use-media-card-error";
@@ -18,9 +14,8 @@ export const AudioCard = memo(function AudioCard({ details }: { details: Preview
   const renderableSource = getPreviewRenderableSource(details);
   const localProbePath = isPreviewRemoteUrl(renderableSource) ? undefined : renderableSource;
   const previewSource = usePreviewRenderSource(renderableSource, details.mimeType, reloadKey);
-  const { error, errorKind, errorDetail, handleError, handleRetry, retryKey } = useMediaCardError(
-    localProbePath,
-  );
+  const { error, errorKind, errorDetail, handleError, handleRetry, retryKey } =
+    useMediaCardError(localProbePath);
 
   const handleRetryAndReload = () => {
     if (previewSource.usesRpcPreview) setReloadKey((k) => k + 1);

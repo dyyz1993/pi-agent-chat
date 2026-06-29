@@ -30,9 +30,7 @@ export const CompactionSummaryCard = memo(function CompactionSummaryCard({
 
   const lines = summary.split("\n");
   const firstMeaningfulLine = lines.find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";
-  const preview = isRunning
-    ? t("compactingHint")
-    : firstMeaningfulLine.slice(0, 120);
+  const preview = isRunning ? t("compactingHint") : firstMeaningfulLine.slice(0, 120);
   const isLong = !isRunning && (summary.length > 200 || lines.length > 6);
   const elapsed = useMemo(() => {
     if (!startedAt) return null;
@@ -82,9 +80,7 @@ export const CompactionSummaryCard = memo(function CompactionSummaryCard({
           </span>
         )}
         {elapsed && (
-          <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
-            {elapsed}
-          </span>
+          <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">{elapsed}</span>
         )}
         <StatusIcon className={`w-3 h-3 shrink-0 ${statusConfig.iconClass}`} />
       </button>

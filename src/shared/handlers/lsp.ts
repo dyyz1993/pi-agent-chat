@@ -51,12 +51,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       if (pm.hasSession(params.sessionId)) {
         try {
           const raw: unknown = await withTimeout(
-            pm.callChannel(
-              params.sessionId,
-              "lsp" as string,
-              "getStatus",
-              {},
-            ),
+            pm.callChannel(params.sessionId, "lsp" as string, "getStatus", {}),
             CHANNEL_TIMEOUT_MS,
           );
           const result = raw as {

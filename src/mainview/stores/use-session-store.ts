@@ -13,7 +13,7 @@ import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSubagentStore, clearSubagentToolNames } from "./use-subagent-store";
 import { createFetchInitialStateAction } from "./session-initial-state";
-import { createSetActiveSessionAction } from "./session-active-session";
+import { createSetActiveSessionAction, runReconnectMessageLoad } from "./session-active-session";
 import { formatProjectStartError, getErrorMessage } from "./session-start-error";
 import {
   createCreateNewSessionAction,
@@ -1072,48 +1072,41 @@ apiClient.onReconnect(() => {
         storeGet().fetchInitialState(activeSessionId);
 
         if (result.status === "already_running") {
-          useChatStore
-            .getState()
-            .loadSessionMessages(activeSessionId, {
-              force: true,
-              sessionPath: session.sessionPath,
-            })
-            .catch(() => {})
-            .then(() => {
-              return useChatStore
-                .getState()
-                ._backgroundRefreshMessages(activeSessionId, session.sessionPath);
-            })
-            .then(() => {
-              // fetch the authoritative value to correct any drift.
-              return apiClient
-                .call("agent.getContextUsage", { sessionId: activeSessionId })
-                .then((r) => {
-                  if (r && r.tokens != null) {
-                    useSessionStore.getState().updateSessionContext(activeSessionId, r);
-                  }
-                })
-                .catch(() => {});
-            })
-            .catch((err) => {
-              log.warn("[onReconnect] load+refresh failed", {
-                sessionId: activeSessionId,
-                err: err instanceof Error ? err.message : String(err),
-              });
+          runReconnectMessageLoad({
+            sessionId: activeSessionId,
+            sessionPath: session.sessionPath,
+            loadSessionMessages: (sid, opts) =>
+              useChatStore.getState().loadSessionMessages(sid, opts),
+            backgroundRefresh: (sid, sPath) =>
+              useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
+            getContextUsage: (sid) =>
+              apiClient.call("agent.getContextUsage", { sessionId: sid }),
+            updateSessionContext: (sid, usage) =>
+              useSessionStore.getState().updateSessionContext(sid, usage),
+          }).catch((err) => {
+            log.warn("[onReconnect] load+refresh failed", {
+              sessionId: activeSessionId,
+              err: err instanceof Error ? err.message : String(err),
             });
+          });
         } else {
-          useChatStore
-            .getState()
-            .loadSessionMessages(activeSessionId, {
-              force: true,
-              sessionPath: session.sessionPath,
-            })
-            .catch((err) => {
-              log.warn("[onReconnect] loadSessionMessages failed", {
-                sessionId: activeSessionId,
-                err: err instanceof Error ? err.message : String(err),
-              });
+          runReconnectMessageLoad({
+            sessionId: activeSessionId,
+            sessionPath: session.sessionPath,
+            loadSessionMessages: (sid, opts) =>
+              useChatStore.getState().loadSessionMessages(sid, opts),
+            backgroundRefresh: (sid, sPath) =>
+              useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
+            getContextUsage: (sid) =>
+              apiClient.call("agent.getContextUsage", { sessionId: sid }),
+            updateSessionContext: (sid, usage) =>
+              useSessionStore.getState().updateSessionContext(sid, usage),
+          }).catch((err) => {
+            log.warn("[onReconnect] loadSessionMessages failed", {
+              sessionId: activeSessionId,
+              err: err instanceof Error ? err.message : String(err),
             });
+          });
         }
       }
     })

@@ -301,7 +301,9 @@ export const InputBar = memo(
             ? "bg-transparent"
             : "rounded-lg border border-border-primary bg-bg-elevated/95 focus-within:border-border-focus focus-within:shadow-sm"
         }`}
-        style={{ minHeight: expanded ? `${EXPANDED_INPUT_HEIGHT}px` : `${COLLAPSED_INPUT_HEIGHT}px` }}
+        style={{
+          minHeight: expanded ? `${EXPANDED_INPUT_HEIGHT}px` : `${COLLAPSED_INPUT_HEIGHT}px`,
+        }}
       >
         <div className="relative h-full flex">
           <textarea

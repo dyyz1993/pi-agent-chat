@@ -61,6 +61,7 @@
     "test:settings": "bash run-tests.sh run settings",
     "test:list": "bash run-tests.sh list",
     "verify:remote-child": "bun tools/verify-remote-child-runtime.ts",
+    "verify:worktree-stack": "bun tools/verify-worktree-stack-orchestration.ts",
     "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {
@@ -115,6 +116,7 @@
     "postcss": "^8.4.49",
     "prettier": "^3.8.3",
     "sharp": "^0.34.5",
+    "streamdown": "2.5.0",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.0.0",

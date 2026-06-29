@@ -2,7 +2,9 @@ import type { RemoteProjectRecord } from "../modules/project";
 
 export type PiRuntimeKind = "local" | "ssh-command" | "remote-agent-child" | "remote-server";
 
-export function buildSshCommandRuntimeEnv(remoteProject: Pick<RemoteProjectRecord, "host" | "remotePath">): Record<string, string> {
+export function buildSshCommandRuntimeEnv(
+  remoteProject: Pick<RemoteProjectRecord, "host" | "remotePath">,
+): Record<string, string> {
   return {
     PI_RUNTIME_KIND: "ssh-command",
     PI_REMOTE_SSH_TOOL_PROXY: "1",

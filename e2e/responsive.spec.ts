@@ -1,9 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { E2E_PAGE_URL, ensureE2EProject } from "./helpers/e2e-project";
 
 test.describe("Responsive Layout", () => {
+  test.beforeEach(async () => {
+    await ensureE2EProject();
+  });
+
   test("should show mobile layout on small screen", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const tabBar = page.locator('[data-testid="tab-bar"]');
@@ -15,7 +20,7 @@ test.describe("Responsive Layout", () => {
 
   test("should show desktop layout on large screen", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const newSessionBtn = page.locator('[data-testid="new-session-button"]');
@@ -27,7 +32,7 @@ test.describe("Responsive Layout", () => {
 
   test("should adapt sidebar visibility when resizing from desktop to mobile", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const newSessionBtn = page.locator('[data-testid="new-session-button"]');
@@ -41,7 +46,7 @@ test.describe("Responsive Layout", () => {
 
   test("should restore sidebar when resizing from mobile to desktop", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
 
     const newSessionBtn = page.locator('[data-testid="new-session-button"]');
@@ -55,7 +60,7 @@ test.describe("Responsive Layout", () => {
 
   test("no key elements should overflow viewport on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
     await page.waitForTimeout(500);
 
@@ -96,7 +101,7 @@ test.describe("Responsive Layout", () => {
 
   test("no key elements should overflow viewport on tablet", async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto("/?token=test-ci-token");
+    await page.goto(E2E_PAGE_URL);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
     await page.waitForTimeout(500);
 

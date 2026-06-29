@@ -70,13 +70,18 @@ async function readRemoteFile(options: {
   ];
 
   return new Promise((resolve, reject) => {
-    execFile("ssh", args, { maxBuffer: 64 * 1024 * 1024, timeout: 20_000 }, (err, stdout, stderr) => {
-      if (err) {
-        reject(new Error(`ssh session mirror failed: ${err.message}\nstderr: ${stderr}`));
-        return;
-      }
-      resolve(stdout);
-    });
+    execFile(
+      "ssh",
+      args,
+      { maxBuffer: 64 * 1024 * 1024, timeout: 20_000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(new Error(`ssh session mirror failed: ${err.message}\nstderr: ${stderr}`));
+          return;
+        }
+        resolve(stdout);
+      },
+    );
   });
 }
 

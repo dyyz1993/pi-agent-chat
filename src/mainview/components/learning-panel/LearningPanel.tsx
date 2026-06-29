@@ -975,9 +975,7 @@ export function LearningPanel() {
           <Brain className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="truncate text-[11px] font-medium text-text-secondary">Learning</div>
-            <div className="truncate text-[9px] text-text-tertiary">
-              {displayProjectPath}
-            </div>
+            <div className="truncate text-[9px] text-text-tertiary">{displayProjectPath}</div>
           </div>
           {snapshot && (
             <div className="flex min-w-0 shrink-0 items-center gap-1 text-[9px] text-text-tertiary">

@@ -145,8 +145,8 @@ fi
 
 if [ -n "$ACTION" ] && [ -d "$ACTION" ]; then
   WORKTREE_PATH=$(cd "$ACTION" && pwd)
-elif [ -n "$ACTION" ] && [ -d "${PARENT_DIR}/${REPO_NAME}-${ACTION}" ]; then
-  WORKTREE_PATH=$(cd "${PARENT_DIR}/${REPO_NAME}-${ACTION}" && pwd)
+elif [ -n "$ACTION" ] && [ -d "${PARENT_DIR}/${REPO_NAME}-$(wt_sanitize "$ACTION")" ]; then
+  WORKTREE_PATH=$(cd "${PARENT_DIR}/${REPO_NAME}-$(wt_sanitize "$ACTION")" && pwd)
 else
   header "Select Worktree"
   WORKTREES=()

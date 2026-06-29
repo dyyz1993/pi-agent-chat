@@ -131,7 +131,14 @@ mock.module("../src/mainview/stores/use-chat-store", () => {
     incrementStreamVersion: () =>
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
   }));
-  return { useChatStore };
+  return {
+    useChatStore,
+    getMemorySemanticTimestamp: (_data: unknown, fallback: number) => fallback,
+    insertChatMessageByDisplayOrder: (messages: ChatMessage[], message: ChatMessage) => [
+      ...messages,
+      message,
+    ],
+  };
 });
 
 function normalizeToolBlocks(

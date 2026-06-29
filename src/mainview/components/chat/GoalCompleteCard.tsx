@@ -51,9 +51,7 @@ export const GoalCompleteCard = memo(function GoalCompleteCard({
         <CircleCheckBig className="w-3.5 h-3.5 shrink-0" />
         <span className="flex-1 min-w-0 flex items-center gap-1.5">
           <span className="font-medium whitespace-nowrap">{t("goal.completeCardLabel")}</span>
-          {objective && (
-            <span className="text-text-tertiary truncate">{objective}</span>
-          )}
+          {objective && <span className="text-text-tertiary truncate">{objective}</span>}
         </span>
         <span className="shrink-0 flex items-center gap-2 text-[10px] text-text-tertiary">
           {durationMs > 0 && (
@@ -70,11 +68,7 @@ export const GoalCompleteCard = memo(function GoalCompleteCard({
           )}
         </span>
         <span className="text-text-tertiary shrink-0">
-          {expanded ? (
-            <ChevronDown className="w-3 h-3" />
-          ) : (
-            <ChevronRight className="w-3 h-3" />
-          )}
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
       {expanded && (

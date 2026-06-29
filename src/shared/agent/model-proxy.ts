@@ -213,8 +213,7 @@ export function createModelProxyServer(options: {
   token: string;
   registry?: LocalModelRegistry;
 }): Server {
-  const registry =
-    options.registry ?? ModelRegistry.create(AuthStorage.create());
+  const registry = options.registry ?? ModelRegistry.create(AuthStorage.create());
 
   return createServer(async (req, res) => {
     try {

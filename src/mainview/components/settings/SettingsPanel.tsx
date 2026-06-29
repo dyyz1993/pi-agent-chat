@@ -148,8 +148,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const availableModels = useSessionStore((s) => s.availableModels);
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
 
+  // 查找当前 session 所属的项目路径
+  const projectPath = useSessionStore((s) => {
+    if (!sessionId) return null;
+    for (const [path, sessions] of Object.entries(s.sessionsByProject ?? {})) {
+      if (sessions.some((sess) => sess.sessionId === sessionId)) return path;
+    }
+    return null;
+  });
+
   const tierModels = useTierStore((s) =>
-    sessionId ? s.dataBySession[sessionId]?.tierModels : undefined,
+    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
   );
   const globalDefaults = useTierStore((s) => s.globalDefaults);
   const effectiveTierModels = tierModels ?? globalDefaults;
@@ -192,16 +201,24 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         sessionId,
         models: localTierModels,
       });
-      useTierStore.getState().setSessionTierModels(sessionId, localTierModels);
-      await fetchTierConfig(sessionId, { force: true });
-      const { dataBySession, globalDefaults } = useTierStore.getState();
-      const sessionData = dataBySession[sessionId];
-      const activeTier = sessionData?.currentTier ?? null;
-      const updatedModels = sessionData?.tierModels ?? globalDefaults;
-      if (activeTier && updatedModels[activeTier]) {
-        await useTierStore.getState().switchToTier(activeTier, sessionId);
+      if (projectPath) {
+        useTierStore.getState().setProjectTierModels(projectPath, localTierModels);
       }
-      setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
+      await fetchTierConfig(sessionId, { force: true });
+      if (projectPath) {
+        const { dataByProject, globalDefaults } = useTierStore.getState();
+        const projectData = dataByProject[projectPath];
+        const activeTier = projectData?.currentTier ?? null;
+        const updatedModels = projectData?.tierModels ?? globalDefaults;
+        if (activeTier && updatedModels[activeTier]) {
+          await useTierStore.getState().switchToTier(activeTier, sessionId);
+        }
+      }
+      if (!projectPath) {
+        setTierSaveMessage({ type: "error", text: "配置已应用到后端，但无法关联到项目。请尝试刷新页面。" });
+      } else {
+        setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
+      }
     } catch (err) {
       log.warn("save tier config failed", {
         error: err instanceof Error ? err.message : String(err),
@@ -210,7 +227,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     } finally {
       setTierSaving(false);
     }
-  }, [sessionId, localTierModels, fetchTierConfig, t]);
+  }, [sessionId, projectPath, localTierModels, fetchTierConfig, t]);
 
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
   const [proxyStatusLoading, setProxyStatusLoading] = useState(false);
@@ -533,7 +550,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         </IconButton>
       </div>
 
-      <div className="min-h-0 flex-1 bg-bg-primary md:flex">
+      <div className="min-h-0 flex flex-1 flex-col bg-bg-primary md:flex-row">
         <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 md:flex md:w-[288px] md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-0">
           <div className="flex gap-1 overflow-x-auto scrollbar-none md:hidden">
             {SETTINGS_TABS.map((tab) => {
@@ -576,9 +593,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="max-w-full truncate text-[11px] font-medium">
-                    {group.label}
-                  </span>
+                  <span className="max-w-full truncate text-[11px] font-medium">{group.label}</span>
                 </button>
               );
             })}

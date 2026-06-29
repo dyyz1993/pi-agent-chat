@@ -61,7 +61,14 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       })),
     loadSessionMessages: () => {},
   }));
-  return { useChatStore };
+  return {
+    useChatStore,
+    getMemorySemanticTimestamp: (_data: unknown, fallback: number) => fallback,
+    insertChatMessageByDisplayOrder: (messages: ChatMessage[], message: ChatMessage) => [
+      ...messages,
+      message,
+    ],
+  };
 });
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
