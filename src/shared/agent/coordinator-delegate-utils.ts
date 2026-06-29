@@ -80,6 +80,7 @@ export async function writeDelegateSessionHeader(options: {
   parentSessionId: string;
   parentSessionPath: string;
   delegateType: DelegateSessionType;
+  permissionMode?: string;
   createdAt?: number;
   timestamp?: string;
 }): Promise<void> {
@@ -91,6 +92,7 @@ export async function writeDelegateSessionHeader(options: {
     timestamp,
     cwd: options.projectPath,
     delegateParentSessionId: options.parentSessionId,
+    permissionMode: options.permissionMode,
   });
   const delegateInfoEntry = JSON.stringify({
     type: "delegate_info",
