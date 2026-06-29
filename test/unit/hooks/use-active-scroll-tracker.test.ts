@@ -567,6 +567,59 @@ describe("useActiveScrollTracker — streaming follow (A/B)", () => {
     // Should NOT scroll to bottom
     expect(mockHandle.scrollToIndex).not.toHaveBeenCalled();
   });
+
+  it("retries streaming scroll-to-bottom when virtua's first bottom alignment uses a stale size", () => {
+    const setActive = vi.fn();
+    let scrollAttempts = 0;
+    const mockHandle = createMockHandle({
+      scrollSize: 1000,
+      scrollOffset: 500,
+      viewportSize: 500,
+    });
+    mockHandle.scrollToIndex = vi.fn((_index: number, opts?: { align?: string; smooth?: boolean }) => {
+      scrollAttempts += 1;
+      if (opts?.align !== "end") return;
+
+      if (scrollAttempts === 1) {
+        // Simulate virtua using a stale measured height, then content grows.
+        mockHandle.scrollOffset = 500;
+        mockHandle.scrollSize = 1200;
+        return;
+      }
+
+      mockHandle.scrollOffset = mockHandle.scrollSize - mockHandle.viewportSize;
+    });
+    mockHandleRef.current = mockHandle;
+
+    const { rerender } = renderHook(
+      (props: { sv: number }) => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef(mockHandle);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          sessionId: "test-session",
+          setActive,
+          streamVersion: props.sv,
+          initialScrollReady: true,
+        });
+      },
+      { initialProps: { sv: 0 } },
+    );
+
+    act(() => vi.advanceTimersByTime(200));
+    setActive.mockClear();
+    mockHandle.scrollToIndex.mockClear();
+    scrollAttempts = 0;
+
+    rerender({ sv: 1 });
+    act(() => vi.advanceTimersByTime(100));
+
+    expect(mockHandle.scrollToIndex).toHaveBeenCalledTimes(2);
+    expect(mockHandle.scrollOffset).toBe(700);
+    expect(setActive).toHaveBeenCalledWith(MESSAGE_IDS[MESSAGE_IDS.length - 1]);
+  });
 });
 
 describe("useActiveScrollTracker — auto-scroll recovery (C)", () => {

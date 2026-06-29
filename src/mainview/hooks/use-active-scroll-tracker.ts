@@ -322,7 +322,7 @@ export function useActiveScrollTracker({
    * Cancels any previously scheduled scroll first, ensuring only one
    * rAF callback is active at any time.
    */
-  const scheduleScrollToBottom = useCallback(() => {
+  const scheduleScrollToBottom = useCallback((options?: { completeInit?: boolean }) => {
     const ids = messageIdsRef.current;
     if (ids.length === 0) return;
     if (userScrolledUpRef.current) return;
@@ -348,17 +348,21 @@ export function useActiveScrollTracker({
 
       const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
       if (isAtBottom) {
-        didInitRef.current = true;
+        if (options?.completeInit) {
+          didInitRef.current = true;
+          // Notify ChatPanel that initial scroll is done so it can sync navId
+          onInitComplete?.();
+        }
         setActive(getLastActiveTargetKey());
         scrollRafRef.current = 0;
-        // Notify ChatPanel that initial scroll is done so it can sync navId
-        onInitComplete?.();
       } else if (attempts < SCROLL_SETTLE_MAX_ATTEMPTS) {
         scrollRafRef.current = requestAnimationFrame(tryScroll);
       } else {
         scrollRafRef.current = 0;
         // Max attempts reached — still call onInitComplete so navId sync starts
-        onInitComplete?.();
+        if (options?.completeInit) {
+          onInitComplete?.();
+        }
       }
     };
 
@@ -488,7 +492,7 @@ export function useActiveScrollTracker({
     if (didInitRef.current) return;
 
     setActive(getLastActiveTargetKey());
-    scheduleScrollToBottom();
+    scheduleScrollToBottom({ completeInit: true });
 
     return () => {
       if (scrollRafRef.current) {
@@ -496,7 +500,13 @@ export function useActiveScrollTracker({
         scrollRafRef.current = 0;
       }
     };
-  }, [initialScrollReady, messageIds, scheduleScrollToBottom, setActive, getLastActiveTargetKey]);
+  }, [
+    initialScrollReady,
+    messageIds,
+    scheduleScrollToBottom,
+    setActive,
+    getLastActiveTargetKey,
+  ]);
 
   // historyLoadVersion effect: scroll to bottom when new messages are loaded
   // (loadSessionMessages / _backgroundRefreshMessages), but don't reset didInitRef.
@@ -535,24 +545,17 @@ export function useActiveScrollTracker({
     getLastActiveTargetKey,
   ]);
 
-  // Stream version effect: follow streaming updates with rAF dedup.
-  // Each streamVersion change cancels the previous rAF, so at most one
-  // scrollToIndex executes per frame regardless of how many events arrive.
+  // Stream version effect: follow streaming updates with settle retry.
+  // This keeps us pinned to the last message even when virtua's first
+  // bottom alignment used a stale measured height for a growing message.
   useEffect(() => {
     if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
     prevStreamRef.current = streamVersion;
     if (userScrolledUpRef.current) return;
     if (!didInitRef.current) return; // Don't compete with initial scroll settle
 
-    // Dedup: cancel previous rAF, schedule new one
-    if (scrollRafRef.current) {
-      cancelAnimationFrame(scrollRafRef.current);
-    }
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = 0;
-      doScrollToBottom();
-    });
-  }, [streamVersion, doScrollToBottom]);
+    scheduleScrollToBottom();
+  }, [streamVersion, scheduleScrollToBottom]);
 
   // Cleanup on unmount
   useEffect(() => {
