@@ -334,6 +334,38 @@ describe("onReconnect - session list refresh", () => {
     expect(mockedCall).not.toHaveBeenCalledWith("project.scanSessions", expect.anything());
   });
 
+  it("should restore persisted tabs before reconnect recovery when the active tab is missing", async () => {
+    const oldSession = makeSession({ sessionId: "sess-old" });
+    useSessionStore.setState({
+      projectTabs: [],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-old",
+      sessionsByProject: { "/project-a": [oldSession] },
+    });
+
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "project.restoreTabs") {
+        return Promise.resolve({ tabs: [TAB_A], activeTabId: "tab-a" });
+      }
+      if (method === "agent.start") return Promise.resolve({ status: "started" });
+      if (method === "project.scanSessions") return Promise.resolve({ sessions: [oldSession] });
+      return Promise.resolve({});
+    });
+
+    const onReconnect = getReconnectCallback();
+    onReconnect();
+
+    await vi.waitFor(() => {
+      expect(mockedCall).toHaveBeenCalledWith("project.restoreTabs", {});
+      expect(mockedCall).toHaveBeenCalledWith("project.scanSessions", {
+        projectPath: "/project-a",
+      });
+    });
+
+    expect(useSessionStore.getState().projectTabs).toEqual([TAB_A]);
+    expect(useSessionStore.getState().activeProjectId).toBe("tab-a");
+  });
+
   it("should force-reload messages after reconnect to recover missed events", async () => {
     const oldSession = makeSession({ sessionId: "sess-old" });
     useSessionStore.setState({
