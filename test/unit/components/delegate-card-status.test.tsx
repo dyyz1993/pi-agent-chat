@@ -73,6 +73,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
               firstMessage: "Long delegate task",
               delegateParentSessionId: "parent-session",
               delegateType: "coordinator",
+              tierConfig: { tierModels: {}, currentTier: "max" },
             }),
             session({
               sessionId: "fork-session",
@@ -80,6 +81,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
               firstMessage: "Long fork task",
               delegateParentSessionId: "parent-session",
               delegateType: "fork",
+              tierConfig: { tierModels: {}, currentTier: null },
             }),
           ],
         },
@@ -101,6 +103,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
               firstMessage: "Long delegate task",
               delegateParentSessionId: "parent-session",
               delegateType: "coordinator",
+              tierConfig: { tierModels: {}, currentTier: "max" },
             }),
             session({
               sessionId: "fork-session",
@@ -108,6 +111,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
               firstMessage: "Long fork task",
               delegateParentSessionId: "parent-session",
               delegateType: "fork",
+              tierConfig: { tierModels: {}, currentTier: null },
             }),
           ],
         },
@@ -255,6 +259,7 @@ describe("DelegateCard", () => {
     const badge = screen.getByText("build");
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(screen.getByText("Max")).toBeInTheDocument();
     expect(container.textContent).toContain("Long delegate task");
   });
 
@@ -272,11 +277,22 @@ describe("DelegateCard", () => {
 
 describe("ForkCard", () => {
   it("shows the default build agent badge when no agent is specified", () => {
-    const { container } = render(<ForkCard block={makeForkBlock()} />);
+    const { container } = render(
+      <ForkCard
+        block={makeForkBlock({
+          args: JSON.stringify({
+            task: "Long fork task",
+            title: "Long fork task",
+            model: "openai/gpt-4.1",
+          }),
+        })}
+      />,
+    );
 
     const badge = screen.getByText("build");
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(screen.getByText("gpt-4.1")).toBeInTheDocument();
     expect(container.textContent).toContain("Long fork task");
   });
 

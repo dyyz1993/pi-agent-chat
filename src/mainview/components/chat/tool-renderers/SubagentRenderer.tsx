@@ -14,6 +14,7 @@ import {
   createSessionActivityLabels,
 } from "./SessionActivitySummary";
 import { SessionTaskCard } from "./SessionTaskCard";
+import { SessionTaskModelBadges } from "./SessionTaskModelBadges";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -55,9 +56,17 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   let description = "";
   let instruction = "";
   let requestedAgent = "";
+  let requestedTier = "";
+  let requestedModel = "";
+  let requestedProvider = "";
+  let requestedThinkingLevel = "";
   try {
     const parsed = JSON.parse(block.args ?? "{}") as Record<string, unknown>;
     requestedAgent = getStringArg(parsed, "agent");
+    requestedTier = getStringArg(parsed, "tier");
+    requestedModel = getStringArg(parsed, "model");
+    requestedProvider = getStringArg(parsed, "provider");
+    requestedThinkingLevel = getStringArg(parsed, "thinkingLevel");
     description = getStringArg(parsed, "description");
     instruction =
       getStringArg(parsed, "instruction") ||
@@ -170,6 +179,12 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
           {agentName}
         </span>
       )}
+      <SessionTaskModelBadges
+        tier={requestedTier}
+        model={firstNonEmptyString(matchedSub?.model, requestedModel)}
+        provider={firstNonEmptyString(matchedSub?.provider, requestedProvider)}
+        thinkingLevel={requestedThinkingLevel}
+      />
       {shortSessionId && (
         <span className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono text-text-tertiary bg-surface-hover/60">
           {shortSessionId}

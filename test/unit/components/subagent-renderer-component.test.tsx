@@ -342,6 +342,38 @@ describe("SubagentExecutionCard — 状态文案", () => {
     expect(screen.getByText("sub_test_001")).toBeTruthy();
   });
 
+  it("折叠态优先展示子任务档位和思考级别", () => {
+    setupMockStore({
+      status: "done",
+      model: "anthropic/claude-sonnet-4",
+    });
+    const block = makeBlock({
+      status: "done",
+      args: JSON.stringify({
+        description: "Refactor module",
+        instruction: "Refactor the auth module",
+        tier: "max",
+        thinkingLevel: "high",
+      }),
+    });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Max")).toBeTruthy();
+    expect(screen.getByText("Think high")).toBeTruthy();
+    expect(screen.queryByText("claude-sonnet-4")).toBeNull();
+  });
+
+  it("没有档位时折叠态展示显式模型短名", () => {
+    setupMockStore({
+      status: "done",
+      model: "anthropic/claude-sonnet-4",
+    });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("claude-sonnet-4")).toBeTruthy();
+  });
+
   it("未指定 agent 时展示默认 build agent 和 build 颜色", () => {
     setupMockStore({ status: "done", agent: undefined });
     const block = makeBlock({ status: "done" });

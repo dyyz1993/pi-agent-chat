@@ -24,6 +24,7 @@ import {
   type SessionActivityRound,
 } from "./SessionActivitySummary";
 import { SessionTaskCard } from "./SessionTaskCard";
+import { SessionTaskModelBadges } from "./SessionTaskModelBadges";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
@@ -34,6 +35,13 @@ const BUILTIN_AGENT_COLORS: Record<string, string> = {
   explore: "blue",
   plan: "purple",
 };
+
+interface SessionTaskModelInfo {
+  tier?: string | null;
+  model?: string | null;
+  provider?: string | null;
+  thinkingLevel?: string | null;
+}
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -48,6 +56,10 @@ interface CoordinatorDetails {
   exitCode?: number;
   finalText?: string;
   error?: string;
+  tier?: string;
+  model?: string;
+  provider?: string;
+  thinkingLevel?: string;
 }
 
 function parseArgs(args?: string): Record<string, unknown> {
@@ -215,6 +227,7 @@ function renderAgentBadge(
 function renderBadge(
   agentName: string | undefined,
   agents: Array<{ name: string; color?: string }>,
+  modelInfo: SessionTaskModelInfo,
   statusLabel: string | undefined,
   isRunning: boolean,
   sessionStatus: SessionStatus | undefined,
@@ -225,6 +238,12 @@ function renderBadge(
   return (
     <>
       {renderAgentBadge(agentName, agents)}
+      <SessionTaskModelBadges
+        tier={modelInfo.tier}
+        model={modelInfo.model}
+        provider={modelInfo.provider}
+        thinkingLevel={modelInfo.thinkingLevel}
+      />
       {projectName && (
         <span className="shrink-0 max-w-24 truncate px-1.5 py-0.5 rounded text-[10px] bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
           {projectName}
@@ -263,6 +282,12 @@ export const DelegateCard = memo(function DelegateCard({
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
   const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
+  const modelInfo: SessionTaskModelInfo = {
+    tier: stringValue(args.tier) ?? details.tier,
+    model: stringValue(args.model) ?? details.model,
+    provider: stringValue(args.provider) ?? details.provider,
+    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+  };
   const agents = useAgentStore((s) => s.agents);
 
   const requestedProjectPath = stringValue(args.projectPath);
@@ -314,6 +339,10 @@ export const DelegateCard = memo(function DelegateCard({
       badge={renderBadge(
         agentText,
         agents,
+        {
+          ...modelInfo,
+          tier: matchedSession?.tierConfig?.currentTier ?? modelInfo.tier,
+        },
         statusLabel,
         isRunning,
         sessionStatus,
@@ -353,6 +382,12 @@ export const ForkCard = memo(function ForkCard({
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
   const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
+  const modelInfo = {
+    tier: stringValue(args.tier) ?? details.tier,
+    model: stringValue(args.model) ?? details.model,
+    provider: stringValue(args.provider) ?? details.provider,
+    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+  };
 
   const sessionId = details.sessionId;
   const { canJump, handleJump } = useJumpToSession(sessionId);
@@ -393,6 +428,7 @@ export const ForkCard = memo(function ForkCard({
         badge={renderBadge(
           agentText,
           agents,
+          modelInfo,
           statusLabel,
           isRunning,
           sessionStatus,
@@ -523,6 +559,12 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     }
     return null;
   });
+  const modelInfo: SessionTaskModelInfo = {
+    tier: stringValue(args.tier) ?? details.tier,
+    model: stringValue(args.model) ?? matchedSub?.model ?? details.model,
+    provider: stringValue(args.provider) ?? matchedSub?.provider ?? details.provider,
+    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+  };
 
   const targetSessionId = details.sessionId ?? matchedSub?.sessionId;
   const { canJump, handleJump } = useJumpToSession(targetSessionId);
@@ -612,6 +654,12 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
       badge={
         <>
           {renderAgentBadge(displayAgentName, agents)}
+          <SessionTaskModelBadges
+            tier={modelInfo.tier}
+            model={modelInfo.model}
+            provider={modelInfo.provider}
+            thinkingLevel={modelInfo.thinkingLevel}
+          />
           <span className={`shrink-0 text-[10px] ${badgeColor}`}>{statusLabel}</span>
           {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
           <CopyButton text={fullExecutionText} size="xs" />

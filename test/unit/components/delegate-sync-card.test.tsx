@@ -177,6 +177,8 @@ describe("DelegateSyncCard", () => {
       args: JSON.stringify({
         title: "Default agent smoke test",
         task: "只读检查当前目录",
+        tier: "fast",
+        thinkingLevel: "medium",
       }),
     });
 
@@ -186,6 +188,8 @@ describe("DelegateSyncCard", () => {
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: "#F97316" });
     expect(badge.getAttribute("style")).toContain("rgba(249, 115, 22, 0.12)");
+    expect(screen.getByText("Fast")).toBeInTheDocument();
+    expect(screen.getByText("Think medium")).toBeInTheDocument();
   });
 
   it("renders task, result, child session metadata, and a jump control when expanded", () => {
