@@ -151,7 +151,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   // 查找当前 session 所属的项目路径
   const projectPath = useSessionStore((s) => {
     if (!sessionId) return null;
-    for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
+    for (const [path, sessions] of Object.entries(s.sessionsByProject ?? {})) {
       if (sessions.some((sess) => sess.sessionId === sessionId)) return path;
     }
     return null;
