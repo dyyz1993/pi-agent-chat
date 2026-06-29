@@ -526,7 +526,9 @@ async function createRpcClient(
           remoteChildBootstrap?.remoteExtensionsDir,
           excludeLsp,
         ),
-        ...(remoteChildRuntime ? getRemoteProjectTrustArgs({ runtime: remoteChildRuntime, cwd }) : []),
+        ...(remoteChildRuntime
+          ? getRemoteProjectTrustArgs({ runtime: remoteChildRuntime, cwd })
+          : []),
         ...(remoteSessionDir ? ["--session-dir", remoteSessionDir] : []),
         ...(remoteSessionId ? ["--session-id", remoteSessionId] : []),
       ]
@@ -893,6 +895,7 @@ export class AgentProcessManager {
       setSessionName: (sessionId, name) => this.setSessionName(sessionId, name),
       switchAgent: (sessionId, agentName) => this.switchAgent(sessionId, agentName),
       setModel: (sessionId, provider, modelId) => this.setModel(sessionId, provider, modelId),
+      setPermissionMode: (sessionId, mode) => this.setPermissionMode(sessionId, mode),
       getState: (sessionId) => this.getState(sessionId),
       getStatus: (sessionId) => this.getStatus(sessionId),
       getContextUsage: (sessionId) => this.getContextUsage(sessionId),

@@ -62,6 +62,7 @@ export interface CoordinatorHandlerDeps {
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setPermissionMode: (sessionId: string, mode: string) => Promise<unknown>;
   getState: (
     sessionId: string,
   ) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
@@ -271,6 +272,7 @@ export class CoordinatorHandler {
       getActiveManaged: (sid) => this.deps.getActiveManaged(sid) ?? null,
       start: (id, projectPath, sessionPath) =>
         this.deps.start(id, projectPath, sessionPath, { forceNewProcess: true }),
+      setPermissionMode: (id, mode) => this.deps.setPermissionMode(id, mode),
       switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
       setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
@@ -300,6 +302,7 @@ export class CoordinatorHandler {
       getActiveManaged: (sid) => this.deps.getActiveManaged(sid) ?? null,
       start: (id, projectPath, sessionPath, startOptions) =>
         this.deps.start(id, projectPath, sessionPath, startOptions),
+      setPermissionMode: (id, mode) => this.deps.setPermissionMode(id, mode),
       switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
       setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),

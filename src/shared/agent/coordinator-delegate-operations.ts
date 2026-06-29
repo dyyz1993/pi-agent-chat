@@ -61,6 +61,7 @@ interface DelegateSyncParentManaged {
   info: {
     projectPath: string;
     sessionPath: string;
+    permissionMode?: string;
   };
 }
 
@@ -68,6 +69,7 @@ interface DelegateParentManaged {
   info: {
     projectPath: string;
     sessionPath: string;
+    permissionMode?: string;
   };
 }
 
@@ -106,6 +108,7 @@ interface DelegateParentManagedBase {
   info: {
     projectPath: string;
     sessionPath: string;
+    permissionMode?: string;
   };
 }
 
@@ -121,6 +124,7 @@ interface CreateAndStartDelegateSessionOptions<TManaged extends DelegateParentMa
     sessionPath: string,
     options: { forceNewProcess: true },
   ) => Promise<unknown>;
+  setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   parentChildMap: DelegateChildMap;
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
@@ -164,6 +168,7 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
       parentSessionId: options.parentSessionId,
       parentSessionPath: parent.info.sessionPath,
       delegateType: options.delegateType,
+      permissionMode: parent.info.permissionMode,
     });
   } catch (writeErr: unknown) {
     log.warn(`[createDelegateSession] failed to write session header`, {
@@ -174,6 +179,11 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
 
   const startResult = await options.start(newSessionId, projectPath, sessionPath, {
     forceNewProcess: true,
+  });
+  await inheritDelegatePermissionMode({
+    sessionId: newSessionId,
+    permissionMode: parent.info.permissionMode,
+    setPermissionMode: options.setPermissionMode,
   });
 
   const createdAt = (options.now ?? Date.now)();
@@ -189,6 +199,24 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
     createdAt,
     startResult,
   };
+}
+
+async function inheritDelegatePermissionMode(options: {
+  sessionId: string;
+  permissionMode?: string;
+  setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
+}): Promise<void> {
+  const permissionMode = options.permissionMode?.trim();
+  if (!permissionMode || !options.setPermissionMode) return;
+  try {
+    await options.setPermissionMode(options.sessionId, permissionMode);
+  } catch (err: unknown) {
+    log.warn("[createDelegateSession] failed to inherit permission mode", {
+      sessionId: options.sessionId,
+      permissionMode,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 async function normalizeDelegateProjectPath(projectPath?: string): Promise<string | undefined> {
@@ -213,6 +241,7 @@ export async function handleCoordinatorDelegateOperation<
     sessionPath: string,
     options: { forceNewProcess: true },
   ) => Promise<{ status: "started" | "already_running" }>;
+  setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
@@ -242,6 +271,7 @@ export async function handleCoordinatorDelegateOperation<
     delegateType: "coordinator",
     getActiveManaged: options.getActiveManaged,
     start: options.start,
+    setPermissionMode: options.setPermissionMode,
     parentChildMap: options.parentChildMap,
     delegateCreatedAt: options.delegateCreatedAt,
     delegateReplyCount: options.delegateReplyCount,
@@ -486,6 +516,7 @@ export async function handleCoordinatorDelegateSyncOperation<
     sessionPath: string,
     options: { forceNewProcess: true },
   ) => Promise<unknown>;
+  setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
@@ -524,6 +555,7 @@ export async function handleCoordinatorDelegateSyncOperation<
     delegateType: "subagent",
     getActiveManaged: options.getActiveManaged,
     start: options.start,
+    setPermissionMode: options.setPermissionMode,
     parentChildMap: options.parentChildMap,
     delegateCreatedAt: options.delegateCreatedAt,
     delegateReplyCount: options.delegateReplyCount,

@@ -25,6 +25,7 @@ interface CoordinatorManagedClient {
     status: string;
     projectPath: string;
     sessionPath: string;
+    permissionMode?: string;
   };
 }
 
@@ -92,6 +93,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
   ) => Promise<{ status: "started" | "already_running" }>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   steer: (sessionId: string, content: string) => void;
@@ -175,6 +177,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
           deps.start(id, projectPath, sessionPath, { forceNewProcess: true }),
         switchAgent: deps.switchAgent,
         setModel: deps.setModel,
+        setPermissionMode: deps.setPermissionMode,
         setSessionName: deps.setSessionName,
         send: deps.send,
         broadcastEvent: deps.broadcastEvent,
@@ -194,6 +197,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
           deps.start(id, projectPath, sessionPath, startOptions),
         switchAgent: deps.switchAgent,
         setModel: deps.setModel,
+        setPermissionMode: deps.setPermissionMode,
         setSessionName: deps.setSessionName,
         send: deps.send,
         steer: deps.steer,
