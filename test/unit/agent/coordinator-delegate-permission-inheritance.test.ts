@@ -123,6 +123,43 @@ describe("delegate permission inheritance", () => {
     expect(switchAgent).toHaveBeenCalledWith("child-agent", "frontend-dev");
   });
 
+  it("does not run async coordinator delegates with the default agent when requested agent switching fails", async () => {
+    const parent = makeParentSession("autopilot");
+    const send = vi.fn();
+    const stop = vi.fn(async () => true);
+    const parentChildMap = new Map();
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "不能静默退回 build",
+          agent: "frontend-dev",
+        },
+        getActiveManaged: (sessionId) => (sessionId === "parent" ? parent : null),
+        start: async () => ({ status: "started" }),
+        switchAgent: async () => {
+          throw new Error('Agent "frontend-dev" not found');
+        },
+        stop,
+        setSessionName: async () => {},
+        send,
+        broadcastEvent: async () => {},
+        parentChildMap,
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        sessionIdFactory: () => "child-agent-fail",
+      }),
+    ).rejects.toThrow(
+      'Failed to switch delegated session child-agent-fail to agent "frontend-dev"',
+    );
+
+    expect(send).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledWith("child-agent-fail");
+    expect(parentChildMap.get("parent")?.has("child-agent-fail")).not.toBe(true);
+  });
+
   it("uses agentName alias when switching sync subagent delegates", async () => {
     const parent = makeParentSession("autopilot");
     const switchAgent = vi.fn(async () => ({}));
@@ -154,6 +191,48 @@ describe("delegate permission inheritance", () => {
 
     await expect(pending).resolves.toMatchObject({ sessionId: "sub-child-agent" });
     expect(switchAgent).toHaveBeenCalledWith("sub-child-agent", "frontend-dev");
+  });
+
+  it("does not run sync subagent delegates with the default agent when requested agent switching fails", async () => {
+    const parent = makeParentSession("autopilot");
+    const send = vi.fn();
+    const stop = vi.fn(async () => true);
+    const parentChildMap = new Map();
+
+    await expect(
+      handleCoordinatorDelegateSyncOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_sync",
+          task: "同步子任务也不能静默退回 build",
+          agent: "frontend-dev",
+          timeoutMs: 25,
+        },
+        getActiveManaged: (sessionId) => (sessionId === "parent" ? parent : null),
+        start: async () => ({ status: "started" }),
+        switchAgent: async () => {
+          throw new Error('Agent "frontend-dev" not found');
+        },
+        setSessionName: async () => {},
+        send,
+        steer: vi.fn(),
+        stop,
+        broadcastEvent: async () => {},
+        parentChildMap,
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        syncDelegateResolvers: new Map(),
+        subagentSyncChildren: new Set(),
+        syncDelegateLastText: new Map(),
+        sessionIdFactory: () => "sub-child-agent-fail",
+      }),
+    ).rejects.toThrow(
+      'Failed to switch delegated session sub-child-agent-fail to agent "frontend-dev"',
+    );
+
+    expect(send).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledWith("sub-child-agent-fail");
+    expect(parentChildMap.get("parent")?.has("sub-child-agent-fail")).not.toBe(true);
   });
 
   it("uses agentName alias when switching forked delegates", async () => {
@@ -191,5 +270,53 @@ describe("delegate permission inheritance", () => {
     });
 
     expect(switchAgent).toHaveBeenCalledWith("fork-child-agent", "frontend-dev");
+  });
+
+  it("does not run forked delegates with the default agent when requested agent switching fails", async () => {
+    const parent = makeParentSession("autopilot");
+    const baseSessionPath = parent.info.sessionPath;
+    fs.writeFileSync(baseSessionPath, JSON.stringify({ type: "session", id: "base" }) + "\n");
+    const send = vi.fn();
+    const stop = vi.fn(async () => true);
+    const parentChildMap = new Map([["parent", new Set(["base"])]]);
+
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "base",
+          task: "fork 也不能静默退回 build",
+          agent: "frontend-dev",
+        },
+        clients: new Map([
+          [
+            "base",
+            {
+              info: {
+                projectPath: parent.info.projectPath,
+                sessionPath: baseSessionPath,
+              },
+            },
+          ],
+        ]),
+        start: async () => ({ status: "started" }),
+        switchAgent: async () => {
+          throw new Error('Agent "frontend-dev" not found');
+        },
+        stop,
+        setSessionName: async () => {},
+        send,
+        broadcastEvent: async () => {},
+        parentChildMap,
+        sessionIdFactory: () => "fork-child-agent-fail",
+      }),
+    ).rejects.toThrow(
+      'Failed to switch delegated session fork-child-agent-fail to agent "frontend-dev"',
+    );
+
+    expect(send).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledWith("fork-child-agent-fail");
+    expect(parentChildMap.get("parent")?.has("fork-child-agent-fail")).toBe(false);
   });
 });
