@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { lazy, memo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2 } from "lucide-react";
 
@@ -16,13 +16,13 @@ import {
   type HookIntervention,
 } from "./HookInterventionCard";
 
+const StreamingMarkdownContent = lazy(() => import("./StreamingMarkdownContent"));
+
 /** A flattened text/hook/references segment used for rendering. */
 type RenderSegment =
   | { type: "text"; text: string }
   | { type: "references"; references: ContextReference[] }
   | { type: "hook"; intervention: HookIntervention };
-
-const STREAMING_MARKDOWN_SNAPSHOT_MS = 800;
 
 function buildRenderSegments(text: string): RenderSegment[] {
   const refSegments = extractContextReferenceSegments(text);
@@ -45,37 +45,6 @@ function buildRenderSegments(text: string): RenderSegment[] {
 function isLongContent(text: string): boolean {
   const lineCount = text.split("\n").length;
   return lineCount > 20;
-}
-
-function useStreamingMarkdownSnapshotText(text: string, enabled: boolean): string | null {
-  const [markdownText, setMarkdownText] = useState<string | null>(null);
-  const latestTextRef = useRef(text);
-
-  useEffect(() => {
-    latestTextRef.current = text;
-
-    if (!enabled) {
-      setMarkdownText(null);
-      return;
-    }
-
-    setMarkdownText((current) => (current && text.startsWith(current) ? current : null));
-  }, [enabled, text]);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const timer = window.setInterval(() => {
-      const nextText = latestTextRef.current;
-      setMarkdownText((current) => (current === nextText ? current : nextText));
-    }, STREAMING_MARKDOWN_SNAPSHOT_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [enabled]);
-
-  return markdownText;
 }
 
 export const TextContentCard = memo(function TextContentCard({
@@ -102,17 +71,8 @@ export const TextContentCard = memo(function TextContentCard({
         .replace(/\n{3,}/g, "\n\n")
         .trim()
     : text;
-  const streamingMarkdownText = useStreamingMarkdownSnapshotText(
-    visibleText,
-    Boolean(isStreaming && !hasInternalReferences && visibleText.trim()),
-  );
 
   if (isStreaming) {
-    const streamingPlainRemainder =
-      streamingMarkdownText && visibleText.startsWith(streamingMarkdownText)
-        ? visibleText.slice(streamingMarkdownText.length)
-        : null;
-
     return (
       <div
         data-block-id={blockId}
@@ -121,12 +81,11 @@ export const TextContentCard = memo(function TextContentCard({
         <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <CopyButton text={visibleText} size="xs" />
         </div>
-        {streamingMarkdownText ? (
+        {!hasInternalReferences && visibleText.trim() ? (
           <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent prose-hr:my-0.5">
-            <CachedReactMarkdown>{streamingMarkdownText}</CachedReactMarkdown>
-            {streamingPlainRemainder && (
-              <span className="whitespace-pre-wrap">{streamingPlainRemainder}</span>
-            )}
+            <Suspense fallback={<span className="whitespace-pre-wrap">{visibleText}</span>}>
+              <StreamingMarkdownContent text={visibleText} />
+            </Suspense>
           </div>
         ) : (
           <div className="whitespace-pre-wrap">

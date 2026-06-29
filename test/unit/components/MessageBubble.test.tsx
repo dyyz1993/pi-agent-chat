@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryCard } from "../../../src/mainview/components/chat/MemoryCard";
@@ -53,37 +53,22 @@ describe("extracted message bubble components", () => {
     expect(overlay.markdownTitle).toContain("messageContentLineCount");
   });
 
-  it("renders a debounced markdown snapshot while text content is streaming", () => {
-    vi.useFakeTimers();
-
+  it("renders markdown while text content is streaming", async () => {
     render(
       <TextContentCard text={"# Streaming title\n\n**bold** text"} isStreaming blockId="msg-1-1" />,
     );
 
-    expect(screen.queryByRole("heading", { name: "Streaming title" })).not.toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(799);
-    });
-    expect(screen.queryByRole("heading", { name: "Streaming title" })).not.toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(screen.getByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
-    expect(screen.getByText("bold").tagName).toBe("STRONG");
+    expect(await screen.findByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
+    expect(screen.getByText("bold")).toHaveAttribute("data-streamdown", "strong");
   });
 
-  it("updates the streaming markdown snapshot even when text keeps changing", () => {
-    vi.useFakeTimers();
-
+  it("updates the streaming markdown snapshot even when text keeps changing", async () => {
     const { rerender } = render(
       <TextContentCard text={"# Streaming title\n\n**bo"} isStreaming blockId="msg-1-2" />,
     );
 
-    act(() => {
-      vi.advanceTimersByTime(400);
-    });
+    expect(await screen.findByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
+
     rerender(
       <TextContentCard
         text={"# Streaming title\n\n**bold** text\n\n- item one"}
@@ -92,25 +77,8 @@ describe("extracted message bubble components", () => {
       />,
     );
 
-    act(() => {
-      vi.advanceTimersByTime(399);
-    });
-    expect(screen.queryByRole("heading", { name: "Streaming title" })).not.toBeInTheDocument();
-
-    rerender(
-      <TextContentCard
-        text={"# Streaming title\n\n**bold** text\n\n- item one\n- item two"}
-        isStreaming
-        blockId="msg-1-2"
-      />,
-    );
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(screen.getByRole("heading", { name: "Streaming title" })).toBeInTheDocument();
-    expect(screen.getByText("bold").tagName).toBe("STRONG");
-    expect(screen.getByText("item two").tagName).toBe("LI");
+    expect(screen.getByText("bold")).toHaveAttribute("data-streamdown", "strong");
+    expect(screen.getByText("item one").closest("li")).not.toBeNull();
   });
 
   it("renders memory prefetch searching details after expansion", () => {
