@@ -168,7 +168,7 @@ describe("setMessagesForSession", () => {
     ]);
 
     const messages = useChatStore.getState().messagesBySession["sess-1"];
-    expect(messages.map((message) => message.id)).toEqual(["inject-1", "save-memory"]);
+    expect(messages.map((message) => message.id)).toEqual(["save-memory", "inject-2"]);
   });
 
   it("normalizes toolCall and toolResult through the store write gateway", () => {
@@ -580,12 +580,136 @@ describe("loadSessionMessages custom entry recovery", () => {
     const messages = useChatStore.getState().messagesBySession["sess-1"];
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      id: "inject-1",
+      id: "inject-3",
       role: "custom",
       content: [
         {
           type: "custom",
           customType: "memory_inject",
+        },
+      ],
+    });
+  });
+
+  it("keeps only the latest memory prefetch result for the same operation after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "prefetch-start-1",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-1",
+            query: "find related memory",
+            availableFiles: 7,
+            occurredAt: 100,
+          },
+          timestamp: 100,
+        },
+        {
+          id: "prefetch-result-1",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            summary: "规则命中",
+            snippet: "rules",
+            layer: "skip",
+            selectedFiles: ["rules.md"],
+            occurredAt: 110,
+          },
+          timestamp: 110,
+        },
+        {
+          id: "prefetch-result-2",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            summary: "Injected relevant memories",
+            snippet: "memory text",
+            layer: "auto",
+            selectedFiles: ["memory.md"],
+            occurredAt: 120,
+          },
+          timestamp: 120,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "prefetch-result-2",
+      role: "custom",
+      content: [
+        {
+          type: "custom",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            _prefetchQuery: "find related memory",
+            _prefetchAvailableFiles: 7,
+            _prefetchOccurredAt: 100,
+          },
+        },
+      ],
+    });
+  });
+
+  it("keeps only the latest memory inject entry for the same operation after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "inject-1",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-1",
+            fingerprint: "rules.md|12288",
+            summary: "已注入 Memory 到模型上下文 · 16个文件",
+            snippet: "rules snippet",
+            selectedFiles: ["rules.md"],
+            injectedBytes: 12288,
+          },
+          timestamp: 100,
+        },
+        {
+          id: "inject-2",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-1",
+            fingerprint: "memory.md|0",
+            summary: "已识别 Memory，本会话已注入过 · 1个文件",
+            snippet: "memory snippet",
+            selectedFiles: ["memory.md"],
+            alreadyInjected: true,
+            skipped: true,
+            originalBytes: 435,
+          },
+          timestamp: 110,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "inject-2",
+      role: "custom",
+      content: [
+        {
+          type: "custom",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-1",
+            alreadyInjected: true,
+            skipped: true,
+          },
         },
       ],
     });

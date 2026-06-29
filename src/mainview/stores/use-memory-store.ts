@@ -6,6 +6,19 @@ import type { MemoryStatusResult } from "../../shared/modules/memory";
 
 const log = createLogger("memory");
 
+function getMemoryOperationId(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  return typeof record?.operationId === "string" ? record.operationId : undefined;
+}
+
+function getMemoryInjectDataKey(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const operationId = getMemoryOperationId(data);
+  const fingerprint = typeof record?.fingerprint === "string" ? record.fingerprint : undefined;
+  if (!operationId || !fingerprint) return undefined;
+  return `${operationId}:${fingerprint}`;
+}
+
 interface MemoryEvent {
   id: string;
   customType: string;
@@ -66,6 +79,22 @@ interface MemoryState {
 
 const loadFilesTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
+function getMemoryEventDedupeKey(event: MemoryEvent): string | undefined {
+  if (event.customType === "memory_prefetch_result") {
+    const operationId = getMemoryOperationId(event.data);
+    return operationId ? `prefetch:${operationId}` : undefined;
+  }
+
+  if (event.customType === "memory_inject") {
+    const operationId = getMemoryOperationId(event.data);
+    if (operationId) return `inject-op:${operationId}`;
+    const injectKey = getMemoryInjectDataKey(event.data);
+    return injectKey ? `inject-key:${injectKey}` : undefined;
+  }
+
+  return undefined;
+}
+
 export const useMemoryStore = create<MemoryState>()((set, get) => ({
   eventsBySession: {},
   filesBySession: {},
@@ -82,6 +111,24 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const existing = s.eventsBySession[sessionId] || [];
       const isDuplicate = existing.some((e) => e.id === event.id);
       if (isDuplicate) return s;
+
+      const dedupeKey = getMemoryEventDedupeKey(event);
+      if (dedupeKey) {
+        const existingIndex = existing.findIndex(
+          (candidate) => getMemoryEventDedupeKey(candidate) === dedupeKey,
+        );
+        if (existingIndex >= 0) {
+          const nextEvents = existing.slice();
+          nextEvents[existingIndex] = event;
+          return {
+            eventsBySession: {
+              ...s.eventsBySession,
+              [sessionId]: nextEvents,
+            },
+          };
+        }
+      }
+
       return {
         eventsBySession: {
           ...s.eventsBySession,

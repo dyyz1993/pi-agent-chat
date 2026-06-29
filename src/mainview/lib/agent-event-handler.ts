@@ -168,6 +168,22 @@ function getMemoryInjectKey(data: unknown): string | undefined {
   return `${operationId}:${fingerprint}`;
 }
 
+function getMemoryCustomDedupeKey(customType: string, data: unknown): string | undefined {
+  if (customType === "memory_prefetch_result") {
+    const operationId = getMemoryOperationId(data);
+    return operationId ? `prefetch:${operationId}` : undefined;
+  }
+
+  if (customType === "memory_inject") {
+    const operationId = getMemoryOperationId(data);
+    if (operationId) return `inject-op:${operationId}`;
+    const injectKey = getMemoryInjectKey(data);
+    return injectKey ? `inject-key:${injectKey}` : undefined;
+  }
+
+  return undefined;
+}
+
 function hasMemoryInjectMessage(messages: ChatMessage[], key: string): boolean {
   return messages.some((message) =>
     message.content.some((block) => {
@@ -187,6 +203,27 @@ function findTimedOutMemoryPrefetchIndex(msgs: ChatMessage[], operationId: strin
     if (data?._timedOut === true && data.operationId === operationId) return i;
   }
   return -1;
+}
+
+function upsertMemoryCustomMessage(messages: ChatMessage[], customMsg: ChatMessage): ChatMessage[] {
+  const block = customMsg.content[0];
+  if (block?.type !== "custom") {
+    return insertChatMessageByDisplayOrder(messages, customMsg);
+  }
+
+  const dedupeKey = getMemoryCustomDedupeKey(block.customType, block.data);
+  if (!dedupeKey) {
+    return insertChatMessageByDisplayOrder(messages, customMsg);
+  }
+
+  const filtered = messages.filter((message) => {
+    if (message.role !== "custom") return true;
+    const candidateBlock = message.content[0];
+    if (candidateBlock?.type !== "custom") return true;
+    return getMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) !== dedupeKey;
+  });
+
+  return insertChatMessageByDisplayOrder(filtered, customMsg);
 }
 
 function mergePrefetchResultData(
@@ -1334,7 +1371,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           ],
           timestamp: getMemorySemanticTimestamp(event.data, Date.now()),
         };
-        chat.setMessagesForSession(sessionId, insertChatMessageByDisplayOrder(msgs, customMsg));
+        chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(msgs, customMsg));
       }, PREFETCH_FALLBACK_MS);
 
       sessionMap.set(operationId, { agentEvent: event, timer });
@@ -1399,10 +1436,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
         timestamp: getMemorySemanticTimestamp(resultData, Date.now()),
       };
-      chat.setMessagesForSession(
-        sessionId,
-        insertChatMessageByDisplayOrder(existingMsgs, customMsg),
-      );
+      chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(existingMsgs, customMsg));
       return;
     }
 
@@ -1419,7 +1453,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     chat.setMessagesForSession(
       sessionId,
       ALL_MEMORY_TYPE_KEYS.has(event.customType)
-        ? insertChatMessageByDisplayOrder(existing, customMsg)
+        ? upsertMemoryCustomMessage(existing, customMsg)
         : [...existing, customMsg],
     );
 

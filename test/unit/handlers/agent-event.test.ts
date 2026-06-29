@@ -376,6 +376,110 @@ describe("memory custom entry ordering", () => {
       ],
     });
   });
+
+  it("replaces older memory prefetch results for the same operation in live event flow", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "读取一下上面的文件" }],
+        timestamp: 1_000,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "我来检查。" }],
+        timestamp: 3_000,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-1",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-1",
+        query: "读取一下上面的文件",
+        availableFiles: 2,
+        occurredAt: 1_100,
+        phaseOrder: 1,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-1",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-1",
+        summary: "规则命中",
+        snippet: "rules text",
+        layer: "skip",
+        selectedFiles: ["rules.md"],
+        occurredAt: 1_200,
+        phaseOrder: 2,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-2",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-1",
+        summary: "Matched memory",
+        snippet: "memory text",
+        layer: "auto",
+        selectedFiles: ["MEMORY.md"],
+        occurredAt: 1_250,
+        phaseOrder: 2,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual([
+      "user-1",
+      "prefetch-result-2",
+      "assistant-1",
+    ]);
+  });
+
+  it("replaces older memory inject entries for the same operation in live event flow", () => {
+    setMessages([]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-1",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-1",
+        fingerprint: "rules.md|12288",
+        summary: "已注入 Memory 到模型上下文 · 16个文件",
+        snippet: "rules snippet",
+        selectedFiles: ["rules.md"],
+        injectedBytes: 12288,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-2",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-1",
+        fingerprint: "memory.md|0",
+        summary: "已识别 Memory，本会话已注入过 · 1个文件",
+        snippet: "memory snippet",
+        selectedFiles: ["memory.md"],
+        alreadyInjected: true,
+        skipped: true,
+        originalBytes: 435,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual(["inject-2"]);
+  });
 });
 
 describe("tool_execution_start", () => {
