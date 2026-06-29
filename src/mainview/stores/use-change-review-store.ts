@@ -4,12 +4,14 @@ import { useSessionStore } from "./use-session-store";
 import { useNotificationStore } from "./use-notification-store";
 import { useGitStore } from "./use-git-store";
 import type { ApprovalResult, PendingChangeResult } from "../../shared/modules/change-review";
+import { getEffectiveSessionId } from "../lib/effective-session";
+import { useSubagentStore } from "./use-subagent-store";
 
 export type PendingChange = PendingChangeResult;
 export type ReviewApproval = ApprovalResult;
 
-/** In-flight dedup promise for fetchPending — prevents triple-fire on session switch */
-let _fetchPendingPromise: Promise<void> | null = null;
+/** In-flight dedup promise by session — prevents triple-fire without crossing parent/child views. */
+const _fetchPendingPromises = new Map<string, Promise<void>>();
 
 /**
  * In-flight action tracking.
@@ -20,6 +22,18 @@ const _inFlight = new Map<string, Promise<void>>();
 
 function actionKey(action: string, path: string): string {
   return `${action}:${path}`;
+}
+
+function findKnownSessionPath(sessionId: string): string | undefined {
+  const sessionState = useSessionStore.getState();
+  const session = Object.values(sessionState.sessionsByProject ?? {})
+    .flat()
+    .find((item) => item.sessionId === sessionId);
+  if (session?.sessionPath) return session.sessionPath;
+
+  return Object.values(useSubagentStore.getState().subsessionsByParent ?? {})
+    .flat()
+    .find((item) => item.sessionId === sessionId)?.sessionPath;
 }
 
 interface ChangeReviewState {
@@ -36,7 +50,7 @@ interface ChangeReviewState {
   setApprovals: (approvals: ReviewApproval[]) => void;
   setLoading: (loading: boolean) => void;
   setSelectedPath: (path: string | null) => void;
-  fetchPending: () => Promise<void>;
+  fetchPending: (sessionId?: string | null) => Promise<void>;
   approveChange: (path: string) => Promise<void>;
   rejectChange: (path: string) => Promise<void>;
   approveAll: () => Promise<void>;
@@ -62,24 +76,20 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
 
   setSelectedPath: (selectedPath) => set({ selectedPath }),
 
-  fetchPending: async () => {
-    if (_fetchPendingPromise) return _fetchPendingPromise;
-    const sessionState = useSessionStore.getState();
-    const sessionId = sessionState.activeSessionId;
+  fetchPending: async (targetSessionId) => {
+    const sessionId = targetSessionId ?? getEffectiveSessionId();
     if (!sessionId) return;
+    const existingPromise = _fetchPendingPromises.get(sessionId);
+    if (existingPromise) return existingPromise;
     set({ loading: true });
 
-    _fetchPendingPromise = (async () => {
+    const promise = (async () => {
       try {
-        const session = sessionState.sessionsByProject
-          ? Object.values(sessionState.sessionsByProject)
-              .flat()
-              .find((s) => s.sessionId === sessionId)
-          : undefined;
+        const sessionPath = findKnownSessionPath(sessionId);
 
         const baseParams = {
           sessionId,
-          ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
+          ...(sessionPath ? { sessionPath } : {}),
         };
 
         const approvalsResult = await apiClient.call("change-review.approvals", baseParams);
@@ -99,19 +109,20 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
         set({ approvals: [], changes: [], loading: false });
       }
     })();
+    _fetchPendingPromises.set(sessionId, promise);
 
     try {
-      await _fetchPendingPromise;
+      await promise;
     } finally {
-      _fetchPendingPromise = null;
+      _fetchPendingPromises.delete(sessionId);
     }
   },
 
   approveChange: async (path) => {
-    const sessionId = useSessionStore.getState().activeSessionId;
+    const sessionId = getEffectiveSessionId();
     if (!sessionId) return;
 
-    const key = actionKey("approve", path);
+    const key = actionKey(`approve:${sessionId}`, path);
     const existing = _inFlight.get(key);
     if (existing) return existing;
 
@@ -129,7 +140,7 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
           });
           return;
         }
-        await get().fetchPending();
+        await get().fetchPending(sessionId);
         useGitStore.getState().clearDiff();
       } catch (err) {
         useNotificationStore.getState().push({
@@ -151,10 +162,10 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
   },
 
   rejectChange: async (path) => {
-    const sessionId = useSessionStore.getState().activeSessionId;
+    const sessionId = getEffectiveSessionId();
     if (!sessionId) return;
 
-    const key = actionKey("reject", path);
+    const key = actionKey(`reject:${sessionId}`, path);
     const existing = _inFlight.get(key);
     if (existing) return existing;
 
@@ -172,7 +183,7 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
           });
           return;
         }
-        await get().fetchPending();
+        await get().fetchPending(sessionId);
         useGitStore.getState().clearDiff();
       } catch (err) {
         useNotificationStore.getState().push({
@@ -194,13 +205,13 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
   },
 
   approveAll: async () => {
-    const sessionId = useSessionStore.getState().activeSessionId;
+    const sessionId = getEffectiveSessionId();
     if (!sessionId) return;
     const pending = get().changes.filter((c) => c.status === "pending");
     if (pending.length === 0) return;
     try {
       await apiClient.call("change-review.approveAll", { sessionId });
-      await get().fetchPending();
+      await get().fetchPending(sessionId);
     } catch (err) {
       useNotificationStore.getState().push({
         message: `Approve all failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -210,13 +221,13 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
   },
 
   rejectAll: async () => {
-    const sessionId = useSessionStore.getState().activeSessionId;
+    const sessionId = getEffectiveSessionId();
     if (!sessionId) return;
     const pending = get().changes.filter((c) => c.status === "pending");
     if (pending.length === 0) return;
     try {
       const result = await apiClient.call("change-review.rejectAll", { sessionId });
-      await get().fetchPending();
+      await get().fetchPending(sessionId);
       if (result.rolledBack > 0) {
         useNotificationStore.getState().push({
           message: `Rejected ${result.count} changes, ${result.rolledBack} files rolled back`,

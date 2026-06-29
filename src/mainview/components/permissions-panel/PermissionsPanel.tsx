@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { PanelHeader } from "../primitives/PanelHeader";
-import { useSessionStore } from "../../stores/use-session-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import {
   type PermissionRule,
   usePermissionRulesStore,
@@ -132,7 +132,7 @@ function PermissionRuleRow({
 }
 
 export function PermissionsPanel() {
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const session = usePermissionRulesStore(
     useShallow((s) => s.bySession[activeSessionId ?? ""] ?? null),
   );

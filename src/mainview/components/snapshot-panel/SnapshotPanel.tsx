@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSnapshotStore } from "../../stores/use-snapshot-store";
-import { useSessionStore } from "../../stores/use-session-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { PanelHeader } from "../primitives/PanelHeader";
 import { apiClient } from "../../lib/api-client";
@@ -31,7 +31,7 @@ type PendingSnapshotAction = {
 
 export function SnapshotPanel() {
   const { t } = useTranslation("snapshot");
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const snapshotsBySession = useSnapshotStore((s) => s.snapshotsBySession);
   const fetchSnapshots = useSnapshotStore((s) => s.fetchSnapshots);
   const rollback = useSnapshotStore((s) => s.rollback);

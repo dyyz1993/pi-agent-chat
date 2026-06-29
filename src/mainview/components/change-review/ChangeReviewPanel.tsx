@@ -76,7 +76,7 @@ export function ChangeReviewPanel() {
         trailing={
           <>
             <button
-              onClick={fetchPending}
+              onClick={() => void fetchPending()}
               disabled={loading}
               className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-30"
               title={t("refresh")}

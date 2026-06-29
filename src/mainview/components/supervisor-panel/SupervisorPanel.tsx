@@ -9,8 +9,8 @@ import type {
   TaskReport,
   TriggerRecord,
 } from "../../../shared/modules/supervisor";
-import { useSessionStore } from "../../stores/use-session-store";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 
 const STATE_STYLES: Record<string, string> = {
   idle: "bg-status-success/20 text-status-success",
@@ -78,7 +78,7 @@ function getChecklistStatusLabel(
 
 export function SupervisorPanel() {
   const { t } = useTranslation("status");
-  const sessionId = useSessionStore((s) => s.activeSessionId);
+  const sessionId = useEffectiveSessionId();
   const sessionState = useSupervisorStore(
     (s) => (sessionId ? s.bySession[sessionId] : null) ?? null,
   );

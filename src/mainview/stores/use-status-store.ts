@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
 import { useSessionStore } from "./use-session-store";
+import { getEffectiveSessionId } from "../lib/effective-session";
 
 const log = createLogger("settings");
 
@@ -142,7 +143,7 @@ interface StatusState {
   expandedMcpServer: string | null;
   collapsedSections: Set<StatusSection>;
 
-  setPermissionProfile: (profile: PermissionProfileName) => void;
+  setPermissionProfile: (profile: PermissionProfileName, sessionId?: string | null) => void;
   applyPermissionProfileSnapshot: (profile: string | undefined, sessionId?: string) => void;
   getRememberedPermissionProfile: (sessionId: string) => PermissionProfileName | undefined;
   setProjectTrustState: (trust: ProjectTrustState | null) => void;
@@ -195,10 +196,10 @@ export const useStatusStore = create<StatusState>((set) => ({
   expandedMcpServer: null,
   collapsedSections: new Set(),
 
-  setPermissionProfile: (profile) => {
+  setPermissionProfile: (profile, targetSessionId) => {
     const s = useStatusStore.getState();
     if (s.permissionProfileLoading || s.permissionProfile === profile) return;
-    const sessionId = useSessionStore.getState().activeSessionId;
+    const sessionId = targetSessionId ?? getEffectiveSessionId();
     if (!sessionId) return;
     set({ permissionProfileLoading: true, yoloLoading: true });
     apiClient

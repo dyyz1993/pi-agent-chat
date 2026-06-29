@@ -39,6 +39,7 @@ import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RemoteProjectRef } from "../../../shared/modules/project";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   high: { dot: "bg-status-error", label: "H" },
@@ -87,10 +88,19 @@ export function StatusPanel() {
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
+  const activeSubsessionInfo = useSubagentStore(
+    useShallow((s) =>
+      activeSubId
+        ? (Object.values(s.subsessionsByParent ?? {})
+            .flat()
+            .find((sub) => sub.sessionId === activeSubId) ?? null)
+        : null,
+    ),
+  );
   const todosBySession = useSessionTodoStore((s) => s.todosBySession);
   const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
   const backgroundedIds = useBashStore((s) => s.backgroundedIds);
@@ -113,10 +123,19 @@ export function StatusPanel() {
   const safeProjectTabs = projectTabs ?? [];
   const safeSessionsByProject = sessionsByProject ?? {};
   const activeProjectTab = safeProjectTabs.find((tab) => tab.id === activeProjectId) ?? null;
-  const activeSessionMeta =
+  const listedSessionMeta =
     activeProjectTab && activeSessionId
       ? safeSessionsByProject[activeProjectTab.path]?.find((s) => s.sessionId === activeSessionId)
       : null;
+  const activeSessionMeta =
+    listedSessionMeta ??
+    (activeSubsessionInfo
+      ? {
+          sessionId: activeSubsessionInfo.sessionId,
+          sessionPath: activeSubsessionInfo.sessionPath,
+          projectPath: activeProjectTab?.path,
+        }
+      : null);
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
   const [showPermissionAdvanced, setShowPermissionAdvanced] = useState(false);
@@ -310,7 +329,7 @@ export function StatusPanel() {
                           return (
                             <button
                               key={preset.id}
-                              onClick={() => setPermissionProfile(preset.id)}
+                              onClick={() => setPermissionProfile(preset.id, activeSessionId)}
                               disabled={permissionProfileLoading || active || preset.disabled}
                               title={preset.description}
                               className={`min-h-8 px-2 py-1.5 rounded-md text-[10px] transition-colors flex items-center justify-center gap-1 ${
@@ -741,9 +760,11 @@ export function StatusPanel() {
                                 </span>
                                 {activeSessionId &&
                                   (() => {
-                                    const projectPath = Object.values(sessionsByProject)
-                                      .flat()
-                                      .find((s) => s.sessionId === activeSessionId)?.projectPath;
+                                    const projectPath =
+                                      Object.values(sessionsByProject)
+                                        .flat()
+                                        .find((s) => s.sessionId === activeSessionId)
+                                        ?.projectPath ?? activeProjectTab?.path;
                                     return projectPath ? (
                                       <button
                                         onClick={(e) => {
@@ -925,7 +946,7 @@ function MCPToolsSection() {
   const toggleMcpExpanded = useStatusStore((s) => s.toggleMcpExpanded);
   const toggleMcpServer = useStatusStore((s) => s.toggleMcpServer);
   const restartMcpServer = useStatusStore((s) => s.restartMcpServer);
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const [restarting, setRestarting] = useState<string | null>(null);
 
   if (mcpServers.length === 0) {

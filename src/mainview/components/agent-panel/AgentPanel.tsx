@@ -20,12 +20,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../stores/use-agent-store";
-import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 import { agentColorStyle } from "../../utils/agent-color";
 import { formatFilePath } from "../../lib/format-path";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -316,7 +316,7 @@ function InitialPromptViewer({ value }: { value: string | undefined }) {
 // ---------------------------------------------------------------------------
 
 export function AgentPanel() {
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const allToolsBySession = useAgentStore((s) => s.allToolsBySession);
   const liveSystemPromptBySession = useAgentStore((s) => s.liveSystemPromptBySession);

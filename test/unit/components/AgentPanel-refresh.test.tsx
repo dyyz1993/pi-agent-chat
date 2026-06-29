@@ -4,6 +4,7 @@ import { AgentPanel } from "../../../src/mainview/components/agent-panel/AgentPa
 import { useLayoutStore } from "../../../src/mainview/layouts/use-layout-store";
 import { useAgentStore } from "../../../src/mainview/stores/use-agent-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSubagentStore } from "../../../src/mainview/stores/use-subagent-store";
 
 describe("AgentPanel refresh", () => {
   const fetchAgents = vi.fn();
@@ -24,6 +25,7 @@ describe("AgentPanel refresh", () => {
     fetchAllTools.mockReset();
     fetchSystemPrompt.mockReset();
     useSessionStore.setState({ activeSessionId: "sess-1" });
+    useSubagentStore.setState({ activeSubsessionId: null });
     useLayoutStore.setState({ activePanelTab: "changeReview" });
     useAgentStore.setState({
       agents: [{ name: "build", source: "builtin", filePath: "" }],
@@ -73,5 +75,32 @@ describe("AgentPanel refresh", () => {
     expect(fetchAgentDetail).toHaveBeenCalledWith("sess-1");
     expect(fetchAllTools).toHaveBeenCalledWith("sess-1");
     expect(fetchSystemPrompt).toHaveBeenCalledWith("sess-1");
+  });
+
+  it("follows the visible subagent session when one is active", () => {
+    useSessionStore.setState({ activeSessionId: "parent-session" });
+    useSubagentStore.setState({ activeSubsessionId: "child-session" });
+    useLayoutStore.setState({ activePanelTab: "agent" });
+    useAgentStore.setState({
+      currentAgentBySession: { "child-session": "build" },
+      agentDetailBySession: {
+        "child-session": {
+          name: "build",
+          description: "Child build",
+          systemPrompt: "You build in the child.",
+          source: "builtin",
+          filePath: "",
+        },
+      },
+      allToolsBySession: { "child-session": [] },
+    });
+
+    render(<AgentPanel />);
+
+    expect(fetchAgents).toHaveBeenCalledWith("child-session");
+    expect(fetchAgentDetail).toHaveBeenCalledWith("child-session");
+    expect(fetchAllTools).toHaveBeenCalledWith("child-session");
+    expect(fetchSystemPrompt).toHaveBeenCalledWith("child-session");
+    expect(fetchAgents).not.toHaveBeenCalledWith("parent-session");
   });
 });
