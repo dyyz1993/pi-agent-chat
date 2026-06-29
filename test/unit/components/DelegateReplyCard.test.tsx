@@ -16,7 +16,8 @@ function makeBlock(body: string, attrs: Record<string, string> = {}): SpecialBlo
       task: "Review the pending implementation",
       agent: "pi-worktree-dev",
       projectPath: "/tmp/project",
-      params: '{"title":"Long delegate reply","agent":"pi-worktree-dev","projectPath":"/tmp/project","replyMode":"interrupt"}',
+      params:
+        '{"title":"Long delegate reply","agent":"pi-worktree-dev","projectPath":"/tmp/project","replyMode":"interrupt"}',
       ...attrs,
     },
     body,
@@ -42,6 +43,12 @@ describe("DelegateReplyCard", () => {
         '{"title":"Long delegate reply","agent":"pi-worktree-dev","projectPath":"/tmp/project","replyMode":"interrupt"}',
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows the source project in the collapsed header", () => {
+    render(<DelegateReplyCard block={makeBlock("Result body")} />);
+
+    expect(screen.getByText("project")).toBeInTheDocument();
   });
 
   it("keeps long delegate replies scrollable and can expand to full height", () => {

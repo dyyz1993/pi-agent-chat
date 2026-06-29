@@ -1,6 +1,6 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { ProjectTab } from "../../../src/mainview/types";
+import type { ProjectTab, SessionMeta } from "../../../src/mainview/types";
 
 const sessionStoreState: Record<string, unknown> = {};
 const uiDialogStoreState: Record<string, unknown> = {};
@@ -35,9 +35,14 @@ import { TabBar, formatTabName } from "../../../src/mainview/components/tab-bar/
 
 function setupStore(overrides: {
   tabs?: ProjectTab[];
-  sessionsByProject?: Record<string, { sessionId: string; name: string }[]>;
+  sessionsByProject?: Record<
+    string,
+    Array<Partial<SessionMeta> & { sessionId: string; name: string }>
+  >;
   statusMap?: Record<string, string>;
   activeProjectId?: string;
+  activeSessionId?: string;
+  lastActiveSessionByProject?: Record<string, string>;
   allPending?: {
     requestId: string;
     sessionId: string;
@@ -49,8 +54,8 @@ function setupStore(overrides: {
     sessionsByProject: overrides.sessionsByProject ?? {},
     sessionStatusMap: overrides.statusMap ?? {},
     activeProjectId: overrides.activeProjectId ?? overrides.tabs?.[0]?.id ?? "",
-    activeSessionId: "",
-    lastActiveSessionByProject: {},
+    activeSessionId: overrides.activeSessionId ?? "",
+    lastActiveSessionByProject: overrides.lastActiveSessionByProject ?? {},
     setActiveProject: vi.fn(),
     removeProjectTab: vi.fn(),
     reorderProjectTabs: vi.fn(),
@@ -122,6 +127,30 @@ describe("TabBar permission icon badge", () => {
 
     render(<TabBar onAddProject={vi.fn()} />);
     expect(countPermissionIcons()).toBe(0);
+  });
+
+  it("shows a delegate identity badge for the visible delegate session", () => {
+    setupStore({
+      tabs: [{ id: "t1", name: "Project A", path: "/a" }],
+      sessionsByProject: {
+        "/a": [
+          {
+            sessionId: "sess_coord_123",
+            name: "Delegate work",
+            delegateParentSessionId: "sess_parent",
+            delegateType: "coordinator",
+          },
+        ],
+      },
+      activeSessionId: "sess_coord_123",
+      activeProjectId: "t1",
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const badge = screen.getByTestId("tab-session-identity-badge");
+    expect(badge).toHaveTextContent("委派");
+    expect(badge).toHaveAttribute("data-session-kind", "delegate");
   });
 
   it("shows permission icon only on the tab with permission sessions", () => {
