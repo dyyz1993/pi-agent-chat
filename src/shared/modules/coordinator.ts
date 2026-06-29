@@ -65,6 +65,7 @@ export interface CoordinatorMethods {
       task: string;
       title?: string;
       agent?: string;
+      agentName?: string;
       model?: string;
       replyMode?: DelegateReplyMode;
       projectPath?: string;
@@ -96,7 +97,14 @@ export interface CoordinatorMethods {
     result: { cleared: string[]; removed: number };
   };
   "coordinator.delegate_fork": {
-    params: { sessionId: string; task: string; title?: string; agent?: string; model?: string };
+    params: {
+      sessionId: string;
+      task: string;
+      title?: string;
+      agent?: string;
+      agentName?: string;
+      model?: string;
+    };
     result: DelegateCreateResult;
   };
   "coordinator.delegate_sync": {
@@ -104,6 +112,7 @@ export interface CoordinatorMethods {
       task: string;
       title?: string;
       agent?: string;
+      agentName?: string;
       model?: string;
       timeoutMs?: number;
     };
@@ -123,6 +132,7 @@ export type CoordinatorMethodCall =
       task: string;
       title?: string;
       agent?: string;
+      agentName?: string;
       model?: string;
       replyMode?: DelegateReplyMode;
       projectPath?: string;
@@ -151,6 +161,7 @@ export type CoordinatorMethodCall =
       task: string;
       title?: string;
       agent?: string;
+      agentName?: string;
       model?: string;
       invokeId?: string;
     }
@@ -159,6 +170,7 @@ export type CoordinatorMethodCall =
       task: string;
       title?: string;
       agent?: string;
+      agentName?: string;
       model?: string;
       timeoutMs?: number;
       projectPath?: string;
@@ -200,6 +212,7 @@ export interface CoordinatorMethods {
     task: string;
     title?: string;
     agent?: string;
+    agentName?: string;
     model?: string;
     replyMode?: DelegateReplyMode;
     projectPath?: string;
@@ -229,6 +242,7 @@ export interface CoordinatorMethods {
     task: string;
     title?: string;
     agent?: string;
+    agentName?: string;
     model?: string;
     invokeId?: string;
   }): Promise<DelegateCreateResult>;

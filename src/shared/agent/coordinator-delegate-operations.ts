@@ -260,7 +260,7 @@ export async function handleCoordinatorDelegateOperation<
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task } = options.msg;
-  const agent = options.msg.agent;
+  const agent = options.msg.agent ?? options.msg.agentName;
   const model = parseCoordinatorModel(options.msg.model);
   const replyMode = options.msg.replyMode ?? "interrupt";
 
@@ -545,7 +545,8 @@ export async function handleCoordinatorDelegateSyncOperation<
   now?: () => number;
   sessionIdFactory?: () => string;
 }): Promise<DelegateSyncResult> {
-  const { task, title, agent, timeoutMs = 1800000 } = options.msg;
+  const { task, title, timeoutMs = 1800000 } = options.msg;
+  const agent = options.msg.agent ?? options.msg.agentName;
   const model = parseCoordinatorModel(options.msg.model);
 
   const session = await createAndStartDelegateSession({
@@ -741,7 +742,8 @@ export async function handleCoordinatorDelegateForkOperation<
   parentChildMap: DelegateChildMap;
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
-  const { task, sessionId: targetSessionId, agent } = options.msg;
+  const { task, sessionId: targetSessionId } = options.msg;
+  const agent = options.msg.agent ?? options.msg.agentName;
   const model = parseCoordinatorModel(options.msg.model);
   if (!canManageDelegateChild(options.parentChildMap, options.parentSessionId, targetSessionId)) {
     throw new Error(`Session not found: ${targetSessionId}`);
