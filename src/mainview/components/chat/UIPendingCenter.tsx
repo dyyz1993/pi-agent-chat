@@ -9,11 +9,7 @@ import {
   ChevronRight,
   FileEdit,
   ShieldAlert,
-  FileWarning,
-  FolderOpen,
   Clock,
-  Eye,
-  Pencil,
   Terminal,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -26,7 +22,136 @@ import { IconButton, ModalDialog } from "../primitives";
 import { PermissionActionButtons } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 
-function PanelCard({ req }: { req: UIPendingRequest }) {
+type ApprovalRisk = "Low" | "Medium" | "High";
+
+interface ApprovalSummaryRow {
+  label: string;
+  value: string;
+  tone?: "default" | "warning" | "danger";
+  mono?: boolean;
+}
+
+function firstStringValue(
+  value: Record<string, unknown> | undefined,
+  keys: string[],
+): string | undefined {
+  if (!value) return undefined;
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return undefined;
+}
+
+function isHighRiskCommand(command: string | undefined): boolean {
+  if (!command) return false;
+  return /\b(rm\s+-rf|sudo|chmod\s+-R|chown\s+-R|dd\s+if=|mkfs|curl\b.*\|\s*(sh|bash)|wget\b.*\|\s*(sh|bash)|--no-verify)\b/i.test(
+    command,
+  );
+}
+
+function approvalRisk(req: UIPendingRequest): ApprovalRisk | null {
+  const meta = req.permissionMeta;
+  if (meta?.type === "path_boundary") {
+    return meta.scope === "write" ? "High" : "Medium";
+  }
+  if (meta?.type === "dangerous_bash") return "High";
+  if (meta?.type === "hook_approval") return "Medium";
+  if (meta?.type === "permission_runtime") {
+    const command = firstStringValue(meta.metadata, ["command", "cmd", "script"]);
+    if (
+      /danger|unsafe|destructive|sudo|path-access/i.test(meta.provider) ||
+      isHighRiskCommand(command)
+    ) {
+      return "High";
+    }
+    if (/write|delete|remove|command|bash|shell/i.test(`${meta.provider} ${meta.subject}`)) {
+      return "Medium";
+    }
+    return "Low";
+  }
+  if (req.hookMeta?.command) {
+    return isHighRiskCommand(req.hookMeta.command) ? "High" : "Medium";
+  }
+  return null;
+}
+
+function buildApprovalSummaryRows(
+  req: UIPendingRequest,
+  sessionName?: string,
+): ApprovalSummaryRow[] {
+  const rows: ApprovalSummaryRow[] = [];
+  const push = (row: ApprovalSummaryRow | null | undefined) => {
+    if (row?.value) rows.push(row);
+  };
+
+  push({ label: "Session", value: sessionName ?? req.sessionId, mono: !sessionName });
+
+  const meta = req.permissionMeta;
+  if (meta?.type === "path_boundary") {
+    push({ label: "Tool", value: meta.toolName });
+    push({ label: "Operation", value: meta.scope });
+    push({ label: "Target", value: meta.path, mono: true });
+    push({ label: "Project", value: meta.cwd, mono: true });
+    push({ label: "Boundary", value: meta.relativeTo });
+  } else if (meta?.type === "permission_runtime") {
+    const command = firstStringValue(meta.metadata, ["command", "cmd", "script", "path"]);
+    push({ label: "Tool", value: meta.provider });
+    push({ label: "Operation", value: meta.subject, mono: true });
+    push({ label: "Target", value: command ?? meta.subject, mono: true });
+  } else if (meta?.type) {
+    push({ label: "Tool", value: meta.toolName });
+    push({ label: "Operation", value: meta.scope });
+    push({ label: "Target", value: meta.path, mono: true });
+  } else if (req.hookMeta) {
+    push({ label: "Tool", value: req.hookMeta.toolName });
+    push({ label: "Operation", value: req.hookMeta.eventName ?? "hook approval" });
+  }
+
+  const risk = approvalRisk(req);
+  push({
+    label: "Risk",
+    value: risk ?? "",
+    tone: risk === "High" ? "danger" : risk === "Medium" ? "warning" : "default",
+  });
+
+  return rows;
+}
+
+function ApprovalContextSummary({
+  req,
+  sessionName,
+}: {
+  req: UIPendingRequest;
+  sessionName?: string;
+}) {
+  const rows = buildApprovalSummaryRows(req, sessionName);
+  if (rows.length <= 1) return null;
+
+  return (
+    <div className="mb-2.5 grid gap-1.5 rounded-md border border-status-warning/25 bg-bg-primary/70 px-2.5 py-2">
+      {rows.map((row) => (
+        <div key={row.label} className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+          <span className="text-[10px] font-medium text-text-tertiary">{row.label}</span>
+          <span
+            className={`min-w-0 truncate text-[11px] ${row.mono ? "font-mono" : "font-medium"} ${
+              row.tone === "danger"
+                ? "text-status-error"
+                : row.tone === "warning"
+                  ? "text-status-warning"
+                  : "text-text-primary"
+            }`}
+            title={row.value}
+          >
+            {row.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: string }) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
@@ -73,7 +198,6 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
 
   if (isSelect && req.permissionMeta?.type === "path_boundary") {
     const meta = req.permissionMeta;
-    const ScopeIcon = meta.scope === "write" ? Pencil : Eye;
     const scopePattern = `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`;
     const rememberScope: "project" | "session" = useStatusStore.getState().projectTrust?.trusted
       ? "project"
@@ -95,50 +219,7 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           <span className="text-xs font-semibold text-status-warning">Path Access</span>
         </div>
         <div className="px-3 py-2">
-          <div className="mb-2.5 space-y-1.5 rounded-md border border-border-secondary/40 bg-bg-primary/70 px-2.5 py-2">
-            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
-              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
-                <ScopeIcon className="h-3.5 w-3.5 shrink-0" />
-                Tool
-              </span>
-              <span className="min-w-0 truncate text-xs font-medium capitalize text-text-primary">
-                {meta.toolName}
-              </span>
-            </div>
-            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
-              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
-                <FileWarning className="h-3.5 w-3.5 shrink-0" />
-                Path
-              </span>
-              <span
-                className="min-w-0 truncate font-mono text-xs text-text-primary"
-                title={meta.path}
-              >
-                {meta.path}
-              </span>
-            </div>
-            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
-              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
-                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                Project
-              </span>
-              <span
-                className="min-w-0 truncate font-mono text-xs text-text-secondary"
-                title={meta.cwd}
-              >
-                {meta.cwd}
-              </span>
-            </div>
-            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
-              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
-                <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-status-warning" />
-                Status
-              </span>
-              <span className="min-w-0 truncate text-xs text-status-warning">
-                {meta.relativeTo}
-              </span>
-            </div>
-          </div>
+          <ApprovalContextSummary req={req} sessionName={sessionName} />
           <PermissionActionButtons
             options={options}
             rememberOptions={rememberOptions}
@@ -159,12 +240,6 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
 
   if (isSelect && req.permissionMeta?.type === "permission_runtime") {
     const meta = req.permissionMeta;
-    const command =
-      typeof meta.metadata?.command === "string"
-        ? meta.metadata.command
-        : typeof meta.metadata?.path === "string"
-          ? meta.metadata.path
-          : undefined;
     return (
       <div className="rounded-md border border-border-secondary/60 bg-bg-primary/60 px-3 py-2 dark:bg-surface-code/45">
         <div className="mb-1.5 flex items-center gap-1.5">
@@ -176,31 +251,7 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
         {req.message && (
           <p className="mb-2 text-[11px] leading-relaxed text-text-secondary">{req.message}</p>
         )}
-        <div className="mb-2 space-y-1 rounded-md border border-border-secondary/40 bg-surface-dim/35 px-2 py-1.5">
-          <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
-            <span className="text-[10px] text-text-tertiary">Provider</span>
-            <span className="min-w-0 truncate text-[11px] font-medium text-text-primary">
-              {meta.provider}
-            </span>
-          </div>
-          <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
-            <span className="text-[10px] text-text-tertiary">Subject</span>
-            <span className="min-w-0 truncate font-mono text-[11px] text-text-secondary">
-              {meta.subject}
-            </span>
-          </div>
-          {command && (
-            <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
-              <span className="text-[10px] text-text-tertiary">Command</span>
-              <span
-                className="min-w-0 truncate font-mono text-[11px] text-text-primary"
-                title={command}
-              >
-                {command}
-              </span>
-            </div>
-          )}
-        </div>
+        <ApprovalContextSummary req={req} sessionName={sessionName} />
         <PermissionActionButtons
           options={options}
           rememberOptions={meta.rememberOptions}
@@ -315,6 +366,7 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           {req.message && (
             <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
+          <ApprovalContextSummary req={req} sessionName={sessionName} />
           {isHookConfirm &&
             req.hookMeta?.command &&
             req.hookMeta?.toolName === "bash" &&
@@ -537,7 +589,7 @@ function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: Sessi
                   <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
-              <PanelCard req={req} />
+              <PanelCard req={req} sessionName={sessionName} />
             </div>
           ))}
         </div>
@@ -699,6 +751,7 @@ export function ProjectRuntimePendingRequests({
 }) {
   const { t } = useTranslation("chat");
   const allPending = useUIDialogStore((s) => s.pending);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const statusWidth = useLayoutStore((s) => s.statusWidth);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
@@ -707,6 +760,15 @@ export function ProjectRuntimePendingRequests({
     if (!activeSessionId) return [];
     return allPending.filter((req) => req.sessionId === activeSessionId);
   }, [allPending, activeSessionId]);
+
+  const activeSessionName = useMemo(() => {
+    if (!activeSessionId) return undefined;
+    for (const sessions of Object.values(sessionsByProject)) {
+      const match = sessions.find((session) => session.sessionId === activeSessionId);
+      if (match) return match.name || match.firstMessage?.slice(0, 30) || match.sessionId;
+    }
+    return undefined;
+  }, [activeSessionId, sessionsByProject]);
 
   if (sessionPending.length === 0) return null;
 
@@ -755,7 +817,7 @@ export function ProjectRuntimePendingRequests({
           </span>
         </div>
         <div className={`${bodyMaxHeightClassName} overflow-y-auto px-2.5 py-2`}>
-          <PanelCard req={primary} />
+          <PanelCard req={primary} sessionName={activeSessionName} />
         </div>
         {secondary.length > 0 && (
           <div className="space-y-1 border-t border-border-secondary/50 px-2.5 py-2">

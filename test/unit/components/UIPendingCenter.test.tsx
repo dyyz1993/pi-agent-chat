@@ -971,7 +971,14 @@ describe("ProjectRuntimePendingRequests", () => {
     render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
     expect(screen.getByText("Path Access")).toBeInTheDocument();
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.getByText("Session A")).toBeInTheDocument();
+    expect(screen.getByText("Operation")).toBeInTheDocument();
+    expect(screen.getAllByText("write").length).toBeGreaterThan(0);
+    expect(screen.getByText("Target")).toBeInTheDocument();
     expect(screen.getByText("/tmp/outside.txt")).toBeInTheDocument();
+    expect(screen.getByText("Risk")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Allow once/i }));
 
     expect(mockRespondById).toHaveBeenCalledWith("path-1", { value: "✅ Allow once" });
@@ -1044,6 +1051,13 @@ describe("ProjectRuntimePendingRequests", () => {
     render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
     expect(screen.getByText("Confirm command")).toBeInTheDocument();
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.getByText("Session A")).toBeInTheDocument();
+    expect(screen.getByText("Operation")).toBeInTheDocument();
+    expect(screen.getByText("command.run")).toBeInTheDocument();
+    expect(screen.getByText("Target")).toBeInTheDocument();
+    expect(screen.getByText("Risk")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
     expect(screen.getByText("dangerous-command")).toBeInTheDocument();
     expect(screen.getByText("command.run")).toBeInTheDocument();
     expect(screen.getByText("git commit --no-verify -m wip")).toBeInTheDocument();
