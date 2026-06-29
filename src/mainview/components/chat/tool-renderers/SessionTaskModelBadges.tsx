@@ -15,7 +15,8 @@ const TIER_LABELS: Record<string, string> = {
 
 function clean(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  if (!trimmed) return undefined;
+  return trimmed;
 }
 
 function formatTier(value: string | null | undefined): string | undefined {
