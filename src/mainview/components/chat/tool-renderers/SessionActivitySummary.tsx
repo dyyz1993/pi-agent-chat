@@ -243,7 +243,8 @@ export function SessionActivitySummary({
         }}
       >
         {visibleRounds.map((round) => {
-          const summary = round.summary.length > 0 ? round.summary : labels.thinking;
+          const summary =
+            round.summary && round.summary.length > 0 ? round.summary : labels.thinking;
           const toolSummary = buildInlineToolSummary(round.tools);
 
           return (
