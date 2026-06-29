@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ChatMessage, ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
-import { useSessionStore } from "../../../stores/use-session-store";
 import { useChatStore } from "../../../stores/use-chat-store";
 import { useAgentStore } from "../../../stores/use-agent-store";
 import { agentColorStyle } from "../../../utils/agent-color";
@@ -20,6 +19,11 @@ type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
 const logger = createLogger("subagent");
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
+const BUILTIN_AGENT_COLORS: Record<string, string> = {
+  build: "orange",
+  explore: "blue",
+  plan: "purple",
+};
 
 function isLiveSubagentStatus(status: string | undefined): boolean {
   return (
@@ -91,8 +95,6 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const isError = !isRunning && subagentHasError;
   const isDone = !isRunning && !isError;
 
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
-
   const [now, setNow] = useState(Date.now());
   const startTime = matchedSub?.startedAt;
   const endTime = matchedSub?.completedAt;
@@ -117,10 +119,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   }, [startTime, endTime, now]);
 
   const { canJump, handleJump } = useJumpToSession(matchedSub?.sessionId);
-
-  const currentAgentColor = activeSessionId
-    ? agentColorStyle(useAgentStore.getState().agentDetailBySession[activeSessionId]?.color)
-    : null;
+  const agents = useAgentStore((s) => s.agents);
 
   const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
 
@@ -145,7 +144,10 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   );
   const isLive =
     !hasFinalOutput && !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
-  const agentName = matchedSub?.agent ?? requestedAgent;
+  const agentName = matchedSub?.agent || requestedAgent || "build";
+  const agentColorName =
+    agents.find((agent) => agent.name === agentName)?.color ?? BUILTIN_AGENT_COLORS[agentName];
+  const agentBadgeStyle = agentColorStyle(agentColorName);
   const shortSessionId = matchedSub?.sessionId
     ? matchedSub.sessionId.replace(/^sess_/, "").slice(0, 12)
     : "";
@@ -156,8 +158,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         <span
           className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono"
           style={
-            currentAgentColor
-              ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
+            agentBadgeStyle
+              ? { backgroundColor: agentBadgeStyle.bg, color: agentBadgeStyle.color }
               : undefined
           }
         >

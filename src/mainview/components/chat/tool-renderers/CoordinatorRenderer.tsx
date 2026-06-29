@@ -5,10 +5,12 @@ import { useSessionStore } from "../../../stores/use-session-store";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useChatStore } from "../../../stores/use-chat-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
+import { useAgentStore } from "../../../stores/use-agent-store";
 import {
   useDelegateActivityStore,
   type DelegateActivity,
 } from "../../../stores/use-delegate-activity-store";
+import { agentColorStyle } from "../../../utils/agent-color";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 import { useJumpToSession } from "../primitives/useJumpToSession";
 import { SessionJumpButton } from "../primitives/SessionJumpButton";
@@ -27,6 +29,11 @@ type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
 const TOOL_MARKDOWN_CLASS =
   "text-[11px] text-text-primary prose dark:prose-invert prose-sm max-w-none max-h-64 overflow-y-auto prose-p:my-1 prose-pre:my-1 prose-headings:my-1 prose-headings:text-text-primary dark:prose-headings:text-text-primary prose-strong:text-text-primary dark:prose-strong:text-text-primary prose-code:text-text-primary dark:prose-code:text-text-primary";
+const BUILTIN_AGENT_COLORS: Record<string, string> = {
+  build: "orange",
+  explore: "blue",
+  plan: "purple",
+};
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -187,7 +194,27 @@ function buildActivityRoundsFromDelegateActivity(
   );
 }
 
+function renderAgentBadge(
+  agentName: string | undefined,
+  agents: Array<{ name: string; color?: string }>,
+): ReactNode {
+  if (!agentName) return null;
+  const colorName =
+    agents.find((agent) => agent.name === agentName)?.color ?? BUILTIN_AGENT_COLORS[agentName];
+  const style = agentColorStyle(colorName);
+  return (
+    <span
+      className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono"
+      style={style ? { backgroundColor: style.bg, color: style.color } : undefined}
+    >
+      {agentName}
+    </span>
+  );
+}
+
 function renderBadge(
+  agentName: string | undefined,
+  agents: Array<{ name: string; color?: string }>,
   statusLabel: string | undefined,
   isRunning: boolean,
   sessionStatus: SessionStatus | undefined,
@@ -197,6 +224,7 @@ function renderBadge(
 ): ReactNode {
   return (
     <>
+      {renderAgentBadge(agentName, agents)}
       {projectName && (
         <span className="shrink-0 max-w-24 truncate px-1.5 py-0.5 rounded text-[10px] bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
           {projectName}
@@ -233,7 +261,9 @@ export const DelegateCard = memo(function DelegateCard({
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
+  const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
+  const agents = useAgentStore((s) => s.agents);
 
   const requestedProjectPath = stringValue(args.projectPath);
   const matchedSession = useDelegateSession({
@@ -282,6 +312,8 @@ export const DelegateCard = memo(function DelegateCard({
       startedAt={block.startedAt}
       endedAt={block.endedAt}
       badge={renderBadge(
+        agentText,
+        agents,
         statusLabel,
         isRunning,
         sessionStatus,
@@ -319,6 +351,7 @@ export const ForkCard = memo(function ForkCard({
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
+  const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
 
   const sessionId = details.sessionId;
@@ -326,6 +359,7 @@ export const ForkCard = memo(function ForkCard({
   const sessionStatus = useTargetSessionStatus(sessionId);
   const hasLiveSession = isLiveSessionStatus(sessionStatus);
   const isRunning = !isError && (blockRunning || hasLiveSession);
+  const agents = useAgentStore((s) => s.agents);
 
   const displayTitle = titleText || t("coordinator.forkTask");
 
@@ -356,7 +390,15 @@ export const ForkCard = memo(function ForkCard({
         description={displayTitle}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
-        badge={renderBadge(statusLabel, isRunning, sessionStatus, canJump, handleJump)}
+        badge={renderBadge(
+          agentText,
+          agents,
+          statusLabel,
+          isRunning,
+          sessionStatus,
+          canJump,
+          handleJump,
+        )}
       />
     </div>
   );
@@ -534,6 +576,8 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   }
 
   const errorText = details.error ?? matchedSub?.error;
+  const displayAgentName = agentText ?? matchedSub?.agent ?? "build";
+  const agents = useAgentStore((s) => s.agents);
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
   const activityRounds = useMemo(
     () =>
@@ -544,7 +588,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   );
   const sessionMeta = [
     targetSessionId ? `Session ${targetSessionId}` : null,
-    agentText ? `Agent ${agentText}` : null,
+    displayAgentName ? `Agent ${displayAgentName}` : null,
     typeof details.exitCode === "number" ? `Exit ${details.exitCode}` : null,
     matchedSub?.sessionPath ?? null,
   ].filter((item): item is string => Boolean(item));
@@ -567,6 +611,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
       endedAt={block.endedAt}
       badge={
         <>
+          {renderAgentBadge(displayAgentName, agents)}
           <span className={`shrink-0 text-[10px] ${badgeColor}`}>{statusLabel}</span>
           {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
           <CopyButton text={fullExecutionText} size="xs" />

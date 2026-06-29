@@ -91,7 +91,21 @@ vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-agent-store", () => ({
-  useAgentStore: { getState: vi.fn(() => ({ agentDetailBySession: {} })), subscribe: vi.fn() },
+  useAgentStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        agents: [
+          { name: "build", source: "builtin", filePath: "", color: "orange" },
+          { name: "code-reviewer", source: "user", filePath: "", color: "purple" },
+        ],
+        agentDetailBySession: {},
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({ agents: [], agentDetailBySession: {} })),
+      subscribe: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("../../../src/mainview/components/chat/primitives/useToolDuration", () => ({
@@ -121,7 +135,15 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../src/mainview/utils/agent-color", () => ({
-  agentColorStyle: vi.fn(() => null),
+  agentColorStyle: vi.fn((raw?: string) =>
+    raw
+      ? {
+          color: raw === "orange" ? "#F97316" : "#7C3AED",
+          bg: raw === "orange" ? "rgba(249, 115, 22, 0.12)" : "rgba(124, 58, 237, 0.12)",
+          border: raw === "orange" ? "rgba(249, 115, 22, 0.30)" : "rgba(124, 58, 237, 0.30)",
+        }
+      : null,
+  ),
 }));
 
 vi.mock("../../../src/mainview/components/chat/primitives/useJumpToSession", () => ({
@@ -318,6 +340,17 @@ describe("SubagentExecutionCard — 状态文案", () => {
 
     expect(screen.getByText("frontend-dev")).toBeTruthy();
     expect(screen.getByText("sub_test_001")).toBeTruthy();
+  });
+
+  it("未指定 agent 时展示默认 build agent 和 build 颜色", () => {
+    setupMockStore({ status: "done", agent: undefined });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    const badge = screen.getByText("build");
+    expect(badge).toBeTruthy();
+    expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(badge.getAttribute("style")).toContain("rgba(249, 115, 22, 0.12)");
   });
 });
 

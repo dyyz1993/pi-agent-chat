@@ -164,7 +164,21 @@ vi.mock("../../../src/mainview/stores/use-delegate-activity-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-agent-store", () => ({
-  useAgentStore: { getState: vi.fn(() => ({ agentDetailBySession: {} })), subscribe: vi.fn() },
+  useAgentStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        agents: [
+          { name: "build", source: "builtin", filePath: "", color: "orange" },
+          { name: "explore", source: "builtin", filePath: "", color: "blue" },
+        ],
+        agentDetailBySession: {},
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({ agents: [], agentDetailBySession: {} })),
+      subscribe: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("../../../src/mainview/components/chat/primitives/useJumpToSession", () => ({
@@ -235,6 +249,15 @@ afterEach(() => {
 });
 
 describe("DelegateCard", () => {
+  it("shows the default build agent badge when no agent is specified", () => {
+    const { container } = render(<DelegateCard block={makeDelegateBlock()} />);
+
+    const badge = screen.getByText("build");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(container.textContent).toContain("Long delegate task");
+  });
+
   it("keeps the card in running state when the delegate session is still streaming", () => {
     hoisted.delegateSessionStatus = "streaming";
     const { container } = render(<DelegateCard block={makeDelegateBlock()} />);
@@ -248,6 +271,15 @@ describe("DelegateCard", () => {
 });
 
 describe("ForkCard", () => {
+  it("shows the default build agent badge when no agent is specified", () => {
+    const { container } = render(<ForkCard block={makeForkBlock()} />);
+
+    const badge = screen.getByText("build");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(container.textContent).toContain("Long fork task");
+  });
+
   it("keeps the card in running state when the forked session is still streaming", () => {
     hoisted.forkSessionStatus = "streaming";
     const { container } = render(<ForkCard block={makeForkBlock()} />);

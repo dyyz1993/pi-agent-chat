@@ -108,6 +108,23 @@ vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
   }),
 }));
 
+vi.mock("../../../src/mainview/stores/use-agent-store", () => ({
+  useAgentStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        agents: [
+          { name: "build", source: "builtin", filePath: "", color: "orange" },
+          { name: "explore", source: "builtin", filePath: "", color: "blue" },
+        ],
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({ agents: [] })),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
 vi.mock("../../../src/shared/lib/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
@@ -155,6 +172,22 @@ afterEach(() => {
 });
 
 describe("DelegateSyncCard", () => {
+  it("shows default build agent with the build color when no agent is specified", () => {
+    const block = makeSyncBlock({
+      args: JSON.stringify({
+        title: "Default agent smoke test",
+        task: "只读检查当前目录",
+      }),
+    });
+
+    render(<DelegateSyncCard block={block} />);
+
+    const badge = screen.getByText("build");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(badge.getAttribute("style")).toContain("rgba(249, 115, 22, 0.12)");
+  });
+
   it("renders task, result, child session metadata, and a jump control when expanded", () => {
     hoisted.sub = {
       sessionId: "sess_sub_test_001",
