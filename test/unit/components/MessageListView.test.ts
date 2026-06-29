@@ -81,7 +81,7 @@ describe("MessageListView message processing", () => {
     expect(processed.map((item) => item.msg.id)).toEqual(["visible", "mem-after-user"]);
   });
 
-  it("keeps memory search under the user turn and pushes memory inject after the assistant turn", () => {
+  it("merges instant memory inject into the memory search row for the same turn", () => {
     const processed = buildProcessedMessages(
       [
         userMessage("u1"),
@@ -97,10 +97,15 @@ describe("MessageListView message processing", () => {
       true,
     );
 
-    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search", "a1", "mem-inject"]);
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search", "a1"]);
+    const memoryBlock = processed[1].msg.content[0];
+    expect(memoryBlock).toMatchObject({ type: "custom", customType: "memory_prefetch_result" });
+    if (memoryBlock.type === "custom") {
+      expect((memoryBlock.data as Record<string, unknown>)._mergedMemoryEntries).toHaveLength(2);
+    }
   });
 
-  it("reanchors memory search ahead of the assistant reply even if it arrived later in the raw stream", () => {
+  it("reanchors memory search and merges reuse even if memory events arrived later", () => {
     const processed = buildProcessedMessages(
       [
         userMessage("u1"),
@@ -116,7 +121,25 @@ describe("MessageListView message processing", () => {
       true,
     );
 
-    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search", "a1", "mem-reuse"]);
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search", "a1"]);
+  });
+
+  it("keeps orphan memory inject rows when there is no memory search in the turn", () => {
+    const processed = buildProcessedMessages(
+      [
+        userMessage("u1"),
+        {
+          id: "a1",
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 1001,
+        },
+        customMessage("mem-inject", "memory_inject"),
+      ],
+      true,
+    );
+
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "a1", "mem-inject"]);
   });
 
   it("hides the weaker duplicate memory search operation for the same query in the same turn", () => {

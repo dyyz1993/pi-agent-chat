@@ -122,6 +122,112 @@ interface ProcessedMessage {
   hide?: boolean;
 }
 
+type CustomContentBlock = Extract<ChatMessage["content"][number], { type: "custom" }>;
+
+function getCustomBlock(message: ChatMessage): CustomContentBlock | undefined {
+  return message.content.find(
+    (block): block is CustomContentBlock => block.type === "custom",
+  );
+}
+
+function mergeMemoryEntriesIntoMessage(
+  target: ChatMessage,
+  entries: Array<{ customType: string; data: unknown }>,
+): ChatMessage {
+  let changed = false;
+  const content = target.content.map((block) => {
+    if (block.type !== "custom") return block;
+    if (block.customType !== "memory_prefetch" && block.customType !== "memory_prefetch_result") {
+      return block;
+    }
+
+    const data =
+      block.data && typeof block.data === "object"
+        ? { ...(block.data as Record<string, unknown>) }
+        : {};
+    const existing = Array.isArray(data._mergedMemoryEntries)
+      ? (data._mergedMemoryEntries as Array<{ customType?: unknown; data?: unknown }>)
+      : [{ customType: block.customType, data: block.data }];
+    changed = true;
+    return {
+      ...block,
+      data: {
+        ...data,
+        _mergedMemoryEntries: [...existing, ...entries],
+      },
+    };
+  });
+
+  return changed ? { ...target, content } : target;
+}
+
+function mergeInstantMemoryInjectsIntoSearch(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length <= 1) return messages;
+
+  const result: ChatMessage[] = [];
+
+  for (let start = 0; start < messages.length; ) {
+    const first = messages[start];
+    if (first.role !== "user") {
+      result.push(first);
+      start += 1;
+      continue;
+    }
+
+    let end = start + 1;
+    while (end < messages.length && messages[end].role !== "user") end += 1;
+
+    const turn = messages.slice(start, end);
+    let searchIndex = -1;
+    for (let i = 1; i < turn.length; i++) {
+      const customBlock = getCustomBlock(turn[i]);
+      if (!customBlock) continue;
+      if (customBlock.customType === "memory_prefetch_result") {
+        searchIndex = i;
+        break;
+      }
+      if (searchIndex === -1 && customBlock.customType === "memory_prefetch") {
+        searchIndex = i;
+      }
+    }
+
+    if (searchIndex === -1) {
+      result.push(...turn);
+      start = end;
+      continue;
+    }
+
+    const mergedEntries: Array<{ customType: string; data: unknown }> = [];
+    const nextTurn: ChatMessage[] = [];
+
+    for (let i = 0; i < turn.length; i++) {
+      const msg = turn[i];
+      const customBlock = getCustomBlock(msg);
+      if (customBlock?.customType === "memory_inject") {
+        mergedEntries.push({ customType: customBlock.customType, data: customBlock.data });
+        continue;
+      }
+      nextTurn.push(msg);
+    }
+
+    if (mergedEntries.length > 0) {
+      const targetId = turn[searchIndex].id;
+      const targetIndex = nextTurn.findIndex((msg) => msg.id === targetId);
+      if (targetIndex >= 0) {
+        nextTurn[targetIndex] = mergeMemoryEntriesIntoMessage(
+          nextTurn[targetIndex],
+          mergedEntries,
+        );
+      }
+    }
+
+    result.push(...nextTurn);
+    start = end;
+  }
+
+  return result;
+}
+
 function isMemoryOnlyCustomMessage(msg: ChatMessage): boolean {
   if (msg.role !== "custom") return false;
   return (
@@ -183,7 +289,9 @@ export function buildProcessedMessages(
     }
   }
 
-  return reorderMemoryMessagesWithinTurns(visibleMessages).map((msg) => ({ msg }));
+  return reorderMemoryMessagesWithinTurns(mergeInstantMemoryInjectsIntoSearch(visibleMessages)).map(
+    (msg) => ({ msg }),
+  );
 }
 
 function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | undefined {
