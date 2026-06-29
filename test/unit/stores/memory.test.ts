@@ -76,6 +76,59 @@ describe("addEvent", () => {
 
     expect(useMemoryStore.getState().eventsBySession["sess-1"]).toHaveLength(2);
   });
+
+  it("replaces older memory prefetch results for the same operation", () => {
+    useMemoryStore.getState().addEvent("sess-1", {
+      id: "prefetch-result-1",
+      customType: "memory_prefetch_result",
+      data: { operationId: "op-1", summary: "规则命中" },
+      timestamp: 100,
+    });
+    useMemoryStore.getState().addEvent("sess-1", {
+      id: "prefetch-result-2",
+      customType: "memory_prefetch_result",
+      data: { operationId: "op-1", summary: "已匹配记忆" },
+      timestamp: 120,
+    });
+
+    expect(useMemoryStore.getState().eventsBySession["sess-1"]).toEqual([
+      {
+        id: "prefetch-result-2",
+        customType: "memory_prefetch_result",
+        data: { operationId: "op-1", summary: "已匹配记忆" },
+        timestamp: 120,
+      },
+    ]);
+  });
+
+  it("keeps actual memory injection over a later reuse entry for the same operation", () => {
+    useMemoryStore.getState().addEvent("sess-1", {
+      id: "inject-1",
+      customType: "memory_inject",
+      data: { operationId: "op-1", fingerprint: "rules.md|12288", summary: "首次注入" },
+      timestamp: 100,
+    });
+    useMemoryStore.getState().addEvent("sess-1", {
+      id: "inject-2",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-1",
+        fingerprint: "memory.md|0",
+        summary: "本会话已注入过",
+        alreadyInjected: true,
+      },
+      timestamp: 120,
+    });
+
+    expect(useMemoryStore.getState().eventsBySession["sess-1"]).toEqual([
+      {
+        id: "inject-1",
+        customType: "memory_inject",
+        data: { operationId: "op-1", fingerprint: "rules.md|12288", summary: "首次注入" },
+        timestamp: 100,
+      },
+    ]);
+  });
 });
 
 describe("loadFiles", () => {
