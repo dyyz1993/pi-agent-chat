@@ -3,12 +3,14 @@ import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import {
-  getMemoryCustomDedupeKey as getChatMemoryCustomDedupeKey,
-  getMemoryEntryScore,
   getMemorySemanticTimestamp,
   insertChatMessageByDisplayOrder,
   useChatStore,
 } from "../stores/use-chat-store";
+import {
+  getMemoryCustomDedupeKey as getChatMemoryCustomDedupeKey,
+  getMemoryEntryScore,
+} from "./memory-entry-dedupe";
 import { useSessionStore, clearAgentStarted } from "../stores/use-session-store";
 import { useSessionQueueStore } from "../stores/use-session-queue-store";
 import { useMemoryStore } from "../stores/use-memory-store";
