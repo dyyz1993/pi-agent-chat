@@ -658,7 +658,7 @@ describe("loadSessionMessages custom entry recovery", () => {
     });
   });
 
-  it("keeps only the latest memory inject entry for the same operation after refresh", async () => {
+  it("keeps the actual memory injection over a later reuse entry for the same operation after refresh", async () => {
     vi.mocked(apiClient.call).mockResolvedValue({
       messages: [],
       customEntries: [
@@ -699,7 +699,7 @@ describe("loadSessionMessages custom entry recovery", () => {
     const messages = useChatStore.getState().messagesBySession["sess-1"];
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      id: "inject-2",
+      id: "inject-1",
       role: "custom",
       content: [
         {
@@ -707,8 +707,153 @@ describe("loadSessionMessages custom entry recovery", () => {
           customType: "memory_inject",
           data: {
             operationId: "op-1",
+            injectedBytes: 12288,
+          },
+        },
+      ],
+    });
+  });
+
+  it("deduplicates same-query memory prefetch results across different operations after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "prefetch-start-rules",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-rules",
+            query: "请连续输出 18 段内容",
+            availableFiles: 16,
+            occurredAt: 100,
+          },
+          timestamp: 100,
+        },
+        {
+          id: "prefetch-result-rules",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-rules",
+            summary: "已匹配记忆 · 规则 · 13KB · 16个文件",
+            layer: "skip",
+            injectedBytes: 13_000,
+            selectedFiles: Array.from({ length: 16 }, (_, i) => `rules-${i}.md`),
+          },
+          timestamp: 120,
+        },
+        {
+          id: "prefetch-start-auto",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-auto",
+            query: "请连续输出 18 段内容",
+            availableFiles: 1,
+            occurredAt: 130,
+          },
+          timestamp: 130,
+        },
+        {
+          id: "prefetch-result-auto",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-auto",
+            summary: "已匹配记忆 · 全量注入 · 0KB · 1个文件",
+            layer: "auto",
+            injectedBytes: 0,
+            selectedFiles: ["user_preferences.md"],
+          },
+          timestamp: 140,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "prefetch-result-rules",
+      content: [
+        {
+          type: "custom",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-rules",
+            _prefetchQuery: "请连续输出 18 段内容",
+          },
+        },
+      ],
+    });
+  });
+
+  it("deduplicates same-query memory inject/reuse entries across different operations after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "prefetch-start-rules",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-rules",
+            query: "请连续输出 18 段内容",
+            occurredAt: 100,
+          },
+          timestamp: 100,
+        },
+        {
+          id: "inject-rules",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-rules",
+            fingerprint: "rules|13000",
+            summary: "已注入 Memory 到模型上下文 · 16个文件",
+            selectedFiles: Array.from({ length: 16 }, (_, i) => `rules-${i}.md`),
+            injectedBytes: 13_000,
+          },
+          timestamp: 110,
+        },
+        {
+          id: "prefetch-start-auto",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-auto",
+            query: "请连续输出 18 段内容",
+            occurredAt: 120,
+          },
+          timestamp: 120,
+        },
+        {
+          id: "inject-auto-reuse",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-auto",
+            fingerprint: "prefs|70",
+            summary: "已识别 Memory，本会话已注入过 · 1个文件",
+            selectedFiles: ["user_preferences.md"],
             alreadyInjected: true,
             skipped: true,
+            originalBytes: 70,
+          },
+          timestamp: 130,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "inject-rules",
+      content: [
+        {
+          type: "custom",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-rules",
+            _prefetchQuery: "请连续输出 18 段内容",
           },
         },
       ],

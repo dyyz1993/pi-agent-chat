@@ -55,46 +55,103 @@ function getMemoryOperationIdFromData(data: unknown): string | undefined {
   return typeof record?.operationId === "string" ? record.operationId : undefined;
 }
 
-function getMemoryMessageDedupeKey(message: ChatMessage): string | undefined {
-  if (message.role !== "custom") return undefined;
-  const block = message.content[0];
-  if (block?.type !== "custom") return undefined;
+export function getMemoryQueryFromData(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const query =
+    typeof record?._prefetchQuery === "string"
+      ? record._prefetchQuery
+      : typeof record?.query === "string"
+        ? record.query
+        : undefined;
+  const normalized = query?.trim().replace(/\s+/g, " ");
+  return normalized || undefined;
+}
 
-  if (block.customType === "memory_prefetch_result") {
-    const operationId = getMemoryOperationIdFromData(block.data);
+function getMemorySelectedFileCount(data: unknown): number {
+  const record = data as Record<string, unknown> | undefined;
+  return Array.isArray(record?.selectedFiles) ? record.selectedFiles.length : 0;
+}
+
+export function getMemoryEntryScore(customType: string, data: unknown): number {
+  const record = data as Record<string, unknown> | undefined;
+  const injectedBytes = typeof record?.injectedBytes === "number" ? record.injectedBytes : 0;
+  const originalBytes = typeof record?.originalBytes === "number" ? record.originalBytes : 0;
+  const selectedFileScore = getMemorySelectedFileCount(data) * 500;
+
+  if (customType === "memory_inject") {
+    const isSkipped = record?.alreadyInjected === true || record?.skipped === true;
+    return (isSkipped ? -10_000 : 10_000) + injectedBytes + originalBytes + selectedFileScore;
+  }
+
+  if (customType === "memory_prefetch_result") {
+    const layer = typeof record?.layer === "string" ? record.layer : "";
+    const layerScore = layer === "llm" ? 300 : layer === "auto" ? 200 : layer === "skip" ? 100 : 0;
+    return injectedBytes + selectedFileScore + layerScore;
+  }
+
+  return 0;
+}
+
+export function getMemoryCustomDedupeKey(customType: string, data: unknown): string | undefined {
+  if (customType === "memory_prefetch_result") {
+    const query = getMemoryQueryFromData(data);
+    if (query) return `prefetch-query:${query}`;
+    const operationId = getMemoryOperationIdFromData(data);
     return operationId ? `prefetch:${operationId}` : undefined;
   }
 
-  if (block.customType === "memory_inject") {
-    const operationId = getMemoryOperationIdFromData(block.data);
+  if (customType === "memory_inject") {
+    const query = getMemoryQueryFromData(data);
+    if (query) return `inject-query:${query}`;
+    const operationId = getMemoryOperationIdFromData(data);
     if (operationId) return `inject-op:${operationId}`;
-    const injectKey = getMemoryInjectDataKey(block.data);
+    const injectKey = getMemoryInjectDataKey(data);
     return injectKey ? `inject-key:${injectKey}` : undefined;
   }
 
   return undefined;
 }
 
-export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage[] {
-  const seenKeys = new Set<string>();
-  let changed = false;
-  const result: ChatMessage[] = [];
+function getMemoryMessageDedupeKey(message: ChatMessage): string | undefined {
+  if (message.role !== "custom") return undefined;
+  const block = message.content[0];
+  if (block?.type !== "custom") return undefined;
+  return getMemoryCustomDedupeKey(block.customType, block.data);
+}
 
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
+export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage[] {
+  const chosenByKey = new Map<string, { message: ChatMessage; score: number }>();
+  let changed = false;
+
+  for (const message of messages) {
     const dedupeKey = getMemoryMessageDedupeKey(message);
-    if (dedupeKey) {
-      if (seenKeys.has(dedupeKey)) {
-        changed = true;
-        continue;
-      }
-      seenKeys.add(dedupeKey);
+    if (!dedupeKey) continue;
+    const block = message.content[0];
+    const score =
+      block?.type === "custom" ? getMemoryEntryScore(block.customType, block.data) : 0;
+    const existing = chosenByKey.get(dedupeKey);
+    if (!existing || score >= existing.score) {
+      chosenByKey.set(dedupeKey, { message, score });
     }
-    result.push(message);
+    if (existing) changed = true;
   }
 
   if (!changed) return messages;
-  result.reverse();
+
+  const emittedKeys = new Set<string>();
+  const result: ChatMessage[] = [];
+  for (const message of messages) {
+    const dedupeKey = getMemoryMessageDedupeKey(message);
+    if (!dedupeKey) {
+      result.push(message);
+      continue;
+    }
+    const chosen = chosenByKey.get(dedupeKey);
+    if (chosen?.message !== message || emittedKeys.has(dedupeKey)) continue;
+    emittedKeys.add(dedupeKey);
+    result.push(message);
+  }
+
   return result;
 }
 
@@ -232,17 +289,20 @@ function getMemoryOperationId(entry: MemoryCustomEntry): string | undefined {
   return getMemoryOperationIdFromData(entry.data);
 }
 
-function getMemoryInjectKey(entry: MemoryCustomEntry): string | undefined {
-  if (entry.customType !== "memory_inject") return undefined;
-  return getMemoryInjectDataKey(entry.data);
+function getMemoryEntryDedupeKey(entry: MemoryCustomEntry): string | undefined {
+  return getMemoryCustomDedupeKey(entry.customType, entry.data);
 }
 
-function getMemoryInjectDedupeKey(entry: MemoryCustomEntry): string | undefined {
-  if (entry.customType !== "memory_inject") return undefined;
-  const operationId = getMemoryOperationId(entry);
-  if (operationId) return `inject-op:${operationId}`;
-  const injectKey = getMemoryInjectKey(entry);
-  return injectKey ? `inject-key:${injectKey}` : undefined;
+function chooseBetterMemoryEntry(
+  current: MemoryCustomEntry | undefined,
+  candidate: MemoryCustomEntry,
+): MemoryCustomEntry {
+  if (!current) return candidate;
+  const currentScore = getMemoryEntryScore(current.customType, current.data);
+  const candidateScore = getMemoryEntryScore(candidate.customType, candidate.data);
+  if (candidateScore > currentScore) return candidate;
+  if (candidateScore === currentScore && candidate.timestamp >= current.timestamp) return candidate;
+  return current;
 }
 
 function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): MemoryCustomEntry[] {
@@ -253,64 +313,72 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
         ? { ...(entry.data as Record<string, unknown>) }
         : entry.data,
   }));
-  const resultMap = new Map<string, MemoryCustomEntry>();
-  const latestInjectMap = new Map<string, MemoryCustomEntry>();
+  const prefetchByOperationId = new Map<string, MemoryCustomEntry>();
+  const bestResultByKey = new Map<string, MemoryCustomEntry>();
+  const bestInjectByKey = new Map<string, MemoryCustomEntry>();
+  const operationIdsWithFinalEntry = new Set<string>();
 
   for (const entry of entries) {
     const operationId = getMemoryOperationId(entry);
-    if (entry.customType === "memory_prefetch_result" && operationId) {
-      resultMap.set(operationId, entry);
-    }
-    const injectDedupeKey = getMemoryInjectDedupeKey(entry);
-    if (injectDedupeKey) {
-      latestInjectMap.set(injectDedupeKey, entry);
+    if (entry.customType === "memory_prefetch" && operationId) {
+      prefetchByOperationId.set(operationId, entry);
     }
   }
 
-  const mergedResultIds = new Set<string>();
-  const seenInjectKeys = new Set<string>();
-
   for (const entry of entries) {
-    if (entry.customType !== "memory_prefetch") continue;
     const operationId = getMemoryOperationId(entry);
-    if (!operationId) continue;
-    const bestResult = resultMap.get(operationId);
-
-    if (bestResult) {
-      mergedResultIds.add(bestResult.id);
-      const prefData = entry.data as Record<string, unknown> | undefined;
-      const resData = bestResult.data as Record<string, unknown> | undefined;
-      const prefetchOccurredAt = getMemorySemanticTimestamp(entry.data, entry.timestamp);
-      bestResult.data = {
-        ...(resData ?? {}),
+    const prefetch = operationId ? prefetchByOperationId.get(operationId) : undefined;
+    if (
+      (entry.customType === "memory_prefetch_result" || entry.customType === "memory_inject") &&
+      prefetch
+    ) {
+      const prefData = prefetch.data as Record<string, unknown> | undefined;
+      const entryData = entry.data as Record<string, unknown> | undefined;
+      const prefetchOccurredAt = getMemorySemanticTimestamp(prefetch.data, prefetch.timestamp);
+      entry.data = {
+        ...(entryData ?? {}),
         _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
         _prefetchAvailableFiles:
           typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
         _prefetchOccurredAt: prefetchOccurredAt,
       };
-      bestResult.timestamp = prefetchOccurredAt;
+      entry.timestamp = prefetchOccurredAt;
+    }
+
+    const dedupeKey = getMemoryEntryDedupeKey(entry);
+    if (!dedupeKey) continue;
+
+    if (entry.customType === "memory_prefetch_result") {
+      if (operationId) operationIdsWithFinalEntry.add(operationId);
+      bestResultByKey.set(dedupeKey, chooseBetterMemoryEntry(bestResultByKey.get(dedupeKey), entry));
+    } else if (entry.customType === "memory_inject") {
+      if (operationId) operationIdsWithFinalEntry.add(operationId);
+      bestInjectByKey.set(dedupeKey, chooseBetterMemoryEntry(bestInjectByKey.get(dedupeKey), entry));
     }
   }
+
+  const seenKeys = new Set<string>();
 
   return entries.filter((entry) => {
     if (entry.customType === "memory_prefetch") {
       const operationId = getMemoryOperationId(entry);
-      if (operationId) {
-        const mergedResult = resultMap.get(operationId);
-        if (mergedResult && mergedResultIds.has(mergedResult.id)) return false;
-      }
+      if (operationId && operationIdsWithFinalEntry.has(operationId)) return false;
     }
 
     if (entry.customType === "memory_prefetch_result") {
-      const operationId = getMemoryOperationId(entry);
-      if (operationId && resultMap.get(operationId)?.id !== entry.id) return false;
+      const dedupeKey = getMemoryEntryDedupeKey(entry);
+      if (dedupeKey && bestResultByKey.get(dedupeKey)?.id !== entry.id) return false;
     }
 
-    const injectDedupeKey = getMemoryInjectDedupeKey(entry);
-    if (injectDedupeKey) {
-      if (latestInjectMap.get(injectDedupeKey)?.id !== entry.id) return false;
-      if (seenInjectKeys.has(injectDedupeKey)) return false;
-      seenInjectKeys.add(injectDedupeKey);
+    if (entry.customType === "memory_inject") {
+      const dedupeKey = getMemoryEntryDedupeKey(entry);
+      if (dedupeKey && bestInjectByKey.get(dedupeKey)?.id !== entry.id) return false;
+    }
+
+    const dedupeKey = getMemoryEntryDedupeKey(entry);
+    if (dedupeKey) {
+      if (seenKeys.has(dedupeKey)) return false;
+      seenKeys.add(dedupeKey);
     }
 
     return true;
