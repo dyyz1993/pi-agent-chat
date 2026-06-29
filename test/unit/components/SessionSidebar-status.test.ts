@@ -24,6 +24,11 @@ describe("getSubagentSidebarStatus", () => {
     expect(getSubagentSidebarStatus(makeSub(), "idle")).toBe("idle");
   });
 
+  it("uses authoritative child session idle state to clear stale subagent streaming state", () => {
+    expect(getSubagentSidebarStatus(makeSub(), "streaming", "idle")).toBe("idle");
+    expect(getSubagentSidebarStatus(makeSub(), "permission", "idle")).toBe("permission");
+  });
+
   it("falls back to persisted error and completion markers when runtime state is absent", () => {
     expect(getSubagentSidebarStatus(makeSub({ exitCode: 1 }))).toBe("error");
     expect(getSubagentSidebarStatus(makeSub({ completedAt: 456 }))).toBe("idle");

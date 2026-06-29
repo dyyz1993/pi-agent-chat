@@ -1241,11 +1241,27 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("scopes nested subtask questions to the owning child session dock", () => {
+  it("surfaces nested subtask questions in the parent session dock with source label", () => {
+    mockSessionsByProject = {
+      "/projects/my-project": [
+        { sessionId: "sess-parent", name: "Parent Session", sessionPath: "/sessions/parent.jsonl" },
+      ],
+    };
+    mockSubsessionsByParent = {
+      "/sessions/parent.jsonl": [
+        {
+          sessionId: "sess-grandchild",
+          sessionPath: "/sessions/grandchild.jsonl",
+          description: "Grandchild Task",
+          instruction: "Answer from nested subtask",
+        },
+      ],
+    };
     currentPending = [
       makeRequest({
         requestId: "grandchild-ask",
         sessionId: "sess-grandchild",
+        parentSessionId: "sess-parent",
         method: "askUserQuestion",
         title: "Grandchild asks",
         questions: [
@@ -1259,8 +1275,12 @@ describe("ProjectRuntimePendingRequests", () => {
       }),
     ];
 
-    const parent = render(<ProjectRuntimePendingRequests activeSessionId="sess-parent" />);
-    expect(parent.container.innerHTML).toBe("");
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-parent" />);
+    expect(screen.getByText("Grandchild asks")).toBeInTheDocument();
+    expect(screen.getByTitle("Grandchild Task")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-ui-dock-request-id="grandchild-ask"]'),
+    ).toBeInTheDocument();
     cleanup();
 
     render(<ProjectRuntimePendingRequests activeSessionId="sess-grandchild" />);

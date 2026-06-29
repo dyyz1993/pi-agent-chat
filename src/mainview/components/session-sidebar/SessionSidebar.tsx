@@ -483,19 +483,39 @@ function WorkspaceBadge({
 export function getSubagentSidebarStatus(
   sub: SubagentSessionInfo,
   runtimeStatus?: SessionStatus,
+  sessionRuntimeStatus?: SessionStatus,
 ): "running" | "permission" | "retrying" | "idle" | "error" {
+  if (sessionRuntimeStatus === "permission") return "permission";
+  if (sessionRuntimeStatus === "retrying") return "retrying";
+  if (
+    sessionRuntimeStatus === "idle" &&
+    (runtimeStatus === "streaming" || runtimeStatus === "compacting")
+  ) {
+    return "idle";
+  }
   if (runtimeStatus === "permission") return "permission";
   if (runtimeStatus === "retrying") return "retrying";
   if (runtimeStatus === "streaming" || runtimeStatus === "compacting") return "running";
+  if (sessionRuntimeStatus === "streaming" || sessionRuntimeStatus === "compacting") {
+    return "running";
+  }
   if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) return "error";
-  if (runtimeStatus === "idle" || sub.completedAt || sub.exitCode === 0) return "idle";
+  if (
+    sessionRuntimeStatus === "idle" ||
+    runtimeStatus === "idle" ||
+    sub.completedAt ||
+    sub.exitCode === 0
+  ) {
+    return "idle";
+  }
   return "running";
 }
 
 function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   const { t } = useTranslation("common");
   const runtimeStatus = useSubagentStore((s) => s.subagentStatusMap[sub.sessionId]);
-  const badgeStatus = getSubagentSidebarStatus(sub, runtimeStatus);
+  const sessionRuntimeStatus = useSessionStore((s) => s.sessionStatusMap[sub.sessionId]);
+  const badgeStatus = getSubagentSidebarStatus(sub, runtimeStatus, sessionRuntimeStatus);
   if (badgeStatus === "permission") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
