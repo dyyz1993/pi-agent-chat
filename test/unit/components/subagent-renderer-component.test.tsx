@@ -458,6 +458,17 @@ describe("SubagentExecutionCard — 输出渲染", () => {
     expect(container.querySelector("strong")?.textContent).toBe("done");
   });
 
+  it("使用统一的深色 Markdown 输出样式", () => {
+    setupMockStore({ status: "done" });
+    const block = makeBlock({ status: "done", output: "## 最终总结\n\n全部完成。" });
+    render(<SubagentExecutionCard block={block} />);
+
+    fireEvent.click(screen.getByText("Refactor module"));
+
+    const heading = screen.getByRole("heading", { name: "最终总结" });
+    expect(heading.closest(".prose")).toHaveClass("dark:prose-invert");
+  });
+
   it("已有最终输出但子会话状态仍在运行时，展开后仍保留输出且不显示 Running", () => {
     setupMockStore({ status: "running", finalText: "done", completedAt: undefined });
     hoisted.subagentStatus = "streaming";
