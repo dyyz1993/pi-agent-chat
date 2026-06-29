@@ -1,4 +1,4 @@
-import type { CoordinatorMethodCall } from "../modules/coordinator";
+import type { CoordinatorMethodCall, DelegateStatusExt } from "../modules/coordinator";
 import {
   clearDelegateTracking,
   canManageDelegateChild,
@@ -56,7 +56,7 @@ export interface CoordinatorHandlerAdapter {
   handleDelegateStatus: (
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
-  ) => Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }>;
+  ) => Promise<DelegateStatusExt>;
   handleDelegateList: (parentSessionId: string) => {
     sessions: Array<{ sessionId: string; status: string; projectPath: string }>;
   };
