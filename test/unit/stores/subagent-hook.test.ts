@@ -194,9 +194,8 @@ describe("useSubagentStore", () => {
       );
     });
 
-    expect(useSubagentStore.getState().messagesBySubsession["sub-1"]).toEqual(
-      useChatStore.getState().messagesBySession["sub-1"],
-    );
+    expect(useSubagentStore.getState().messagesBySubsession["sub-1"] ?? []).toEqual([]);
+    expect(useChatStore.getState().messagesBySession["sub-1"] ?? []).toEqual([]);
   });
 
   it("setSubMessages", () => {
