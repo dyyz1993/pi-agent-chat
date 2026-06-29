@@ -27,6 +27,17 @@ import type { DelegateReplyMetadata, DelegateReplyMode } from "./coordinator-del
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("agent");
+export const DEFAULT_ASYNC_DELEGATE_TIMEOUT_MS = 10 * 60 * 1000;
+
+function normalizeAsyncDelegateTimeoutMs(timeoutMs: unknown): number {
+  if (typeof timeoutMs !== "number") return DEFAULT_ASYNC_DELEGATE_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return DEFAULT_ASYNC_DELEGATE_TIMEOUT_MS;
+  return timeoutMs;
+}
+
+function formatAsyncDelegateTimeout(timeoutMs: number): string {
+  return `Timed out after ${timeoutMs}ms`;
+}
 
 /**
  * Minimal managed-client interface needed by CoordinatorHandler.
@@ -95,6 +106,9 @@ export class CoordinatorHandler {
   public syncDelegateResolvers = new Map<string, SyncDelegateResolver>();
   public subagentSyncChildren = new Set<string>();
   public syncDelegateLastText = new Map<string, string>();
+  private delegateTimeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
+  private delegateTimeoutMs = new Map<string, number>();
+  private delegateTimeoutAt = new Map<string, number>();
 
   constructor(deps: CoordinatorHandlerDeps) {
     this.deps = deps;
@@ -205,6 +219,7 @@ export class CoordinatorHandler {
     const targetSessionId = (msg as Record<string, unknown>).sessionId as string | undefined;
     const cleared: string[] = [];
     if (targetSessionId) {
+      this.clearDelegateTimeout(targetSessionId);
       removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
       clearDelegateTracking(
         this.delegateCreatedAt,
@@ -222,6 +237,7 @@ export class CoordinatorHandler {
     for (const childSessionId of children) {
       const managed = this.deps.getActiveManaged(childSessionId);
       if (managed?.info.status === "streaming") continue;
+      this.clearDelegateTimeout(childSessionId);
       removeDelegateChild(this.parentChildMap, parentSessionId, childSessionId);
       clearDelegateTracking(
         this.delegateCreatedAt,
@@ -248,6 +264,7 @@ export class CoordinatorHandler {
       return { ok: false, removed: false };
     }
 
+    this.clearDelegateTimeout(targetSessionId);
     removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
     removeSessionFromAllParents(this.parentChildMap, targetSessionId);
     clearDelegateTracking(
@@ -266,7 +283,7 @@ export class CoordinatorHandler {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
   ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
-    return handleCoordinatorDelegateOperation({
+    const result = await handleCoordinatorDelegateOperation({
       parentSessionId,
       msg,
       getActiveManaged: (sid) => this.deps.getActiveManaged(sid) ?? null,
@@ -284,6 +301,8 @@ export class CoordinatorHandler {
       delegateReplyMode: this.delegateReplyMode,
       delegateReplyMetadata: this.delegateReplyMetadata,
     });
+    this.scheduleDelegateTimeout(parentSessionId, result.sessionId, msg.timeoutMs);
+    return result;
   }
 
   async handleCoordinatorDelegateSync(
@@ -351,6 +370,7 @@ export class CoordinatorHandler {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
   ): Promise<DelegateStatusExt> {
+    await this.stopOverdueDelegate(parentSessionId, msg.sessionId);
     return handleCoordinatorDelegateStatusOperation({
       parentSessionId,
       msg,
@@ -377,12 +397,14 @@ export class CoordinatorHandler {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_stop" }>,
   ): Promise<{ ok: boolean }> {
-    return handleCoordinatorDelegateStopOperation({
+    const result = await handleCoordinatorDelegateStopOperation({
       parentSessionId,
       msg,
       parentChildMap: this.parentChildMap,
       stop: (id) => this.deps.stop(id),
     });
+    if (result.ok) this.clearDelegateTimeout(msg.sessionId);
+    return result;
   }
 
   async handleCoordinatorDelegateFork(
@@ -412,6 +434,7 @@ export class CoordinatorHandler {
     childSessionIds: string[];
     resolvedSyncDelegate: boolean;
   } {
+    this.clearDelegateTimeout(sessionId);
     return cleanupStoppedDelegateSession({
       sessionId,
       parentChildMap: this.parentChildMap,
@@ -454,5 +477,83 @@ export class CoordinatorHandler {
       message,
     });
     return result.delivered;
+  }
+
+  private scheduleDelegateTimeout(
+    parentSessionId: string,
+    childSessionId: string,
+    rawTimeoutMs: unknown,
+  ): void {
+    const timeoutMs = normalizeAsyncDelegateTimeoutMs(rawTimeoutMs);
+    this.clearDelegateTimeout(childSessionId);
+    this.delegateTimeoutMs.set(childSessionId, timeoutMs);
+    this.delegateTimeoutAt.set(childSessionId, Date.now() + timeoutMs);
+    const handle = setTimeout(() => {
+      void this.stopDelegateForTimeout(parentSessionId, childSessionId);
+    }, timeoutMs);
+    this.delegateTimeoutHandles.set(childSessionId, handle);
+  }
+
+  private clearDelegateTimeout(sessionId: string): void {
+    const handle = this.delegateTimeoutHandles.get(sessionId);
+    if (handle) clearTimeout(handle);
+    this.delegateTimeoutHandles.delete(sessionId);
+    this.delegateTimeoutMs.delete(sessionId);
+    this.delegateTimeoutAt.delete(sessionId);
+  }
+
+  private async stopOverdueDelegate(parentSessionId: string, childSessionId: string): Promise<void> {
+    const timeoutAt = this.delegateTimeoutAt.get(childSessionId);
+    if (!timeoutAt || Date.now() < timeoutAt) return;
+    await this.stopDelegateForTimeout(parentSessionId, childSessionId);
+  }
+
+  private async stopDelegateForTimeout(
+    parentSessionId: string,
+    childSessionId: string,
+  ): Promise<void> {
+    if (!canManageDelegateChild(this.parentChildMap, parentSessionId, childSessionId)) {
+      this.clearDelegateTimeout(childSessionId);
+      return;
+    }
+    const timeoutMs =
+      this.delegateTimeoutMs.get(childSessionId) ?? DEFAULT_ASYNC_DELEGATE_TIMEOUT_MS;
+    const status = this.deps.getStatus(childSessionId).status;
+    const state = await this.deps.getState(childSessionId).catch(() => null);
+    if (status !== "streaming" && !state?.isStreaming) {
+      this.clearDelegateTimeout(childSessionId);
+      return;
+    }
+    this.clearDelegateTimeout(childSessionId);
+    try {
+      await this.deps.stop(childSessionId);
+    } catch (err: unknown) {
+      log.warn("[coordinator] failed to stop timed-out delegate", {
+        parentSessionId,
+        childSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    this.deps
+      .broadcastEvent(
+        "coordinator.session_event",
+        {
+          parentSessionId,
+          sessionId: childSessionId,
+          event: {
+            type: "task_error",
+            sessionId: childSessionId,
+            error: formatAsyncDelegateTimeout(timeoutMs),
+          },
+        },
+        { parentSessionId, sessionId: childSessionId },
+      )
+      .catch((err: unknown) => {
+        log.warn("[coordinator] failed to broadcast delegate timeout", {
+          parentSessionId,
+          childSessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
   }
 }
