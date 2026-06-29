@@ -38,7 +38,7 @@ function isDelegateSession(session: SessionMeta): boolean {
 }
 
 function isSubagentSession(session: SessionMeta): boolean {
-  return session.sessionId.startsWith("sess_sub_");
+  return session.delegateType === "subagent" || session.sessionId.startsWith("sess_sub_");
 }
 
 function isMainSession(session: SessionMeta): boolean {
@@ -211,6 +211,19 @@ export function getStandaloneSubagentItems(
   }
 
   return items.sort((a, b) => b.sub.startedAt - a.sub.startedAt);
+}
+
+export function getVisibleDelegateChildren(
+  children: SessionMeta[] | undefined,
+  subsessions: SubagentSessionInfo[] | undefined,
+): SessionMeta[] {
+  if (!children?.length) return [];
+  if (!subsessions?.length) return children;
+
+  const indexedSubagentIds = new Set(subsessions.map((sub) => sub.sessionId));
+  return children.filter(
+    (child) => !(isSubagentSession(child) && indexedSubagentIds.has(child.sessionId)),
+  );
 }
 
 interface SessionSidebarProps {
@@ -571,7 +584,11 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const copyWithFeedback = useCopyFeedback();
   const [copiedId, setCopiedId] = useState(false);
-  const hasPiChildren = !!(children && children.length > 0);
+  const visibleDelegateChildren = useMemo(
+    () => getVisibleDelegateChildren(children, subsessions),
+    [children, subsessions],
+  );
+  const hasPiChildren = visibleDelegateChildren.length > 0;
   const hasSubagents = !!(subsessions && subsessions.length > 0);
   const isDelegate = session.sessionId.startsWith("sess_coord_");
   const isSubtask = session.sessionId.startsWith("sess_sub_");
@@ -825,7 +842,9 @@ function SessionItem({
           )}
           {!loadingSubs &&
             hasPiChildren &&
-            children?.map((child) => <DelegateChildItem key={child.sessionId} session={child} />)}
+            visibleDelegateChildren.map((child) => (
+              <DelegateChildItem key={child.sessionId} session={child} />
+            ))}
           {!loadingSubs &&
             hasSubagents &&
             subsessions?.map((sub) => (
