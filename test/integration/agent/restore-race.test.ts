@@ -181,6 +181,7 @@ function baseMocks(overrides?: Record<string, () => unknown>) {
     "agent.getSettings": () => null,
     "agent.getTierModels": () => ({ models: {} }),
     "project.getModelFavorites": () => ({ favorites: [] }),
+    "project.getAgentFavorites": () => ({ favorites: [] }),
     "agent.getContextUsage": () => ({ tokens: 1000, contextWindow: 200000 }),
     "agent.getAgents": () => AGENTS_RESPONSE,
     "agent.getCurrentAgent": () => ({ agentName: "build" }),

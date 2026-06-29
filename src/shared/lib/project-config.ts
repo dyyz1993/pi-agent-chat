@@ -64,6 +64,8 @@ interface ProjectConfig {
   disabledSkills: string[];
   /** per-project disabled plugin paths */
   disabledPlugins: Record<string, string[]>;
+  /** app-level agent favorites (global) */
+  agentFavorites: string[];
   /** app-level model favorites (global) */
   modelFavorites: string[];
   /** app-level local preview proxy preference shared by all browser clients */
@@ -85,6 +87,7 @@ function emptyConfig(): ProjectConfig {
     favoriteFolders: [],
     disabledSkills: [],
     disabledPlugins: {},
+    agentFavorites: [],
     modelFavorites: [],
     sshProfiles: [],
     remoteProjects: [],
@@ -120,6 +123,7 @@ function parseConfig(raw: string): ProjectConfig {
     favoriteFolders: parsed.favoriteFolders ?? [],
     disabledSkills: parsed.disabledSkills ?? [],
     disabledPlugins: parsed.disabledPlugins ?? {},
+    agentFavorites: parsed.agentFavorites ?? [],
     modelFavorites: parsed.modelFavorites ?? [],
     localProxyEnabled:
       typeof parsed.localProxyEnabled === "boolean" ? parsed.localProxyEnabled : undefined,
@@ -137,6 +141,7 @@ function hasUserData(config: ProjectConfig): boolean {
     config.recentProjects.length > 0 ||
     config.pinnedSessionIds.length > 0 ||
     config.favoriteFolders.length > 0 ||
+    config.agentFavorites.length > 0 ||
     config.modelFavorites.length > 0 ||
     typeof config.localProxyEnabled === "boolean" ||
     config.disabledSkills.length > 0 ||
@@ -823,6 +828,26 @@ export async function setLocalProxyPreference(enabled: boolean): Promise<boolean
 export async function getModelFavorites(): Promise<string[]> {
   const config = await load();
   return config.modelFavorites;
+}
+
+export async function getAgentFavorites(): Promise<string[]> {
+  const config = await load();
+  return config.agentFavorites;
+}
+
+export async function toggleAgentFavorite(
+  agentName: string,
+): Promise<{ added: boolean; favorites: string[] }> {
+  return loadAndSave((config) => {
+    const list = config.agentFavorites;
+    const idx = list.indexOf(agentName);
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      return { added: false, favorites: list };
+    }
+    list.push(agentName);
+    return { added: true, favorites: list };
+  });
 }
 
 export async function toggleModelFavorite(

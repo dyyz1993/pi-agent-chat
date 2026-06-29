@@ -34,6 +34,8 @@ function setupProjectHandlerMocks(): void {
     listFavoriteFolders: vi.fn(async () => []),
     toggleFavoriteFolder: vi.fn(async () => ({ added: true, favorites: [] })),
     toggleProjectPin: vi.fn(async () => false),
+    getAgentFavorites: vi.fn(async () => []),
+    toggleAgentFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
     getModelFavorites: vi.fn(async () => []),
     toggleModelFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
     createDirectory: vi.fn(async () => ({ ok: true, path: "/tmp/created" })),

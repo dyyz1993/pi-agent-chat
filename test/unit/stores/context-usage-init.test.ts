@@ -123,6 +123,7 @@ function setupMock(contextUsageHandler: () => Promise<unknown>) {
     if (method === "agent.getCurrentAgent") return Promise.resolve(null);
     if (method === "agent.getMcpServers") return Promise.resolve([]);
     if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+    if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
     if (method === "agent.getSettings") return Promise.resolve({});
     if (method === "supervisor.getStatus")
       return Promise.resolve({
@@ -329,6 +330,7 @@ describe("fetchInitialState context usage retry", () => {
       if (method === "agent.getCurrentAgent") return Promise.resolve(null);
       if (method === "agent.getMcpServers") return Promise.resolve([]);
       if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
       if (method === "agent.getSettings") return Promise.resolve({});
       if (method === "supervisor.getStatus")
         return Promise.resolve({

@@ -636,6 +636,7 @@ export function createFetchInitialStateAction({
         const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
         const tierPromise = useTierStore.getState().fetchTierConfig(sessionId);
         const favoritesPromise = apiClient.call("project.getModelFavorites", {});
+        const agentFavoritesPromise = apiClient.call("project.getAgentFavorites", {});
 
         Promise.all([statePromise, tierPromise])
           .then(([rawState]) => {
@@ -663,8 +664,8 @@ export function createFetchInitialStateAction({
           })
           .catch(() => {});
 
-        Promise.all([agentsPromise, currentAgentPromise, agentChangePromise])
-          .then(([agentsResult, currentResult, agentChangeResult]: [unknown, unknown, unknown]) => {
+        Promise.all([agentsPromise, currentAgentPromise, agentChangePromise, agentFavoritesPromise])
+          .then(([agentsResult, currentResult, agentChangeResult, agentFavoritesResult]) => {
             perfLog.info("[fetchInit] getAgents done", {
               sessionId,
               ms: Math.round(performance.now() - t0),
@@ -693,6 +694,11 @@ export function createFetchInitialStateAction({
               color: a.color,
               avatar: a.avatar,
             }));
+            useAgentStore
+              .getState()
+              .setAgentFavorites(
+                (agentFavoritesResult as { favorites?: string[] } | null)?.favorites ?? [],
+              );
             useAgentStore.getState().setAgents(agentList);
 
             perfLog.info("[fetchInit] getCurrentAgent done", {
