@@ -26,6 +26,7 @@ import { useAgentStore, type AgentAvatar as AgentAvatarValue } from "../../store
 import { dedupeMemoryInjectMessages } from "../../stores/use-chat-store";
 import { createLogger } from "../../../shared/lib/logger";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
+import { reorderMemoryMessagesWithinTurns } from "../../lib/chat-memory-turn-order";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./lsp-constants";
 import { isBashBackgroundProcessType } from "./bash-background-process";
@@ -271,7 +272,7 @@ export function buildFlatItems(
   showToolResults = true,
 ): FlatItem[] {
   const items: FlatItem[] = [];
-  for (const msg of dedupeMemoryInjectMessages(messages)) {
+  for (const msg of reorderMemoryMessagesWithinTurns(dedupeMemoryInjectMessages(messages))) {
     const id = msg.id;
 
     if (msg.role === "user") {

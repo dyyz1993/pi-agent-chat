@@ -89,11 +89,13 @@ export function clearDelegateTracking(
   delegateReplyCount: Map<string, number>,
   sessionId: string,
   delegateRepliedSessions?: Set<string>,
+  delegateReplyMetadata?: Map<string, unknown>,
 ): boolean {
   const hadCreatedAt = delegateCreatedAt.delete(sessionId);
   const hadReplyCount = delegateReplyCount.delete(sessionId);
   const hadReplied = delegateRepliedSessions?.delete(sessionId) ?? false;
-  return hadCreatedAt || hadReplyCount || hadReplied;
+  const hadMetadata = delegateReplyMetadata?.delete(sessionId) ?? false;
+  return hadCreatedAt || hadReplyCount || hadReplied || hadMetadata;
 }
 
 export function cleanupStoppedDelegateSession(options: {
@@ -102,6 +104,7 @@ export function cleanupStoppedDelegateSession(options: {
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
   delegateRepliedSessions?: Set<string>;
+  delegateReplyMetadata?: Map<string, unknown>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: SyncChildRegistry;
   syncDelegateLastText: Map<string, string>;
@@ -113,6 +116,7 @@ export function cleanupStoppedDelegateSession(options: {
     options.delegateReplyCount,
     options.sessionId,
     options.delegateRepliedSessions,
+    options.delegateReplyMetadata,
   );
 
   const syncResolver = options.syncDelegateResolvers.get(options.sessionId);

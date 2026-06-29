@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { summarizeActivityText } from "../lib/activity-summary-text";
 
 type DelegateActivityStatus = "running" | "done" | "error";
 
@@ -45,11 +46,6 @@ function getString(record: Record<string, unknown>, key: string): string | undef
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-function truncate(text: string, max = MAX_SUMMARY_CHARS): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  return compact.length > max ? `${compact.slice(0, max - 1)}…` : compact;
-}
-
 function extractTextFromContent(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return content
@@ -65,7 +61,7 @@ function extractMessageText(event: Record<string, unknown>): string {
   const message = event.message;
   if (!message || typeof message !== "object") return "";
   const content = (message as Record<string, unknown>).content;
-  return truncate(extractTextFromContent(content));
+  return summarizeActivityText(extractTextFromContent(content), MAX_SUMMARY_CHARS);
 }
 
 function getMessageRole(event: Record<string, unknown>): string | undefined {
@@ -198,6 +194,19 @@ export const useDelegateActivityStore = create<DelegateActivityState>((set) => (
       } else if (type === "message_update") {
         const text = extractMessageText(event);
         if (text) {
+          if (current.status !== "running") {
+            const lastRound = next.rounds[next.rounds.length - 1];
+            const rounds = lastRound
+              ? replaceLastRound(next, {
+                  ...lastRound,
+                  summary: text,
+                  status: lastRound.status === "error" ? "error" : "done",
+                  endedAt: lastRound.endedAt ?? now,
+                })
+              : next.rounds;
+            next = { ...next, status: current.status, rounds };
+            return { bySession: { ...state.bySession, [sessionId]: next } };
+          }
           const round = { ...ensureRound(next, now), summary: text, status: "running" as const };
           next = { ...next, status: "running", rounds: replaceLastRound(next, round) };
         }

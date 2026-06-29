@@ -7,6 +7,15 @@ export type DelegateSessionType = "coordinator" | "subagent";
 export type CoordinatorSessionCreatedDelegateType = DelegateSessionType | "fork";
 export type DelegateReplyMode = "auto" | "interrupt" | "followUp";
 
+export interface DelegateReplyMetadata {
+  task: string;
+  title: string;
+  projectPath: string;
+  replyMode: DelegateReplyMode;
+  agent?: string;
+  params?: string;
+}
+
 export interface CoordinatorSessionCreatedPayload {
   parentSessionId: string;
   session: {
@@ -123,6 +132,7 @@ export function buildCoordinatorDelegatePrompt(options: {
   title: string;
   task: string;
   projectPath: string;
+  agent?: string;
   replyMode?: DelegateReplyMode;
 }): string {
   const projectName = options.projectPath.split("/").pop() ?? options.projectPath;
@@ -141,6 +151,7 @@ export function buildCoordinatorDelegatePrompt(options: {
     `[系统提示] 你是一个被委派的后台任务会话。`,
     ``,
     `**你的身份信息：**`,
+    options.agent ? `**Agent 角色:** ${options.agent}` : "",
     `- 你的会话 ID: ${options.newSessionId}`,
     `- 委派方（父会话）ID: ${options.parentSessionId}`,
     `- 任务: ${options.title}`,
@@ -161,7 +172,9 @@ export function buildCoordinatorDelegatePrompt(options: {
     `---`,
     ``,
     options.task,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildSyncDelegatePrompt(options: {
@@ -238,10 +251,59 @@ export function wrapDelegateReply(options: {
   createdAt: number;
   elapsed: string;
   message: string;
+  task?: string;
+  agent?: string;
+  projectPath?: string;
+  replyMode?: string;
+  params?: string;
 }): string {
-  return [
-    `<delegate-reply from="${options.sourceSessionId}" sessionId="${options.sourceSessionId}" targetSessionId="${options.targetSessionId}" title="${options.title}" sequence="${options.sequence}" createdAt="${options.createdAt}" elapsed="${options.elapsed}" historyCount="${options.sequence}">`,
-    options.message,
-    `</delegate-reply>`,
-  ].join("\n");
+  const optionalAttrs = [
+    ["task", options.task],
+    ["agent", options.agent],
+    ["projectPath", options.projectPath],
+    ["replyMode", options.replyMode],
+    ["params", options.params],
+  ]
+    .filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+    )
+    .map(([key, value]) => `${key}="${escapeXmlAttr(value)}"`)
+    .join(" ");
+  const attrs = [
+    `from="${escapeXmlAttr(options.sourceSessionId)}"`,
+    `sessionId="${escapeXmlAttr(options.sourceSessionId)}"`,
+    `targetSessionId="${escapeXmlAttr(options.targetSessionId)}"`,
+    `title="${escapeXmlAttr(options.title)}"`,
+    `sequence="${options.sequence}"`,
+    `createdAt="${options.createdAt}"`,
+    `elapsed="${escapeXmlAttr(options.elapsed)}"`,
+    `historyCount="${options.sequence}"`,
+    optionalAttrs,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return [`<delegate-reply ${attrs}>`, options.message, `</delegate-reply>`].join("\n");
+}
+
+export function buildDelegateReplyParams(options: {
+  title?: string;
+  projectPath?: string;
+  replyMode?: DelegateReplyMode;
+  agent?: string;
+}): string | undefined {
+  const params: Record<string, string> = {};
+  if (options.title) params.title = options.title;
+  if (options.agent) params.agent = options.agent;
+  if (options.projectPath) params.projectPath = options.projectPath;
+  if (options.replyMode) params.replyMode = options.replyMode;
+  return Object.keys(params).length > 0 ? JSON.stringify(params) : undefined;
+}
+
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

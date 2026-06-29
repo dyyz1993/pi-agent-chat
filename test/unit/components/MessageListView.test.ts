@@ -80,4 +80,138 @@ describe("MessageListView message processing", () => {
 
     expect(processed.map((item) => item.msg.id)).toEqual(["visible", "mem-after-user"]);
   });
+
+  it("merges instant memory inject into the memory search row for the same turn", () => {
+    const processed = buildProcessedMessages(
+      [
+        userMessage("u1"),
+        customMessage("mem-search", "memory_prefetch_result"),
+        {
+          id: "a1",
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 1001,
+        },
+        customMessage("mem-inject", "memory_inject"),
+      ],
+      true,
+    );
+
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search", "a1"]);
+    const memoryBlock = processed[1].msg.content[0];
+    expect(memoryBlock).toMatchObject({ type: "custom", customType: "memory_prefetch_result" });
+    if (memoryBlock.type === "custom") {
+      expect((memoryBlock.data as Record<string, unknown>)._mergedMemoryEntries).toHaveLength(2);
+    }
+  });
+
+  it("reanchors memory search and merges reuse even if memory events arrived later", () => {
+    const processed = buildProcessedMessages(
+      [
+        userMessage("u1"),
+        {
+          id: "a1",
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 1001,
+        },
+        customMessage("mem-search", "memory_prefetch_result"),
+        customMessage("mem-reuse", "memory_inject"),
+      ],
+      true,
+    );
+
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search", "a1"]);
+  });
+
+  it("keeps orphan memory inject rows when there is no memory search in the turn", () => {
+    const processed = buildProcessedMessages(
+      [
+        userMessage("u1"),
+        {
+          id: "a1",
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 1001,
+        },
+        customMessage("mem-inject", "memory_inject"),
+      ],
+      true,
+    );
+
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "a1", "mem-inject"]);
+  });
+
+  it("hides the weaker duplicate memory search operation for the same query in the same turn", () => {
+    const processed = buildProcessedMessages(
+      [
+        userMessage("u1"),
+        {
+          id: "mem-search-rich",
+          role: "custom",
+          content: [
+            {
+              type: "custom",
+              customType: "memory_prefetch_result",
+              data: {
+                operationId: "op-rich",
+                _prefetchQuery: "请创建一个子会话来完成任务",
+                occurredAt: 1_100,
+                layer: "llm",
+                injectedBytes: 11 * 1024,
+                selectedFiles: Array.from({ length: 16 }, (_, i) => `f-${i}.md`),
+              },
+            },
+          ],
+          timestamp: 1_200,
+        },
+        {
+          id: "mem-search-thin",
+          role: "custom",
+          content: [
+            {
+              type: "custom",
+              customType: "memory_prefetch_result",
+              data: {
+                operationId: "op-thin",
+                _prefetchQuery: "请创建一个子会话来完成任务",
+                occurredAt: 1_180,
+                layer: "auto",
+                injectedBytes: 0,
+                selectedFiles: ["thin.md"],
+              },
+            },
+          ],
+          timestamp: 1_250,
+        },
+        {
+          id: "mem-inject-thin",
+          role: "custom",
+          content: [
+            {
+              type: "custom",
+              customType: "memory_inject",
+              data: {
+                operationId: "op-thin",
+                fingerprint: "thin.md|70",
+                occurredAt: 1_210,
+                skipped: true,
+                alreadyInjected: true,
+              },
+            },
+          ],
+          timestamp: 1_260,
+        },
+        {
+          id: "a1",
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 2_000,
+        },
+      ],
+      true,
+    );
+
+    expect(processed.map((item) => item.msg.id)).toEqual(["u1", "mem-search-rich", "a1"]);
+  });
 });

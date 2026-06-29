@@ -158,6 +158,18 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
   const d = data as Record<string, unknown> | undefined;
   if (!d) return null;
 
+  const mergedEntries = Array.isArray(d._mergedMemoryEntries)
+    ? (d._mergedMemoryEntries as Array<{ customType?: unknown; data?: unknown }>)
+    : [];
+  if (mergedEntries.length > 0) {
+    const summaries = mergedEntries
+      .map((entry) =>
+        typeof entry.customType === "string" ? getMemorySummary(entry.customType, entry.data) : null,
+      )
+      .filter((summary): summary is string => Boolean(summary));
+    return [...new Set(summaries)].join("；") || null;
+  }
+
   switch (customType) {
     case "memory_prefetch": {
       if (d.skipped === true) return "跳过搜索，复用上次结果";

@@ -3,11 +3,14 @@ import { useTranslation } from "react-i18next";
 import type { ChatMessage, ContentBlock, SessionMeta, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
+import { useChatStore } from "../../../stores/use-chat-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
+import { useAgentStore } from "../../../stores/use-agent-store";
 import {
   useDelegateActivityStore,
   type DelegateActivity,
 } from "../../../stores/use-delegate-activity-store";
+import { agentColorStyle } from "../../../utils/agent-color";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 import { useJumpToSession } from "../primitives/useJumpToSession";
 import { SessionJumpButton } from "../primitives/SessionJumpButton";
@@ -16,14 +19,27 @@ import { CopyButton } from "../CopyButton";
 import { parseToolArgs } from "../../../utils/parse-tool-args";
 import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import {
-  SessionActivitySummary,
   buildActivityRoundsFromMessages,
   createSessionActivityLabels,
   type SessionActivityRound,
 } from "./SessionActivitySummary";
+import { SessionTaskCard } from "./SessionTaskCard";
+import {
+  mergeSessionTaskModelInfo,
+  SessionTaskModelBadges,
+  type SessionTaskModelInfo,
+} from "./SessionTaskModelBadges";
+import { useSessionTaskModelFallback } from "./useSessionTaskModelFallback";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
+const TOOL_MARKDOWN_CLASS =
+  "text-[11px] text-text-primary prose dark:prose-invert prose-sm max-w-none max-h-64 overflow-y-auto prose-p:my-1 prose-pre:my-1 prose-headings:my-1 prose-headings:text-text-primary dark:prose-headings:text-text-primary prose-strong:text-text-primary dark:prose-strong:text-text-primary prose-code:text-text-primary dark:prose-code:text-text-primary";
+const BUILTIN_AGENT_COLORS: Record<string, string> = {
+  build: "orange",
+  explore: "blue",
+  plan: "purple",
+};
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -38,6 +54,10 @@ interface CoordinatorDetails {
   exitCode?: number;
   finalText?: string;
   error?: string;
+  tier?: string;
+  model?: string;
+  provider?: string;
+  thinkingLevel?: string;
 }
 
 function parseArgs(args?: string): Record<string, unknown> {
@@ -165,38 +185,47 @@ function isLiveSessionStatus(status: SessionStatus | undefined): boolean {
   );
 }
 
-function DelegateActivitySummary({
-  activity,
-  live,
-}: {
-  activity?: DelegateActivity;
-  live: boolean;
-}) {
-  const { t } = useTranslation("chat");
-  const rounds: SessionActivityRound[] =
+function buildActivityRoundsFromDelegateActivity(
+  activity?: DelegateActivity,
+): SessionActivityRound[] {
+  return (
     activity?.rounds.map((round) => ({
       id: round.id,
       index: round.index,
       status: round.status,
       summary: round.summary,
+      summarySource: round.summary ? "content" : round.tools.length > 0 ? "tools" : "thinking",
       tools: round.tools.map((tool) => ({
         id: tool.toolCallId,
         name: tool.toolName,
         status: tool.status,
       })),
-    })) ?? [];
+    })) ?? []
+  );
+}
 
+function renderAgentBadge(
+  agentName: string | undefined,
+  agents: Array<{ name: string; color?: string }>,
+): ReactNode {
+  if (!agentName) return null;
+  const colorName =
+    agents.find((agent) => agent.name === agentName)?.color ?? BUILTIN_AGENT_COLORS[agentName];
+  const style = agentColorStyle(colorName);
   return (
-    <SessionActivitySummary
-      title={t("coordinator.activity")}
-      rounds={rounds}
-      live={live}
-      labels={createSessionActivityLabels(t)}
-    />
+    <span
+      className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono"
+      style={style ? { backgroundColor: style.bg, color: style.color } : undefined}
+    >
+      {agentName}
+    </span>
   );
 }
 
 function renderBadge(
+  agentName: string | undefined,
+  agents: Array<{ name: string; color?: string }>,
+  modelInfo: SessionTaskModelInfo,
   statusLabel: string | undefined,
   isRunning: boolean,
   sessionStatus: SessionStatus | undefined,
@@ -206,6 +235,13 @@ function renderBadge(
 ): ReactNode {
   return (
     <>
+      {renderAgentBadge(agentName, agents)}
+      <SessionTaskModelBadges
+        tier={modelInfo.tier}
+        model={modelInfo.model}
+        provider={modelInfo.provider}
+        thinkingLevel={modelInfo.thinkingLevel}
+      />
       {projectName && (
         <span className="shrink-0 max-w-24 truncate px-1.5 py-0.5 rounded text-[10px] bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
           {projectName}
@@ -237,12 +273,21 @@ export const DelegateCard = memo(function DelegateCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
+  const blockRunning = block.status === "running";
 
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
+  const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
+  const rawModelInfo: SessionTaskModelInfo = {
+    tier: stringValue(args.tier) ?? details.tier,
+    model: stringValue(args.model) ?? details.model,
+    provider: stringValue(args.provider) ?? details.provider,
+    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+  };
+  const modelFallback = useSessionTaskModelFallback();
+  const agents = useAgentStore((s) => s.agents);
 
   const requestedProjectPath = stringValue(args.projectPath);
   const matchedSession = useDelegateSession({
@@ -254,83 +299,73 @@ export const DelegateCard = memo(function DelegateCard({
   });
   const targetSessionId = details.sessionId ?? matchedSession?.sessionId;
   const targetProjectPath = requestedProjectPath ?? matchedSession?.projectPath;
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      ...rawModelInfo,
+      tier: matchedSession?.tierConfig?.currentTier ?? rawModelInfo.tier,
+    },
+    modelFallback,
+  );
   const { canJump, handleJump } = useJumpToSession(targetSessionId);
   const sessionStatus = useTargetSessionStatus(targetSessionId);
   const activity = useDelegateActivityStore((s) =>
     targetSessionId ? s.bySession[targetSessionId] : undefined,
   );
-  const delegateLive = isLiveSessionStatus(sessionStatus) || activity?.status === "running";
+  const hasRunningActivity = activity?.status === "running";
+  const hasErroredActivity = activity?.status === "error";
+  const hasLiveSession = isLiveSessionStatus(sessionStatus) || hasRunningActivity;
+  const isError = block.status === "error" || hasErroredActivity;
+  const isRunning = !isError && (blockRunning || hasLiveSession);
+  const delegateLive = isRunning || hasRunningActivity;
 
   const displayTitle = titleText || t("coordinator.delegateTask");
 
-  const statusLabel =
-    sessionStatusLabel(sessionStatus, t) ||
-    (matchedSession
-      ? t("coordinator.dispatched")
-      : isRunning
-        ? t("coordinator.creating")
-        : undefined);
+  const statusLabel = isError
+    ? t("coordinator.error")
+    : hasLiveSession
+      ? sessionStatusLabel(sessionStatus, t) || t("coordinator.running")
+      : sessionStatusLabel(sessionStatus, t) ||
+        (matchedSession ? t("coordinator.dispatched") : blockRunning ? t("coordinator.creating") : undefined);
 
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
+  const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
+  const activityRounds = useMemo(
+    () => buildActivityRoundsFromDelegateActivity(activity),
+    [activity],
+  );
+  const cardStatus: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
 
   return (
-    <div
-      data-block-id={blockId}
-      className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
-        isRunning
-          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : block.status === "error"
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
-            : "border-border-secondary/30 bg-surface-dim"
-      }`}
-    >
-      <ToolCardHeader
-        toolName="delegate"
-        status={toCardStatus(block)}
-        description={displayTitle}
-        collapsed={collapsed}
-        onClick={() => setCollapsed((c) => !c)}
-        startedAt={block.startedAt}
-        endedAt={block.endedAt}
-        badge={renderBadge(
-          statusLabel,
-          isRunning,
-          sessionStatus,
-          canJump,
-          handleJump,
-          basename(targetProjectPath),
-        )}
-      />
-      {!collapsed && !isRunning && taskText && (
-        <div className="px-3 pb-2 border-t border-border-secondary/20">
-          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">Input</div>
-          <span className="text-[11px] text-blue-600/70 dark:text-blue-400/70 italic block">
-            {taskText.slice(0, 500)}
-          </span>
-        </div>
+    <SessionTaskCard
+      blockId={blockId}
+      toolName="delegate"
+      status={cardStatus}
+      title={displayTitle}
+      startedAt={block.startedAt}
+      endedAt={block.endedAt}
+      badge={renderBadge(
+        agentText,
+        agents,
+        modelInfo,
+        statusLabel,
+        isRunning,
+        sessionStatus,
+        canJump,
+        handleJump,
+        basename(targetProjectPath),
       )}
-      {!collapsed && <DelegateActivitySummary activity={activity} live={delegateLive} />}
-      {!collapsed && !isRunning && block.output && (
-        <div className="px-3 pb-2 border-t border-border-secondary/20">
-          <div className="flex items-center justify-between mb-0.5">
-            <div className="text-[10px] text-text-tertiary select-none">Output</div>
-            <CopyButton text={block.output} size="xs" />
-          </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
-            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
-          </div>
-        </div>
-      )}
-    </div>
+      input={taskText ? { label: "Input", text: taskText.slice(0, 500) } : undefined}
+      activity={{
+        title: t("coordinator.activity"),
+        rounds: activityRounds,
+        live: delegateLive,
+        labels: activityRoundLabels,
+      }}
+      result={
+        !isRunning && block.output
+          ? { label: "Output", text: block.output, copyText: block.output }
+          : undefined
+      }
+    />
   );
 });
 
@@ -342,25 +377,40 @@ export const ForkCard = memo(function ForkCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
-  const isDone = block.status === "done";
+  const blockRunning = block.status === "running";
+  const isError = block.status === "error";
 
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
+  const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
+  const modelFallback = useSessionTaskModelFallback();
+  const modelInfo = mergeSessionTaskModelInfo({
+    tier: stringValue(args.tier) ?? details.tier,
+    model: stringValue(args.model) ?? details.model,
+    provider: stringValue(args.provider) ?? details.provider,
+    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+  }, modelFallback);
 
   const sessionId = details.sessionId;
   const { canJump, handleJump } = useJumpToSession(sessionId);
   const sessionStatus = useTargetSessionStatus(sessionId);
+  const hasLiveSession = isLiveSessionStatus(sessionStatus);
+  const isRunning = !isError && (blockRunning || hasLiveSession);
+  const agents = useAgentStore((s) => s.agents);
 
   const displayTitle = titleText || t("coordinator.forkTask");
 
-  const statusLabel = isDone
-    ? sessionStatusLabel(sessionStatus, t) || t("coordinator.dispatched")
-    : isRunning
-      ? t("coordinator.forking")
-      : undefined;
+  const statusLabel = isError
+    ? t("coordinator.error")
+    : hasLiveSession
+      ? sessionStatusLabel(sessionStatus, t) || t("coordinator.running")
+      : block.status === "done"
+        ? sessionStatusLabel(sessionStatus, t) || t("coordinator.dispatched")
+        : isRunning
+          ? t("coordinator.forking")
+          : undefined;
 
   return (
     <div
@@ -368,18 +418,27 @@ export const ForkCard = memo(function ForkCard({
       className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
         isRunning
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : block.status === "error"
+          : isError
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
             : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
       <ToolCardHeader
         toolName="fork"
-        status={toCardStatus(block)}
+        status={isRunning ? "running" : isError ? "error" : "done"}
         description={displayTitle}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
-        badge={renderBadge(statusLabel, isRunning, sessionStatus, canJump, handleJump)}
+        badge={renderBadge(
+          agentText,
+          agents,
+          modelInfo,
+          statusLabel,
+          isRunning,
+          sessionStatus,
+          canJump,
+          handleJump,
+        )}
       />
     </div>
   );
@@ -465,7 +524,7 @@ export const DelegateSendCard = memo(function DelegateSendCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -482,9 +541,6 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
-  const isDone = block.status === "done";
-  const isError = block.status === "error";
   const args = parseArgs(block.args);
   const outputDetails = parseOutputAsDetails(block.output);
   const details = { ...outputDetails, ...extractDetails(block.details) };
@@ -493,6 +549,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   const titleText = stringValue(args.title) ?? details.title ?? taskText.slice(0, 60);
   const agentText = stringValue(args.agent);
   const displayTitle = titleText || t("coordinator.syncTask");
+  const modelFallback = useSessionTaskModelFallback();
 
   const matchedSub = useSubagentStore((s) => {
     for (const subs of Object.values(s.subsessionsByParent)) {
@@ -507,58 +564,83 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     }
     return null;
   });
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      tier: stringValue(args.tier) ?? details.tier,
+      model: stringValue(args.model) ?? matchedSub?.model ?? details.model,
+      provider: stringValue(args.provider) ?? matchedSub?.provider ?? details.provider,
+      thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+    },
+    modelFallback,
+  );
 
   const targetSessionId = details.sessionId ?? matchedSub?.sessionId;
   const { canJump, handleJump } = useJumpToSession(targetSessionId);
   const sessionStatus = useTargetSessionStatus(targetSessionId);
-  const subMessages = useSubagentStore((s) =>
+  const subMessages = useChatStore((s) =>
     targetSessionId
-      ? (s.messagesBySubsession?.[targetSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
+      ? (s.messagesBySession?.[targetSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
       : EMPTY_SUBAGENT_MESSAGES,
   );
-
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
+  const hasCompletedSubagent = Boolean(matchedSub?.completedAt);
+  const hasErroredSubagent =
+    Boolean(matchedSub?.error) ||
+    (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0);
+  const finalText =
+    details.finalText ??
+    matchedSub?.finalText ??
+    (outputContainsOnlySerializedDetails(block.output) ? undefined : block.output);
+  const hasFinalText = Boolean(finalText?.trim());
+  const hasTerminalDetailStatus =
+    details.status === "completed" ||
+    details.status === "timeout" ||
+    details.status === "error" ||
+    details.status === "aborted";
+  const isTerminal =
+    hasTerminalDetailStatus || hasCompletedSubagent || hasErroredSubagent || hasFinalText;
+  const isRunning = block.status === "running" && !isTerminal;
+  const isError =
+    !isRunning &&
+    (block.status === "error" ||
+      details.status === "error" ||
+      details.status === "timeout" ||
+      details.status === "aborted" ||
+      hasErroredSubagent);
+  const isDone = !isRunning && !isError;
 
   const statusLabel = useMemo(() => {
     if (isRunning) return t("coordinator.running");
     if (isError) return t("coordinator.error");
     if (details.status === "timeout") return t("coordinator.timeout");
     if (details.status === "aborted") return t("coordinator.aborted");
+    if (isTerminal) return t("coordinator.completed");
     return sessionStatusLabel(sessionStatus, t) || t("coordinator.completed");
-  }, [details.status, isError, isRunning, sessionStatus, t]);
+  }, [details.status, isError, isRunning, isTerminal, sessionStatus, t]);
 
   let badgeColor = "text-text-tertiary";
   if (isRunning) badgeColor = "text-status-info animate-pulse";
-  else if (isError || details.status === "error" || details.status === "timeout") {
+  else if (isError) {
     badgeColor = "text-status-error";
   } else if (isDone) {
     badgeColor = "text-status-success";
   }
 
-  const finalText =
-    details.finalText ??
-    matchedSub?.finalText ??
-    (outputContainsOnlySerializedDetails(block.output) ? undefined : block.output);
   const errorText = details.error ?? matchedSub?.error;
+  const displayAgentName = agentText ?? matchedSub?.agent ?? "build";
+  const agents = useAgentStore((s) => s.agents);
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
   const activityRounds = useMemo(
-    () => buildActivityRoundsFromMessages(subMessages, activityRoundLabels),
-    [activityRoundLabels, subMessages],
+    () =>
+      buildActivityRoundsFromMessages(subMessages, activityRoundLabels, undefined, {
+        forceTerminal: isTerminal,
+      }),
+    [activityRoundLabels, isTerminal, subMessages],
   );
   const sessionMeta = [
     targetSessionId ? `Session ${targetSessionId}` : null,
-    agentText ? `Agent ${agentText}` : null,
+    displayAgentName ? `Agent ${displayAgentName}` : null,
     typeof details.exitCode === "number" ? `Exit ${details.exitCode}` : null,
-    matchedSub?.sessionPath ? matchedSub.sessionPath : null,
+    matchedSub?.sessionPath ?? null,
   ].filter((item): item is string => Boolean(item));
   const fullExecutionText = [
     `session_delegate_sync: ${displayTitle}`,
@@ -570,98 +652,45 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     .join("\n\n");
 
   return (
-    <div
-      data-block-id={blockId}
-      className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
-        isRunning
-          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : isError || details.status === "error" || details.status === "timeout"
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
-            : "border-border-secondary/30 bg-surface-dim"
-      }`}
-    >
-      <ToolCardHeader
-        toolName="session_delegate_sync"
-        status={toCardStatus(block)}
-        description={displayTitle}
-        collapsed={collapsed}
-        onClick={() => setCollapsed((c) => !c)}
-        startedAt={block.startedAt}
-        endedAt={block.endedAt}
-        badge={
-          <>
-            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{statusLabel}</span>
-            {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
-            <CopyButton text={fullExecutionText} size="xs" />
-          </>
-        }
-      />
-
-      {!collapsed && (
-        <div className="border-t border-border-secondary/20">
-          {sessionMeta.length > 0 && (
-            <div className="px-3 py-1.5 text-[10px] text-text-tertiary flex flex-wrap gap-x-2 gap-y-1 border-b border-border-secondary/20">
-              {sessionMeta.map((item) => (
-                <span key={item} className="font-mono truncate max-w-full">
-                  {item}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <SessionActivitySummary
-            title={t("coordinator.activity")}
-            rounds={activityRounds}
-            live={isRunning || isLiveSessionStatus(sessionStatus)}
-            labels={activityRoundLabels}
+    <SessionTaskCard
+      blockId={blockId}
+      toolName="session_delegate_sync"
+      status={isRunning ? "running" : isError ? "error" : "done"}
+      title={displayTitle}
+      startedAt={block.startedAt}
+      endedAt={block.endedAt}
+      badge={
+        <>
+          {renderAgentBadge(displayAgentName, agents)}
+          <SessionTaskModelBadges
+            tier={modelInfo.tier}
+            model={modelInfo.model}
+            provider={modelInfo.provider}
+            thinkingLevel={modelInfo.thinkingLevel}
           />
-
-          {taskText && (
-            <div className="px-3 py-2 border-b border-border-secondary/20">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[10px] text-text-tertiary select-none">Input</div>
-                <CopyButton text={taskText} size="xs" />
-              </div>
-              <div className="text-[11px] text-blue-600/80 dark:text-blue-400/80 whitespace-pre-wrap leading-relaxed">
-                {taskText}
-              </div>
-            </div>
-          )}
-
-          {finalText && (
-            <div className="px-3 py-2 border-b border-border-secondary/20">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[10px] text-text-tertiary select-none">Result</div>
-                <CopyButton text={finalText} size="xs" />
-              </div>
-              <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
-                <CachedReactMarkdown>{finalText}</CachedReactMarkdown>
-              </div>
-            </div>
-          )}
-
-          {errorText && (
-            <div className="px-3 py-2 border-b border-status-error/20">
-              <div className="text-[10px] text-status-error mb-1 select-none">Error</div>
-              <pre className="text-[11px] text-status-error/90 whitespace-pre-wrap font-mono">
-                {errorText}
-              </pre>
-            </div>
-          )}
-
-          {block.details !== undefined && (
-            <details className="group">
-              <summary className="px-3 py-1.5 text-[11px] text-text-tertiary cursor-pointer hover:text-text-primary select-none">
-                Details
-              </summary>
-              <pre className="px-3 pb-2 text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono max-h-44 overflow-y-auto">
-                {tryFormatAsYaml(JSON.stringify(block.details))}
-              </pre>
-            </details>
-          )}
-        </div>
-      )}
-    </div>
+          <span className={`shrink-0 text-[10px] ${badgeColor}`}>{statusLabel}</span>
+          {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
+          <CopyButton text={fullExecutionText} size="xs" />
+        </>
+      }
+      meta={sessionMeta}
+      input={taskText ? { label: "Input", text: taskText, copyText: taskText } : undefined}
+      activity={{
+        title: t("coordinator.activity"),
+        rounds: activityRounds,
+        live: !isTerminal && (isRunning || (!finalText && isLiveSessionStatus(sessionStatus))),
+        labels: activityRoundLabels,
+      }}
+      result={
+        finalText ? { label: "Result", text: finalText, copyText: finalText } : undefined
+      }
+      error={errorText ? { label: "Error", text: errorText } : undefined}
+      details={
+        block.details !== undefined
+          ? { label: "Details", text: tryFormatAsYaml(JSON.stringify(block.details)) }
+          : undefined
+      }
+    />
   );
 });
 
@@ -733,7 +762,7 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -810,7 +839,7 @@ export const DelegateStopCard = memo(function DelegateStopCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -887,7 +916,7 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -953,7 +982,7 @@ export const DelegateClearCard = memo(function DelegateClearCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>

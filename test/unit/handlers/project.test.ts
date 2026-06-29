@@ -28,6 +28,8 @@ const projectMocks = vi.hoisted(() => ({
   mockToggleAgentFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
   mockGetModelFavorites: vi.fn(async () => []),
   mockToggleModelFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
+  mockGetAgentFavorites: vi.fn(async () => []),
+  mockToggleAgentFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
   mockCreateDirectory: vi.fn(async (_parentPath: string, folderName: string) => ({
     ok: true,
     path: `/tmp/${folderName}`,
@@ -210,6 +212,8 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
   toggleAgentFavorite: projectMocks.mockToggleAgentFavorite,
   getModelFavorites: projectMocks.mockGetModelFavorites,
   toggleModelFavorite: projectMocks.mockToggleModelFavorite,
+  getAgentFavorites: projectMocks.mockGetAgentFavorites,
+  toggleAgentFavorite: projectMocks.mockToggleAgentFavorite,
   createDirectory: projectMocks.mockCreateDirectory,
   listSshProfiles: projectMocks.mockListSshProfiles,
   getSshProfile: projectMocks.mockGetSshProfile,
@@ -603,6 +607,31 @@ describe("project handler", () => {
       const result = await handler({ projectPath: "/p" });
 
       expect(result).toEqual({ pinned: true });
+    });
+  });
+
+  describe("project agent favorites", () => {
+    it("returns persisted agent favorites", async () => {
+      const handler = server.handlers.get("project.getAgentFavorites")!;
+      projectMocks.mockGetAgentFavorites.mockResolvedValueOnce(["pi-expert"]);
+
+      const result = await handler({});
+
+      expect(result).toEqual({ favorites: ["pi-expert"] });
+      expect(projectMocks.mockGetAgentFavorites).toHaveBeenCalledTimes(1);
+    });
+
+    it("toggles an agent favorite", async () => {
+      const handler = server.handlers.get("project.toggleAgentFavorite")!;
+      projectMocks.mockToggleAgentFavorite.mockResolvedValueOnce({
+        added: true,
+        favorites: ["pi-expert"],
+      });
+
+      const result = await handler({ agentName: "pi-expert" });
+
+      expect(result).toEqual({ added: true, favorites: ["pi-expert"] });
+      expect(projectMocks.mockToggleAgentFavorite).toHaveBeenCalledWith("pi-expert");
     });
   });
 

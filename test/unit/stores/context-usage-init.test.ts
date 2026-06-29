@@ -173,7 +173,7 @@ beforeEach(() => {
     modelFavorites: new Set(),
   });
   useSupervisorStore.setState({ bySession: {} });
-  useTierStore.setState({ globalDefaults: {}, dataBySession: {}, switching: false });
+  useTierStore.setState({ globalDefaults: {}, dataByProject: {}, switching: false });
 });
 
 describe("fetchInitialState context usage retry", () => {

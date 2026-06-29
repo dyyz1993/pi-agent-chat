@@ -3,6 +3,7 @@ import { createLogger } from "../lib/logger";
 import { classifyExtensionUiRequest, extractMessageEndText } from "./agent-event-lifecycle";
 import type { SyncChildRegistry, SyncDelegateResolver } from "./coordinator-session-state";
 import { findParentSession } from "./coordinator-session-state";
+import { classifyAgentEndOutcome } from "./agent-end-outcome";
 import { sanitizeEvent, type SanitizedEvent } from "./hold-events";
 
 const log = createLogger("agent");
@@ -229,11 +230,13 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
       options.subagentSyncChildren.delete(options.sessionId);
       const finalText = options.syncDelegateLastText.get(options.sessionId) ?? "(completed)";
       options.syncDelegateLastText.delete(options.sessionId);
+      const outcome = classifyAgentEndOutcome((options.event as { reason?: unknown }).reason);
       resolver.resolve({
         sessionId: options.sessionId,
-        status: "completed",
-        exitCode: 0,
+        status: outcome.status,
+        exitCode: outcome.exitCode,
         finalText: finalText || "(completed)",
+        error: outcome.error,
       });
     }
   }

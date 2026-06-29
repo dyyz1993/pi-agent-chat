@@ -321,6 +321,7 @@ export function AgentPanel() {
   const allToolsBySession = useAgentStore((s) => s.allToolsBySession);
   const liveSystemPromptBySession = useAgentStore((s) => s.liveSystemPromptBySession);
   const loadingDetail = useAgentStore((s) => s.loadingDetail);
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
   const fetchAgentDetail = useAgentStore((s) => s.fetchAgentDetail);
   const fetchAllTools = useAgentStore((s) => s.fetchAllTools);
   const fetchSystemPrompt = useAgentStore((s) => s.fetchSystemPrompt);
@@ -335,22 +336,24 @@ export function AgentPanel() {
 
   const handleRefresh = useCallback(() => {
     if (sessionId) {
+      fetchAgents(sessionId);
       fetchAgentDetail(sessionId);
       fetchAllTools(sessionId);
       fetchSystemPrompt(sessionId);
     }
-  }, [sessionId, fetchAgentDetail, fetchAllTools, fetchSystemPrompt]);
+  }, [sessionId, fetchAgents, fetchAgentDetail, fetchAllTools, fetchSystemPrompt]);
 
   const activePanelTab = useLayoutStore((s) => s.activePanelTab);
 
   // Auto-load when tab becomes active
   useEffect(() => {
     if (activePanelTab === "agent" && sessionId && currentAgentName) {
+      fetchAgents(sessionId);
       fetchAgentDetail(sessionId);
       fetchAllTools(sessionId);
       fetchSystemPrompt(sessionId);
     }
-  }, [activePanelTab, sessionId, currentAgentName]);
+  }, [activePanelTab, sessionId, currentAgentName, fetchAgents, fetchAgentDetail, fetchAllTools, fetchSystemPrompt]);
 
   if (!sessionId) {
     return (

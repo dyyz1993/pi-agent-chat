@@ -122,6 +122,42 @@ beforeEach(() => {
 });
 
 describe("SideNav — highlight matching", () => {
+  it("uses the same turn-based memory ordering as the main message list", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "u1",
+        role: "user",
+        content: [{ type: "text", text: "请处理这个任务" }],
+        timestamp: 1,
+      },
+      {
+        id: "a1",
+        role: "assistant",
+        content: [{ type: "text", text: "我来处理。" }],
+        timestamp: 2,
+      },
+      {
+        id: "mem-search",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_prefetch_result", data: {} }],
+        timestamp: 3,
+      },
+      {
+        id: "mem-reuse",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_inject", data: {} }],
+        timestamp: 4,
+      },
+    ];
+
+    const items = buildFlatItems(messages, false, true);
+    const firstSeenNavIds = items
+      .map((item) => item.navId)
+      .filter((navId, index, arr) => arr.indexOf(navId) === index);
+
+    expect(firstSeenNavIds).toEqual(["u1", "mem-search", "a1", "mem-reuse"]);
+  });
+
   it("renders correct number of nav items for mixed messages", () => {
     const messages = makeMessages();
     const items = buildFlatItems(messages, false);

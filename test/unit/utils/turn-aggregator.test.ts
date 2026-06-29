@@ -249,7 +249,7 @@ describe("aggregateTurns", () => {
     }
   });
 
-  it("skips memory custom blocks in chat turns", () => {
+  it("keeps memory custom blocks inside the current turn", () => {
     const result = aggregateTurns([
       makeUserMsg(),
       makeAssistantMsg({}, [
@@ -259,20 +259,85 @@ describe("aggregateTurns", () => {
       ]),
     ]);
     expect(result.turns).toHaveLength(1);
-    expect(result.turns[0].items).toHaveLength(0);
+    expect(result.turns[0].items).toHaveLength(3);
+    expect(result.turns[0].items.every((item) => item.itemType === "customEntry")).toBe(true);
   });
 
-  it("skips standalone memory custom messages", () => {
+  it("merges memory search/reuse/inject entries into one timeline item per turn", () => {
     const result = aggregateTurns([
+      makeUserMsg(),
+      makeAssistantMsg({ id: "a1" }),
+      {
+        id: "mem-search",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_prefetch_result",
+            data: { summary: "matched", injectedBytes: 12000, availableFiles: 16 },
+          },
+        ],
+        timestamp: 2100,
+      },
+      {
+        id: "mem-reuse",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_inject",
+            data: { alreadyInjected: true, originalBytes: 280, selectedFiles: ["a.md"] },
+          },
+        ],
+        timestamp: 2200,
+      },
+      {
+        id: "mem-inject",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_inject",
+            data: { injectedBytes: 30260, selectedFiles: ["a.md", "b.md"] },
+          },
+        ],
+        timestamp: 2300,
+      },
+    ]);
+
+    expect(result.turns).toHaveLength(1);
+    const memoryItems = result.turns[0].items.filter(
+      (item) =>
+        item.itemType === "customEntry" &&
+        (item.customType === "memory_prefetch_result" || item.customType === "memory_inject"),
+    );
+    expect(memoryItems).toHaveLength(1);
+    expect(memoryItems[0]).toMatchObject({
+      itemType: "customEntry",
+      customType: "memory_prefetch_result",
+    });
+    if (memoryItems[0].itemType === "customEntry") {
+      const data = memoryItems[0].data as Record<string, unknown>;
+      expect(data._mergedMemoryEntries).toHaveLength(3);
+    }
+  });
+
+  it("attaches memory custom messages after a user turn instead of dropping them", () => {
+    const result = aggregateTurns([
+      makeUserMsg(),
       {
         id: "mem1",
         role: "custom",
         content: [{ type: "custom", customType: "memory_prefetch", data: { query: "x" } }],
         timestamp: 3000,
       },
+      makeAssistantMsg({ id: "a2" }),
     ]);
-    expect(result.turns).toHaveLength(0);
-    expect(result.standalone).toHaveLength(0);
+    expect(result.turns).toHaveLength(1);
+    expect(result.turns[0].items[0]).toMatchObject({
+      itemType: "customEntry",
+      customType: "memory_prefetch",
+    });
   });
 
   it("isStreaming propagates from user and assistant messages", () => {

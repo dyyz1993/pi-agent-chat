@@ -18,8 +18,27 @@ import type { ContentBlock, SubagentSessionInfo } from "../../../src/mainview/ty
 const hoisted = vi.hoisted(() => ({
   matchedSub: null as SubagentSessionInfo | null,
   messages: [] as Array<{ role: string; content: ContentBlock[] }>,
+  subagentStatus: undefined as string | undefined,
+  currentTier: "max" as string | null,
+  currentModel: {
+    provider: "anthropic",
+    id: "claude-sonnet-4",
+    reasoning: true,
+  } as { provider: string; id: string; reasoning?: boolean } | null,
+  currentThinkingLevel: "high",
   useSubagentStoreImpl: null as ((s: (state: unknown) => unknown) => unknown) | null,
 }));
+
+function fakeSessionState() {
+  return {
+    activeSessionId: "sess_parent_001",
+    currentModel: hoisted.currentModel,
+    currentThinkingLevel: hoisted.currentThinkingLevel,
+    projectTabs: [{ id: "tab-1", path: "/fake/project" }],
+    activeProjectId: "tab-1",
+    sessionContextMap: {},
+  };
+}
 
 vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
   useSubagentStore: Object.assign(
@@ -28,8 +47,7 @@ vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
         subsessionsByParent: hoisted.matchedSub
           ? { "/fake/parent.jsonl": [hoisted.matchedSub] }
           : {},
-        messagesBySubsession:
-          hoisted.messages.length > 0 ? { sess_sub_test_001: hoisted.messages } : {},
+        subagentStatusMap: hoisted.subagentStatus ? { sess_sub_test_001: hoisted.subagentStatus } : {},
       };
       return selector(fakeState);
     }),
@@ -38,6 +56,24 @@ vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
         subsessionsByParent: {},
         messagesBySubsession: {},
         setActiveSubsession: vi.fn(),
+      })),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
+  useChatStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) => {
+      const fakeState = {
+        messagesBySession:
+          hoisted.messages.length > 0 ? { sess_sub_test_001: hoisted.messages } : {},
+      };
+      return selector(fakeState);
+    }),
+    {
+      getState: vi.fn(() => ({
+        messagesBySession: {},
       })),
       subscribe: vi.fn(),
     },
@@ -54,9 +90,29 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   useSessionStore: Object.assign(
-    vi.fn(() => "sess_parent_001"),
+    vi.fn((selector: (s: unknown) => unknown) => selector(fakeSessionState())),
     {
-      getState: vi.fn(() => ({ sessionContextMap: {}, activeSessionId: "sess_parent_001" })),
+      getState: vi.fn(() => fakeSessionState()),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
+  useTierStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
+      })),
       subscribe: vi.fn(),
     },
   ),
@@ -73,7 +129,21 @@ vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-agent-store", () => ({
-  useAgentStore: { getState: vi.fn(() => ({ agentDetailBySession: {} })), subscribe: vi.fn() },
+  useAgentStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        agents: [
+          { name: "build", source: "builtin", filePath: "", color: "orange" },
+          { name: "code-reviewer", source: "user", filePath: "", color: "purple" },
+        ],
+        agentDetailBySession: {},
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({ agents: [], agentDetailBySession: {} })),
+      subscribe: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("../../../src/mainview/components/chat/primitives/useToolDuration", () => ({
@@ -81,6 +151,10 @@ vi.mock("../../../src/mainview/components/chat/primitives/useToolDuration", () =
 }));
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: {
+    type: "3rdParty",
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
@@ -99,11 +173,22 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../src/mainview/utils/agent-color", () => ({
-  agentColorStyle: vi.fn(() => null),
+  agentColorStyle: vi.fn((raw?: string) =>
+    raw
+      ? {
+          color: raw === "orange" ? "#F97316" : "#7C3AED",
+          bg: raw === "orange" ? "rgba(249, 115, 22, 0.12)" : "rgba(124, 58, 237, 0.12)",
+          border: raw === "orange" ? "rgba(249, 115, 22, 0.30)" : "rgba(124, 58, 237, 0.30)",
+        }
+      : null,
+  ),
 }));
 
-vi.mock("../../../src/mainview/components/chat/primitives/AnsiText", () => ({
-  AnsiText: ({ content }: { content: string }) => <span data-testid="ansi-text">{content}</span>,
+vi.mock("../../../src/mainview/components/chat/primitives/useJumpToSession", () => ({
+  useJumpToSession: vi.fn((sessionId?: string) => ({
+    canJump: Boolean(sessionId),
+    handleJump: vi.fn(),
+  })),
 }));
 
 // Import after mocks
@@ -124,6 +209,18 @@ function makeBlock(
     output: "",
     ...overrides,
   };
+}
+
+function makeTaskArgBlock(
+  overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {},
+): Extract<ContentBlock, { type: "toolExecution" }> {
+  return makeBlock({
+    args: JSON.stringify({
+      agent: "code-reviewer",
+      task: "Review use-session-store.ts and summarize risks",
+    }),
+    ...overrides,
+  });
 }
 
 function setupMockStore(
@@ -147,6 +244,7 @@ function setupMockStore(
     ...sub,
   };
   hoisted.messages = messages;
+  hoisted.subagentStatus = isRunning ? "streaming" : undefined;
 }
 
 describe("SubagentExecutionCard — status styling", () => {
@@ -154,6 +252,14 @@ describe("SubagentExecutionCard — status styling", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
+    hoisted.currentTier = "max";
+    hoisted.currentModel = {
+      provider: "anthropic",
+      id: "claude-sonnet-4",
+      reasoning: true,
+    };
+    hoisted.currentThinkingLevel = "high";
   });
 
   it("运行中显示信息状态图标", () => {
@@ -190,6 +296,14 @@ describe("SubagentExecutionCard — 状态文案", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
+    hoisted.currentTier = "max";
+    hoisted.currentModel = {
+      provider: "anthropic",
+      id: "claude-sonnet-4",
+      reasoning: true,
+    };
+    hoisted.currentThinkingLevel = "high";
   });
 
   it("运行中显示 'Running' 文案 + animate-pulse", () => {
@@ -219,6 +333,123 @@ describe("SubagentExecutionCard — 状态文案", () => {
     const statusText = screen.getByText("Error");
     expect(statusText.className).toContain("text-status-error");
   });
+
+  it("父工具块已 done 且子会话仍在流式运行、尚无最终输出时，仍显示 'Running'", () => {
+    setupMockStore(
+      {
+        status: "running",
+        completedAt: undefined,
+        exitCode: undefined,
+      },
+      [],
+    );
+    hoisted.subagentStatus = "streaming";
+    const block = makeBlock({ status: "done", output: "" });
+    render(<SubagentExecutionCard block={block} />);
+
+    const statusText = screen.getByText("Running");
+    expect(statusText.className).toContain("animate-pulse");
+  });
+
+  it("已有最终输出且子会话已空闲时，不再显示 'Running'", () => {
+    setupMockStore(
+      {
+        status: "done",
+        finalText: "All steps completed",
+      },
+      [],
+    );
+    hoisted.subagentStatus = "idle";
+    const block = makeBlock({ status: "done", output: "All steps completed" });
+    render(<SubagentExecutionCard block={block} />);
+
+    const statusText = screen.getByText("Completed");
+    expect(statusText.className).toContain("text-status-success");
+  });
+
+  it("已有最终输出时，即使子会话状态仍是 streaming，也显示 'Completed'", () => {
+    setupMockStore(
+      {
+        status: "running",
+        completedAt: undefined,
+        finalText: "Phase 1 complete",
+      },
+      [],
+    );
+    hoisted.subagentStatus = "streaming";
+    const block = makeBlock({ status: "done", output: "Phase 1 complete" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
+  });
+
+  it("折叠态展示智能体名称和短会话 ID", () => {
+    setupMockStore({
+      status: "done",
+      agent: "frontend-dev",
+    });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("frontend-dev")).toBeTruthy();
+    expect(screen.getByText("sub_test_001")).toBeTruthy();
+  });
+
+  it("折叠态优先展示子任务档位和思考级别", () => {
+    setupMockStore({
+      status: "done",
+      model: "anthropic/claude-sonnet-4",
+    });
+    const block = makeBlock({
+      status: "done",
+      args: JSON.stringify({
+        description: "Refactor module",
+        instruction: "Refactor the auth module",
+        tier: "max",
+        thinkingLevel: "high",
+      }),
+    });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Max")).toBeTruthy();
+    expect(screen.getByText("Think high")).toBeTruthy();
+    expect(screen.queryByText("claude-sonnet-4")).toBeNull();
+  });
+
+  it("没有档位时折叠态展示显式模型短名", () => {
+    setupMockStore({
+      status: "done",
+      model: "anthropic/claude-sonnet-4",
+    });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("claude-sonnet-4")).toBeTruthy();
+  });
+
+  it("没有显式模型上下文时折叠态从当前项目档位兜底展示 Max", () => {
+    setupMockStore({
+      status: "done",
+      model: undefined,
+    });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Max")).toBeTruthy();
+    expect(screen.getByText("Think high")).toBeTruthy();
+  });
+
+  it("未指定 agent 时展示默认 build agent 和 build 颜色", () => {
+    setupMockStore({ status: "done", agent: undefined });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    const badge = screen.getByText("build");
+    expect(badge).toBeTruthy();
+    expect(badge).toHaveStyle({ color: "#F97316" });
+    expect(badge.getAttribute("style")).toContain("rgba(249, 115, 22, 0.12)");
+  });
 });
 
 describe("SubagentExecutionCard — 展开/折叠行为", () => {
@@ -226,6 +457,7 @@ describe("SubagentExecutionCard — 展开/折叠行为", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
   it("失败状态默认遵循折叠设置", () => {
@@ -258,6 +490,20 @@ describe("SubagentExecutionCard — 展开/折叠行为", () => {
     fireEvent.click(header);
     expect(screen.queryByText("Input")).toBeNull();
   });
+
+  it("展开后展示 task 参数作为 Input", () => {
+    setupMockStore({
+      status: "done",
+      description: "Review use-session-store.ts",
+      instruction: "Review use-session-store.ts and summarize risks",
+    });
+    render(<SubagentExecutionCard block={makeTaskArgBlock({ status: "done" })} />);
+
+    fireEvent.click(screen.getByText("Review use-session-store.ts and summarize risks"));
+
+    expect(screen.getByText("Input")).toBeTruthy();
+    expect(screen.getAllByText("Review use-session-store.ts and summarize risks")).toHaveLength(2);
+  });
 });
 
 describe("SubagentExecutionCard — 实时进度展示", () => {
@@ -265,9 +511,10 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
-  it("展开时显示工具调用列表", () => {
+  it("展开时以内联工具标签显示工具调用列表", () => {
     setupMockStore({ status: "running" }, [
       {
         role: "assistant",
@@ -293,8 +540,7 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
     const block = makeBlock({ status: "running" });
     render(<SubagentExecutionCard block={block} />);
 
-    expect(screen.getByText("read")).toBeTruthy();
-    expect(screen.getByText("edit")).toBeTruthy();
+    expect(screen.getByText("read · edit")).toBeTruthy();
   });
 
   it("展开时显示最新消息摘要", () => {
@@ -310,7 +556,7 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
     expect(screen.getByText("Found 3 issues in auth module")).toBeTruthy();
   });
 
-  it("超过5个工具调用时显示剩余数量", () => {
+  it("超过3个工具调用时以内联标签显示剩余数量", () => {
     setupMockStore({ status: "running" }, [
       {
         role: "assistant",
@@ -326,7 +572,7 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
     const block = makeBlock({ status: "running" });
     const { container } = render(<SubagentExecutionCard block={block} />);
 
-    expect(container.textContent).toContain("+4");
+    expect(container.textContent).toContain("+5");
   });
 
   it("无消息和工具调用时不崩溃", () => {
@@ -342,6 +588,7 @@ describe("SubagentExecutionCard — 耗时显示", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
   it("成功状态显示完成耗时", () => {
@@ -352,5 +599,50 @@ describe("SubagentExecutionCard — 耗时显示", () => {
     const timeElements = document.querySelectorAll(".tabular-nums");
     expect(timeElements.length).toBeGreaterThan(0);
     expect(timeElements[0]?.textContent).toMatch(/^\d+s$/);
+  });
+});
+
+describe("SubagentExecutionCard — 输出渲染", () => {
+  afterEach(() => {
+    cleanup();
+    hoisted.matchedSub = null;
+    hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
+  });
+
+  it("将子会话输出按 Markdown 渲染", () => {
+    setupMockStore({ status: "done" });
+    const block = makeBlock({ status: "done", output: "**done**" });
+    const { container } = render(<SubagentExecutionCard block={block} />);
+
+    fireEvent.click(screen.getByText("Refactor module"));
+    expect(container.querySelector("strong")?.textContent).toBe("done");
+  });
+
+  it("使用统一的深色 Markdown 输出样式", () => {
+    setupMockStore({ status: "done" });
+    const block = makeBlock({ status: "done", output: "## 最终总结\n\n全部完成。" });
+    render(<SubagentExecutionCard block={block} />);
+
+    fireEvent.click(screen.getByText("Refactor module"));
+
+    const heading = screen.getByRole("heading", { name: "最终总结" });
+    expect(heading.closest(".prose")).toHaveClass("dark:prose-invert");
+  });
+
+  it("已有最终输出但子会话状态仍在运行时，展开后仍保留输出且不显示 Running", () => {
+    setupMockStore({ status: "running", finalText: "done", completedAt: undefined });
+    hoisted.subagentStatus = "streaming";
+    const block = makeBlock({ status: "done", output: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    const header = screen.getByText("Refactor module");
+    if (!screen.queryByText("Output")) {
+      fireEvent.click(header);
+    }
+    expect(screen.queryByText("Running")).toBeNull();
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.getByText("Output")).toBeTruthy();
+    expect(screen.getByText("done")).toBeTruthy();
   });
 });

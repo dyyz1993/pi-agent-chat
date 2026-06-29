@@ -15,6 +15,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import type { CompactionActivity } from "../../stores/use-compaction-store";
 import { useCompactionStore } from "../../stores/use-compaction-store";
+import { reorderMemoryMessagesWithinTurns } from "../../lib/chat-memory-turn-order";
 
 const EMPTY_MSGS: ChatMessage[] = [];
 
@@ -105,27 +106,126 @@ function useStableMessages(source: "main" | "sub"): ChatMessage[] {
 
   const selector = useCallback(
     (s: { messagesBySession: Record<string, ChatMessage[]> }) => {
-      if (!sessionId) return EMPTY_MSGS;
-      return s.messagesBySession[sessionId] || EMPTY_MSGS;
+      const targetSessionId = source === "sub" ? activeSubId : sessionId;
+      if (!targetSessionId) return EMPTY_MSGS;
+      return s.messagesBySession[targetSessionId] || EMPTY_MSGS;
     },
-    [sessionId],
+    [activeSubId, sessionId, source],
   );
 
-  const subSelector = useCallback(
-    (s: { messagesBySubsession: Record<string, ChatMessage[]> }) => {
-      if (!activeSubId) return EMPTY_MSGS;
-      return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
-    },
-    [activeSubId],
-  );
-
-  return source === "sub" ? useSubagentStore(subSelector) : useChatStore(selector);
+  return useChatStore(selector);
 }
 
 interface ProcessedMessage {
   msg: ChatMessage;
   mergedResultData?: unknown;
   hide?: boolean;
+}
+
+type CustomContentBlock = Extract<ChatMessage["content"][number], { type: "custom" }>;
+
+function getCustomBlock(message: ChatMessage): CustomContentBlock | undefined {
+  return message.content.find(
+    (block): block is CustomContentBlock => block.type === "custom",
+  );
+}
+
+function mergeMemoryEntriesIntoMessage(
+  target: ChatMessage,
+  entries: Array<{ customType: string; data: unknown }>,
+): ChatMessage {
+  let changed = false;
+  const content = target.content.map((block) => {
+    if (block.type !== "custom") return block;
+    if (block.customType !== "memory_prefetch" && block.customType !== "memory_prefetch_result") {
+      return block;
+    }
+
+    const data =
+      block.data && typeof block.data === "object"
+        ? { ...(block.data as Record<string, unknown>) }
+        : {};
+    const existing = Array.isArray(data._mergedMemoryEntries)
+      ? (data._mergedMemoryEntries as Array<{ customType?: unknown; data?: unknown }>)
+      : [{ customType: block.customType, data: block.data }];
+    changed = true;
+    return {
+      ...block,
+      data: {
+        ...data,
+        _mergedMemoryEntries: [...existing, ...entries],
+      },
+    };
+  });
+
+  return changed ? { ...target, content } : target;
+}
+
+function mergeInstantMemoryInjectsIntoSearch(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length <= 1) return messages;
+
+  const result: ChatMessage[] = [];
+
+  for (let start = 0; start < messages.length; ) {
+    const first = messages[start];
+    if (first.role !== "user") {
+      result.push(first);
+      start += 1;
+      continue;
+    }
+
+    let end = start + 1;
+    while (end < messages.length && messages[end].role !== "user") end += 1;
+
+    const turn = messages.slice(start, end);
+    let searchIndex = -1;
+    for (let i = 1; i < turn.length; i++) {
+      const customBlock = getCustomBlock(turn[i]);
+      if (!customBlock) continue;
+      if (customBlock.customType === "memory_prefetch_result") {
+        searchIndex = i;
+        break;
+      }
+      if (searchIndex === -1 && customBlock.customType === "memory_prefetch") {
+        searchIndex = i;
+      }
+    }
+
+    if (searchIndex === -1) {
+      result.push(...turn);
+      start = end;
+      continue;
+    }
+
+    const mergedEntries: Array<{ customType: string; data: unknown }> = [];
+    const nextTurn: ChatMessage[] = [];
+
+    for (let i = 0; i < turn.length; i++) {
+      const msg = turn[i];
+      const customBlock = getCustomBlock(msg);
+      if (customBlock?.customType === "memory_inject") {
+        mergedEntries.push({ customType: customBlock.customType, data: customBlock.data });
+        continue;
+      }
+      nextTurn.push(msg);
+    }
+
+    if (mergedEntries.length > 0) {
+      const targetId = turn[searchIndex].id;
+      const targetIndex = nextTurn.findIndex((msg) => msg.id === targetId);
+      if (targetIndex >= 0) {
+        nextTurn[targetIndex] = mergeMemoryEntriesIntoMessage(
+          nextTurn[targetIndex],
+          mergedEntries,
+        );
+      }
+    }
+
+    result.push(...nextTurn);
+    start = end;
+  }
+
+  return result;
 }
 
 function isMemoryOnlyCustomMessage(msg: ChatMessage): boolean {
@@ -143,7 +243,7 @@ export function buildProcessedMessages(
   showMemoryEntries: boolean,
   options: { hideLeadingOrphanMemoryEntries?: boolean } = {},
 ): ProcessedMessage[] {
-  const result: ProcessedMessage[] = [];
+  const visibleMessages: ChatMessage[] = [];
   let hasConversationAnchor = false;
 
   for (const msg of dedupeMemoryInjectMessages(messages)) {
@@ -183,13 +283,15 @@ export function buildProcessedMessages(
       if (allHidden) continue;
     }
 
-    result.push({ msg });
+    visibleMessages.push(msg);
     if (isConversationAnchor) {
       hasConversationAnchor = true;
     }
   }
 
-  return result;
+  return reorderMemoryMessagesWithinTurns(mergeInstantMemoryInjectsIntoSearch(visibleMessages)).map(
+    (msg) => ({ msg }),
+  );
 }
 
 function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | undefined {

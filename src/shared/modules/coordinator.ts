@@ -44,7 +44,14 @@ export interface DelegateListResult {
 
 export interface CoordinatorMethods {
   "coordinator.delegate": {
-    params: { task: string; title?: string; replyMode?: DelegateReplyMode; projectPath?: string };
+    params: {
+      task: string;
+      title?: string;
+      agent?: string;
+      model?: string;
+      replyMode?: DelegateReplyMode;
+      projectPath?: string;
+    };
     result: DelegateCreateResult;
   };
   "coordinator.delegate_send": {
@@ -72,7 +79,7 @@ export interface CoordinatorMethods {
     result: { cleared: string[]; removed: number };
   };
   "coordinator.delegate_fork": {
-    params: { sessionId: string; task: string; title?: string };
+    params: { sessionId: string; task: string; title?: string; agent?: string; model?: string };
     result: DelegateCreateResult;
   };
   "coordinator.delegate_sync": {
@@ -80,6 +87,7 @@ export interface CoordinatorMethods {
       task: string;
       title?: string;
       agent?: string;
+      model?: string;
       timeoutMs?: number;
     };
     result: {
@@ -97,6 +105,8 @@ export type CoordinatorMethodCall =
       __call: "session_delegate";
       task: string;
       title?: string;
+      agent?: string;
+      model?: string;
       replyMode?: DelegateReplyMode;
       projectPath?: string;
       invokeId?: string;
@@ -123,6 +133,8 @@ export type CoordinatorMethodCall =
       sessionId: string;
       task: string;
       title?: string;
+      agent?: string;
+      model?: string;
       invokeId?: string;
     }
   | {
@@ -130,6 +142,7 @@ export type CoordinatorMethodCall =
       task: string;
       title?: string;
       agent?: string;
+      model?: string;
       timeoutMs?: number;
       projectPath?: string;
       invokeId?: string;
@@ -169,6 +182,8 @@ export interface CoordinatorMethods {
   session_delegate(params: {
     task: string;
     title?: string;
+    agent?: string;
+    model?: string;
     replyMode?: DelegateReplyMode;
     projectPath?: string;
     invokeId?: string;
@@ -196,6 +211,8 @@ export interface CoordinatorMethods {
     sessionId: string;
     task: string;
     title?: string;
+    agent?: string;
+    model?: string;
     invokeId?: string;
   }): Promise<DelegateCreateResult>;
 }

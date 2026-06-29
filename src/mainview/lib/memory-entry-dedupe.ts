@@ -1,9 +1,7 @@
 function getMemoryInjectDataKey(data: unknown): string | undefined {
   const record = data as Record<string, unknown> | undefined;
-  const operationId = typeof record?.operationId === "string" ? record.operationId : undefined;
   const fingerprint = typeof record?.fingerprint === "string" ? record.fingerprint : undefined;
-  if (!operationId || !fingerprint) return undefined;
-  return `${operationId}:${fingerprint}`;
+  return fingerprint && fingerprint.length > 0 ? fingerprint : undefined;
 }
 
 export function getMemoryOperationIdFromData(data: unknown): string | undefined {
@@ -33,16 +31,23 @@ export function getMemoryEntryScore(customType: string, data: unknown): number {
   const injectedBytes = typeof record?.injectedBytes === "number" ? record.injectedBytes : 0;
   const originalBytes = typeof record?.originalBytes === "number" ? record.originalBytes : 0;
   const selectedFileScore = getMemorySelectedFileCount(data) * 500;
+  const sourceScore = record?.source === "learning" ? -1_000_000 : 0;
 
   if (customType === "memory_inject") {
     const isSkipped = record?.alreadyInjected === true || record?.skipped === true;
-    return (isSkipped ? -10_000 : 10_000) + injectedBytes + originalBytes + selectedFileScore;
+    return (
+      sourceScore +
+      (isSkipped ? -10_000 : 10_000) +
+      injectedBytes +
+      originalBytes +
+      selectedFileScore
+    );
   }
 
   if (customType === "memory_prefetch_result") {
     const layer = typeof record?.layer === "string" ? record.layer : "";
     const layerScore = layer === "llm" ? 300 : layer === "auto" ? 200 : layer === "skip" ? 100 : 0;
-    return injectedBytes + selectedFileScore + layerScore;
+    return sourceScore + injectedBytes + selectedFileScore + layerScore;
   }
 
   return 0;
@@ -62,10 +67,10 @@ export function getMemoryCustomDedupeKey(
   if (customType === "memory_inject") {
     const query = getMemoryQueryFromData(data);
     if (query) return `inject-query:${query}`;
+    const injectKey = getMemoryInjectDataKey(data);
+    if (injectKey) return `inject-key:${injectKey}`;
     const operationId = getMemoryOperationIdFromData(data);
     if (operationId) return `inject-op:${operationId}`;
-    const injectKey = getMemoryInjectDataKey(data);
-    return injectKey ? `inject-key:${injectKey}` : undefined;
   }
 
   return undefined;

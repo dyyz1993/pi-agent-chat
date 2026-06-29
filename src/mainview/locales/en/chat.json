@@ -1,5 +1,7 @@
 {
   "backToMain": "Back to main session",
+  "backToDelegate": "Back to delegator",
+  "backToSource": "Back to source",
   "sessionStartFailed": "Session start failed",
   "sessionStarting": "Starting session...",
   "loadingSession": "Loading session...",

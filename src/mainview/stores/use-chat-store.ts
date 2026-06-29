@@ -17,6 +17,7 @@ import {
   getMemoryCustomDedupeKey,
   getMemoryEntryScore,
   getMemoryOperationIdFromData,
+  getMemoryQueryFromData,
 } from "../lib/memory-entry-dedupe";
 import type { AgentMessageForUI } from "../../shared/modules/agent";
 import { createLogger } from "../../shared/lib/logger";
@@ -33,6 +34,7 @@ const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
 const PAGE_SIZE = 50;
+const MEMORY_SAME_QUERY_DEDUP_WINDOW_MS = 15_000;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
 const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
   "memory_prefetch",
@@ -60,11 +62,163 @@ function getMemoryMessageDedupeKey(message: ChatMessage): string | undefined {
   return getMemoryCustomDedupeKey(block.customType, block.data);
 }
 
-export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage[] {
-  const chosenByKey = new Map<string, { message: ChatMessage; score: number }>();
-  let changed = false;
+function getMemoryMessageOperationId(message: ChatMessage): string | undefined {
+  if (message.role !== "custom") return undefined;
+  const block = message.content[0];
+  if (block?.type !== "custom") return undefined;
+  return getMemoryOperationIdFromData(block.data);
+}
+
+type MemoryPrefetchResultCandidate = {
+  message: ChatMessage;
+  operationId: string | undefined;
+  query: string;
+  score: number;
+  timestamp: number;
+};
+
+function getMemoryPrefetchResultCandidate(
+  message: ChatMessage,
+): MemoryPrefetchResultCandidate | undefined {
+  if (message.role !== "custom") return undefined;
+  const block = message.content[0];
+  if (block?.type !== "custom" || block.customType !== "memory_prefetch_result") {
+    return undefined;
+  }
+  const query = getMemoryQueryFromData(block.data);
+  if (!query) return undefined;
+  return {
+    message,
+    operationId: getMemoryOperationIdFromData(block.data),
+    query,
+    score: getMemoryEntryScore(block.customType, block.data),
+    timestamp: getMemorySemanticTimestamp(block.data, message.timestamp),
+  };
+}
+
+function chooseBetterMemoryResultCandidate(
+  current: MemoryPrefetchResultCandidate,
+  candidate: MemoryPrefetchResultCandidate,
+): MemoryPrefetchResultCandidate {
+  if (candidate.score > current.score) return candidate;
+  if (candidate.score === current.score && candidate.timestamp >= current.timestamp) {
+    return candidate;
+  }
+  return current;
+}
+
+function findRedundantMemoryOperationIds(messages: ChatMessage[]): Set<string> {
+  const groups: {
+    query: string;
+    anchorTimestamp: number;
+    best: MemoryPrefetchResultCandidate;
+    members: MemoryPrefetchResultCandidate[];
+  }[] = [];
 
   for (const message of messages) {
+    const candidate = getMemoryPrefetchResultCandidate(message);
+    if (!candidate) continue;
+
+    const group = groups.find(
+      (item) =>
+        item.query === candidate.query &&
+        Math.abs(candidate.timestamp - item.anchorTimestamp) <= MEMORY_SAME_QUERY_DEDUP_WINDOW_MS,
+    );
+    if (!group) {
+      groups.push({
+        query: candidate.query,
+        anchorTimestamp: candidate.timestamp,
+        best: candidate,
+        members: [candidate],
+      });
+      continue;
+    }
+
+    group.members.push(candidate);
+    group.best = chooseBetterMemoryResultCandidate(group.best, candidate);
+  }
+
+  const redundantOperationIds = new Set<string>();
+  for (const group of groups) {
+    if (group.members.length < 2) continue;
+    const bestOperationId = group.best.operationId;
+    for (const candidate of group.members) {
+      if (!candidate.operationId || candidate.operationId === bestOperationId) continue;
+      redundantOperationIds.add(candidate.operationId);
+    }
+  }
+  return redundantOperationIds;
+}
+
+function isRedundantMemoryOperationMessage(
+  message: ChatMessage,
+  redundantOperationIds: Set<string>,
+): boolean {
+  if (redundantOperationIds.size === 0 || message.role !== "custom") return false;
+  const block = message.content[0];
+  if (block?.type !== "custom" || !ALL_MEMORY_TYPE_KEYS.has(block.customType)) return false;
+  const operationId = getMemoryMessageOperationId(message);
+  return operationId !== undefined && redundantOperationIds.has(operationId);
+}
+
+function findBestMemoryInjectMessageByOperationId(
+  messages: ChatMessage[],
+): Map<string, ChatMessage> {
+  const bestByOperationId = new Map<string, ChatMessage>();
+
+  for (const message of messages) {
+    if (message.role !== "custom") continue;
+    const block = message.content[0];
+    if (block?.type !== "custom" || block.customType !== "memory_inject") continue;
+    const operationId = getMemoryOperationIdFromData(block.data);
+    if (!operationId) continue;
+
+    const current = bestByOperationId.get(operationId);
+    if (!current) {
+      bestByOperationId.set(operationId, message);
+      continue;
+    }
+
+    const currentBlock = current.content[0];
+    const currentScore =
+      currentBlock?.type === "custom"
+        ? getMemoryEntryScore(currentBlock.customType, currentBlock.data)
+        : 0;
+    const candidateScore = getMemoryEntryScore(block.customType, block.data);
+    if (
+      candidateScore > currentScore ||
+      (candidateScore === currentScore && message.timestamp >= current.timestamp)
+    ) {
+      bestByOperationId.set(operationId, message);
+    }
+  }
+
+  return bestByOperationId;
+}
+
+function isWeakerMemoryInjectForSameOperation(
+  message: ChatMessage,
+  bestInjectByOperationId: Map<string, ChatMessage>,
+): boolean {
+  if (message.role !== "custom") return false;
+  const block = message.content[0];
+  if (block?.type !== "custom" || block.customType !== "memory_inject") return false;
+  const operationId = getMemoryOperationIdFromData(block.data);
+  return operationId !== undefined && bestInjectByOperationId.get(operationId) !== message;
+}
+
+export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage[] {
+  const redundantOperationIds = findRedundantMemoryOperationIds(messages);
+  const bestInjectByOperationId = findBestMemoryInjectMessageByOperationId(messages);
+  const chosenByKey = new Map<string, { message: ChatMessage; score: number }>();
+  let changed = redundantOperationIds.size > 0;
+
+  for (const message of messages) {
+    if (isRedundantMemoryOperationMessage(message, redundantOperationIds)) continue;
+    if (isWeakerMemoryInjectForSameOperation(message, bestInjectByOperationId)) {
+      changed = true;
+      continue;
+    }
     const dedupeKey = getMemoryMessageDedupeKey(message);
     if (!dedupeKey) continue;
     const block = message.content[0];
@@ -82,6 +236,8 @@ export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage
   const emittedKeys = new Set<string>();
   const result: ChatMessage[] = [];
   for (const message of messages) {
+    if (isRedundantMemoryOperationMessage(message, redundantOperationIds)) continue;
+    if (isWeakerMemoryInjectForSameOperation(message, bestInjectByOperationId)) continue;
     const dedupeKey = getMemoryMessageDedupeKey(message);
     if (!dedupeKey) {
       result.push(message);
@@ -257,7 +413,9 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
   const prefetchByOperationId = new Map<string, MemoryCustomEntry>();
   const bestResultByKey = new Map<string, MemoryCustomEntry>();
   const bestInjectByKey = new Map<string, MemoryCustomEntry>();
+  const bestInjectByOperationId = new Map<string, MemoryCustomEntry>();
   const operationIdsWithFinalEntry = new Set<string>();
+  const redundantOperationIds = new Set<string>();
 
   for (const entry of entries) {
     const operationId = getMemoryOperationId(entry);
@@ -295,14 +453,35 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
     } else if (entry.customType === "memory_inject") {
       if (operationId) operationIdsWithFinalEntry.add(operationId);
       bestInjectByKey.set(dedupeKey, chooseBetterMemoryEntry(bestInjectByKey.get(dedupeKey), entry));
+      if (operationId) {
+        bestInjectByOperationId.set(
+          operationId,
+          chooseBetterMemoryEntry(bestInjectByOperationId.get(operationId), entry),
+        );
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    if (entry.customType !== "memory_prefetch_result") continue;
+    const operationId = getMemoryOperationId(entry);
+    if (!operationId) continue;
+    const dedupeKey = getMemoryEntryDedupeKey(entry);
+    if (!dedupeKey) continue;
+    const best = bestResultByKey.get(dedupeKey);
+    const bestOperationId = best ? getMemoryOperationId(best) : undefined;
+    if (best && best.id !== entry.id && bestOperationId && bestOperationId !== operationId) {
+      redundantOperationIds.add(operationId);
     }
   }
 
   const seenKeys = new Set<string>();
 
   return entries.filter((entry) => {
+    const operationId = getMemoryOperationId(entry);
+    if (operationId && redundantOperationIds.has(operationId)) return false;
+
     if (entry.customType === "memory_prefetch") {
-      const operationId = getMemoryOperationId(entry);
       if (operationId && operationIdsWithFinalEntry.has(operationId)) return false;
     }
 
@@ -312,6 +491,9 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
     }
 
     if (entry.customType === "memory_inject") {
+      if (operationId && bestInjectByOperationId.get(operationId)?.id !== entry.id) {
+        return false;
+      }
       const dedupeKey = getMemoryEntryDedupeKey(entry);
       if (dedupeKey && bestInjectByKey.get(dedupeKey)?.id !== entry.id) return false;
     }

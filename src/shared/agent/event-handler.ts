@@ -6,10 +6,11 @@ import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
 import type { LearningCandidate, LearningRun, LearningSnapshot } from "../modules/learning";
 import { createLogger } from "../lib/logger";
+import { classifyAgentEndOutcome } from "./agent-end-outcome";
 import { config } from "../../server-config";
 import { classifyExtensionUiRequest } from "./agent-event-lifecycle";
 import { createMemoryBroadcast } from "./agent-channel-state";
-import type { DelegateReplyMode } from "./coordinator-delegate-utils";
+import type { DelegateReplyMetadata, DelegateReplyMode } from "./coordinator-delegate-utils";
 
 const log = createLogger("agent");
 
@@ -76,6 +77,7 @@ export interface AgentEventHandlerDeps {
   delegateReplyCount: Map<string, number>;
   delegateCreatedAt: Map<string, number>;
   delegateReplyMode: Map<string, DelegateReplyMode>;
+  delegateReplyMetadata: Map<string, DelegateReplyMetadata>;
   delegateRepliedSessions: Set<string>;
   sendDelegateFallbackReply: (sessionId: string) => Promise<boolean>;
 }
@@ -223,11 +225,13 @@ export class AgentEventHandler {
         this.deps.subagentSyncChildren.delete(sessionId);
         const finalText = this.deps.syncDelegateLastText.get(sessionId) ?? "(completed)";
         this.deps.syncDelegateLastText.delete(sessionId);
+        const outcome = classifyAgentEndOutcome((event as { reason?: unknown }).reason);
         resolver.resolve({
           sessionId,
-          status: "completed",
-          exitCode: 0,
+          status: outcome.status,
+          exitCode: outcome.exitCode,
           finalText: finalText || "(completed)",
+          error: outcome.error,
         });
       }
 

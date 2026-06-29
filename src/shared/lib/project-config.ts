@@ -143,6 +143,7 @@ function hasUserData(config: ProjectConfig): boolean {
     config.favoriteFolders.length > 0 ||
     config.agentFavorites.length > 0 ||
     config.modelFavorites.length > 0 ||
+    config.agentFavorites.length > 0 ||
     typeof config.localProxyEnabled === "boolean" ||
     config.disabledSkills.length > 0 ||
     (config.disabledPlugins && Object.keys(config.disabledPlugins).length > 0) ||

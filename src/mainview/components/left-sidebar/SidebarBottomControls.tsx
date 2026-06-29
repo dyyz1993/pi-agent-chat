@@ -108,11 +108,13 @@ export function SidebarBottomControls() {
     activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
   );
   const agents = useAgentStore((s) => s.agents);
+  const agentFavorites = useAgentStore((s) => s.agentFavorites);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const agentSwitching = useAgentStore((s) =>
     activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
   );
   const switchAgent = useAgentStore((s) => s.switchAgent);
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
   const toggleAgentFavorite = useAgentStore((s) => s.toggleAgentFavorite);
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
@@ -405,7 +407,11 @@ export function SidebarBottomControls() {
       <div className="relative" ref={agentRef}>
         <button
           onClick={() => {
-            setAgentOpen(!agentOpen);
+            const nextOpen = !agentOpen;
+            setAgentOpen(nextOpen);
+            if (nextOpen && activeSessionId && agentReady) {
+              void fetchAgents(activeSessionId);
+            }
             setThinkingOpen(false);
             setWorkspaceOpen(false);
             setTierConfigOpen(false);
@@ -445,6 +451,7 @@ export function SidebarBottomControls() {
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
+                const isFavorite = agentFavorites.has(agent.name);
                 const iconMap: Record<string, LucideIcon> = {
                   build: Wrench,
                   explore: Search,
@@ -477,26 +484,19 @@ export function SidebarBottomControls() {
                     <button
                       type="button"
                       className={`mt-0.5 -ml-0.5 p-0.5 rounded text-text-tertiary hover:text-status-warning hover:bg-status-warning/10 transition-colors ${
-                        agent.isFavorite ? "text-status-warning" : ""
+                        isFavorite ? "text-status-warning" : ""
                       }`}
-                      title={agent.isFavorite ? "取消收藏 Agent" : "收藏 Agent"}
-                      aria-label={agent.isFavorite ? "取消收藏 Agent" : "收藏 Agent"}
+                      title={isFavorite ? t("unfavorite") : t("favorite")}
+                      aria-label={isFavorite ? t("unfavorite") : t("favorite")}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        void toggleAgentFavorite(agent.name).catch((error) => {
-                          const message =
-                            error instanceof Error ? error.message : String(error);
-                          useNotificationStore.getState().push({
-                            message: `Agent 收藏失败: ${message}`,
-                            level: "error",
-                          });
-                        });
+                        void toggleAgentFavorite(agent.name);
                       }}
                     >
                       <Star
                         className="w-3 h-3"
-                        fill={agent.isFavorite ? "currentColor" : "none"}
+                        fill={isFavorite ? "currentColor" : "none"}
                       />
                     </button>
                     <AgentAvatar

@@ -1,25 +1,34 @@
-import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ChatMessage, ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
-import { useSessionStore } from "../../../stores/use-session-store";
-import { useSettingsStore } from "../../../stores/use-settings-store";
+import { useChatStore } from "../../../stores/use-chat-store";
 import { useAgentStore } from "../../../stores/use-agent-store";
 import { agentColorStyle } from "../../../utils/agent-color";
-import { AnsiText } from "../primitives/AnsiText";
-import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
+import { useJumpToSession } from "../primitives/useJumpToSession";
+import type { ToolCardStatus } from "../primitives/ToolCardHeader";
 import { SessionJumpButton } from "../primitives/SessionJumpButton";
 import {
-  SessionActivitySummary,
   buildActivityRoundsFromMessages,
   createSessionActivityLabels,
 } from "./SessionActivitySummary";
+import { SessionTaskCard } from "./SessionTaskCard";
+import {
+  mergeSessionTaskModelInfo,
+  SessionTaskModelBadges,
+} from "./SessionTaskModelBadges";
+import { useSessionTaskModelFallback } from "./useSessionTaskModelFallback";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
 const logger = createLogger("subagent");
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
+const BUILTIN_AGENT_COLORS: Record<string, string> = {
+  build: "orange",
+  explore: "blue",
+  plan: "purple",
+};
 
 function isLiveSubagentStatus(status: string | undefined): boolean {
   return (
@@ -30,6 +39,15 @@ function isLiveSubagentStatus(status: string | undefined): boolean {
   );
 }
 
+function getStringArg(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : "";
+}
+
+function firstNonEmptyString(...values: Array<string | undefined>): string | undefined {
+  return values.find((value) => value !== undefined && value.trim().length > 0)?.trim();
+}
+
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
   blockId,
@@ -38,27 +56,27 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
-  const isError = block.status === "error";
-  const isDone = block.status === "done";
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
 
   let description = "";
   let instruction = "";
+  let requestedAgent = "";
+  let requestedTier = "";
+  let requestedModel = "";
+  let requestedProvider = "";
+  let requestedThinkingLevel = "";
   try {
-    const parsed = JSON.parse(block.args ?? "{}") as { description?: string; instruction?: string };
-    description = parsed.description ?? "";
-    instruction = parsed.instruction ?? "";
+    const parsed = JSON.parse(block.args ?? "{}") as Record<string, unknown>;
+    requestedAgent = getStringArg(parsed, "agent");
+    requestedTier = getStringArg(parsed, "tier");
+    requestedModel = getStringArg(parsed, "model");
+    requestedProvider = getStringArg(parsed, "provider");
+    requestedThinkingLevel = getStringArg(parsed, "thinkingLevel");
+    description = getStringArg(parsed, "description");
+    instruction =
+      getStringArg(parsed, "instruction") ||
+      getStringArg(parsed, "task") ||
+      getStringArg(parsed, "prompt") ||
+      getStringArg(parsed, "message");
   } catch (e) {
     logger.warn("Failed to parse subagent args", { error: String(e) });
   }
@@ -75,16 +93,24 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     return null;
   });
   const subSessionId = matchedSub?.sessionId;
-  const subMessages = useSubagentStore((s) =>
+  const subMessages = useChatStore((s) =>
     subSessionId
-      ? (s.messagesBySubsession?.[subSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
+      ? (s.messagesBySession?.[subSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
       : EMPTY_SUBAGENT_MESSAGES,
   );
   const subagentStatus = useSubagentStore((s) =>
     subSessionId ? s.subagentStatusMap?.[subSessionId] : undefined,
   );
-
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const hasFinalOutput = Boolean(block.output?.trim());
+  const subagentHasCompleted = Boolean(matchedSub?.completedAt);
+  const subagentHasError =
+    block.status === "error" ||
+    Boolean(matchedSub?.error) ||
+    (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0);
+  const hasLiveSignal = isLiveSubagentStatus(subagentStatus) || block.status === "running";
+  const isRunning = !hasFinalOutput && !subagentHasCompleted && !subagentHasError && hasLiveSignal;
+  const isError = !isRunning && subagentHasError;
+  const isDone = !isRunning && !isError;
 
   const [now, setNow] = useState(Date.now());
   const startTime = matchedSub?.startedAt;
@@ -109,28 +135,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     return remainSec > 0 ? `${min}m${remainSec}s` : `${min}m`;
   }, [startTime, endTime, now]);
 
-  const handleJumpToSession = useCallback(() => {
-    if (!matchedSub) return;
-    const childSessionId = matchedSub.sessionId;
-    if (!childSessionId) return;
-    const subStore = useSubagentStore.getState();
-    if (activeSessionId) {
-      subStore.setActiveSubsession(activeSessionId, childSessionId);
-    }
-  }, [matchedSub, activeSessionId]);
-
-  let borderBg: string;
-  if (isRunning) {
-    borderBg = "border-semantic-agent/25 bg-semantic-agent/5 dark:bg-semantic-agent/10";
-  } else if (isError) {
-    borderBg = "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
-  } else {
-    borderBg = "border-border-secondary/30 bg-surface-dim";
-  }
-
-  const currentAgentColor = activeSessionId
-    ? agentColorStyle(useAgentStore.getState().agentDetailBySession[activeSessionId]?.color)
-    : null;
+  const { canJump, handleJump } = useJumpToSession(matchedSub?.sessionId);
+  const agents = useAgentStore((s) => s.agents);
 
   const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
 
@@ -144,82 +150,95 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   else if (isDone) statusColorClass = "text-status-success";
   else statusColorClass = "text-status-error";
 
-  const canJump = !!matchedSub?.sessionId;
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
+  const isTerminal = hasFinalOutput || subagentHasCompleted || subagentHasError;
   const activityRounds = useMemo(
-    () => buildActivityRoundsFromMessages(subMessages, activityRoundLabels),
-    [activityRoundLabels, subMessages],
+    () =>
+      buildActivityRoundsFromMessages(subMessages, activityRoundLabels, undefined, {
+        forceTerminal: isTerminal,
+      }),
+    [activityRoundLabels, isTerminal, subMessages],
   );
-  const isLive = isRunning || isLiveSubagentStatus(subagentStatus);
+  const isLive =
+    !hasFinalOutput && !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
+  const agentName = firstNonEmptyString(matchedSub?.agent, requestedAgent) ?? "build";
+  const agentColorName =
+    agents.find((agent) => agent.name === agentName)?.color ?? BUILTIN_AGENT_COLORS[agentName];
+  const agentBadgeStyle = agentColorStyle(agentColorName);
+  const shortSessionId = matchedSub?.sessionId
+    ? matchedSub.sessionId.replace(/^sess_/, "").slice(0, 12)
+    : "";
+  const modelFallback = useSessionTaskModelFallback();
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      tier: requestedTier,
+      model: firstNonEmptyString(matchedSub?.model, requestedModel),
+      provider: firstNonEmptyString(matchedSub?.provider, requestedProvider),
+      thinkingLevel: requestedThinkingLevel,
+    },
+    modelFallback,
+  );
 
   const badgeContent = (
     <>
-      {matchedSub?.agent && (
+      {agentName && (
         <span
           className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono"
           style={
-            currentAgentColor
-              ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
+            agentBadgeStyle
+              ? { backgroundColor: agentBadgeStyle.bg, color: agentBadgeStyle.color }
               : undefined
           }
         >
-          {matchedSub.agent}
+          {agentName}
+        </span>
+      )}
+      <SessionTaskModelBadges
+        tier={modelInfo.tier}
+        model={modelInfo.model}
+        provider={modelInfo.provider}
+        thinkingLevel={modelInfo.thinkingLevel}
+      />
+      {shortSessionId && (
+        <span className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono text-text-tertiary bg-surface-hover/60">
+          {shortSessionId}
         </span>
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
-      {canJump && <SessionJumpButton onJump={handleJumpToSession} title={t("subagent.view")} />}
+      {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
     </>
   );
 
   return (
-    <div
-      data-block-id={blockId}
-      className={`rounded-none overflow-hidden border-x-0 border-t border-b transition-colors ${borderBg}`}
-    >
-      <ToolCardHeader
-        toolName="subagent"
-        status={status}
-        description={displayTitle}
-        collapsed={collapsed}
-        onClick={() => setCollapsed((c) => !c)}
-        badge={badgeContent}
-        time={
-          durationText ? (
-            <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
-              {durationText}
-            </span>
-          ) : undefined
-        }
-      />
-
-      {!collapsed && instruction && (
-        <div className="px-3 pb-2 pt-0.5 border-t border-border-secondary/20">
-          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">
-            {t("subagent.input")}
-          </div>
-          <span className="text-[11px] text-semantic-agent/70 italic block">
-            {instruction.slice(0, 500)}
+    <SessionTaskCard
+      blockId={blockId}
+      toolName="subagent"
+      status={status}
+      title={displayTitle}
+      badge={badgeContent}
+      time={
+        durationText ? (
+          <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
+            {durationText}
           </span>
-        </div>
-      )}
-
-      {!collapsed && (
-        <SessionActivitySummary
-          title={t("coordinator.activity")}
-          rounds={activityRounds}
-          live={isLive}
-          labels={activityRoundLabels}
-        />
-      )}
-
-      {!collapsed && block.output && (
-        <div className="px-3 pb-2 pt-0.5 border-t border-border-secondary/20">
-          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">
-            {t("subagent.output")}
-          </div>
-          <AnsiText content={block.output} className="text-[11px] leading-relaxed" />
-        </div>
-      )}
-    </div>
+        ) : undefined
+      }
+      input={
+        instruction
+          ? { label: t("subagent.input"), text: instruction.slice(0, 500) }
+          : undefined
+      }
+      activity={{
+        title: t("coordinator.activity"),
+        rounds: activityRounds,
+        live: isLive,
+        labels: activityRoundLabels,
+      }}
+      result={
+        block.output
+          ? { label: t("subagent.output"), text: block.output, copyText: block.output }
+          : undefined
+      }
+    />
   );
 });

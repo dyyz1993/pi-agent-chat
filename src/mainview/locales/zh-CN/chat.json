@@ -1,5 +1,7 @@
 {
   "backToMain": "返回主会话",
+  "backToDelegate": "返回委派方",
+  "backToSource": "返回来源",
   "sessionStartFailed": "会话启动失败",
   "sessionStarting": "会话启动中...",
   "loadingSession": "加载会话...",

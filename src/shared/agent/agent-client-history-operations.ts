@@ -22,6 +22,16 @@ interface ManagedClientLike {
   >;
 }
 
+type ModifiedFilesResult = {
+  files: Array<{
+    path: string;
+    status: "added" | "modified" | "deleted";
+    turnIndex: number;
+    entryId: string;
+  }>;
+  resolvedFromEntryId: string | null;
+};
+
 type CopyForkResult = {
   newSessionFile?: string;
   newSessionId?: string;
@@ -46,6 +56,19 @@ function errorMessage(err: unknown): string {
 
 function hasCopyFork(client: unknown): client is CopyForkClient {
   return typeof (client as { copyFork?: unknown }).copyFork === "function";
+}
+
+function normalizeModifiedFilesResult(
+  result: ModifiedFilesResult | ModifiedFilesResult["files"],
+): ModifiedFilesResult {
+  if (Array.isArray(result)) {
+    return { files: result, resolvedFromEntryId: null };
+  }
+  return {
+    files: Array.isArray(result.files) ? result.files : [],
+    resolvedFromEntryId:
+      typeof result.resolvedFromEntryId === "string" ? result.resolvedFromEntryId : null,
+  };
 }
 
 export async function getLastAssistantTextOperation<TManaged extends ManagedClientLike>(options: {
@@ -147,17 +170,50 @@ export async function getModifiedFilesOperation<TManaged extends ManagedClientLi
 }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (managed) {
-    return withTimeout(
-      managed.client.getModifiedFiles({
-        fromEntryId: options.fromEntryId,
-        toEntryId: options.toEntryId,
-        ...((options.toUserMsgEntryId
-          ? { toUserMsgEntryId: options.toUserMsgEntryId }
-          : {}) as Record<string, string>),
-      }),
-      15_000,
-      "getModifiedFiles",
+    const result = normalizeModifiedFilesResult(
+      await withTimeout(
+        managed.client.getModifiedFiles({
+          fromEntryId: options.fromEntryId,
+          toEntryId: options.toEntryId,
+          ...((options.toUserMsgEntryId
+            ? { toUserMsgEntryId: options.toUserMsgEntryId }
+            : {}) as Record<string, string>),
+        }),
+        15_000,
+        "getModifiedFiles",
+      ),
     );
+
+    if (result.files.length > 0) {
+      return result;
+    }
+
+    const fallbackFromEntryId = result.resolvedFromEntryId ?? options.fromEntryId ?? null;
+    if (!fallbackFromEntryId) {
+      return result;
+    }
+
+    const batchDiffs = await withTimeout(
+      managed.client.getBatchDiffs({
+        fromEntryId: fallbackFromEntryId,
+        toEntryId: options.toEntryId,
+      }),
+      30_000,
+      "getBatchDiffs",
+    );
+    const fallbackFiles = Array.isArray(batchDiffs.files)
+      ? batchDiffs.files.map((file, index) => ({
+          path: file.path,
+          status: file.status,
+          turnIndex: index,
+          entryId: fallbackFromEntryId,
+        }))
+      : [];
+
+    return {
+      files: fallbackFiles,
+      resolvedFromEntryId: fallbackFromEntryId,
+    };
   }
   return { files: [], resolvedFromEntryId: null };
 }

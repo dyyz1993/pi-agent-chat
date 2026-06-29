@@ -526,7 +526,7 @@ async function createRpcClient(
           remoteChildBootstrap?.remoteExtensionsDir,
           excludeLsp,
         ),
-        ...getRemoteProjectTrustArgs({ runtime: remoteChildRuntime!, cwd }),
+        ...(remoteChildRuntime ? getRemoteProjectTrustArgs({ runtime: remoteChildRuntime, cwd }) : []),
         ...(remoteSessionDir ? ["--session-dir", remoteSessionDir] : []),
         ...(remoteSessionId ? ["--session-id", remoteSessionId] : []),
       ]
@@ -892,6 +892,7 @@ export class AgentProcessManager {
       broadcastEvent: (method, params, meta) => this.broadcastEvent(method, params, meta),
       setSessionName: (sessionId, name) => this.setSessionName(sessionId, name),
       switchAgent: (sessionId, agentName) => this.switchAgent(sessionId, agentName),
+      setModel: (sessionId, provider, modelId) => this.setModel(sessionId, provider, modelId),
       getState: (sessionId) => this.getState(sessionId),
       getStatus: (sessionId) => this.getStatus(sessionId),
       getContextUsage: (sessionId) => this.getContextUsage(sessionId),
@@ -934,6 +935,7 @@ export class AgentProcessManager {
       delegateReplyCount: this.coordinatorHandler.delegateReplyCount,
       delegateCreatedAt: this.coordinatorHandler.delegateCreatedAt,
       delegateReplyMode: this.coordinatorHandler.delegateReplyMode,
+      delegateReplyMetadata: this.coordinatorHandler.delegateReplyMetadata,
       delegateRepliedSessions: this.coordinatorHandler.delegateRepliedSessions,
       sendDelegateFallbackReply: (sessionId) =>
         this.coordinatorHandler.sendDelegateFallbackReply(sessionId),
@@ -1108,6 +1110,7 @@ export class AgentProcessManager {
       parentChildMap: this.coordinatorHandler.parentChildMap,
       delegateCreatedAt: this.coordinatorHandler.delegateCreatedAt,
       delegateReplyCount: this.coordinatorHandler.delegateReplyCount,
+      delegateReplyMetadata: this.coordinatorHandler.delegateReplyMetadata,
       delegateRepliedSessions: this.coordinatorHandler.delegateRepliedSessions,
       syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers,
       subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,

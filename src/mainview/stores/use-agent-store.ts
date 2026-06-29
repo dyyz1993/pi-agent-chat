@@ -3,6 +3,7 @@ import { createLogger } from "../../shared/lib/logger";
 import { apiClient } from "../lib/api-client";
 import type { SessionMeta } from "../types";
 import { clearAgentStarted, markAgentStarted, useSessionStore } from "./use-session-store";
+import { useNotificationStore } from "./use-notification-store";
 
 const log = createLogger("agent");
 
@@ -91,9 +92,10 @@ interface AgentState {
   setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
   setAgentFavorites: (favorites: string[]) => void;
-  toggleAgentFavorite: (agentName: string) => Promise<void>;
   setCurrentAgent: (sessionId: string, agentName: string) => void;
   fetchAgents: (sessionId: string) => Promise<void>;
+  fetchAgentFavorites: () => Promise<void>;
+  toggleAgentFavorite: (agentName: string) => Promise<void>;
   switchAgent: (agentName: string, sessionId: string) => Promise<void>;
   getCurrentAgentForSession: (sessionId: string) => string;
   fetchAgentDetail: (sessionId: string) => Promise<void>;
@@ -116,6 +118,21 @@ export const getSourceLabel = (source: AgentSource): string => SOURCE_LABELS[sou
 export const isGlobalAgent = (source: AgentSource): boolean =>
   source === "builtin" || source === "user";
 
+export function sortAgentsForDisplay(
+  agents: AgentInfo[],
+  favorites: ReadonlySet<string>,
+): AgentInfo[] {
+  return agents
+    .map((agent, index) => ({ agent, index }))
+    .sort((a, b) => {
+      const aFav = favorites.has(a.agent.name);
+      const bFav = favorites.has(b.agent.name);
+      if (aFav !== bFav) return aFav ? -1 : 1;
+      return a.index - b.index;
+    })
+    .map(({ agent }) => ({ ...agent, isFavorite: favorites.has(agent.name) }));
+}
+
 const runtimeRecoveryBySession = new Map<string, Promise<boolean>>();
 
 function withFavoriteMetadata(agents: AgentInfo[], favorites: Set<string>): AgentInfo[] {
@@ -134,6 +151,17 @@ function withFavoriteMetadata(agents: AgentInfo[], favorites: Set<string>): Agen
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+function maybeNotifyStaleDesktopFavoriteRpc(error: unknown): void {
+  const message = errorMessage(error);
+  if (!/Method not found:\s*project\.(?:getAgentFavorites|toggleAgentFavorite)/i.test(message)) {
+    return;
+  }
+  useNotificationStore.getState().push({
+    level: "warning",
+    message: "Agent 收藏能力尚未加载到当前桌面进程，请重启桌面端后重试。",
+  });
 }
 
 function isMissingRuntimeClientError(error: unknown): boolean {
@@ -255,6 +283,25 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         agents: withFavoriteMetadata(state.agents, favoriteSet),
       };
     }),
+  setCurrentAgent: (sessionId, agentName) =>
+    set((state) => ({
+      currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
+    })),
+
+  fetchAgentFavorites: async () => {
+    try {
+      const result = (await apiClient.call("project.getAgentFavorites", {})) as {
+        favorites: string[];
+      };
+      get().setAgentFavorites(result.favorites ?? []);
+    } catch (err) {
+      maybeNotifyStaleDesktopFavoriteRpc(err);
+      log.warn("failed to fetch agent favorites", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
   toggleAgentFavorite: async (agentName) => {
     const previous = get().agentFavorites;
     const optimistic = new Set(previous);
@@ -270,25 +317,35 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         favorites: string[];
       };
       get().setAgentFavorites(result.favorites ?? []);
-    } catch (error) {
+    } catch (err) {
       set((state) => ({
         agentFavorites: previous,
         agents: withFavoriteMetadata(state.agents, previous),
       }));
+      maybeNotifyStaleDesktopFavoriteRpc(err);
       log.warn("failed to toggle agent favorite", {
         agentName,
-        error: errorMessage(error),
+        error: err instanceof Error ? err.message : String(err),
       });
-      throw error;
     }
   },
-  setCurrentAgent: (sessionId, agentName) =>
-    set((state) => ({
-      currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
-    })),
 
   fetchAgents: async (sessionId) => {
     try {
+      let favorites = get().agentFavorites;
+      try {
+        const favoriteResult = (await apiClient.call("project.getAgentFavorites", {})) as {
+          favorites: string[];
+        };
+        favorites = new Set(favoriteResult.favorites ?? []);
+        set({ agentFavorites: favorites });
+      } catch (favoriteError) {
+        maybeNotifyStaleDesktopFavoriteRpc(favoriteError);
+        log.warn("failed to fetch agent favorites", {
+          error: favoriteError instanceof Error ? favoriteError.message : String(favoriteError),
+        });
+      }
+
       const result = (await apiClient.call("agent.getAgents", { sessionId })) as {
         agents: Array<{
           name: string;
@@ -302,10 +359,6 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           avatar?: AgentAvatar;
         }>;
       };
-      const favoritesResult = (await apiClient.call("project.getAgentFavorites", {})) as {
-        favorites?: string[];
-      };
-      const favoriteSet = new Set(favoritesResult.favorites ?? []);
       const agents: AgentInfo[] = (result.agents ?? []).map((a) => ({
         name: a.name,
         description: a.description,
@@ -318,8 +371,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         avatar: a.avatar,
       }));
       set({
-        agentFavorites: favoriteSet,
-        agents: withFavoriteMetadata(agents, favoriteSet),
+        agentFavorites: favorites,
+        agents: withFavoriteMetadata(agents, favorites),
         loaded: true,
       });
 
