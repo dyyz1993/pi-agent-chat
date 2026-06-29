@@ -191,7 +191,7 @@ describe("UIPendingCenter", () => {
     expect(button).toHaveTextContent("1");
   });
 
-  it("auto-opens the project pending modal when a new current-project request appears", async () => {
+  it("does not auto-open the project pending modal when an inline request appears", async () => {
     setupProject();
     const { rerender } = render(<UIPendingCenter />);
     expect(mockSetPanelOpen).not.toHaveBeenCalledWith(true);
@@ -200,8 +200,9 @@ describe("UIPendingCenter", () => {
     rerender(<UIPendingCenter />);
 
     await waitFor(() => {
-      expect(mockSetPanelOpen).toHaveBeenCalledWith(true);
+      expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toBeInTheDocument();
     });
+    expect(mockSetPanelOpen).not.toHaveBeenCalledWith(true);
   });
 
   it("renders badge count > 9 as 9+", () => {
@@ -971,7 +972,14 @@ describe("ProjectRuntimePendingRequests", () => {
     render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
     expect(screen.getByText("Path Access")).toBeInTheDocument();
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.getByText("Session A")).toBeInTheDocument();
+    expect(screen.getByText("Operation")).toBeInTheDocument();
+    expect(screen.getAllByText("write").length).toBeGreaterThan(0);
+    expect(screen.getByText("Target")).toBeInTheDocument();
     expect(screen.getByText("/tmp/outside.txt")).toBeInTheDocument();
+    expect(screen.getByText("Risk")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Allow once/i }));
 
     expect(mockRespondById).toHaveBeenCalledWith("path-1", { value: "✅ Allow once" });
@@ -1044,6 +1052,13 @@ describe("ProjectRuntimePendingRequests", () => {
     render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
     expect(screen.getByText("Confirm command")).toBeInTheDocument();
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.getByText("Session A")).toBeInTheDocument();
+    expect(screen.getByText("Operation")).toBeInTheDocument();
+    expect(screen.getByText("command.run")).toBeInTheDocument();
+    expect(screen.getByText("Target")).toBeInTheDocument();
+    expect(screen.getByText("Risk")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
     expect(screen.getByText("dangerous-command")).toBeInTheDocument();
     expect(screen.getByText("command.run")).toBeInTheDocument();
     expect(screen.getByText("git commit --no-verify -m wip")).toBeInTheDocument();
