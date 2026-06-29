@@ -30,10 +30,27 @@ import { jumpToSessionById } from "../chat/primitives/useJumpToSession";
 
 const EMPTY: never[] = [];
 
+export type SessionSidebarFilterType = "main" | "delegate" | "subagent";
+type GroupSessionFilterType = SessionSidebarFilterType | "all" | "normal";
+
+function isDelegateSession(session: SessionMeta): boolean {
+  return session.sessionId.startsWith("sess_coord_");
+}
+
+function isSubagentSession(session: SessionMeta): boolean {
+  return session.sessionId.startsWith("sess_sub_");
+}
+
+function isMainSession(session: SessionMeta): boolean {
+  return (
+    !session.delegateParentSessionId && !isDelegateSession(session) && !isSubagentSession(session)
+  );
+}
+
 export function groupSessions(
   rawSessions: SessionMeta[],
   searchQuery: string,
-  filterType?: "all" | "delegate" | "normal",
+  filterType: GroupSessionFilterType = "all",
   filterAgent?: string | null,
   agentBySession?: Record<string, string>,
   statusBySession?: Record<string, SessionStatus>,
@@ -139,9 +156,23 @@ export function groupSessions(
   }
 
   if (filterType === "delegate") {
-    resultRoots = resultRoots.filter((r) => r.sessionId.startsWith("sess_coord_"));
-  } else if (filterType === "normal") {
-    resultRoots = resultRoots.filter((r) => !r.delegateParentSessionId);
+    resultRoots = resultRoots.filter(isDelegateSession);
+    resultChildMap = {};
+  } else if (filterType === "main" || filterType === "normal") {
+    resultRoots = resultRoots.filter(isMainSession);
+  } else if (filterType === "subagent") {
+    resultRoots = sortPinnedFirst(
+      deduped.filter((session) => {
+        if (!isSubagentSession(session)) return false;
+        if (!q) return true;
+        return (
+          session.name?.toLowerCase().includes(q) ||
+          session.firstMessage?.toLowerCase().includes(q) ||
+          session.sessionId.toLowerCase().includes(q)
+        );
+      }),
+    );
+    resultChildMap = {};
   }
 
   if (filterAgent) {
@@ -149,6 +180,37 @@ export function groupSessions(
   }
 
   return { rootSessions: resultRoots, childMap: resultChildMap };
+}
+
+export function getStandaloneSubagentItems(
+  subsessionsByParent: Record<string, SubagentSessionInfo[]>,
+  rawSessions: SessionMeta[],
+  searchQuery: string,
+): Array<{ sub: SubagentSessionInfo; parentSessionId: string }> {
+  const q = searchQuery.trim().toLowerCase();
+  const parentIdByPath = new Map(
+    rawSessions.map((session) => [session.sessionPath, session.sessionId]),
+  );
+  const items: Array<{ sub: SubagentSessionInfo; parentSessionId: string }> = [];
+
+  for (const [parentPath, subsessions] of Object.entries(subsessionsByParent)) {
+    const parentSessionId = parentIdByPath.get(parentPath);
+    if (!parentSessionId) continue;
+
+    for (const sub of subsessions) {
+      if (
+        q &&
+        !sub.sessionId.toLowerCase().includes(q) &&
+        !sub.description.toLowerCase().includes(q) &&
+        !sub.instruction.toLowerCase().includes(q)
+      ) {
+        continue;
+      }
+      items.push({ sub, parentSessionId });
+    }
+  }
+
+  return items.sort((a, b) => b.sub.startedAt - a.sub.startedAt);
 }
 
 interface SessionSidebarProps {
@@ -159,7 +221,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<"all" | "delegate" | "normal">("all");
+  const [filterType, setFilterType] = useState<SessionSidebarFilterType>("main");
   const [filterAgent, setFilterAgent] = useState<string | null>(null);
 
   const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
@@ -208,7 +270,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
       </div>
 
       <div className="px-2 py-0.5 flex items-center gap-1">
-        {(["all", "delegate", "normal"] as const).map((type) => (
+        {(["main", "delegate", "subagent"] as const).map((type) => (
           <button
             key={type}
             onClick={() => setFilterType(type)}
@@ -218,11 +280,11 @@ export function SessionSidebar(_props: SessionSidebarProps) {
                 : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary"
             }`}
           >
-            {type === "all"
-              ? t("sidebar:filterAll", "全部")
+            {type === "main"
+              ? t("sidebar:filterMain", "主会话")
               : type === "delegate"
                 ? t("sidebar:filterDelegate", "委派")
-                : t("sidebar:filterNormal", "普通")}
+                : t("sidebar:filterSubagent", "子任务")}
           </button>
         ))}
         <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
@@ -247,7 +309,7 @@ function SessionList({
   onToggleExpand,
 }: {
   searchQuery: string;
-  filterType: "all" | "delegate" | "normal";
+  filterType: SessionSidebarFilterType;
   filterAgent: string | null;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
@@ -289,18 +351,15 @@ function SessionList({
     [rawSessions, searchQuery, filterType, filterAgent, agentBySession, sessionStatusMap],
   );
 
-  const filteredRoots = useMemo(() => {
-    if (filterType === "normal") {
-      return rootSessions.filter((r) => {
-        const hasSubChildren = childMap[r.sessionPath]?.some((c) =>
-          c.sessionId.startsWith("sess_sub_"),
-        );
-        const subs = subsessionsByParent[r.sessionPath];
-        return !hasSubChildren && (!subs || subs.length === 0) && !r.delegateParentSessionId;
-      });
-    }
-    return rootSessions;
-  }, [rootSessions, filterType, subsessionsByParent, childMap]);
+  const standaloneSubagents = useMemo(() => {
+    if (filterType !== "subagent") return [];
+    const rawSubagentIds = new Set(rootSessions.map((session) => session.sessionId));
+    return getStandaloneSubagentItems(subsessionsByParent, rawSessions, searchQuery).filter(
+      (item) => !rawSubagentIds.has(item.sub.sessionId),
+    );
+  }, [filterType, rootSessions, subsessionsByParent, rawSessions, searchQuery]);
+
+  const hasVisibleItems = rootSessions.length > 0 || standaloneSubagents.length > 0;
 
   if (loading) {
     return (
@@ -311,19 +370,17 @@ function SessionList({
     );
   }
 
-  if (filteredRoots.length === 0) {
+  if (!hasVisibleItems) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-tertiary text-xs p-4 text-center">
-        {searchQuery || filterType !== "all"
-          ? t("sidebar:noMatchingSessions")
-          : t("sidebar:noSessions")}
+        {searchQuery ? t("sidebar:noMatchingSessions") : t("sidebar:noSessions")}
       </div>
     );
   }
 
   return (
     <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 space-y-1">
-      {filteredRoots.map((sess) => (
+      {rootSessions.map((sess) => (
         <SessionItem
           key={sess.sessionId}
           session={sess}
@@ -332,6 +389,9 @@ function SessionList({
           isExpanded={expandedIds.has(sess.sessionId)}
           onToggleExpand={() => onToggleExpand(sess.sessionId)}
         />
+      ))}
+      {standaloneSubagents.map(({ sub, parentSessionId }) => (
+        <SubagentItem key={sub.sessionId} sub={sub} parentSessionId={parentSessionId} />
       ))}
     </div>
   );
