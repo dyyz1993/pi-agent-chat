@@ -191,7 +191,7 @@ describe("UIPendingCenter", () => {
     expect(button).toHaveTextContent("1");
   });
 
-  it("auto-opens the project pending modal when a new current-project request appears", async () => {
+  it("does not auto-open the project pending modal when an inline request appears", async () => {
     setupProject();
     const { rerender } = render(<UIPendingCenter />);
     expect(mockSetPanelOpen).not.toHaveBeenCalledWith(true);
@@ -200,8 +200,9 @@ describe("UIPendingCenter", () => {
     rerender(<UIPendingCenter />);
 
     await waitFor(() => {
-      expect(mockSetPanelOpen).toHaveBeenCalledWith(true);
+      expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toBeInTheDocument();
     });
+    expect(mockSetPanelOpen).not.toHaveBeenCalledWith(true);
   });
 
   it("renders badge count > 9 as 9+", () => {

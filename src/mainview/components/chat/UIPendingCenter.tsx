@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MessageCircleQuestion,
   ArrowRight,
@@ -635,7 +635,6 @@ export function UIPendingCenter() {
   }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 
   const pendingCount = projectPending.length;
-  const knownPendingIdsRef = useRef<Set<string>>(new Set());
 
   // All hooks must be called before any early return (React rules of hooks)
   const sessionNameMap = useMemo(() => {
@@ -659,16 +658,6 @@ export function UIPendingCenter() {
     }
     return groups;
   }, [projectPending]);
-
-  useEffect(() => {
-    const previousIds = knownPendingIdsRef.current;
-    const currentIds = new Set(projectPending.map((req) => req.requestId));
-    const hasNewRequest = projectPending.some((req) => !previousIds.has(req.requestId));
-    knownPendingIdsRef.current = currentIds;
-    if (!panelOpen && hasNewRequest) {
-      setPanelOpen(true);
-    }
-  }, [panelOpen, projectPending, setPanelOpen]);
 
   useEffect(() => {
     if (!panelOpen || pendingCount > 0) return;
