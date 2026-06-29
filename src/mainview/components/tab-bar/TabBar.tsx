@@ -1,4 +1,13 @@
-import { Cable, CloudCog, Plus, X, Settings, MessageCircleQuestion } from "lucide-react";
+import {
+  Bot,
+  Cable,
+  CloudCog,
+  GitFork,
+  Plus,
+  X,
+  Settings,
+  MessageCircleQuestion,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -9,6 +18,7 @@ import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { Button, ModalDialog } from "../primitives";
 import { resolveDotClass, hasPermissionPending } from "./tab-dot";
+import { getSessionIdentity, type SessionIdentity } from "../../lib/session-identity";
 
 const log = createLogger("tab-bar");
 
@@ -30,6 +40,16 @@ const logger = createLogger("session");
 
 function isRemoteProjectLocalPath(projectPath: string): boolean {
   return /\/(?:\.pi-agent-chat|\.pi\/chat)\/remote-projects\/ssh-[^/]+$/.test(projectPath);
+}
+
+function sessionIdentityClass(identity: SessionIdentity): string {
+  if (identity.kind === "subagent") {
+    return "border-status-info/30 bg-status-info/10 text-status-info";
+  }
+  if (identity.kind === "fork") {
+    return "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent";
+  }
+  return "border-status-warning/30 bg-status-warning/10 text-status-warning";
 }
 
 function clipPrefixAtBoundary(value: string, budget: number): string {
@@ -333,6 +353,10 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             (isActive ? activeSessionId : undefined) ??
             lastActiveSessionByProject[tab.path] ??
             sessions[0]?.sessionId;
+          const visibleSession = visibleSessionId
+            ? sessions.find((session) => session.sessionId === visibleSessionId)
+            : undefined;
+          const sessionIdentity = getSessionIdentity(visibleSession);
           const remoteRuntime = visibleSessionId
             ? remoteRuntimeBySession[visibleSessionId]
             : undefined;
@@ -443,6 +467,22 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                   aria-label={remoteRuntimeTitle}
                 >
                   <RemoteRuntimeIcon className="h-3.5 w-3.5" />
+                </span>
+              )}
+              {sessionIdentity && (
+                <span
+                  data-testid="tab-session-identity-badge"
+                  data-session-kind={sessionIdentity.kind}
+                  className={`inline-flex h-5 flex-shrink-0 items-center gap-1 rounded border px-1 text-[10px] font-medium ${sessionIdentityClass(sessionIdentity)}`}
+                  title={sessionIdentity.title}
+                  aria-label={sessionIdentity.title}
+                >
+                  {sessionIdentity.kind === "fork" ? (
+                    <GitFork className="h-3 w-3" />
+                  ) : (
+                    <Bot className="h-3 w-3" />
+                  )}
+                  <span>{sessionIdentity.shortLabel}</span>
                 </span>
               )}
               <span className="min-w-[60px] max-w-[220px] whitespace-nowrap overflow-hidden">

@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { ExternalLink, ChevronDown } from "lucide-react";
+import { ExternalLink, ChevronDown, Folder } from "lucide-react";
 import type { SpecialBlockRendererProps } from "../special-block-registry";
 import { registerSpecialBlock } from "../special-block-registry";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
@@ -8,6 +8,7 @@ import { useAgentStore } from "../../../stores/use-agent-store";
 import { useJumpToSession } from "../primitives/useJumpToSession";
 import { SessionJumpButton } from "../primitives/SessionJumpButton";
 import { agentColorStyle } from "../../../utils/agent-color";
+import { getProjectDisplayName } from "../../../lib/session-identity";
 
 const CONTEXT_ATTRS: Array<[string, string]> = [
   ["task", "任务"],
@@ -22,6 +23,8 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
   block,
 }: SpecialBlockRendererProps) {
   const { from, sessionId, title, elapsed, historyCount } = block.attrs;
+  const sourceProjectPath = block.attrs.projectPath;
+  const sourceProjectName = getProjectDisplayName(sourceProjectPath);
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
@@ -77,6 +80,15 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
           委托回复
         </span>
         {title && <span className="font-medium text-text-primary truncate">{title}</span>}
+        {sourceProjectName && (
+          <span
+            className="inline-flex min-w-0 max-w-[160px] shrink-0 items-center gap-1 rounded bg-bg-secondary/70 px-1.5 py-0.5 text-[10px] text-text-tertiary"
+            title={sourceProjectPath}
+          >
+            <Folder className="h-3 w-3 shrink-0" />
+            <span className="truncate">{sourceProjectName}</span>
+          </span>
+        )}
         {elapsed && <span className="text-text-tertiary text-[10px] shrink-0">{elapsed}</span>}
         {historyCount && (
           <span className="text-text-tertiary text-[10px] shrink-0">({historyCount}条历史)</span>

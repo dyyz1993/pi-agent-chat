@@ -64,6 +64,12 @@ import type { ChatMessage } from "../../types";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import {
+  getProjectDisplayName,
+  getSessionIdentity,
+  type SessionIdentity,
+} from "../../lib/session-identity";
+import type { SessionMeta } from "../../types";
 
 const log = createLogger("chat");
 const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
@@ -77,6 +83,28 @@ interface TopLoadScrollAnchor {
   sessionId: string;
   scrollHeight: number;
   scrollTop: number;
+}
+
+function findSessionMeta(
+  sessionsByProject: Record<string, SessionMeta[]>,
+  sessionId: string | null | undefined,
+): SessionMeta | null {
+  if (!sessionId) return null;
+  for (const sessions of Object.values(sessionsByProject)) {
+    const match = sessions.find((session) => session.sessionId === sessionId);
+    if (match) return match;
+  }
+  return null;
+}
+
+function sessionIdentityClass(identity: SessionIdentity): string {
+  if (identity.kind === "subagent") {
+    return "border-status-info/30 bg-status-info/10 text-status-info";
+  }
+  if (identity.kind === "fork") {
+    return "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent";
+  }
+  return "border-status-warning/30 bg-status-warning/10 text-status-warning";
 }
 
 export function shouldStartTopLoad({
@@ -206,6 +234,30 @@ export function ChatPanel() {
   const attachmentCount = useAttachmentStore((s) => s.attachments.length);
   const composerPlaceholders = useComposerPlaceholderStore((s) => s.placeholders);
   const hasComposerPlaceholders = composerPlaceholders.length > 0;
+
+  const activeSessionMeta = useSessionStore(
+    useCallback((s) => findSessionMeta(s.sessionsByProject, activeSessionId), [activeSessionId]),
+  );
+  const activeSubSessionMeta = useSessionStore(
+    useCallback((s) => findSessionMeta(s.sessionsByProject, activeSubId), [activeSubId]),
+  );
+  const chatIdentity = isViewingSubagent
+    ? getSessionIdentity(
+        activeSubSessionMeta ??
+          (activeSubId
+            ? {
+                sessionId: activeSubId,
+                delegateParentSessionId: activeSessionId,
+                delegateType: "subagent",
+              }
+            : null),
+      )
+    : getSessionIdentity(activeSessionMeta);
+  const chatProjectPath =
+    (isViewingSubagent ? activeSubSessionMeta?.projectPath : activeSessionMeta?.projectPath) ??
+    activeSessionMeta?.projectPath ??
+    "";
+  const chatProjectName = getProjectDisplayName(chatProjectPath);
 
   const effectiveStatus = isViewingSubagent ? (subSessionStatus ?? subStatus) : parentStatus;
 
@@ -882,6 +934,26 @@ export function ChatPanel() {
         <SessionToggleIcon />
         {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
         <ReturnToSourceButton variant="top" />
+        {chatIdentity && (
+          <span
+            data-testid="chat-session-identity-badge"
+            data-session-kind={chatIdentity.kind}
+            className={`inline-flex min-w-0 max-w-[220px] items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${sessionIdentityClass(chatIdentity)}`}
+            title={
+              chatProjectPath ? `${chatIdentity.title} · ${chatProjectPath}` : chatIdentity.title
+            }
+          >
+            {chatIdentity.kind === "fork" ? (
+              <GitFork className="h-3 w-3 shrink-0" />
+            ) : (
+              <Bot className="h-3 w-3 shrink-0" />
+            )}
+            <span className="shrink-0">{chatIdentity.label}</span>
+            {chatProjectName && (
+              <span className="min-w-0 truncate text-current/75">{chatProjectName}</span>
+            )}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-1">
           <UIPendingCenter />
           <NotificationCenter />
@@ -1198,8 +1270,7 @@ export function ReturnToSourceButton({ variant = "bottom" }: { variant?: "top" |
       : returnTarget.kind === "delegate"
         ? t("backToDelegate", "返回委派方")
         : t("backToSource", "返回来源");
-  const sizeClass =
-    variant === "top" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
+  const sizeClass = variant === "top" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
 
   return (
     <button
