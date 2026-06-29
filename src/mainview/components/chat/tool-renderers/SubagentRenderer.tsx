@@ -39,6 +39,10 @@ function getStringArg(record: Record<string, unknown>, key: string): string {
   return typeof value === "string" && value.trim().length > 0 ? value : "";
 }
 
+function firstNonEmptyString(...values: Array<string | undefined>): string | undefined {
+  return values.find((value) => value !== undefined && value.trim().length > 0)?.trim();
+}
+
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
   blockId,
@@ -144,7 +148,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   );
   const isLive =
     !hasFinalOutput && !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
-  const agentName = matchedSub?.agent || requestedAgent || "build";
+  const agentName = firstNonEmptyString(matchedSub?.agent, requestedAgent) ?? "build";
   const agentColorName =
     agents.find((agent) => agent.name === agentName)?.color ?? BUILTIN_AGENT_COLORS[agentName];
   const agentBadgeStyle = agentColorStyle(agentColorName);
