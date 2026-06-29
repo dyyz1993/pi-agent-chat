@@ -1,4 +1,4 @@
-import { memo, type ComponentProps } from "react";
+import { memo, type ComponentProps, type JSX } from "react";
 import { Streamdown, type Components, type ExtraProps } from "streamdown";
 
 import { MermaidPreBlock } from "./mermaid/MermaidPreBlock";
@@ -7,6 +7,8 @@ type StreamingCodeProps = ComponentProps<"code"> &
   ExtraProps & {
     "data-block"?: string | boolean;
   };
+type StreamingElementProps<Tag extends keyof JSX.IntrinsicElements> = ComponentProps<Tag> &
+  ExtraProps;
 
 function StreamingInlineCode({ children, className, node: _node, ...props }: StreamingCodeProps) {
   return (
@@ -48,9 +50,39 @@ function StreamingCodeBlock({ children, className, node }: StreamingCodeProps) {
   );
 }
 
+function StreamingTable({ node: _node, ...props }: StreamingElementProps<"table">) {
+  return <table {...props} />;
+}
+
+function StreamingTableHead({ node: _node, ...props }: StreamingElementProps<"thead">) {
+  return <thead {...props} />;
+}
+
+function StreamingTableBody({ node: _node, ...props }: StreamingElementProps<"tbody">) {
+  return <tbody {...props} />;
+}
+
+function StreamingTableRow({ node: _node, ...props }: StreamingElementProps<"tr">) {
+  return <tr {...props} />;
+}
+
+function StreamingTableHeaderCell({ node: _node, ...props }: StreamingElementProps<"th">) {
+  return <th {...props} />;
+}
+
+function StreamingTableCell({ node: _node, ...props }: StreamingElementProps<"td">) {
+  return <td {...props} />;
+}
+
 const streamdownComponents = {
   code: StreamingCodeBlock,
   inlineCode: StreamingInlineCode,
+  table: StreamingTable,
+  thead: StreamingTableHead,
+  tbody: StreamingTableBody,
+  tr: StreamingTableRow,
+  th: StreamingTableHeaderCell,
+  td: StreamingTableCell,
 } satisfies Components;
 
 export default memo(function StreamingMarkdownContent({ text }: { text: string }) {

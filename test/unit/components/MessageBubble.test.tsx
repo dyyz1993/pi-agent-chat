@@ -100,6 +100,28 @@ describe("extracted message bubble components", () => {
     });
   });
 
+  it("uses prose table elements while text content is streaming", async () => {
+    render(
+      <TextContentCard
+        text={
+          "| 原则 | 全称 | 核心思想 |\n| --- | --- | --- |\n| KISS | Keep It Simple | 保持简单 |"
+        }
+        isStreaming
+        blockId="msg-1-table"
+      />,
+    );
+
+    await waitFor(() => {
+      const root = document.querySelector('[data-block-id="msg-1-table"]');
+      const table = root?.querySelector("table");
+      expect(table).not.toBeNull();
+      expect(root?.querySelector('[data-streamdown="table-wrapper"]')).toBeNull();
+      expect(root?.querySelector('[data-streamdown="table"]')).toBeNull();
+      expect(table?.querySelectorAll("th")).toHaveLength(3);
+      expect(table?.textContent).toContain("KISS");
+    });
+  });
+
   it("renders memory prefetch searching details after expansion", () => {
     render(
       <MemoryCard
