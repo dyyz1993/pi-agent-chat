@@ -21,6 +21,7 @@ import { useStatusStore } from "../../stores/use-status-store";
 import { IconButton, ModalDialog } from "../primitives";
 import { PermissionActionButtons } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
+import { jumpToSessionById } from "./primitives/useJumpToSession";
 
 type ApprovalRisk = "Low" | "Medium" | "High";
 
@@ -116,6 +117,13 @@ function buildApprovalSummaryRows(
   });
 
   return rows;
+}
+
+function requestBelongsToProject(req: UIPendingRequest, projectSessionIds: Set<string>): boolean {
+  return (
+    projectSessionIds.has(req.sessionId) ||
+    (!!req.parentSessionId && projectSessionIds.has(req.parentSessionId))
+  );
 }
 
 function ApprovalContextSummary({
@@ -631,7 +639,7 @@ export function UIPendingCenter() {
       }
     }
 
-    return allPending.filter((req) => projectSessionIds.has(req.sessionId));
+    return allPending.filter((req) => requestBelongsToProject(req, projectSessionIds));
   }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 
   const pendingCount = projectPending.length;
@@ -668,7 +676,7 @@ export function UIPendingCenter() {
 
   const handleGotoSession = (sessionId: string, requestId: string) => {
     setPanelOpen(false);
-    useSessionStore.getState().setActiveSession(sessionId);
+    void jumpToSessionById(sessionId);
     requestAnimationFrame(() => {
       const el = document.querySelector(`[data-ui-request-id="${requestId}"]`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -866,6 +874,6 @@ export function useProjectPendingCount(): number {
       }
     }
 
-    return allPending.filter((req) => projectSessionIds.has(req.sessionId)).length;
+    return allPending.filter((req) => requestBelongsToProject(req, projectSessionIds)).length;
   }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 }

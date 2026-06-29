@@ -393,11 +393,28 @@ export function setupSubscriptions(
             syncCoordinatorChildSessionStatus(sid, childStatus);
           }
 
-          handleAgentEvent(sid, payload.event as Parameters<typeof handleAgentEvent>[1]);
-          handleSubagentEvent(sid, payload.event as Parameters<typeof handleSubagentEvent>[1], id, {
-            skipUIRegistration: true,
-            skipMessageMirroring: true,
-          });
+          if (eventType === "extension_ui_request") {
+            handleSubagentEvent(
+              sid,
+              payload.event as Parameters<typeof handleSubagentEvent>[1],
+              id,
+              {
+                skipMessageMirroring: true,
+              },
+            );
+            handleAgentEvent(sid, payload.event as Parameters<typeof handleAgentEvent>[1]);
+          } else {
+            handleAgentEvent(sid, payload.event as Parameters<typeof handleAgentEvent>[1]);
+            handleSubagentEvent(
+              sid,
+              payload.event as Parameters<typeof handleSubagentEvent>[1],
+              id,
+              {
+                skipUIRegistration: true,
+                skipMessageMirroring: true,
+              },
+            );
+          }
           const mirroredMessages = useChatStore.getState().messagesBySession[sid];
           if (mirroredMessages) {
             subStore.setSubMessages(sid, mirroredMessages);

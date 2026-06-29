@@ -1062,7 +1062,7 @@ export function ChatPanel() {
         onDrop={handleDrop}
       >
         <ProjectRuntimePendingRequests
-          activeSessionId={isViewingSubagent ? null : activeSessionId}
+          activeSessionId={isViewingSubagent ? activeSubId : activeSessionId}
           placement="composerOverlay"
         />
         {!isViewingSubagent ? (

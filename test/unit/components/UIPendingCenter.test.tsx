@@ -30,6 +30,7 @@ const mockFns = vi.hoisted(() => ({
   setHooksEnabled: vi.fn(),
   apiCall: vi.fn(),
   setActiveSession: vi.fn(),
+  jumpToSessionById: vi.fn(),
 }));
 
 let currentPending: UIPendingRequest[] = [];
@@ -40,6 +41,7 @@ const mockRespondById = mockFns.respondById;
 const mockDismissById = mockFns.dismissById;
 const mockSetHooksEnabled = mockFns.setHooksEnabled;
 const mockApiCall = mockFns.apiCall;
+const mockJumpToSessionById = mockFns.jumpToSessionById;
 
 let mockActiveProjectId: string | null = null;
 let mockProjectTabs: { id: string; name: string; path: string }[] = [];
@@ -121,6 +123,10 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
   apiClient: {
     call: mockFns.apiCall,
   },
+}));
+
+vi.mock("../../../src/mainview/components/chat/primitives/useJumpToSession", () => ({
+  jumpToSessionById: mockFns.jumpToSessionById,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -275,14 +281,14 @@ describe("UIPendingCenter", () => {
     expect(screen.getByText("uiPending.pendingRequestsTitle")).toBeInTheDocument();
   });
 
-  it("calls setActiveSession and closes modal on goto session click", () => {
+  it("uses the unified session jump and closes modal on goto session click", () => {
     setupProject();
     mockPanelOpen = true;
     currentPending = [makeRequest({ requestId: "r1", sessionId: "sess-1" })];
     render(<UIPendingCenter />);
     const gotoBtn = screen.getByTitle("uiPending.gotoSession");
     fireEvent.click(gotoBtn);
-    expect(mockSetActiveSession).toHaveBeenCalledWith("sess-1");
+    expect(mockJumpToSessionById).toHaveBeenCalledWith("sess-1");
     expect(mockSetPanelOpen).toHaveBeenCalledWith(false);
   });
 
@@ -1362,7 +1368,7 @@ describe("UIPendingCenter nested subtask requests", () => {
     fireEvent.click(within(grandchildGroup as HTMLElement).getByText("uiPending.gotoSession"));
 
     expect(mockSetPanelOpen).toHaveBeenCalledWith(false);
-    expect(mockSetActiveSession).toHaveBeenCalledWith("sess-grandchild");
+    expect(mockJumpToSessionById).toHaveBeenCalledWith("sess-grandchild");
   });
 });
 
@@ -1414,5 +1420,25 @@ describe("UIPendingCenter subagent request recovery", () => {
     render(<UIPendingCenter />);
     expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toHaveTextContent("1");
     expect(screen.getAllByText("Child approval").length).toBeGreaterThan(0);
+  });
+
+  it("keeps project pending visible for live child requests before subagent list is restored", () => {
+    mockSubsessionsByParent = {};
+    currentPending = [
+      makeRequest({
+        requestId: "live-subagent-approval",
+        sessionId: "sess_sub_live",
+        title: "Live child approval",
+        message: "Allow child command?",
+        parentSessionId: "sess-parent",
+      }),
+    ];
+
+    const { result } = renderHook(() => useProjectPendingCount());
+    expect(result.current).toBe(1);
+
+    render(<UIPendingCenter />);
+    expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toHaveTextContent("1");
+    expect(screen.getAllByText("Live child approval").length).toBeGreaterThan(0);
   });
 });

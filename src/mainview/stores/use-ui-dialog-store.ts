@@ -12,6 +12,7 @@ import type { AskUserQuestion } from "../../shared/modules/agent";
 export interface UIPendingRequest {
   requestId: string;
   sessionId: string;
+  parentSessionId?: string;
   method: "askUserQuestion" | "confirm" | "input" | "select" | "editor";
   title?: string;
   message?: string;
