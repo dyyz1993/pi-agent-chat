@@ -1,7 +1,12 @@
 import { copyFileSync, existsSync, readFileSync } from "fs";
 import * as path from "path";
 
-import type { CoordinatorMethodCall } from "../modules/coordinator";
+import type {
+  CoordinatorMethodCall,
+  DelegateStatusDetail,
+  DelegateStatusExt,
+  DelegateStatusWaitingType,
+} from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { getRemoteProjectByPath } from "../lib/project-config";
 import {
@@ -66,7 +71,9 @@ interface DelegateParentManaged {
   };
 }
 
-function parseCoordinatorModel(model: string | undefined): { provider: string; modelId: string } | null {
+function parseCoordinatorModel(
+  model: string | undefined,
+): { provider: string; modelId: string } | null {
   if (!model) return null;
   const [provider, ...modelParts] = model.split("/");
   const modelId = modelParts.join("/");
@@ -806,23 +813,29 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   getContextUsage: (
     sessionId: string,
   ) => Promise<{ tokens: number | null; contextWindow: number; percent: number | null }>;
-}): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
+}): Promise<DelegateStatusExt> {
   const { sessionId: targetSessionId } = options.msg;
   const parentChildren = options.parentChildMap.get(options.parentSessionId);
   if (!parentChildren?.has(targetSessionId)) {
     return {
+      task: null,
       status: "not_found",
+      detail: buildDelegateStatusDetail("not_found", undefined, false),
       isCompacting: false,
       contextUsage: { tokens: null, contextWindow: 0, percent: null },
     };
   }
 
   const status = options.getStatus(targetSessionId);
+  const sessionPath = options.sessionPaths.get(targetSessionId);
   if (status.status === "stopped") {
     const hasRecord =
       options.sessionPaths.has(targetSessionId) || options.sessionProjectPaths.has(targetSessionId);
+    const resolvedStatus = hasRecord ? "stopped" : "not_found";
     return {
-      status: hasRecord ? "stopped" : "not_found",
+      task: null,
+      status: resolvedStatus,
+      detail: buildDelegateStatusDetail(resolvedStatus, sessionPath, false),
       isCompacting: false,
       contextUsage: { tokens: null, contextWindow: 0, percent: null },
     };
@@ -830,16 +843,102 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
 
   const state = await options.getState(targetSessionId);
   const contextUsage = await options.getContextUsage(targetSessionId);
+  const isCompacting = state?.isCompacting ?? false;
+  const resolvedStatus = state?.isStreaming
+    ? "streaming"
+    : hasAssistantMessage(sessionPath)
+      ? "completed"
+      : "idle";
 
   return {
-    status: state?.isStreaming
-      ? "streaming"
-      : hasAssistantMessage(options.sessionPaths.get(targetSessionId))
-        ? "completed"
-        : "idle",
-    isCompacting: state?.isCompacting ?? false,
+    task: null,
+    status: resolvedStatus,
+    detail: buildDelegateStatusDetail(resolvedStatus, sessionPath, isCompacting),
+    isCompacting,
     contextUsage,
   };
+}
+
+function buildDelegateStatusDetail(
+  status: string,
+  sessionPath: string | undefined,
+  isCompacting: boolean,
+): DelegateStatusDetail {
+  const waitingType: DelegateStatusWaitingType = isCompacting
+    ? "compacting"
+    : status === "streaming" ||
+        status === "completed" ||
+        status === "idle" ||
+        status === "stopped" ||
+        status === "not_found"
+      ? status
+      : "idle";
+  const phase = (() => {
+    if (isCompacting) return "压缩中";
+    if (status === "streaming") return "执行中";
+    if (status === "completed") return "已完成";
+    if (status === "stopped") return "已停止";
+    if (status === "not_found") return "未找到会话";
+    return "空闲";
+  })();
+
+  return {
+    phase,
+    waitingType,
+    waitingSince: Date.now(),
+    lastMessages: readRecentMessageSummaries(sessionPath),
+  };
+}
+
+function readRecentMessageSummaries(sessionPath: string | undefined, limit = 3): string[] {
+  if (!sessionPath || !existsSync(sessionPath)) return [];
+  try {
+    const summaries: string[] = [];
+    const lines = readFileSync(sessionPath, "utf-8").trim().split("\n");
+    for (let i = lines.length - 1; i >= 0 && summaries.length < limit; i--) {
+      const line = lines[i]?.trim();
+      if (!line) continue;
+      const summary = summarizeSessionMessageLine(line);
+      if (summary) summaries.unshift(summary);
+    }
+    return summaries;
+  } catch {
+    return [];
+  }
+}
+
+function summarizeSessionMessageLine(line: string): string | undefined {
+  try {
+    const entry = JSON.parse(line) as unknown;
+    if (!entry || typeof entry !== "object") return undefined;
+    const record = entry as Record<string, unknown>;
+    if (record.type !== "message") return undefined;
+    const message = record.message;
+    if (!message || typeof message !== "object") return undefined;
+    const msg = message as Record<string, unknown>;
+    const role = typeof msg.role === "string" ? msg.role : undefined;
+    if (!role) return undefined;
+    const text = extractMessageText(msg.content);
+    if (!text) return undefined;
+    const label = role === "user" ? "用户" : role === "assistant" ? "助手" : "工具";
+    return `${label}: ${text.length > 120 ? `${text.slice(0, 120)}...` : text}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractMessageText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const item of content) {
+    if (!item || typeof item !== "object") continue;
+    const block = item as Record<string, unknown>;
+    if (typeof block.text === "string") parts.push(block.text);
+    else if (typeof block.thinking === "string") parts.push(block.thinking);
+    else if (typeof block.name === "string") parts.push(`调用 ${block.name}`);
+  }
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 function hasAssistantMessage(sessionPath: string | undefined): boolean {

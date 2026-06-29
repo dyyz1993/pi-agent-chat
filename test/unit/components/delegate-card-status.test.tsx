@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContentBlock, SessionMeta } from "../../../src/mainview/types";
 
@@ -233,6 +233,7 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
 
 import {
   DelegateCard,
+  DelegateStatusCard,
   ForkCard,
 } from "../../../src/mainview/components/chat/tool-renderers/CoordinatorRenderer";
 
@@ -272,6 +273,32 @@ function makeForkBlock(
     output: "",
     details: {
       sessionId: "fork-session",
+    },
+    ...overrides,
+  };
+}
+
+function makeDelegateStatusBlock(
+  overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {},
+): Extract<ContentBlock, { type: "toolExecution" }> {
+  return {
+    type: "toolExecution",
+    toolCallId: "status-call-1",
+    toolName: "session_delegate_status",
+    args: JSON.stringify({ sessionId: "delegate-session" }),
+    status: "done",
+    output: "",
+    details: {
+      task: {
+        sessionId: "delegate-session",
+        title: "Long delegate task",
+        status: "streaming",
+      },
+      detail: {
+        phase: "执行中",
+        waitingType: "streaming",
+        lastMessages: ["助手: 正在执行 ls", "工具: bash 完成"],
+      },
     },
     ...overrides,
   };
@@ -358,5 +385,18 @@ describe("ForkCard", () => {
 
     const icon = container.querySelector(".lucide-git-fork");
     expect(icon?.className).toContain("text-status-info");
+  });
+});
+
+describe("DelegateStatusCard", () => {
+  it("renders rich status detail and recent message summaries", () => {
+    render(<DelegateStatusCard block={makeDelegateStatusBlock()} />);
+
+    expect(screen.getByText("执行中")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(screen.getAllByText("streaming").length).toBeGreaterThan(0);
+    expect(screen.getByText("助手: 正在执行 ls")).toBeInTheDocument();
+    expect(screen.getByText("工具: bash 完成")).toBeInTheDocument();
   });
 });

@@ -1,4 +1,8 @@
-import type { CoordinatorMethodCall, CoordinatorChannelEvent } from "../modules/coordinator";
+import type {
+  CoordinatorMethodCall,
+  CoordinatorChannelEvent,
+  DelegateStatusExt,
+} from "../modules/coordinator";
 import {
   type DelegateChildMap,
   type SyncDelegateResolver,
@@ -343,7 +347,7 @@ export class CoordinatorHandler {
   async handleCoordinatorDelegateStatus(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
-  ): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
+  ): Promise<DelegateStatusExt> {
     return handleCoordinatorDelegateStatusOperation({
       parentSessionId,
       msg,

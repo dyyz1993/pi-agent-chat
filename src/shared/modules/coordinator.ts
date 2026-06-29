@@ -9,6 +9,21 @@ export interface CoordinatorContextUsage {
   percent: number | null;
 }
 
+export type DelegateStatusWaitingType =
+  | "streaming"
+  | "compacting"
+  | "completed"
+  | "idle"
+  | "stopped"
+  | "not_found";
+
+export interface DelegateStatusDetail {
+  phase: string;
+  waitingType: DelegateStatusWaitingType;
+  waitingSince?: number;
+  lastMessages?: string[];
+}
+
 export interface DelegatedTask {
   sessionId: string;
   title: string;
@@ -34,6 +49,8 @@ export interface DelegateSendResult {
 
 export interface DelegateStatusExt {
   task: DelegatedTask | null;
+  status?: CoordinatorSessionStatus | "not_found";
+  detail?: DelegateStatusDetail;
   isCompacting?: boolean;
   contextUsage?: CoordinatorContextUsage;
 }

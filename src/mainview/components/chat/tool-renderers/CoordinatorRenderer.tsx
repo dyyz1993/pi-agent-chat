@@ -44,6 +44,12 @@ const BUILTIN_AGENT_COLORS: Record<string, string> = {
 interface CoordinatorDetails {
   sessionId?: string;
   status?: string;
+  detail?: {
+    phase?: string;
+    waitingType?: string;
+    waitingSince?: number;
+    lastMessages?: string[];
+  };
   task?: string;
   title?: string;
   dispatchedBy?: string;
@@ -183,6 +189,19 @@ function isLiveSessionStatus(status: SessionStatus | undefined): boolean {
     status === "permission" ||
     status === "retrying"
   );
+}
+
+function asSessionStatus(status: string | undefined): SessionStatus | undefined {
+  if (
+    status === "streaming" ||
+    status === "compacting" ||
+    status === "permission" ||
+    status === "retrying" ||
+    status === "idle"
+  ) {
+    return status;
+  }
+  return undefined;
 }
 
 function buildActivityRoundsFromDelegateActivity(
@@ -325,7 +344,11 @@ export const DelegateCard = memo(function DelegateCard({
     : hasLiveSession
       ? sessionStatusLabel(sessionStatus, t) || t("coordinator.running")
       : sessionStatusLabel(sessionStatus, t) ||
-        (matchedSession ? t("coordinator.dispatched") : blockRunning ? t("coordinator.creating") : undefined);
+        (matchedSession
+          ? t("coordinator.dispatched")
+          : blockRunning
+            ? t("coordinator.creating")
+            : undefined);
 
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
   const activityRounds = useMemo(
@@ -386,12 +409,15 @@ export const ForkCard = memo(function ForkCard({
   const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
   const modelFallback = useSessionTaskModelFallback();
-  const modelInfo = mergeSessionTaskModelInfo({
-    tier: stringValue(args.tier) ?? details.tier,
-    model: stringValue(args.model) ?? details.model,
-    provider: stringValue(args.provider) ?? details.provider,
-    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
-  }, modelFallback);
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      tier: stringValue(args.tier) ?? details.tier,
+      model: stringValue(args.model) ?? details.model,
+      provider: stringValue(args.provider) ?? details.provider,
+      thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+    },
+    modelFallback,
+  );
 
   const sessionId = details.sessionId;
   const { canJump, handleJump } = useJumpToSession(sessionId);
@@ -681,9 +707,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
         live: !isTerminal && (isRunning || (!finalText && isLiveSessionStatus(sessionStatus))),
         labels: activityRoundLabels,
       }}
-      result={
-        finalText ? { label: "Result", text: finalText, copyText: finalText } : undefined
-      }
+      result={finalText ? { label: "Result", text: finalText, copyText: finalText } : undefined}
       error={errorText ? { label: "Error", text: errorText } : undefined}
       details={
         block.details !== undefined
@@ -709,7 +733,10 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
     | undefined;
   const taskTitle = task?.task?.title;
   const taskStatus = task?.task?.status;
+  const sessionTaskStatus = asSessionStatus(taskStatus);
   const taskSessionId = task?.task?.sessionId;
+  const statusDetail = extractDetails(block.details).detail;
+  const hasStatusContent = statusDetail !== undefined || !!block.output;
 
   const displayTitle = taskTitle
     ? `${t("coordinator.statusCheck")}: ${taskTitle}`
@@ -720,6 +747,9 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
   if (isRunning) {
     badgeText = t("coordinator.checking");
     badgeColor = "text-status-info animate-pulse";
+  } else if (statusDetail?.phase) {
+    badgeText = statusDetail.phase;
+    badgeColor = isLiveSessionStatus(sessionTaskStatus) ? "text-status-info" : "text-text-tertiary";
   } else if (taskStatus) {
     badgeText = taskStatus;
   }
@@ -756,15 +786,51 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
           </>
         }
       />
-      {!collapsed && !isRunning && block.output && (
+      {!collapsed && !isRunning && hasStatusContent && (
         <div className="px-3 pb-2 border-t border-border-secondary/20">
-          <div className="flex items-center justify-between mb-0.5">
-            <div className="text-[10px] text-text-tertiary select-none">Output</div>
-            <CopyButton text={block.output} size="xs" />
-          </div>
-          <div className={TOOL_MARKDOWN_CLASS}>
-            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
-          </div>
+          {statusDetail && (
+            <div className="mt-2 mb-2 rounded-md border border-border-secondary/40 bg-bg-primary/60 px-2.5 py-2 text-[11px]">
+              <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-2 gap-y-1">
+                {statusDetail.phase && (
+                  <>
+                    <span className="text-text-tertiary">Phase</span>
+                    <span className="font-medium text-text-primary">{statusDetail.phase}</span>
+                  </>
+                )}
+                {statusDetail.waitingType && (
+                  <>
+                    <span className="text-text-tertiary">Type</span>
+                    <span className="font-mono text-text-secondary">
+                      {statusDetail.waitingType}
+                    </span>
+                  </>
+                )}
+                {statusDetail.lastMessages?.length ? (
+                  <>
+                    <span className="text-text-tertiary">Recent</span>
+                    <div className="space-y-0.5 text-text-secondary">
+                      {statusDetail.lastMessages.map((line, index) => (
+                        <div key={`${index}-${line}`} className="break-words">
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+          {block.output && (
+            <>
+              <div className="flex items-center justify-between mb-0.5">
+                <div className="text-[10px] text-text-tertiary select-none">Output</div>
+                <CopyButton text={block.output} size="xs" />
+              </div>
+              <div className={TOOL_MARKDOWN_CLASS}>
+                <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
