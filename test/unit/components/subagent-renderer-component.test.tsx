@@ -19,8 +19,26 @@ const hoisted = vi.hoisted(() => ({
   matchedSub: null as SubagentSessionInfo | null,
   messages: [] as Array<{ role: string; content: ContentBlock[] }>,
   subagentStatus: undefined as string | undefined,
+  currentTier: "max" as string | null,
+  currentModel: {
+    provider: "anthropic",
+    id: "claude-sonnet-4",
+    reasoning: true,
+  } as { provider: string; id: string; reasoning?: boolean } | null,
+  currentThinkingLevel: "high",
   useSubagentStoreImpl: null as ((s: (state: unknown) => unknown) => unknown) | null,
 }));
+
+function fakeSessionState() {
+  return {
+    activeSessionId: "sess_parent_001",
+    currentModel: hoisted.currentModel,
+    currentThinkingLevel: hoisted.currentThinkingLevel,
+    projectTabs: [{ id: "tab-1", path: "/fake/project" }],
+    activeProjectId: "tab-1",
+    sessionContextMap: {},
+  };
+}
 
 vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
   useSubagentStore: Object.assign(
@@ -72,9 +90,29 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   useSessionStore: Object.assign(
-    vi.fn(() => "sess_parent_001"),
+    vi.fn((selector: (s: unknown) => unknown) => selector(fakeSessionState())),
     {
-      getState: vi.fn(() => ({ sessionContextMap: {}, activeSessionId: "sess_parent_001" })),
+      getState: vi.fn(() => fakeSessionState()),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
+  useTierStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
+      })),
       subscribe: vi.fn(),
     },
   ),
@@ -214,6 +252,14 @@ describe("SubagentExecutionCard — status styling", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
+    hoisted.currentTier = "max";
+    hoisted.currentModel = {
+      provider: "anthropic",
+      id: "claude-sonnet-4",
+      reasoning: true,
+    };
+    hoisted.currentThinkingLevel = "high";
   });
 
   it("运行中显示信息状态图标", () => {
@@ -250,6 +296,14 @@ describe("SubagentExecutionCard — 状态文案", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
+    hoisted.currentTier = "max";
+    hoisted.currentModel = {
+      provider: "anthropic",
+      id: "claude-sonnet-4",
+      reasoning: true,
+    };
+    hoisted.currentThinkingLevel = "high";
   });
 
   it("运行中显示 'Running' 文案 + animate-pulse", () => {
@@ -374,6 +428,18 @@ describe("SubagentExecutionCard — 状态文案", () => {
     expect(screen.getByText("claude-sonnet-4")).toBeTruthy();
   });
 
+  it("没有显式模型上下文时折叠态从当前项目档位兜底展示 Max", () => {
+    setupMockStore({
+      status: "done",
+      model: undefined,
+    });
+    const block = makeBlock({ status: "done" });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Max")).toBeTruthy();
+    expect(screen.getByText("Think high")).toBeTruthy();
+  });
+
   it("未指定 agent 时展示默认 build agent 和 build 颜色", () => {
     setupMockStore({ status: "done", agent: undefined });
     const block = makeBlock({ status: "done" });
@@ -391,6 +457,7 @@ describe("SubagentExecutionCard — 展开/折叠行为", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
   it("失败状态默认遵循折叠设置", () => {
@@ -444,6 +511,7 @@ describe("SubagentExecutionCard — 实时进度展示", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
   it("展开时以内联工具标签显示工具调用列表", () => {
@@ -520,6 +588,7 @@ describe("SubagentExecutionCard — 耗时显示", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
   it("成功状态显示完成耗时", () => {
@@ -538,6 +607,7 @@ describe("SubagentExecutionCard — 输出渲染", () => {
     cleanup();
     hoisted.matchedSub = null;
     hoisted.messages = [];
+    hoisted.subagentStatus = undefined;
   });
 
   it("将子会话输出按 Markdown 渲染", () => {

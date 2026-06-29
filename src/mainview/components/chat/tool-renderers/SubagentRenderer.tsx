@@ -14,7 +14,11 @@ import {
   createSessionActivityLabels,
 } from "./SessionActivitySummary";
 import { SessionTaskCard } from "./SessionTaskCard";
-import { SessionTaskModelBadges } from "./SessionTaskModelBadges";
+import {
+  mergeSessionTaskModelInfo,
+  SessionTaskModelBadges,
+} from "./SessionTaskModelBadges";
+import { useSessionTaskModelFallback } from "./useSessionTaskModelFallback";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -164,6 +168,16 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const shortSessionId = matchedSub?.sessionId
     ? matchedSub.sessionId.replace(/^sess_/, "").slice(0, 12)
     : "";
+  const modelFallback = useSessionTaskModelFallback();
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      tier: requestedTier,
+      model: firstNonEmptyString(matchedSub?.model, requestedModel),
+      provider: firstNonEmptyString(matchedSub?.provider, requestedProvider),
+      thinkingLevel: requestedThinkingLevel,
+    },
+    modelFallback,
+  );
 
   const badgeContent = (
     <>
@@ -180,10 +194,10 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         </span>
       )}
       <SessionTaskModelBadges
-        tier={requestedTier}
-        model={firstNonEmptyString(matchedSub?.model, requestedModel)}
-        provider={firstNonEmptyString(matchedSub?.provider, requestedProvider)}
-        thinkingLevel={requestedThinkingLevel}
+        tier={modelInfo.tier}
+        model={modelInfo.model}
+        provider={modelInfo.provider}
+        thinkingLevel={modelInfo.thinkingLevel}
       />
       {shortSessionId && (
         <span className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono text-text-tertiary bg-surface-hover/60">

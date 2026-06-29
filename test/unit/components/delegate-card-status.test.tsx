@@ -8,6 +8,13 @@ import type { ContentBlock, SessionMeta } from "../../../src/mainview/types";
 const hoisted = vi.hoisted(() => ({
   delegateSessionStatus: undefined as string | undefined,
   forkSessionStatus: undefined as string | undefined,
+  currentTier: "max" as string | null,
+  currentModel: {
+    provider: "anthropic",
+    id: "claude-sonnet-4",
+    reasoning: true,
+  } as { provider: string; id: string; reasoning?: boolean } | null,
+  currentThinkingLevel: "high",
 }));
 
 function session(overrides: Partial<SessionMeta>): SessionMeta {
@@ -87,6 +94,8 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
         },
         projectTabs: [{ id: "tab-1", path: "/fake/project" }],
         activeProjectId: "tab-1",
+        currentModel: hoisted.currentModel,
+        currentThinkingLevel: hoisted.currentThinkingLevel,
         setActiveProject: vi.fn(),
         setActiveSession: vi.fn(),
         loadSessionsForProject: vi.fn(),
@@ -117,9 +126,31 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
         },
         projectTabs: [{ id: "tab-1", path: "/fake/project" }],
         activeProjectId: "tab-1",
+        currentModel: hoisted.currentModel,
+        currentThinkingLevel: hoisted.currentThinkingLevel,
         setActiveProject: vi.fn(),
         setActiveSession: vi.fn(),
         loadSessionsForProject: vi.fn(),
+      })),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
+  useTierStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
       })),
       subscribe: vi.fn(),
     },
@@ -250,6 +281,13 @@ afterEach(() => {
   cleanup();
   hoisted.delegateSessionStatus = undefined;
   hoisted.forkSessionStatus = undefined;
+  hoisted.currentTier = "max";
+  hoisted.currentModel = {
+    provider: "anthropic",
+    id: "claude-sonnet-4",
+    reasoning: true,
+  };
+  hoisted.currentThinkingLevel = "high";
 });
 
 describe("DelegateCard", () => {
@@ -261,6 +299,21 @@ describe("DelegateCard", () => {
     expect(badge).toHaveStyle({ color: "#F97316" });
     expect(screen.getByText("Max")).toBeInTheDocument();
     expect(container.textContent).toContain("Long delegate task");
+  });
+
+  it("falls back to the active project tier when delegate metadata has no model context", () => {
+    render(
+      <DelegateCard
+        block={makeDelegateBlock({
+          details: {
+            sessionId: "unknown-delegate-session",
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Max")).toBeInTheDocument();
+    expect(screen.getByText("Think high")).toBeInTheDocument();
   });
 
   it("keeps the card in running state when the delegate session is still streaming", () => {
@@ -277,6 +330,7 @@ describe("DelegateCard", () => {
 
 describe("ForkCard", () => {
   it("shows the default build agent badge when no agent is specified", () => {
+    hoisted.currentTier = null;
     const { container } = render(
       <ForkCard
         block={makeForkBlock({

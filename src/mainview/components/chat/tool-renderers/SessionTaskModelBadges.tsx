@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
-interface SessionTaskModelBadgesProps {
+export interface SessionTaskModelInfo {
   tier?: string | null;
   model?: string | null;
   provider?: string | null;
   thinkingLevel?: string | null;
 }
+
+type SessionTaskModelBadgesProps = SessionTaskModelInfo;
 
 const TIER_LABELS: Record<string, string> = {
   fast: "Fast",
@@ -17,6 +19,30 @@ function clean(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
   return trimmed;
+}
+
+function normalizeSessionTaskModelInfo(info: SessionTaskModelInfo): SessionTaskModelInfo {
+  return {
+    tier: clean(info.tier),
+    model: clean(info.model),
+    provider: clean(info.provider),
+    thinkingLevel: clean(info.thinkingLevel),
+  };
+}
+
+export function mergeSessionTaskModelInfo(
+  primary: SessionTaskModelInfo,
+  fallback: SessionTaskModelInfo,
+): SessionTaskModelInfo {
+  const normalizedPrimary = normalizeSessionTaskModelInfo(primary);
+  const normalizedFallback = normalizeSessionTaskModelInfo(fallback);
+  const tier = normalizedPrimary.tier ?? (normalizedPrimary.model ? undefined : normalizedFallback.tier);
+  return {
+    tier,
+    model: normalizedPrimary.model ?? normalizedFallback.model,
+    provider: normalizedPrimary.provider ?? normalizedFallback.provider,
+    thinkingLevel: normalizedPrimary.thinkingLevel ?? normalizedFallback.thinkingLevel,
+  };
 }
 
 function formatTier(value: string | null | undefined): string | undefined {

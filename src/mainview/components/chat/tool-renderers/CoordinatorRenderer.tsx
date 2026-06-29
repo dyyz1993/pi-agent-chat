@@ -24,7 +24,12 @@ import {
   type SessionActivityRound,
 } from "./SessionActivitySummary";
 import { SessionTaskCard } from "./SessionTaskCard";
-import { SessionTaskModelBadges } from "./SessionTaskModelBadges";
+import {
+  mergeSessionTaskModelInfo,
+  SessionTaskModelBadges,
+  type SessionTaskModelInfo,
+} from "./SessionTaskModelBadges";
+import { useSessionTaskModelFallback } from "./useSessionTaskModelFallback";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
@@ -35,13 +40,6 @@ const BUILTIN_AGENT_COLORS: Record<string, string> = {
   explore: "blue",
   plan: "purple",
 };
-
-interface SessionTaskModelInfo {
-  tier?: string | null;
-  model?: string | null;
-  provider?: string | null;
-  thinkingLevel?: string | null;
-}
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -282,12 +280,13 @@ export const DelegateCard = memo(function DelegateCard({
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
   const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
-  const modelInfo: SessionTaskModelInfo = {
+  const rawModelInfo: SessionTaskModelInfo = {
     tier: stringValue(args.tier) ?? details.tier,
     model: stringValue(args.model) ?? details.model,
     provider: stringValue(args.provider) ?? details.provider,
     thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
   };
+  const modelFallback = useSessionTaskModelFallback();
   const agents = useAgentStore((s) => s.agents);
 
   const requestedProjectPath = stringValue(args.projectPath);
@@ -300,6 +299,13 @@ export const DelegateCard = memo(function DelegateCard({
   });
   const targetSessionId = details.sessionId ?? matchedSession?.sessionId;
   const targetProjectPath = requestedProjectPath ?? matchedSession?.projectPath;
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      ...rawModelInfo,
+      tier: matchedSession?.tierConfig?.currentTier ?? rawModelInfo.tier,
+    },
+    modelFallback,
+  );
   const { canJump, handleJump } = useJumpToSession(targetSessionId);
   const sessionStatus = useTargetSessionStatus(targetSessionId);
   const activity = useDelegateActivityStore((s) =>
@@ -339,10 +345,7 @@ export const DelegateCard = memo(function DelegateCard({
       badge={renderBadge(
         agentText,
         agents,
-        {
-          ...modelInfo,
-          tier: matchedSession?.tierConfig?.currentTier ?? modelInfo.tier,
-        },
+        modelInfo,
         statusLabel,
         isRunning,
         sessionStatus,
@@ -382,12 +385,13 @@ export const ForkCard = memo(function ForkCard({
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
   const agentText = stringValue(args.agent) ?? "build";
   const details = extractDetails(block.details);
-  const modelInfo = {
+  const modelFallback = useSessionTaskModelFallback();
+  const modelInfo = mergeSessionTaskModelInfo({
     tier: stringValue(args.tier) ?? details.tier,
     model: stringValue(args.model) ?? details.model,
     provider: stringValue(args.provider) ?? details.provider,
     thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
-  };
+  }, modelFallback);
 
   const sessionId = details.sessionId;
   const { canJump, handleJump } = useJumpToSession(sessionId);
@@ -545,6 +549,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   const titleText = stringValue(args.title) ?? details.title ?? taskText.slice(0, 60);
   const agentText = stringValue(args.agent);
   const displayTitle = titleText || t("coordinator.syncTask");
+  const modelFallback = useSessionTaskModelFallback();
 
   const matchedSub = useSubagentStore((s) => {
     for (const subs of Object.values(s.subsessionsByParent)) {
@@ -559,12 +564,15 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     }
     return null;
   });
-  const modelInfo: SessionTaskModelInfo = {
-    tier: stringValue(args.tier) ?? details.tier,
-    model: stringValue(args.model) ?? matchedSub?.model ?? details.model,
-    provider: stringValue(args.provider) ?? matchedSub?.provider ?? details.provider,
-    thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
-  };
+  const modelInfo = mergeSessionTaskModelInfo(
+    {
+      tier: stringValue(args.tier) ?? details.tier,
+      model: stringValue(args.model) ?? matchedSub?.model ?? details.model,
+      provider: stringValue(args.provider) ?? matchedSub?.provider ?? details.provider,
+      thinkingLevel: stringValue(args.thinkingLevel) ?? details.thinkingLevel,
+    },
+    modelFallback,
+  );
 
   const targetSessionId = details.sessionId ?? matchedSub?.sessionId;
   const { canJump, handleJump } = useJumpToSession(targetSessionId);

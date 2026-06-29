@@ -9,6 +9,13 @@ const hoisted = vi.hoisted(() => ({
   sub: null as SubagentSessionInfo | null,
   sessionStatus: undefined as string | undefined,
   messages: [] as Array<{ role: string; content: ContentBlock[]; isStreaming?: boolean }>,
+  currentTier: "max" as string | null,
+  currentModel: {
+    provider: "anthropic",
+    id: "claude-sonnet-4",
+    reasoning: true,
+  } as { provider: string; id: string; reasoning?: boolean } | null,
+  currentThinkingLevel: "high",
 }));
 
 vi.mock("react-i18next", () => ({
@@ -59,6 +66,8 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
         },
         projectTabs: [{ id: "tab-1", path: "/fake/project" }],
         activeProjectId: "tab-1",
+        currentModel: hoisted.currentModel,
+        currentThinkingLevel: hoisted.currentThinkingLevel,
         setActiveProject: vi.fn(),
         setActiveSession: vi.fn(),
         loadSessionsForProject: vi.fn(),
@@ -76,9 +85,31 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
         },
         projectTabs: [{ id: "tab-1", path: "/fake/project" }],
         activeProjectId: "tab-1",
+        currentModel: hoisted.currentModel,
+        currentThinkingLevel: hoisted.currentThinkingLevel,
         setActiveProject: vi.fn(),
         setActiveSession: vi.fn(),
         loadSessionsForProject: vi.fn(),
+      })),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
+  useTierStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({
+        dataByProject: {
+          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        },
       })),
       subscribe: vi.fn(),
     },
@@ -169,6 +200,13 @@ afterEach(() => {
   hoisted.sub = null;
   hoisted.sessionStatus = undefined;
   hoisted.messages = [];
+  hoisted.currentTier = "max";
+  hoisted.currentModel = {
+    provider: "anthropic",
+    id: "claude-sonnet-4",
+    reasoning: true,
+  };
+  hoisted.currentThinkingLevel = "high";
 });
 
 describe("DelegateSyncCard", () => {
@@ -213,6 +251,13 @@ describe("DelegateSyncCard", () => {
     expect(screen.getByText("SUBTASK_SMOKE_OK")).toBeInTheDocument();
     expect(screen.getByText("Session sess_sub_test_001")).toBeInTheDocument();
     expect(screen.getByTitle("View")).toBeInTheDocument();
+  });
+
+  it("falls back to the active project tier when sync metadata has no model context", () => {
+    render(<DelegateSyncCard block={makeSyncBlock()} />);
+
+    expect(screen.getByText("Max")).toBeInTheDocument();
+    expect(screen.getByText("Think high")).toBeInTheDocument();
   });
 
   it("prefers terminal completion evidence over stale streaming session status", () => {
