@@ -151,6 +151,18 @@ function makeBlock(
   };
 }
 
+function makeTaskArgBlock(
+  overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {},
+): Extract<ContentBlock, { type: "toolExecution" }> {
+  return makeBlock({
+    args: JSON.stringify({
+      agent: "code-reviewer",
+      task: "Review use-session-store.ts and summarize risks",
+    }),
+    ...overrides,
+  });
+}
+
 function setupMockStore(
   sub: Partial<SubagentSessionInfo> & { status?: "running" | "done" | "error" },
   messages: Array<{ role: string; content: ContentBlock[] }> = [],
@@ -345,6 +357,20 @@ describe("SubagentExecutionCard — 展开/折叠行为", () => {
 
     fireEvent.click(header);
     expect(screen.queryByText("Input")).toBeNull();
+  });
+
+  it("展开后展示 task 参数作为 Input", () => {
+    setupMockStore({
+      status: "done",
+      description: "Review use-session-store.ts",
+      instruction: "Review use-session-store.ts and summarize risks",
+    });
+    render(<SubagentExecutionCard block={makeTaskArgBlock({ status: "done" })} />);
+
+    fireEvent.click(screen.getByText("Review use-session-store.ts and summarize risks"));
+
+    expect(screen.getByText("Input")).toBeTruthy();
+    expect(screen.getAllByText("Review use-session-store.ts and summarize risks")).toHaveLength(2);
   });
 });
 

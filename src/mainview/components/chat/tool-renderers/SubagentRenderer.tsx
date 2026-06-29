@@ -30,6 +30,11 @@ function isLiveSubagentStatus(status: string | undefined): boolean {
   );
 }
 
+function getStringArg(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : "";
+}
+
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
   blockId,
@@ -43,14 +48,14 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   let instruction = "";
   let requestedAgent = "";
   try {
-    const parsed = JSON.parse(block.args ?? "{}") as {
-      agent?: string;
-      description?: string;
-      instruction?: string;
-    };
-    requestedAgent = parsed.agent ?? "";
-    description = parsed.description ?? "";
-    instruction = parsed.instruction ?? "";
+    const parsed = JSON.parse(block.args ?? "{}") as Record<string, unknown>;
+    requestedAgent = getStringArg(parsed, "agent");
+    description = getStringArg(parsed, "description");
+    instruction =
+      getStringArg(parsed, "instruction") ||
+      getStringArg(parsed, "task") ||
+      getStringArg(parsed, "prompt") ||
+      getStringArg(parsed, "message");
   } catch (e) {
     logger.warn("Failed to parse subagent args", { error: String(e) });
   }
