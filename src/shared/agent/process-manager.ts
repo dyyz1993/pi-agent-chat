@@ -1554,9 +1554,13 @@ export class AgentProcessManager {
     });
   }
 
-  async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
+  async clearQueue(
+    sessionId: string,
+    item?: { type: "steering" | "followUp"; index: number; text: string },
+  ): Promise<{ steering: string[]; followUp: string[] }> {
     return clearQueueOperation({
       sessionId,
+      item,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }

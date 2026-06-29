@@ -31,6 +31,8 @@ interface ManagedClientLike {
   >;
 }
 
+export type QueueItemRef = { type: "steering" | "followUp"; index: number; text: string };
+
 interface ManagedClientAccess<TManaged extends ManagedClientLike> {
   sessionId: string;
   getActiveManaged: (sessionId: string) => TManaged | null;
@@ -217,11 +219,12 @@ export async function getQueueOperation<TManaged extends ManagedClientLike>(opti
 
 export async function clearQueueOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
+  item?: QueueItemRef;
   getActiveManaged: (sessionId: string) => TManaged | null;
 }): Promise<{ steering: string[]; followUp: string[] }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) return { steering: [], followUp: [] };
-  return managed.client.clearQueue().catch((err: unknown) => {
+  return managed.client.clearQueue(options.item).catch((err: unknown) => {
     log.warn("clearQueue error", {
       sessionId: options.sessionId,
       err: errorMessage(err),

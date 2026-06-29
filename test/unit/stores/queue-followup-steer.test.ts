@@ -476,6 +476,32 @@ describe("clearQueue — 行为验证", () => {
 
     expect(apiClient.call).not.toHaveBeenCalled();
   });
+
+  it("按 type/index/text 单独删除队列项并乐观更新本地队列", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A"],
+          followUp: ["稍后 A", "稍后 B"],
+        },
+      },
+    });
+
+    await useChatStore.getState().clearQueuedMessage({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.clearQueue", {
+      sessionId: SID,
+      item: { type: "followUp", index: 0, text: "稍后 A" },
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A"],
+      followUp: ["稍后 B"],
+    });
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════

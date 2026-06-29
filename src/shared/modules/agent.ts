@@ -206,7 +206,10 @@ export interface AgentMethods {
     result: { steering: string[]; followUp: string[] };
   };
   "agent.clearQueue": {
-    params: { sessionId: string };
+    params: {
+      sessionId: string;
+      item?: { type: "steering" | "followUp"; index: number; text: string };
+    };
     result: { steering: string[]; followUp: string[] };
   };
   "agent.getExtensions": {
