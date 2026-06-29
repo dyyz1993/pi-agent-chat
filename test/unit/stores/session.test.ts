@@ -436,6 +436,7 @@ describe("setActiveSession", () => {
       if (method === "agent.getCurrentAgent") return Promise.resolve({ agent: null });
       if (method === "agent.getTierModels") return Promise.resolve({});
       if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
       if (method === "session.loadTierConfig") return Promise.resolve(null);
       return Promise.resolve({});
     });

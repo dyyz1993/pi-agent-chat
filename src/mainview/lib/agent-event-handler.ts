@@ -7,6 +7,10 @@ import {
   insertChatMessageByDisplayOrder,
   useChatStore,
 } from "../stores/use-chat-store";
+import {
+  getMemoryCustomDedupeKey as getChatMemoryCustomDedupeKey,
+  getMemoryEntryScore,
+} from "./memory-entry-dedupe";
 import { useSessionStore, clearAgentStarted } from "../stores/use-session-store";
 import { useSessionQueueStore } from "../stores/use-session-queue-store";
 import { useMemoryStore } from "../stores/use-memory-store";
@@ -73,6 +77,7 @@ const pendingPrefetchMap = new Map<
   string,
   Map<string, { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }>
 >();
+const memoryPrefetchDataBySession = new Map<string, Map<string, Record<string, unknown>>>();
 const PREFETCH_FALLBACK_MS = 5000;
 
 function refreshAuthoritativeContextUsage(sessionId: string): void {
@@ -142,6 +147,7 @@ export function cleanupEventHandlerMaps(sessionId: string): void {
     }
     pendingPrefetchMap.delete(sessionId);
   }
+  memoryPrefetchDataBySession.delete(sessionId);
 
   // Remove from compaction deferred set
   compactionDeferredSessions.delete(sessionId);
@@ -160,23 +166,6 @@ function getMemoryOperationId(data: unknown): string | undefined {
   return typeof record?.operationId === "string" ? record.operationId : undefined;
 }
 
-function getMemoryInjectKey(data: unknown): string | undefined {
-  const record = data as Record<string, unknown> | undefined;
-  const operationId = getMemoryOperationId(data);
-  const fingerprint = typeof record?.fingerprint === "string" ? record.fingerprint : undefined;
-  if (!operationId || !fingerprint) return undefined;
-  return `${operationId}:${fingerprint}`;
-}
-
-function hasMemoryInjectMessage(messages: ChatMessage[], key: string): boolean {
-  return messages.some((message) =>
-    message.content.some((block) => {
-      if (block.type !== "custom" || block.customType !== "memory_inject") return false;
-      return getMemoryInjectKey(block.data) === key;
-    }),
-  );
-}
-
 function findTimedOutMemoryPrefetchIndex(msgs: ChatMessage[], operationId: string): number {
   for (let i = msgs.length - 1; i >= 0; i--) {
     const msg = msgs[i];
@@ -187,6 +176,43 @@ function findTimedOutMemoryPrefetchIndex(msgs: ChatMessage[], operationId: strin
     if (data?._timedOut === true && data.operationId === operationId) return i;
   }
   return -1;
+}
+
+function upsertMemoryCustomMessage(messages: ChatMessage[], customMsg: ChatMessage): ChatMessage[] {
+  const block = customMsg.content[0];
+  if (block?.type !== "custom") {
+    return insertChatMessageByDisplayOrder(messages, customMsg);
+  }
+
+  const dedupeKey = getChatMemoryCustomDedupeKey(block.customType, block.data);
+  if (!dedupeKey) {
+    return insertChatMessageByDisplayOrder(messages, customMsg);
+  }
+
+  const existingSameKey = messages.find((message) => {
+    if (message.role !== "custom") return false;
+    const candidateBlock = message.content[0];
+    if (candidateBlock?.type !== "custom") return false;
+    return getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) === dedupeKey;
+  });
+  if (existingSameKey) {
+    const existingBlock = existingSameKey.content[0];
+    const existingScore =
+      existingBlock?.type === "custom"
+        ? getMemoryEntryScore(existingBlock.customType, existingBlock.data)
+        : 0;
+    const nextScore = getMemoryEntryScore(block.customType, block.data);
+    if (nextScore < existingScore) return messages;
+  }
+
+  const filtered = messages.filter((message) => {
+    if (message.role !== "custom") return true;
+    const candidateBlock = message.content[0];
+    if (candidateBlock?.type !== "custom") return true;
+    return getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) !== dedupeKey;
+  });
+
+  return insertChatMessageByDisplayOrder(filtered, customMsg);
 }
 
 function mergePrefetchResultData(
@@ -206,6 +232,27 @@ function mergePrefetchResultData(
       typeof prefetchData?.availableFiles === "number" ? prefetchData.availableFiles : 0,
     ...(prefetchOccurredAt !== undefined ? { _prefetchOccurredAt: prefetchOccurredAt } : {}),
   };
+}
+
+function setMemoryPrefetchData(
+  sessionId: string,
+  operationId: string,
+  data: Record<string, unknown>,
+): void {
+  let sessionMap = memoryPrefetchDataBySession.get(sessionId);
+  if (!sessionMap) {
+    sessionMap = new Map();
+    memoryPrefetchDataBySession.set(sessionId, sessionMap);
+  }
+  sessionMap.set(operationId, data);
+}
+
+function getMemoryPrefetchData(
+  sessionId: string,
+  operationId: string | undefined,
+): Record<string, unknown> | undefined {
+  if (!operationId) return undefined;
+  return memoryPrefetchDataBySession.get(sessionId)?.get(operationId);
 }
 
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
@@ -1269,26 +1316,38 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       return;
     }
 
-    if (event.customType === "memory_inject") {
-      const injectKey = getMemoryInjectKey(event.data);
-      const existing = useChatStore.getState().messagesBySession[sessionId] || [];
-      if (injectKey && hasMemoryInjectMessage(existing, injectKey)) return;
+    const memoryOperationId = getMemoryOperationId(event.data);
+    if (
+      event.customType === "memory_prefetch" &&
+      memoryOperationId &&
+      event.data &&
+      typeof event.data === "object"
+    ) {
+      setMemoryPrefetchData(sessionId, memoryOperationId, event.data as Record<string, unknown>);
+    }
+
+    let effectiveMemoryData = event.data;
+    if (event.customType === "memory_prefetch_result" || event.customType === "memory_inject") {
+      effectiveMemoryData = mergePrefetchResultData(
+        event.data,
+        getMemoryPrefetchData(sessionId, memoryOperationId),
+      );
     }
 
     const memoryStore = useMemoryStore.getState();
     memoryStore.addEvent(sessionId, {
       id: event.id || `custom-${Date.now()}`,
       customType: event.customType,
-      data: event.data,
-      timestamp: getMemorySemanticTimestamp(event.data, Date.now()),
+      data: effectiveMemoryData,
+      timestamp: getMemorySemanticTimestamp(effectiveMemoryData, Date.now()),
     });
 
     if (event.customType === "memory_prefetch_result" || event.customType === "memory_inject") {
-      const data = event.data as { summary?: string; snippet?: string } | undefined;
+      const data = effectiveMemoryData as { summary?: string; snippet?: string } | undefined;
       const skippedInjection =
         event.customType === "memory_inject" &&
-        ((event.data as Record<string, unknown> | undefined)?.skipped === true ||
-          (event.data as Record<string, unknown> | undefined)?.alreadyInjected === true);
+        ((effectiveMemoryData as Record<string, unknown> | undefined)?.skipped === true ||
+          (effectiveMemoryData as Record<string, unknown> | undefined)?.alreadyInjected === true);
       if (data && !skippedInjection) {
         memoryStore.addInjected(sessionId, {
           summary: data.summary ?? "",
@@ -1334,7 +1393,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           ],
           timestamp: getMemorySemanticTimestamp(event.data, Date.now()),
         };
-        chat.setMessagesForSession(sessionId, insertChatMessageByDisplayOrder(msgs, customMsg));
+        chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(msgs, customMsg));
       }, PREFETCH_FALLBACK_MS);
 
       sessionMap.set(operationId, { agentEvent: event, timer });
@@ -1345,6 +1404,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const sessionMap = pendingPrefetchMap.get(sessionId);
       let resultData: unknown = event.data;
       const operationId = getMemoryOperationId(event.data);
+      const storedPrefetchData = getMemoryPrefetchData(sessionId, operationId);
 
       if (sessionMap && operationId) {
         const firstPending = sessionMap.get(operationId);
@@ -1360,6 +1420,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           ) as Record<string, unknown> | undefined;
           resultData = mergePrefetchResultData(event.data, prefetchData);
         }
+      }
+      if (resultData === event.data && storedPrefetchData) {
+        resultData = mergePrefetchResultData(event.data, storedPrefetchData);
       }
 
       const chat = useChatStore.getState();
@@ -1399,27 +1462,26 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
         timestamp: getMemorySemanticTimestamp(resultData, Date.now()),
       };
-      chat.setMessagesForSession(
-        sessionId,
-        insertChatMessageByDisplayOrder(existingMsgs, customMsg),
-      );
+      chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(existingMsgs, customMsg));
       return;
     }
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
+    const customData =
+      event.customType === "memory_inject" ? effectiveMemoryData : event.data;
     const customMsg: ChatMessage = {
       id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",
-      content: [{ type: "custom", customType: event.customType, data: event.data }],
+      content: [{ type: "custom", customType: event.customType, data: customData }],
       timestamp: ALL_MEMORY_TYPE_KEYS.has(event.customType)
-        ? getMemorySemanticTimestamp(event.data, Date.now())
+        ? getMemorySemanticTimestamp(customData, Date.now())
         : Date.now(),
     };
     chat.setMessagesForSession(
       sessionId,
       ALL_MEMORY_TYPE_KEYS.has(event.customType)
-        ? insertChatMessageByDisplayOrder(existing, customMsg)
+        ? upsertMemoryCustomMessage(existing, customMsg)
         : [...existing, customMsg],
     );
 

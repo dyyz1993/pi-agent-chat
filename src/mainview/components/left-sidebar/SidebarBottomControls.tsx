@@ -15,6 +15,7 @@ import {
   Target,
   Settings2,
   RefreshCw,
+  Star,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -112,6 +113,7 @@ export function SidebarBottomControls() {
     activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
   );
   const switchAgent = useAgentStore((s) => s.switchAgent);
+  const toggleAgentFavorite = useAgentStore((s) => s.toggleAgentFavorite);
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
 
@@ -472,6 +474,31 @@ export function SidebarBottomControls() {
                       }
                     }}
                   >
+                    <button
+                      type="button"
+                      className={`mt-0.5 -ml-0.5 p-0.5 rounded text-text-tertiary hover:text-status-warning hover:bg-status-warning/10 transition-colors ${
+                        agent.isFavorite ? "text-status-warning" : ""
+                      }`}
+                      title={agent.isFavorite ? "取消收藏 Agent" : "收藏 Agent"}
+                      aria-label={agent.isFavorite ? "取消收藏 Agent" : "收藏 Agent"}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleAgentFavorite(agent.name).catch((error) => {
+                          const message =
+                            error instanceof Error ? error.message : String(error);
+                          useNotificationStore.getState().push({
+                            message: `Agent 收藏失败: ${message}`,
+                            level: "error",
+                          });
+                        });
+                      }}
+                    >
+                      <Star
+                        className="w-3 h-3"
+                        fill={agent.isFavorite ? "currentColor" : "none"}
+                      />
+                    </button>
                     <AgentAvatar
                       avatar={agent.avatar}
                       agentFilePath={agent.filePath}

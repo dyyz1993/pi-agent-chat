@@ -19,6 +19,7 @@ const BOTTOM_THRESHOLD_PX = 80;
 const TOP_THRESHOLD_PX = 80;
 const ACTIVE_THROTTLE_MS = 16;
 const SCROLL_SETTLE_MAX_ATTEMPTS = 10;
+const STREAM_SCROLL_STABLE_MAX_ATTEMPTS = 10;
 const ACTIVE_TARGET_ANCHOR_OFFSET_PX = 48;
 const ACTIVE_TARGET_ANCHOR_MAX_RATIO = 0.35;
 
@@ -29,6 +30,13 @@ type VisibleActiveTargetCandidate = {
   top: number;
   bottom: number;
   order?: number;
+};
+
+type BottomMeasurementSnapshot = {
+  index: number;
+  itemSize: number;
+  scrollSize: number;
+  viewportSize: number;
 };
 
 export function getActiveTargetAnchorY(containerRect: Pick<DOMRect, "top" | "height">): number {
@@ -138,6 +146,7 @@ export function useActiveScrollTracker({
   // Unified scroll scheduler: single rAF slot for all scroll requests.
   // Ensures at most one scrollToIndex per animation frame.
   const scrollRafRef = useRef<number>(0);
+  const bottomMeasurementRef = useRef<BottomMeasurementSnapshot | null>(null);
 
   const [toolbarState, setToolbarState] = useState({
     isAtTop: false,
@@ -175,6 +184,31 @@ export function useActiveScrollTracker({
     if (!handle) return true;
     return handle.scrollOffset < TOP_THRESHOLD_PX;
   }, [vlistRef]);
+
+  const hasStableBottomMeasurement = useCallback((handle: VirtualizerHandle, index: number) => {
+    let itemSize = 0;
+    try {
+      itemSize = handle.getItemSize(index);
+    } catch {
+      bottomMeasurementRef.current = null;
+      return true;
+    }
+
+    const snapshot: BottomMeasurementSnapshot = {
+      index,
+      itemSize,
+      scrollSize: handle.scrollSize,
+      viewportSize: handle.viewportSize,
+    };
+    const previous = bottomMeasurementRef.current;
+    bottomMeasurementRef.current = snapshot;
+    return (
+      previous?.index === snapshot.index &&
+      previous.itemSize === snapshot.itemSize &&
+      previous.scrollSize === snapshot.scrollSize &&
+      previous.viewportSize === snapshot.viewportSize
+    );
+  }, []);
 
   const findVisibleIndex = useCallback((): number => {
     const handle = vlistRef.current;
@@ -376,6 +410,44 @@ export function useActiveScrollTracker({
     setActive(lastId);
   }, [vlistRef, setActive, markProgrammatic, getLastActiveTargetKey]);
 
+  const scheduleStreamingScrollToBottom = useCallback(() => {
+    const ids = messageIdsRef.current;
+    if (ids.length === 0) return;
+    if (userScrolledUpRef.current) return;
+    if (!didInitRef.current) return;
+
+    if (scrollRafRef.current) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = 0;
+    }
+
+    let attempts = 0;
+
+    const tryScroll = () => {
+      const handle = vlistRef.current;
+      const currentIds = messageIdsRef.current;
+      if (!handle || currentIds.length === 0 || userScrolledUpRef.current || !didInitRef.current) {
+        scrollRafRef.current = 0;
+        return;
+      }
+
+      attempts++;
+      const lastIndex = currentIds.length - 1;
+      if (
+        hasStableBottomMeasurement(handle, lastIndex) ||
+        attempts >= STREAM_SCROLL_STABLE_MAX_ATTEMPTS
+      ) {
+        scrollRafRef.current = 0;
+        doScrollToBottom();
+        return;
+      }
+
+      scrollRafRef.current = requestAnimationFrame(tryScroll);
+    };
+
+    scrollRafRef.current = requestAnimationFrame(tryScroll);
+  }, [doScrollToBottom, hasStableBottomMeasurement, vlistRef]);
+
   const scrollToMessage = useCallback(
     (msgId: string, options?: { align?: "start" | "center" | "end"; smooth?: boolean }) => {
       const handle = vlistRef.current;
@@ -464,6 +536,7 @@ export function useActiveScrollTracker({
         scrollRafRef.current = 0;
       }
       didInitRef.current = false;
+      bottomMeasurementRef.current = null;
       userScrolledUpRef.current = false;
       prevCountRef.current = 0;
       prevStreamRef.current = 0;
@@ -544,15 +617,8 @@ export function useActiveScrollTracker({
     if (userScrolledUpRef.current) return;
     if (!didInitRef.current) return; // Don't compete with initial scroll settle
 
-    // Dedup: cancel previous rAF, schedule new one
-    if (scrollRafRef.current) {
-      cancelAnimationFrame(scrollRafRef.current);
-    }
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = 0;
-      doScrollToBottom();
-    });
-  }, [streamVersion, doScrollToBottom]);
+    scheduleStreamingScrollToBottom();
+  }, [streamVersion, scheduleStreamingScrollToBottom]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -21,6 +21,8 @@ import {
   listFavoriteFolders,
   toggleProjectPin,
   toggleFavoriteFolder,
+  getAgentFavorites,
+  toggleAgentFavorite,
   getModelFavorites,
   toggleModelFavorite,
   createDirectory,
@@ -489,6 +491,16 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   r("project.getModelFavorites", async () => {
     const favorites = await getModelFavorites();
     return { favorites };
+  });
+
+  r("project.getAgentFavorites", async () => {
+    const favorites = await getAgentFavorites();
+    return { favorites };
+  });
+
+  r("project.toggleAgentFavorite", async (params) => {
+    const result = await toggleAgentFavorite(params.agentName);
+    return result;
   });
 
   r("project.toggleModelFavorite", async (params) => {
