@@ -180,6 +180,54 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
     if (typeof occurredAt === "number" && Number.isFinite(occurredAt)) return occurredAt;
     return fallback;
   }
+  function getMemoryQueryFromData(data: unknown): string | undefined {
+    const record = data as Record<string, unknown> | undefined;
+    const query =
+      typeof record?._prefetchQuery === "string"
+        ? record._prefetchQuery
+        : typeof record?.query === "string"
+          ? record.query
+          : undefined;
+    const normalized = query?.trim().replace(/\s+/g, " ");
+    return normalized || undefined;
+  }
+  function getMemoryOperationIdFromData(data: unknown): string | undefined {
+    const record = data as Record<string, unknown> | undefined;
+    return typeof record?.operationId === "string" ? record.operationId : undefined;
+  }
+  function getMemoryCustomDedupeKey(customType: string, data: unknown): string | undefined {
+    if (customType === "memory_prefetch_result") {
+      const query = getMemoryQueryFromData(data);
+      if (query) return `prefetch-query:${query}`;
+      const operationId = getMemoryOperationIdFromData(data);
+      return operationId ? `prefetch:${operationId}` : undefined;
+    }
+    if (customType === "memory_inject") {
+      const query = getMemoryQueryFromData(data);
+      if (query) return `inject-query:${query}`;
+      const operationId = getMemoryOperationIdFromData(data);
+      return operationId ? `inject-op:${operationId}` : undefined;
+    }
+    return undefined;
+  }
+  function getMemoryEntryScore(customType: string, data: unknown): number {
+    const record = data as Record<string, unknown> | undefined;
+    const injectedBytes = typeof record?.injectedBytes === "number" ? record.injectedBytes : 0;
+    const originalBytes = typeof record?.originalBytes === "number" ? record.originalBytes : 0;
+    const selectedFileScore = Array.isArray(record?.selectedFiles)
+      ? record.selectedFiles.length * 500
+      : 0;
+    if (customType === "memory_inject") {
+      const isSkipped = record?.alreadyInjected === true || record?.skipped === true;
+      return (isSkipped ? -10_000 : 10_000) + injectedBytes + originalBytes + selectedFileScore;
+    }
+    if (customType === "memory_prefetch_result") {
+      const layer = typeof record?.layer === "string" ? record.layer : "";
+      const layerScore = layer === "llm" ? 300 : layer === "auto" ? 200 : layer === "skip" ? 100 : 0;
+      return injectedBytes + selectedFileScore + layerScore;
+    }
+    return 0;
+  }
   function insertChatMessageByDisplayOrder(
     messages: ChatMessage[],
     message: ChatMessage,
@@ -193,7 +241,13 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       return a.id.localeCompare(b.id);
     });
   }
-  return { getMemorySemanticTimestamp, insertChatMessageByDisplayOrder, useChatStore };
+  return {
+    getMemoryCustomDedupeKey,
+    getMemoryEntryScore,
+    getMemorySemanticTimestamp,
+    insertChatMessageByDisplayOrder,
+    useChatStore,
+  };
 });
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
@@ -375,6 +429,224 @@ describe("memory custom entry ordering", () => {
         },
       ],
     });
+  });
+
+  it("replaces older memory prefetch results for the same operation in live event flow", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "读取一下上面的文件" }],
+        timestamp: 1_000,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "我来检查。" }],
+        timestamp: 3_000,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-1",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-1",
+        query: "读取一下上面的文件",
+        availableFiles: 2,
+        occurredAt: 1_100,
+        phaseOrder: 1,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-1",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-1",
+        summary: "规则命中",
+        snippet: "rules text",
+        layer: "skip",
+        selectedFiles: ["rules.md"],
+        occurredAt: 1_200,
+        phaseOrder: 2,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-2",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-1",
+        summary: "Matched memory",
+        snippet: "memory text",
+        layer: "auto",
+        selectedFiles: ["MEMORY.md"],
+        occurredAt: 1_250,
+        phaseOrder: 2,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual([
+      "user-1",
+      "prefetch-result-2",
+      "assistant-1",
+    ]);
+  });
+
+  it("keeps the actual memory injection over a later reuse entry in live event flow", () => {
+    setMessages([]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-1",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-1",
+        fingerprint: "rules.md|12288",
+        summary: "已注入 Memory 到模型上下文 · 16个文件",
+        snippet: "rules snippet",
+        selectedFiles: ["rules.md"],
+        injectedBytes: 12288,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-2",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-1",
+        fingerprint: "memory.md|0",
+        summary: "已识别 Memory，本会话已注入过 · 1个文件",
+        snippet: "memory snippet",
+        selectedFiles: ["memory.md"],
+        alreadyInjected: true,
+        skipped: true,
+        originalBytes: 435,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual(["inject-1"]);
+  });
+
+  it("deduplicates same-query memory prefetch results across different operations in live event flow", () => {
+    setMessages([]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-rules",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-rules",
+        query: "请连续输出 18 段内容",
+        availableFiles: 16,
+        occurredAt: 100,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-rules",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-rules",
+        summary: "已匹配记忆 · 规则 · 13KB · 16个文件",
+        layer: "skip",
+        injectedBytes: 13_000,
+        selectedFiles: Array.from({ length: 16 }, (_, i) => `rules-${i}.md`),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-auto",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-auto",
+        query: "请连续输出 18 段内容",
+        availableFiles: 1,
+        occurredAt: 120,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-auto",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-auto",
+        summary: "已匹配记忆 · 全量注入 · 0KB · 1个文件",
+        layer: "auto",
+        injectedBytes: 0,
+        selectedFiles: ["user_preferences.md"],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual(["prefetch-result-rules"]);
+  });
+
+  it("deduplicates same-query memory inject/reuse entries across different operations in live event flow", () => {
+    setMessages([]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-rules",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-rules",
+        query: "请连续输出 18 段内容",
+        occurredAt: 100,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-rules",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-rules",
+        fingerprint: "rules|13000",
+        summary: "已注入 Memory 到模型上下文 · 16个文件",
+        selectedFiles: Array.from({ length: 16 }, (_, i) => `rules-${i}.md`),
+        injectedBytes: 13_000,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-start-auto",
+      customType: "memory_prefetch",
+      data: {
+        operationId: "op-auto",
+        query: "请连续输出 18 段内容",
+        occurredAt: 120,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-auto-reuse",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-auto",
+        fingerprint: "prefs|70",
+        summary: "已识别 Memory，本会话已注入过 · 1个文件",
+        selectedFiles: ["user_preferences.md"],
+        alreadyInjected: true,
+        skipped: true,
+        originalBytes: 70,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((message) => message.id)).toEqual(["inject-rules"]);
   });
 });
 

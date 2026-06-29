@@ -21,10 +21,10 @@ import {
   listFavoriteFolders,
   toggleProjectPin,
   toggleFavoriteFolder,
-  getModelFavorites,
-  toggleModelFavorite,
   getAgentFavorites,
   toggleAgentFavorite,
+  getModelFavorites,
+  toggleModelFavorite,
   createDirectory,
   listSshProfiles,
   getSshProfile,
@@ -493,11 +493,6 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     return { favorites };
   });
 
-  r("project.toggleModelFavorite", async (params) => {
-    const result = await toggleModelFavorite(params.modelKey);
-    return result;
-  });
-
   r("project.getAgentFavorites", async () => {
     const favorites = await getAgentFavorites();
     return { favorites };
@@ -505,6 +500,11 @@ export function register(server: RPCServer, options: HandlerOptions): void {
 
   r("project.toggleAgentFavorite", async (params) => {
     const result = await toggleAgentFavorite(params.agentName);
+    return result;
+  });
+
+  r("project.toggleModelFavorite", async (params) => {
+    const result = await toggleModelFavorite(params.modelKey);
     return result;
   });
 

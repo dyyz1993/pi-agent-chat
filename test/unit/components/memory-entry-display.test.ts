@@ -173,8 +173,8 @@ describe("Memory entry display — showMemoryEntries=true (debug mode)", () => {
     const processed = buildProcessedMessages(messages, true);
     expect(processed.map((p) => p.msg.id)).toEqual([
       "assistant-1",
-      "inject-1",
       "save-memory",
+      "inject-2",
       "assistant-2",
     ]);
   });
@@ -225,9 +225,9 @@ describe("Memory entry display — SideNav behavior", () => {
     );
 
     const navIds = items.map((i) => i.navId);
-    expect(navIds).toContain("inject-1");
+    expect(navIds).toContain("inject-2");
     expect(navIds).toContain("save-memory");
-    expect(navIds).not.toContain("inject-2");
+    expect(navIds).not.toContain("inject-1");
   });
 
   it("SideNav includes non-memory custom messages", () => {

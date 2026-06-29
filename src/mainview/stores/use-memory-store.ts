@@ -6,6 +6,56 @@ import type { MemoryStatusResult } from "../../shared/modules/memory";
 
 const log = createLogger("memory");
 
+function getMemoryOperationId(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  return typeof record?.operationId === "string" ? record.operationId : undefined;
+}
+
+function getMemoryInjectDataKey(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const operationId = getMemoryOperationId(data);
+  const fingerprint = typeof record?.fingerprint === "string" ? record.fingerprint : undefined;
+  if (!operationId || !fingerprint) return undefined;
+  return `${operationId}:${fingerprint}`;
+}
+
+function getMemoryQueryFromData(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  const query =
+    typeof record?._prefetchQuery === "string"
+      ? record._prefetchQuery
+      : typeof record?.query === "string"
+        ? record.query
+        : undefined;
+  const normalized = query?.trim().replace(/\s+/g, " ");
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function getMemorySelectedFileCount(data: unknown): number {
+  const record = data as Record<string, unknown> | undefined;
+  return Array.isArray(record?.selectedFiles) ? record.selectedFiles.length : 0;
+}
+
+function getMemoryEventScore(customType: string, data: unknown): number {
+  const record = data as Record<string, unknown> | undefined;
+  const injectedBytes = typeof record?.injectedBytes === "number" ? record.injectedBytes : 0;
+  const originalBytes = typeof record?.originalBytes === "number" ? record.originalBytes : 0;
+  const selectedFileScore = getMemorySelectedFileCount(data) * 500;
+
+  if (customType === "memory_inject") {
+    const isSkipped = record?.alreadyInjected === true || record?.skipped === true;
+    return (isSkipped ? -10_000 : 10_000) + injectedBytes + originalBytes + selectedFileScore;
+  }
+
+  if (customType === "memory_prefetch_result") {
+    const layer = typeof record?.layer === "string" ? record.layer : "";
+    const layerScore = layer === "llm" ? 300 : layer === "auto" ? 200 : layer === "skip" ? 100 : 0;
+    return injectedBytes + selectedFileScore + layerScore;
+  }
+
+  return 0;
+}
+
 interface MemoryEvent {
   id: string;
   customType: string;
@@ -66,6 +116,26 @@ interface MemoryState {
 
 const loadFilesTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
+function getMemoryEventDedupeKey(event: MemoryEvent): string | undefined {
+  if (event.customType === "memory_prefetch_result") {
+    const query = getMemoryQueryFromData(event.data);
+    if (query) return `prefetch-query:${query}`;
+    const operationId = getMemoryOperationId(event.data);
+    return operationId ? `prefetch:${operationId}` : undefined;
+  }
+
+  if (event.customType === "memory_inject") {
+    const query = getMemoryQueryFromData(event.data);
+    if (query) return `inject-query:${query}`;
+    const operationId = getMemoryOperationId(event.data);
+    if (operationId) return `inject-op:${operationId}`;
+    const injectKey = getMemoryInjectDataKey(event.data);
+    return injectKey ? `inject-key:${injectKey}` : undefined;
+  }
+
+  return undefined;
+}
+
 export const useMemoryStore = create<MemoryState>()((set, get) => ({
   eventsBySession: {},
   filesBySession: {},
@@ -82,6 +152,30 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const existing = s.eventsBySession[sessionId] || [];
       const isDuplicate = existing.some((e) => e.id === event.id);
       if (isDuplicate) return s;
+
+      const dedupeKey = getMemoryEventDedupeKey(event);
+      if (dedupeKey) {
+        const existingIndex = existing.findIndex(
+          (candidate) => getMemoryEventDedupeKey(candidate) === dedupeKey,
+        );
+        if (existingIndex >= 0) {
+          const currentScore = getMemoryEventScore(event.customType, event.data);
+          const existingScore = getMemoryEventScore(
+            existing[existingIndex].customType,
+            existing[existingIndex].data,
+          );
+          if (currentScore < existingScore) return s;
+          const nextEvents = existing.slice();
+          nextEvents[existingIndex] = event;
+          return {
+            eventsBySession: {
+              ...s.eventsBySession,
+              [sessionId]: nextEvents,
+            },
+          };
+        }
+      }
+
       return {
         eventsBySession: {
           ...s.eventsBySession,

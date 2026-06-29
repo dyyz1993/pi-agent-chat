@@ -13,7 +13,7 @@ import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSubagentStore, clearSubagentToolNames } from "./use-subagent-store";
 import { createFetchInitialStateAction } from "./session-initial-state";
-import { createSetActiveSessionAction } from "./session-active-session";
+import { createSetActiveSessionAction, runReconnectMessageLoad } from "./session-active-session";
 import { formatProjectStartError, getErrorMessage } from "./session-start-error";
 import {
   createCreateNewSessionAction,
@@ -84,6 +84,45 @@ function mergeProjectTab(existing: ProjectTab, incoming: ProjectTab): ProjectTab
     remote: incoming.remote ?? existing.remote,
     connected: incoming.connected ?? existing.connected,
   };
+}
+
+async function resolveReconnectTab(
+  state: SessionState,
+): Promise<{ state: SessionState; tab: ProjectTab } | null> {
+  if (!state.activeProjectId) return null;
+  const existingTab = state.projectTabs.find((t) => t.id === state.activeProjectId);
+  if (existingTab) return { state, tab: existingTab };
+
+  try {
+    const restored = (await apiClient.call("project.restoreTabs", {})) as {
+      tabs?: ProjectTab[];
+      activeTabId?: string | null;
+    };
+    const tabs = restored.tabs ?? [];
+    const activeProjectId =
+      (restored.activeTabId && tabs.some((tab) => tab.id === restored.activeTabId)
+        ? restored.activeTabId
+        : null) ??
+      (tabs.some((tab) => tab.id === state.activeProjectId) ? state.activeProjectId : null) ??
+      tabs[0]?.id ??
+      null;
+
+    if (!activeProjectId) return null;
+
+    useSessionStore.setState({
+      projectTabs: tabs,
+      activeProjectId,
+    });
+
+    const nextState = useSessionStore.getState();
+    const restoredTab = nextState.projectTabs.find((tab) => tab.id === activeProjectId);
+    return restoredTab ? { state: nextState, tab: restoredTab } : null;
+  } catch (err) {
+    log.warn("[onReconnect] restoreTabs failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 function scheduleWorkspaceResourceRefresh(getState: () => SessionState, sessionId: string): void {
@@ -1021,128 +1060,124 @@ export const useSessionStore = create<SessionState>()(
 );
 
 apiClient.onReconnect(() => {
-  log.info("[onReconnect] triggered");
-  const state = useSessionStore.getState();
-  const { activeSessionId, projectTabs, activeProjectId } = state;
+  void (async () => {
+    log.info("[onReconnect] triggered");
+    const initialState = useSessionStore.getState();
+    const { activeSessionId, activeProjectId } = initialState;
 
-  if (!activeSessionId || !activeProjectId) return;
-  const tab = projectTabs.find((t) => t.id === activeProjectId);
-  if (!tab) return;
+    if (!activeSessionId || !activeProjectId) return;
+    const resolved = await resolveReconnectTab(initialState);
+    if (!resolved) return;
 
-  const sessions = state.sessionsByProject[tab.path];
-  const session = sessions?.find((s) => s.sessionId === activeSessionId);
-  if (!session) return;
+    const { state, tab } = resolved;
+    const sessions = state.sessionsByProject[tab.path];
+    const session = sessions?.find((s) => s.sessionId === activeSessionId);
+    if (!session) return;
 
-  const storeGet = useSessionStore.getState.bind(useSessionStore);
-  const storeSet = (fn: (s: SessionState) => Partial<SessionState>) =>
-    useSessionStore.setState(fn(useSessionStore.getState()));
+    const storeGet = useSessionStore.getState.bind(useSessionStore);
+    const storeSet = (fn: (s: SessionState) => Partial<SessionState>) =>
+      useSessionStore.setState(fn(useSessionStore.getState()));
 
-  for (const sid of Object.keys(state.agentSubscriptions)) {
-    if (sid !== activeSessionId) {
-      clearStatusWatchdog(sid);
-      cleanupSession(state, sid);
+    for (const sid of Object.keys(state.agentSubscriptions)) {
+      if (sid !== activeSessionId) {
+        clearStatusWatchdog(sid);
+        cleanupSession(state, sid);
+      }
     }
-  }
 
-  if (!state.agentSubscriptions[activeSessionId]) {
-    setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
-  }
+    if (!state.agentSubscriptions[activeSessionId]) {
+      setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+    }
 
-  apiClient
-    .call("agent.start", {
-      sessionId: activeSessionId,
-      projectPath: session.projectPath,
-      sessionPath: session.sessionPath,
-    })
-    .then((result) => {
-      if (result.status === "already_running" || result.status === "started") {
-        useSessionStore.setState((s) => {
-          const projectId = s.activeProjectId;
-          if (!projectId) return {};
-          return {
-            projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
-            projectStartError: { ...s.projectStartError, [projectId]: "" },
-          };
-        });
-        useSessionStore.setState((s) => ({
-          sessionReady: { ...s.sessionReady, [activeSessionId]: true },
-          agentReady: { ...s.agentReady, [activeSessionId]: true },
-        }));
-        requestRulesSnapshot(activeSessionId);
-        storeGet().fetchInitialState(activeSessionId);
+    apiClient
+      .call("agent.start", {
+        sessionId: activeSessionId,
+        projectPath: session.projectPath,
+        sessionPath: session.sessionPath,
+      })
+      .then((result) => {
+        if (result.status === "already_running" || result.status === "started") {
+          useSessionStore.setState((s) => {
+            const projectId = s.activeProjectId;
+            if (!projectId) return {};
+            return {
+              projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+              projectStartError: { ...s.projectStartError, [projectId]: "" },
+            };
+          });
+          useSessionStore.setState((s) => ({
+            sessionReady: { ...s.sessionReady, [activeSessionId]: true },
+            agentReady: { ...s.agentReady, [activeSessionId]: true },
+          }));
+          requestRulesSnapshot(activeSessionId);
+          storeGet().fetchInitialState(activeSessionId);
 
-        if (result.status === "already_running") {
-          useChatStore
-            .getState()
-            .loadSessionMessages(activeSessionId, {
-              force: true,
+          if (result.status === "already_running") {
+            runReconnectMessageLoad({
+              sessionId: activeSessionId,
               sessionPath: session.sessionPath,
-            })
-            .catch(() => {})
-            .then(() => {
-              return useChatStore
-                .getState()
-                ._backgroundRefreshMessages(activeSessionId, session.sessionPath);
-            })
-            .then(() => {
-              // fetch the authoritative value to correct any drift.
-              return apiClient
-                .call("agent.getContextUsage", { sessionId: activeSessionId })
-                .then((r) => {
-                  if (r && r.tokens != null) {
-                    useSessionStore.getState().updateSessionContext(activeSessionId, r);
-                  }
-                })
-                .catch(() => {});
-            })
-            .catch((err) => {
+              loadSessionMessages: (sid, opts) =>
+                useChatStore.getState().loadSessionMessages(sid, opts),
+              backgroundRefresh: (sid, sPath) =>
+                useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
+              getContextUsage: (sid) =>
+                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              updateSessionContext: (sid, usage) =>
+                useSessionStore.getState().updateSessionContext(sid, usage),
+            }).catch((err) => {
               log.warn("[onReconnect] load+refresh failed", {
                 sessionId: activeSessionId,
                 err: err instanceof Error ? err.message : String(err),
               });
             });
-        } else {
-          useChatStore
-            .getState()
-            .loadSessionMessages(activeSessionId, {
-              force: true,
+          } else {
+            runReconnectMessageLoad({
+              sessionId: activeSessionId,
               sessionPath: session.sessionPath,
-            })
-            .catch((err) => {
+              loadSessionMessages: (sid, opts) =>
+                useChatStore.getState().loadSessionMessages(sid, opts),
+              backgroundRefresh: (sid, sPath) =>
+                useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
+              getContextUsage: (sid) =>
+                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              updateSessionContext: (sid, usage) =>
+                useSessionStore.getState().updateSessionContext(sid, usage),
+            }).catch((err) => {
               log.warn("[onReconnect] loadSessionMessages failed", {
                 sessionId: activeSessionId,
                 err: err instanceof Error ? err.message : String(err),
               });
             });
+          }
         }
-      }
-    })
-    .catch((err) => {
-      const errMsg = formatProjectStartError(err, tab);
-      useAppStore.getState().addLog(`reconnect agent.start failed: ${errMsg}`);
-      useSessionStore.setState((s) => {
-        const projectId = s.activeProjectId;
-        if (!projectId) return {};
-        return {
-          projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
-          projectStartError: { ...s.projectStartError, [projectId]: errMsg },
-        };
+      })
+      .catch((err) => {
+        const errMsg = formatProjectStartError(err, tab);
+        useAppStore.getState().addLog(`reconnect agent.start failed: ${errMsg}`);
+        useSessionStore.setState((s) => {
+          const projectId = s.activeProjectId;
+          if (!projectId) return {};
+          return {
+            projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+            projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+          };
+        });
+        log.warn("[onReconnect] agent.start failed", {
+          sessionId: activeSessionId,
+          error: getErrorMessage(err),
+        });
       });
-      log.warn("[onReconnect] agent.start failed", {
-        sessionId: activeSessionId,
-        error: getErrorMessage(err),
-      });
-    });
 
-  storeGet()
-    .loadSessionsForProject(tab.path)
-    .catch((err) => {
-      log.warn("[onReconnect] loadSessionsForProject failed", {
-        projectPath: tab.path,
-        err: err instanceof Error ? err.message : String(err),
+    storeGet()
+      .loadSessionsForProject(tab.path)
+      .catch((err) => {
+        log.warn("[onReconnect] loadSessionsForProject failed", {
+          projectPath: tab.path,
+          err: err instanceof Error ? err.message : String(err),
+        });
       });
-    });
-  // 不再延迟 3s 调一次 fetchAllProjectsSessionsStatus：
-  // loadSessionsForProject → project.scanSessions 已经带回 session 状态；
-  // 实时变化走 subscription。
+    // 不再延迟 3s 调一次 fetchAllProjectsSessionsStatus：
+    // loadSessionsForProject → project.scanSessions 已经带回 session 状态；
+    // 实时变化走 subscription。
+  })();
 });

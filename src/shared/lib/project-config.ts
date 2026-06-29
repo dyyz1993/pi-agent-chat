@@ -64,10 +64,10 @@ interface ProjectConfig {
   disabledSkills: string[];
   /** per-project disabled plugin paths */
   disabledPlugins: Record<string, string[]>;
-  /** app-level model favorites (global) */
-  modelFavorites: string[];
   /** app-level agent favorites (global) */
   agentFavorites: string[];
+  /** app-level model favorites (global) */
+  modelFavorites: string[];
   /** app-level local preview proxy preference shared by all browser clients */
   localProxyEnabled?: boolean;
   /** reusable SSH connection profiles for opening remote projects */
@@ -87,8 +87,8 @@ function emptyConfig(): ProjectConfig {
     favoriteFolders: [],
     disabledSkills: [],
     disabledPlugins: {},
-    modelFavorites: [],
     agentFavorites: [],
+    modelFavorites: [],
     sshProfiles: [],
     remoteProjects: [],
   };
@@ -123,8 +123,8 @@ function parseConfig(raw: string): ProjectConfig {
     favoriteFolders: parsed.favoriteFolders ?? [],
     disabledSkills: parsed.disabledSkills ?? [],
     disabledPlugins: parsed.disabledPlugins ?? {},
-    modelFavorites: parsed.modelFavorites ?? [],
     agentFavorites: parsed.agentFavorites ?? [],
+    modelFavorites: parsed.modelFavorites ?? [],
     localProxyEnabled:
       typeof parsed.localProxyEnabled === "boolean" ? parsed.localProxyEnabled : undefined,
     sshProfiles: parsed.sshProfiles ?? [],
@@ -141,6 +141,7 @@ function hasUserData(config: ProjectConfig): boolean {
     config.recentProjects.length > 0 ||
     config.pinnedSessionIds.length > 0 ||
     config.favoriteFolders.length > 0 ||
+    config.agentFavorites.length > 0 ||
     config.modelFavorites.length > 0 ||
     config.agentFavorites.length > 0 ||
     typeof config.localProxyEnabled === "boolean" ||
@@ -830,21 +831,6 @@ export async function getModelFavorites(): Promise<string[]> {
   return config.modelFavorites;
 }
 
-export async function toggleModelFavorite(
-  modelKey: string,
-): Promise<{ added: boolean; favorites: string[] }> {
-  return loadAndSave((config) => {
-    const list = config.modelFavorites;
-    const idx = list.indexOf(modelKey);
-    if (idx >= 0) {
-      list.splice(idx, 1);
-      return { added: false, favorites: list };
-    }
-    list.push(modelKey);
-    return { added: true, favorites: list };
-  });
-}
-
 export async function getAgentFavorites(): Promise<string[]> {
   const config = await load();
   return config.agentFavorites;
@@ -861,6 +847,21 @@ export async function toggleAgentFavorite(
       return { added: false, favorites: list };
     }
     list.push(agentName);
+    return { added: true, favorites: list };
+  });
+}
+
+export async function toggleModelFavorite(
+  modelKey: string,
+): Promise<{ added: boolean; favorites: string[] }> {
+  return loadAndSave((config) => {
+    const list = config.modelFavorites;
+    const idx = list.indexOf(modelKey);
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      return { added: false, favorites: list };
+    }
+    list.push(modelKey);
     return { added: true, favorites: list };
   });
 }

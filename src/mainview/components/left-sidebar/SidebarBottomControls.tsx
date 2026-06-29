@@ -481,6 +481,24 @@ export function SidebarBottomControls() {
                       }
                     }}
                   >
+                    <button
+                      type="button"
+                      className={`mt-0.5 -ml-0.5 p-0.5 rounded text-text-tertiary hover:text-status-warning hover:bg-status-warning/10 transition-colors ${
+                        isFavorite ? "text-status-warning" : ""
+                      }`}
+                      title={isFavorite ? t("unfavorite") : t("favorite")}
+                      aria-label={isFavorite ? t("unfavorite") : t("favorite")}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleAgentFavorite(agent.name);
+                      }}
+                    >
+                      <Star
+                        className="w-3 h-3"
+                        fill={isFavorite ? "currentColor" : "none"}
+                      />
+                    </button>
                     <AgentAvatar
                       avatar={agent.avatar}
                       agentFilePath={agent.filePath}
@@ -533,22 +551,6 @@ export function SidebarBottomControls() {
                         {agent.tier}
                       </span>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void toggleAgentFavorite(agent.name);
-                      }}
-                      className={`p-0.5 rounded transition-colors shrink-0 mt-0.5 ${
-                        isFavorite
-                          ? "text-status-warning"
-                          : "text-text-tertiary hover:text-text-secondary"
-                      }`}
-                      title={isFavorite ? t("unfavorite") : t("favorite")}
-                      aria-label={isFavorite ? t("unfavorite") : t("favorite")}
-                    >
-                      <Star className={`w-3 h-3 ${isFavorite ? "fill-status-warning" : ""}`} />
-                    </button>
                   </div>
                 );
               })}

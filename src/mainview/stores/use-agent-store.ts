@@ -21,6 +21,7 @@ interface AgentInfo {
   filePath: string;
   color?: string;
   avatar?: AgentAvatar;
+  isFavorite?: boolean;
 }
 
 interface ToolSourceInfo {
@@ -90,6 +91,7 @@ interface AgentState {
   loadingSystemPrompt: Set<string>;
   setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
+  setAgentFavorites: (favorites: string[]) => void;
   setCurrentAgent: (sessionId: string, agentName: string) => void;
   fetchAgents: (sessionId: string) => Promise<void>;
   fetchAgentFavorites: () => Promise<void>;
@@ -128,10 +130,23 @@ export function sortAgentsForDisplay(
       if (aFav !== bFav) return aFav ? -1 : 1;
       return a.index - b.index;
     })
-    .map(({ agent }) => agent);
+    .map(({ agent }) => ({ ...agent, isFavorite: favorites.has(agent.name) }));
 }
 
 const runtimeRecoveryBySession = new Map<string, Promise<boolean>>();
+
+function withFavoriteMetadata(agents: AgentInfo[], favorites: Set<string>): AgentInfo[] {
+  return agents
+    .map((agent) => ({ ...agent, isFavorite: favorites.has(agent.name) }))
+    .sort((a, b) => {
+      if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+      const sourceRank = (source: AgentSource) =>
+        source === "builtin" ? 0 : source === "user" ? 1 : 2;
+      const sourceDiff = sourceRank(a.source) - sourceRank(b.source);
+      if (sourceDiff !== 0) return sourceDiff;
+      return a.name.localeCompare(b.name);
+    });
+}
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -255,7 +270,19 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set((state) => ({
       currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: name },
     })),
-  setAgents: (agents) => set({ agents, loaded: true }),
+  setAgents: (agents) =>
+    set((state) => ({
+      agents: withFavoriteMetadata(agents, state.agentFavorites),
+      loaded: true,
+    })),
+  setAgentFavorites: (favorites) =>
+    set((state) => {
+      const favoriteSet = new Set(favorites);
+      return {
+        agentFavorites: favoriteSet,
+        agents: withFavoriteMetadata(state.agents, favoriteSet),
+      };
+    }),
   setCurrentAgent: (sessionId, agentName) =>
     set((state) => ({
       currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
@@ -266,11 +293,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const result = (await apiClient.call("project.getAgentFavorites", {})) as {
         favorites: string[];
       };
-      const favorites = new Set(result.favorites ?? []);
-      set((state) => ({
-        agentFavorites: favorites,
-        agents: sortAgentsForDisplay(state.agents, favorites),
-      }));
+      get().setAgentFavorites(result.favorites ?? []);
     } catch (err) {
       maybeNotifyStaleDesktopFavoriteRpc(err);
       log.warn("failed to fetch agent favorites", {
@@ -280,16 +303,25 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   toggleAgentFavorite: async (agentName) => {
+    const previous = get().agentFavorites;
+    const optimistic = new Set(previous);
+    if (optimistic.has(agentName)) optimistic.delete(agentName);
+    else optimistic.add(agentName);
+    set((state) => ({
+      agentFavorites: optimistic,
+      agents: withFavoriteMetadata(state.agents, optimistic),
+    }));
+
     try {
       const result = (await apiClient.call("project.toggleAgentFavorite", { agentName })) as {
         favorites: string[];
       };
-      const favorites = new Set(result.favorites ?? []);
-      set((state) => ({
-        agentFavorites: favorites,
-        agents: sortAgentsForDisplay(state.agents, favorites),
-      }));
+      get().setAgentFavorites(result.favorites ?? []);
     } catch (err) {
+      set((state) => ({
+        agentFavorites: previous,
+        agents: withFavoriteMetadata(state.agents, previous),
+      }));
       maybeNotifyStaleDesktopFavoriteRpc(err);
       log.warn("failed to toggle agent favorite", {
         agentName,
@@ -338,7 +370,11 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         color: a.color,
         avatar: a.avatar,
       }));
-      set({ agents: sortAgentsForDisplay(agents, favorites), loaded: true });
+      set({
+        agentFavorites: favorites,
+        agents: withFavoriteMetadata(agents, favorites),
+        loaded: true,
+      });
 
       const currentResult = (await apiClient.call("agent.getCurrentAgent", { sessionId })) as {
         agentName: string | null;
@@ -383,7 +419,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         },
       ];
       set((state) => ({
-        agents: sortAgentsForDisplay(defaultAgents, state.agentFavorites),
+        agents: withFavoriteMetadata(defaultAgents, state.agentFavorites),
         loaded: true,
         currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: "build" },
       }));

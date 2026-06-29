@@ -24,6 +24,8 @@ const projectMocks = vi.hoisted(() => ({
   mockLinkProject: vi.fn(async () => ({ ok: true })),
   mockUnlinkProject: vi.fn(async () => ({ ok: true })),
   mockGetLinkedProjects: vi.fn(async () => []),
+  mockGetAgentFavorites: vi.fn(async () => []),
+  mockToggleAgentFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
   mockGetModelFavorites: vi.fn(async () => []),
   mockToggleModelFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
   mockGetAgentFavorites: vi.fn(async () => []),
@@ -169,6 +171,8 @@ const {
   mockLinkProject,
   mockUnlinkProject,
   mockGetLinkedProjects,
+  mockGetAgentFavorites,
+  mockToggleAgentFavorite,
   mockSyncRemoteAgentResources,
   mockReadWorktreeStackManifest,
   mockUpdateWorktreeStackOrchestration,
@@ -204,6 +208,8 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
   listFavoriteFolders: projectMocks.mockListFavorites,
   toggleFavoriteFolder: projectMocks.mockToggleFavorite,
   toggleProjectPin: projectMocks.mockTogglePin,
+  getAgentFavorites: projectMocks.mockGetAgentFavorites,
+  toggleAgentFavorite: projectMocks.mockToggleAgentFavorite,
   getModelFavorites: projectMocks.mockGetModelFavorites,
   toggleModelFavorite: projectMocks.mockToggleModelFavorite,
   getAgentFavorites: projectMocks.mockGetAgentFavorites,
@@ -564,6 +570,32 @@ describe("project handler", () => {
       const result = await handler({ folderPath: "/f" });
 
       expect(result).toEqual({ isFavorite: true, favorites: ["/f"] });
+    });
+  });
+
+  describe("project.getAgentFavorites", () => {
+    it("lists favorite agents", async () => {
+      const handler = server.handlers.get("project.getAgentFavorites")!;
+      mockGetAgentFavorites.mockResolvedValueOnce(["frontend-dev"]);
+
+      const result = await handler({});
+
+      expect(result).toEqual({ favorites: ["frontend-dev"] });
+    });
+  });
+
+  describe("project.toggleAgentFavorite", () => {
+    it("toggles favorite agent", async () => {
+      const handler = server.handlers.get("project.toggleAgentFavorite")!;
+      mockToggleAgentFavorite.mockResolvedValueOnce({
+        added: true,
+        favorites: ["frontend-dev"],
+      });
+
+      const result = await handler({ agentName: "frontend-dev" });
+
+      expect(mockToggleAgentFavorite).toHaveBeenCalledWith("frontend-dev");
+      expect(result).toEqual({ added: true, favorites: ["frontend-dev"] });
     });
   });
 
