@@ -36,6 +36,7 @@ import { clearAgentStarted } from "./use-session-store";
 import { useSessionTodoStore } from "./use-session-todo-store";
 import { useDelegateActivityStore } from "./use-delegate-activity-store";
 import { createLogger } from "../../shared/lib/logger";
+import { buildSubagentTerminalPatch } from "../lib/subagent-terminal-state";
 
 const perfLog = createLogger("session-perf");
 
@@ -84,6 +85,12 @@ function statusFromCoordinatorChildEvent(event: unknown): SessionStatus | null {
     default:
       return null;
   }
+}
+
+function shouldForwardCoordinatorChildEvent(event: unknown): event is Parameters<typeof handleAgentEvent>[1] {
+  if (!event || typeof event !== "object") return false;
+  const type = (event as Record<string, unknown>).type;
+  return type === "extension_ui_request" || type === "extension_ui_resolved";
 }
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -381,12 +388,30 @@ export function setupSubscriptions(
             });
           }
 
-          handleSubagentEvent(sid, payload.event as Parameters<typeof handleSubagentEvent>[1], id);
+          const childStatus = statusFromCoordinatorChildEvent(payload.event);
+          if (childStatus) {
+            syncCoordinatorChildSessionStatus(sid, childStatus);
+          }
+
+          handleAgentEvent(sid, payload.event as Parameters<typeof handleAgentEvent>[1]);
+          handleSubagentEvent(sid, payload.event as Parameters<typeof handleSubagentEvent>[1], id, {
+            skipUIRegistration: true,
+            skipMessageMirroring: true,
+          });
+          const mirroredMessages = useChatStore.getState().messagesBySession[sid];
+          if (mirroredMessages) {
+            subStore.setSubMessages(sid, mirroredMessages);
+          }
 
           if (eventType === "agent_end") {
+            const existingSub = (subStore.subsessionsByParent[path] || []).find(
+              (sub) => sub.sessionId === sid,
+            );
             subStore.upsertLiveSubagent(path, sid, {
-              completedAt: Date.now(),
-              exitCode: 0,
+              ...buildSubagentTerminalPatch(
+                payload.event as { reason?: unknown },
+                existingSub?.finalText,
+              ),
             });
           }
         },
@@ -849,6 +874,9 @@ export function setupSubscriptions(
         const childStatus = statusFromCoordinatorChildEvent(payload.event);
         if (childStatus) {
           syncCoordinatorChildSessionStatus(payload.childSessionId, childStatus);
+        }
+        if (shouldForwardCoordinatorChildEvent(payload.event)) {
+          handleAgentEvent(payload.childSessionId, payload.event);
         }
         useDelegateActivityStore.getState().handleEvent(payload.childSessionId, payload.event);
       },

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ChatMessage, ContentBlock, SessionMeta, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
+import { useChatStore } from "../../../stores/use-chat-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import {
   useDelegateActivityStore,
@@ -24,6 +25,8 @@ import {
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
+const TOOL_MARKDOWN_CLASS =
+  "text-[11px] text-text-primary prose dark:prose-invert prose-sm max-w-none max-h-64 overflow-y-auto prose-p:my-1 prose-pre:my-1 prose-headings:my-1 prose-headings:text-text-primary dark:prose-headings:text-text-primary prose-strong:text-text-primary dark:prose-strong:text-text-primary prose-code:text-text-primary dark:prose-code:text-text-primary";
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -179,6 +182,7 @@ function DelegateActivitySummary({
       index: round.index,
       status: round.status,
       summary: round.summary,
+      summarySource: round.summary ? "content" : round.tools.length > 0 ? "tools" : "thinking",
       tools: round.tools.map((tool) => ({
         id: tool.toolCallId,
         name: tool.toolName,
@@ -237,7 +241,7 @@ export const DelegateCard = memo(function DelegateCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
+  const blockRunning = block.status === "running";
 
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
@@ -259,17 +263,21 @@ export const DelegateCard = memo(function DelegateCard({
   const activity = useDelegateActivityStore((s) =>
     targetSessionId ? s.bySession[targetSessionId] : undefined,
   );
-  const delegateLive = isLiveSessionStatus(sessionStatus) || activity?.status === "running";
+  const hasRunningActivity = activity?.status === "running";
+  const hasErroredActivity = activity?.status === "error";
+  const hasLiveSession = isLiveSessionStatus(sessionStatus) || hasRunningActivity;
+  const isError = block.status === "error" || hasErroredActivity;
+  const isRunning = !isError && (blockRunning || hasLiveSession);
+  const delegateLive = isRunning || hasRunningActivity;
 
   const displayTitle = titleText || t("coordinator.delegateTask");
 
-  const statusLabel =
-    sessionStatusLabel(sessionStatus, t) ||
-    (matchedSession
-      ? t("coordinator.dispatched")
-      : isRunning
-        ? t("coordinator.creating")
-        : undefined);
+  const statusLabel = isError
+    ? t("coordinator.error")
+    : hasLiveSession
+      ? sessionStatusLabel(sessionStatus, t) || t("coordinator.running")
+      : sessionStatusLabel(sessionStatus, t) ||
+        (matchedSession ? t("coordinator.dispatched") : blockRunning ? t("coordinator.creating") : undefined);
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
@@ -295,7 +303,7 @@ export const DelegateCard = memo(function DelegateCard({
     >
       <ToolCardHeader
         toolName="delegate"
-        status={toCardStatus(block)}
+        status={isRunning ? "running" : isError ? "error" : "done"}
         description={displayTitle}
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
@@ -325,7 +333,7 @@ export const DelegateCard = memo(function DelegateCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -342,8 +350,8 @@ export const ForkCard = memo(function ForkCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
-  const isDone = block.status === "done";
+  const blockRunning = block.status === "running";
+  const isError = block.status === "error";
 
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
@@ -353,14 +361,20 @@ export const ForkCard = memo(function ForkCard({
   const sessionId = details.sessionId;
   const { canJump, handleJump } = useJumpToSession(sessionId);
   const sessionStatus = useTargetSessionStatus(sessionId);
+  const hasLiveSession = isLiveSessionStatus(sessionStatus);
+  const isRunning = !isError && (blockRunning || hasLiveSession);
 
   const displayTitle = titleText || t("coordinator.forkTask");
 
-  const statusLabel = isDone
-    ? sessionStatusLabel(sessionStatus, t) || t("coordinator.dispatched")
-    : isRunning
-      ? t("coordinator.forking")
-      : undefined;
+  const statusLabel = isError
+    ? t("coordinator.error")
+    : hasLiveSession
+      ? sessionStatusLabel(sessionStatus, t) || t("coordinator.running")
+      : block.status === "done"
+        ? sessionStatusLabel(sessionStatus, t) || t("coordinator.dispatched")
+        : isRunning
+          ? t("coordinator.forking")
+          : undefined;
 
   return (
     <div
@@ -368,14 +382,14 @@ export const ForkCard = memo(function ForkCard({
       className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
         isRunning
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : block.status === "error"
+          : isError
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
             : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
       <ToolCardHeader
         toolName="fork"
-        status={toCardStatus(block)}
+        status={isRunning ? "running" : isError ? "error" : "done"}
         description={displayTitle}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
@@ -465,7 +479,7 @@ export const DelegateSendCard = memo(function DelegateSendCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -482,9 +496,6 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
-  const isDone = block.status === "done";
-  const isError = block.status === "error";
   const args = parseArgs(block.args);
   const outputDetails = parseOutputAsDetails(block.output);
   const details = { ...outputDetails, ...extractDetails(block.details) };
@@ -511,11 +522,36 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   const targetSessionId = details.sessionId ?? matchedSub?.sessionId;
   const { canJump, handleJump } = useJumpToSession(targetSessionId);
   const sessionStatus = useTargetSessionStatus(targetSessionId);
-  const subMessages = useSubagentStore((s) =>
+  const subMessages = useChatStore((s) =>
     targetSessionId
-      ? (s.messagesBySubsession?.[targetSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
+      ? (s.messagesBySession?.[targetSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
       : EMPTY_SUBAGENT_MESSAGES,
   );
+  const hasCompletedSubagent = Boolean(matchedSub?.completedAt);
+  const hasErroredSubagent =
+    Boolean(matchedSub?.error) ||
+    (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0);
+  const finalText =
+    details.finalText ??
+    matchedSub?.finalText ??
+    (outputContainsOnlySerializedDetails(block.output) ? undefined : block.output);
+  const hasFinalText = Boolean(finalText?.trim());
+  const hasTerminalDetailStatus =
+    details.status === "completed" ||
+    details.status === "timeout" ||
+    details.status === "error" ||
+    details.status === "aborted";
+  const isTerminal =
+    hasTerminalDetailStatus || hasCompletedSubagent || hasErroredSubagent || hasFinalText;
+  const isRunning = block.status === "running" && !isTerminal;
+  const isError =
+    !isRunning &&
+    (block.status === "error" ||
+      details.status === "error" ||
+      details.status === "timeout" ||
+      details.status === "aborted" ||
+      hasErroredSubagent);
+  const isDone = !isRunning && !isError;
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
@@ -533,32 +569,32 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     if (isError) return t("coordinator.error");
     if (details.status === "timeout") return t("coordinator.timeout");
     if (details.status === "aborted") return t("coordinator.aborted");
+    if (isTerminal) return t("coordinator.completed");
     return sessionStatusLabel(sessionStatus, t) || t("coordinator.completed");
-  }, [details.status, isError, isRunning, sessionStatus, t]);
+  }, [details.status, isError, isRunning, isTerminal, sessionStatus, t]);
 
   let badgeColor = "text-text-tertiary";
   if (isRunning) badgeColor = "text-status-info animate-pulse";
-  else if (isError || details.status === "error" || details.status === "timeout") {
+  else if (isError) {
     badgeColor = "text-status-error";
   } else if (isDone) {
     badgeColor = "text-status-success";
   }
 
-  const finalText =
-    details.finalText ??
-    matchedSub?.finalText ??
-    (outputContainsOnlySerializedDetails(block.output) ? undefined : block.output);
   const errorText = details.error ?? matchedSub?.error;
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
   const activityRounds = useMemo(
-    () => buildActivityRoundsFromMessages(subMessages, activityRoundLabels),
-    [activityRoundLabels, subMessages],
+    () =>
+      buildActivityRoundsFromMessages(subMessages, activityRoundLabels, undefined, {
+        forceTerminal: isTerminal,
+      }),
+    [activityRoundLabels, isTerminal, subMessages],
   );
   const sessionMeta = [
     targetSessionId ? `Session ${targetSessionId}` : null,
     agentText ? `Agent ${agentText}` : null,
     typeof details.exitCode === "number" ? `Exit ${details.exitCode}` : null,
-    matchedSub?.sessionPath ? matchedSub.sessionPath : null,
+    matchedSub?.sessionPath ?? null,
   ].filter((item): item is string => Boolean(item));
   const fullExecutionText = [
     `session_delegate_sync: ${displayTitle}`,
@@ -575,14 +611,14 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
       className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
         isRunning
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : isError || details.status === "error" || details.status === "timeout"
+          : isError
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
             : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
       <ToolCardHeader
         toolName="session_delegate_sync"
-        status={toCardStatus(block)}
+        status={isRunning ? "running" : isError ? "error" : "done"}
         description={displayTitle}
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
@@ -612,7 +648,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
           <SessionActivitySummary
             title={t("coordinator.activity")}
             rounds={activityRounds}
-            live={isRunning || isLiveSessionStatus(sessionStatus)}
+            live={!isTerminal && (isRunning || (!finalText && isLiveSessionStatus(sessionStatus)))}
             labels={activityRoundLabels}
           />
 
@@ -634,7 +670,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
                 <div className="text-[10px] text-text-tertiary select-none">Result</div>
                 <CopyButton text={finalText} size="xs" />
               </div>
-              <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+              <div className={TOOL_MARKDOWN_CLASS}>
                 <CachedReactMarkdown>{finalText}</CachedReactMarkdown>
               </div>
             </div>
@@ -733,7 +769,7 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -810,7 +846,7 @@ export const DelegateStopCard = memo(function DelegateStopCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -887,7 +923,7 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>
@@ -953,7 +989,7 @@ export const DelegateClearCard = memo(function DelegateClearCard({
             <div className="text-[10px] text-text-tertiary select-none">Output</div>
             <CopyButton text={block.output} size="xs" />
           </div>
-          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+          <div className={TOOL_MARKDOWN_CLASS}>
             <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
           </div>
         </div>

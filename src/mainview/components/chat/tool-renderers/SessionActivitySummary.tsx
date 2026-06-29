@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useRef } from "react";
 import type { ChatMessage, ContentBlock, ToolExecutionStatus } from "../../../types";
+import { summarizeActivityText } from "../../../lib/activity-summary-text";
 
 export type SessionActivityStatus = "running" | "done" | "error";
 
@@ -13,6 +15,7 @@ export interface SessionActivityRound {
   index: number;
   status: SessionActivityStatus;
   summary?: string;
+  summarySource: "content" | "tools" | "thinking";
   tools: SessionActivityTool[];
 }
 
@@ -24,6 +27,10 @@ export interface SessionActivityLabels {
   thinking: string;
 }
 
+interface BuildActivityRoundsOptions {
+  forceTerminal?: boolean;
+}
+
 interface SessionActivitySummaryProps {
   title: string;
   rounds: SessionActivityRound[];
@@ -33,11 +40,42 @@ interface SessionActivitySummaryProps {
 }
 
 const DEFAULT_MAX_ROUNDS = 8;
-const MAX_SUMMARY_CHARS = 220;
+const MAX_SUMMARY_CHARS = 160;
+const MAX_VISIBLE_TOOL_NAMES = 3;
+const MAX_TOOL_SUMMARY_CHARS = 64;
 
 function compactText(text: string, max = MAX_SUMMARY_CHARS): string {
   const compact = text.replace(/\s+/g, " ").trim();
   return compact.length > max ? `${compact.slice(0, max - 1)}…` : compact;
+}
+
+function collectTextCandidates(block: ContentBlock): string[] {
+  if (block.type !== "text") return [];
+  return block.text
+    .split(/\n+/)
+    .map((line) => compactText(line, MAX_SUMMARY_CHARS))
+    .filter(Boolean);
+}
+
+function uniqueToolNames(tools: SessionActivityTool[]): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const tool of tools) {
+    if (seen.has(tool.name)) continue;
+    seen.add(tool.name);
+    names.push(tool.name);
+  }
+  return names;
+}
+
+function buildInlineToolSummary(tools: SessionActivityTool[]): string {
+  const names = uniqueToolNames(tools);
+  if (names.length === 0) return "";
+  const visible = names.slice(0, MAX_VISIBLE_TOOL_NAMES);
+  const extraCount = Math.max(0, names.length - visible.length);
+  const summary = visible.join(" · ");
+  const withExtra = extraCount > 0 ? `${summary} +${extraCount}` : summary;
+  return compactText(withExtra, MAX_TOOL_SUMMARY_CHARS);
 }
 
 function normalizeToolStatus(status: ToolExecutionStatus): SessionActivityStatus {
@@ -78,57 +116,82 @@ export function createSessionActivityLabels(t: (key: string) => string): Session
   };
 }
 
-function textFromBlock(block: ContentBlock): string {
-  if (block.type === "text") return block.text;
-  if (block.type === "custom") return block.customType.replace(/_/g, " ");
-  return "";
-}
-
 export function buildActivityRoundsFromMessages(
   messages: ChatMessage[],
   labels: SessionActivitySummaryProps["labels"],
   maxRounds = DEFAULT_MAX_ROUNDS,
+  options?: BuildActivityRoundsOptions,
 ): SessionActivityRound[] {
+  const forceTerminal = options?.forceTerminal ?? false;
   const rounds: SessionActivityRound[] = [];
+  const lastAssistantMessageIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return i;
+    }
+    return -1;
+  })();
 
-  for (const message of messages) {
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
+    const message = messages[messageIndex];
     if (message.role !== "assistant" && message.role !== "custom") continue;
 
     const tools: SessionActivityTool[] = [];
-    const textParts: string[] = [];
+    const textCandidates: string[] = [];
     let hasThinking = false;
 
     message.content.forEach((block, index) => {
       if (block.type === "toolExecution") {
+        let status = normalizeToolStatus(block.status);
+        if (forceTerminal && status === "running") {
+          status = "done";
+        }
+        if (
+          status === "running" &&
+          !message.isStreaming &&
+          lastAssistantMessageIndex > messageIndex
+        ) {
+          status = "done";
+        }
         tools.push({
           id: block.toolCallId || `${message.id}-${index}`,
           name: block.toolName || "tool",
-          status: normalizeToolStatus(block.status),
+          status,
         });
         return;
       }
 
       if (block.type === "thinking") hasThinking = true;
-      const text = textFromBlock(block);
-      if (text.trim()) textParts.push(text);
+      textCandidates.push(...collectTextCandidates(block));
     });
 
     const hasError = tools.some((tool) => tool.status === "error");
-    const hasRunning = message.isStreaming || tools.some((tool) => tool.status === "running");
+    const hasRunning =
+      !forceTerminal && ((message.isStreaming ?? false) || tools.some((tool) => tool.status === "running"));
     const status: SessionActivityStatus = hasError ? "error" : hasRunning ? "running" : "done";
-    const toolText = tools.map((tool) => tool.name).join(" · ");
-    const summary =
-      compactText(textParts.join(" ")) ||
-      compactText(toolText) ||
-      (hasThinking ? labels.thinking : "");
+    const toolText = buildInlineToolSummary(tools);
+    const latestText =
+      textCandidates.length > 0 ? summarizeActivityText(textCandidates, MAX_SUMMARY_CHARS) : "";
+    let summary = "";
+    let summarySource: SessionActivityRound["summarySource"] = "thinking";
+    if (latestText) {
+      summary = latestText;
+      summarySource = "content";
+    } else if (toolText) {
+      summary = compactText(toolText);
+      summarySource = "tools";
+    } else if (hasThinking) {
+      summary = labels.thinking;
+      summarySource = "thinking";
+    }
 
     if (!summary && tools.length === 0) continue;
 
     rounds.push({
-      id: message.id,
+      id: message.id || `activity-round-${message.timestamp}-${rounds.length}`,
       index: rounds.length + 1,
       status,
       summary,
+      summarySource,
       tools,
     });
   }
@@ -146,51 +209,68 @@ export function SessionActivitySummary({
   const visibleRounds = rounds.slice(-maxRounds);
   const hasRunningRound = visibleRounds.some((round) => round.status === "running");
   const showLivePlaceholder = live && !hasRunningRound;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const scrollSignature = useMemo(
+    () =>
+      visibleRounds
+        .map((round) => {
+          const toolSig = round.tools.map((tool) => `${tool.id}:${tool.status}`).join(",");
+          return `${round.id}:${round.status}:${round.summary ?? ""}:${toolSig}`;
+        })
+        .join("|"),
+    [visibleRounds],
+  );
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !shouldStickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [scrollSignature, showLivePlaceholder]);
+
   if (visibleRounds.length === 0 && !showLivePlaceholder) return null;
 
   return (
     <div className="px-3 py-2 border-t border-border-secondary/20">
       <div className="text-[10px] text-text-tertiary mb-1 select-none">{title}</div>
-      <div className="max-h-44 overflow-y-auto overscroll-contain pr-1 space-y-1 [scrollbar-gutter:stable]">
+      <div
+        ref={scrollRef}
+        className="max-h-44 overflow-y-auto overscroll-contain pr-1 space-y-1 [scrollbar-gutter:stable]"
+        onScroll={(event) => {
+          const el = event.currentTarget;
+          const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          shouldStickToBottomRef.current = distanceFromBottom < 12;
+        }}
+      >
         {visibleRounds.map((round) => {
-          const visibleTools = round.tools.slice(0, 4);
-          const extraTools = Math.max(0, round.tools.length - visibleTools.length);
-          const summary = round.summary || visibleTools.map((tool) => tool.name).join(" · ");
-          const hasToolDetails = round.tools.length > 0;
+          const summary = round.summary.length > 0 ? round.summary : labels.thinking;
+          const toolSummary = buildInlineToolSummary(round.tools);
 
           return (
-            <details
+            <div
               key={round.id}
-              className="group rounded border border-border-secondary/20 bg-surface-elevated/30"
-              open={round.status === "running"}
+              className="rounded border border-border-secondary/20 bg-surface-elevated/30 px-2 py-1.5"
             >
-              <summary className="list-none cursor-pointer px-2 py-1.5 flex items-center gap-2 text-[11px] hover:bg-surface-hover/40">
+              <div className="flex items-center gap-2 text-[11px]">
                 <span className="shrink-0 text-text-tertiary tabular-nums">#{round.index}</span>
                 <span className={`shrink-0 ${statusClass(round.status)}`}>
                   {statusLabel(round.status, labels)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-text-secondary">
-                  {summary || labels.thinking}
+                  {summary}
                 </span>
-                {extraTools > 0 && (
-                  <span className="shrink-0 text-[10px] text-text-tertiary">+{extraTools}</span>
+                {toolSummary && round.summarySource !== "tools" && (
+                  <span
+                    className={`shrink-0 max-w-[40%] truncate rounded border px-1.5 py-0.5 font-mono text-[10px] ${toolClass(
+                      round.status,
+                    )}`}
+                    title={uniqueToolNames(round.tools).join(" · ")}
+                  >
+                    {toolSummary}
+                  </span>
                 )}
-              </summary>
-              {hasToolDetails && (
-                <div className="px-2 pb-2 flex flex-wrap gap-1">
-                  {round.tools.map((tool) => (
-                    <span
-                      key={tool.id}
-                      className={`px-1.5 py-0.5 rounded text-[10px] border ${toolClass(
-                        tool.status,
-                      )}`}
-                    >
-                      {tool.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </details>
+              </div>
+            </div>
           );
         })}
         {showLivePlaceholder && (

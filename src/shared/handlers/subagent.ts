@@ -4,9 +4,61 @@ import { createRegister } from "../rpc-schema";
 import type { SubagentSessionInfo } from "../modules/subagent";
 import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
+import { dirname } from "path";
 import { createLogger } from "../lib/logger";
+import { scanSessionDir } from "../lib/session-scanner";
 
 const log = createLogger("subagent");
+
+async function readSessionHeaderId(sessionPath: string): Promise<string | null> {
+  try {
+    const content = await readFile(sessionPath, "utf-8");
+    const firstLine = content
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (!firstLine) return null;
+    const entry = JSON.parse(firstLine) as Record<string, unknown>;
+    if (entry.type !== "session" || typeof entry.id !== "string") return null;
+    return entry.id;
+  } catch (error) {
+    log.debug("subagent.readSessionHeaderId failed", {
+      sessionPath,
+      error: String(error),
+    });
+    return null;
+  }
+}
+
+function normalizeSubagentDescription(name: string, sessionId: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return sessionId;
+  if (trimmed.startsWith("子代理:")) return trimmed.slice("子代理:".length).trim() || sessionId;
+  if (trimmed.startsWith("Subagent:")) return trimmed.slice("Subagent:".length).trim() || sessionId;
+  return trimmed;
+}
+
+async function loadFallbackSubagentSessions(parentSessionPath: string): Promise<SubagentSessionInfo[]> {
+  const parentSessionId = await readSessionHeaderId(parentSessionPath);
+  if (!parentSessionId) return [];
+
+  const siblingSessions = await scanSessionDir(dirname(parentSessionPath));
+  return siblingSessions
+    .filter(
+      (session) =>
+        session.sessionId !== parentSessionId &&
+        session.delegateType === "subagent" &&
+        (session.delegateParentSessionId === parentSessionId ||
+          session.parentSessionPath === parentSessionPath),
+    )
+    .map((session) => ({
+      sessionId: session.sessionId,
+      sessionPath: session.sessionPath,
+      description: normalizeSubagentDescription(session.name || session.firstMessage, session.sessionId),
+      instruction: session.firstMessage || normalizeSubagentDescription(session.name, session.sessionId),
+      startedAt: session.createdAt,
+    }));
+}
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -38,7 +90,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       }
     }
 
-    return { subsessions };
+    const fallbackSubs = await loadFallbackSubagentSessions(sessionPath);
+    const merged = new Map<string, SubagentSessionInfo>();
+
+    for (const sub of fallbackSubs) {
+      merged.set(sub.sessionId, sub);
+    }
+    for (const sub of subsessions) {
+      merged.set(sub.sessionId, {
+        ...merged.get(sub.sessionId),
+        ...sub,
+      });
+    }
+
+    return { subsessions: [...merged.values()] };
   });
 
   r("subagent.rename", async (params) => {

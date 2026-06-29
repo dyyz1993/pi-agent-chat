@@ -1,13 +1,15 @@
-import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { memo, useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ChatMessage, ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { useChatStore } from "../../../stores/use-chat-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { useAgentStore } from "../../../stores/use-agent-store";
 import { agentColorStyle } from "../../../utils/agent-color";
-import { AnsiText } from "../primitives/AnsiText";
+import { useJumpToSession } from "../primitives/useJumpToSession";
+import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 import { SessionJumpButton } from "../primitives/SessionJumpButton";
 import {
@@ -20,6 +22,8 @@ type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
 const logger = createLogger("subagent");
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
+const SUBAGENT_MARKDOWN_CLASS =
+  "text-[11px] text-text-primary prose dark:prose-invert prose-sm max-w-none max-h-64 overflow-y-auto prose-p:my-1 prose-pre:my-1 prose-headings:my-1 prose-headings:text-text-primary dark:prose-headings:text-text-primary prose-strong:text-text-primary dark:prose-strong:text-text-primary prose-code:text-text-primary dark:prose-code:text-text-primary";
 
 function isLiveSubagentStatus(status: string | undefined): boolean {
   return (
@@ -38,20 +42,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   blockId?: string;
 }) {
   const { t } = useTranslation("chat");
-  const isRunning = block.status === "running";
-  const isError = block.status === "error";
-  const isDone = block.status === "done";
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
 
   let description = "";
   let instruction = "";
@@ -75,14 +66,33 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     return null;
   });
   const subSessionId = matchedSub?.sessionId;
-  const subMessages = useSubagentStore((s) =>
+  const subMessages = useChatStore((s) =>
     subSessionId
-      ? (s.messagesBySubsession?.[subSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
+      ? (s.messagesBySession?.[subSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
       : EMPTY_SUBAGENT_MESSAGES,
   );
   const subagentStatus = useSubagentStore((s) =>
     subSessionId ? s.subagentStatusMap?.[subSessionId] : undefined,
   );
+  const subagentHasCompleted = Boolean(matchedSub?.completedAt);
+  const subagentHasError =
+    block.status === "error" ||
+    Boolean(matchedSub?.error) ||
+    (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0);
+  const hasLiveSignal = isLiveSubagentStatus(subagentStatus) || block.status === "running";
+  const isRunning = !subagentHasCompleted && !subagentHasError && hasLiveSignal;
+  const isError = !isRunning && subagentHasError;
+  const isDone = !isRunning && !isError;
+
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
 
@@ -109,15 +119,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     return remainSec > 0 ? `${min}m${remainSec}s` : `${min}m`;
   }, [startTime, endTime, now]);
 
-  const handleJumpToSession = useCallback(() => {
-    if (!matchedSub) return;
-    const childSessionId = matchedSub.sessionId;
-    if (!childSessionId) return;
-    const subStore = useSubagentStore.getState();
-    if (activeSessionId) {
-      subStore.setActiveSubsession(activeSessionId, childSessionId);
-    }
-  }, [matchedSub, activeSessionId]);
+  const { canJump, handleJump } = useJumpToSession(matchedSub?.sessionId);
 
   let borderBg: string;
   if (isRunning) {
@@ -144,13 +146,16 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   else if (isDone) statusColorClass = "text-status-success";
   else statusColorClass = "text-status-error";
 
-  const canJump = !!matchedSub?.sessionId;
   const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
+  const isTerminal = subagentHasCompleted || subagentHasError;
   const activityRounds = useMemo(
-    () => buildActivityRoundsFromMessages(subMessages, activityRoundLabels),
-    [activityRoundLabels, subMessages],
+    () =>
+      buildActivityRoundsFromMessages(subMessages, activityRoundLabels, undefined, {
+        forceTerminal: isTerminal,
+      }),
+    [activityRoundLabels, isTerminal, subMessages],
   );
-  const isLive = isRunning || isLiveSubagentStatus(subagentStatus);
+  const isLive = !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
 
   const badgeContent = (
     <>
@@ -167,7 +172,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         </span>
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
-      {canJump && <SessionJumpButton onJump={handleJumpToSession} title={t("subagent.view")} />}
+      {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
     </>
   );
 
@@ -217,7 +222,9 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
           <div className="text-[10px] text-text-tertiary mb-0.5 select-none">
             {t("subagent.output")}
           </div>
-          <AnsiText content={block.output} className="text-[11px] leading-relaxed" />
+          <div className={SUBAGENT_MARKDOWN_CLASS}>
+            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+          </div>
         </div>
       )}
     </div>

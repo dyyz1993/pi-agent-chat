@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MessageCircleQuestion,
   ArrowRight,
@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useStatusStore } from "../../stores/use-status-store";
 import { IconButton, ModalDialog } from "../primitives";
 import { PermissionActionButtons } from "./PermissionActionButtons";
@@ -555,6 +556,7 @@ export function UIPendingCenter() {
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
 
   const projectPending = useMemo(() => {
     if (!activeProjectId) return [];
@@ -562,10 +564,26 @@ export function UIPendingCenter() {
     if (!tab) return [];
     const projectSessions = sessionsByProject[tab.path] ?? [];
     const projectSessionIds = new Set(projectSessions.map((s) => s.sessionId));
+    const parentPaths = projectSessions.map((s) => s.sessionPath).filter(Boolean);
+    const pendingParentPaths = [...parentPaths];
+    const visitedParentPaths = new Set<string>();
+
+    while (pendingParentPaths.length > 0) {
+      const parentPath = pendingParentPaths.shift();
+      if (!parentPath || visitedParentPaths.has(parentPath)) continue;
+      visitedParentPaths.add(parentPath);
+      const children = subsessionsByParent[parentPath] ?? [];
+      for (const child of children) {
+        projectSessionIds.add(child.sessionId);
+        if (child.sessionPath) pendingParentPaths.push(child.sessionPath);
+      }
+    }
+
     return allPending.filter((req) => projectSessionIds.has(req.sessionId));
-  }, [allPending, activeProjectId, projectTabs, sessionsByProject]);
+  }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 
   const pendingCount = projectPending.length;
+  const knownPendingIdsRef = useRef<Set<string>>(new Set());
 
   // All hooks must be called before any early return (React rules of hooks)
   const sessionNameMap = useMemo(() => {
@@ -589,6 +607,16 @@ export function UIPendingCenter() {
     }
     return groups;
   }, [projectPending]);
+
+  useEffect(() => {
+    const previousIds = knownPendingIdsRef.current;
+    const currentIds = new Set(projectPending.map((req) => req.requestId));
+    const hasNewRequest = projectPending.some((req) => !previousIds.has(req.requestId));
+    knownPendingIdsRef.current = currentIds;
+    if (!panelOpen && hasNewRequest) {
+      setPanelOpen(true);
+    }
+  }, [panelOpen, projectPending, setPanelOpen]);
 
   useEffect(() => {
     if (!panelOpen || pendingCount > 0) return;
@@ -765,6 +793,7 @@ export function useProjectPendingCount(): number {
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
 
   return useMemo(() => {
     if (!activeProjectId) return 0;
@@ -772,6 +801,20 @@ export function useProjectPendingCount(): number {
     if (!tab) return 0;
     const projectSessions = sessionsByProject[tab.path] ?? [];
     const projectSessionIds = new Set(projectSessions.map((s) => s.sessionId));
+    const pendingParentPaths = projectSessions.map((s) => s.sessionPath).filter(Boolean);
+    const visitedParentPaths = new Set<string>();
+
+    while (pendingParentPaths.length > 0) {
+      const parentPath = pendingParentPaths.shift();
+      if (!parentPath || visitedParentPaths.has(parentPath)) continue;
+      visitedParentPaths.add(parentPath);
+      const children = subsessionsByParent[parentPath] ?? [];
+      for (const child of children) {
+        projectSessionIds.add(child.sessionId);
+        if (child.sessionPath) pendingParentPaths.push(child.sessionPath);
+      }
+    }
+
     return allPending.filter((req) => projectSessionIds.has(req.sessionId)).length;
-  }, [allPending, activeProjectId, projectTabs, sessionsByProject]);
+  }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 }

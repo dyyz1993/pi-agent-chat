@@ -19,7 +19,7 @@ import {
   handleCoordinatorDelegateForkOperation,
   type DelegateSendNotFoundReason,
 } from "./coordinator-delegate-operations";
-import type { DelegateReplyMode } from "./coordinator-delegate-utils";
+import type { DelegateReplyMetadata, DelegateReplyMode } from "./coordinator-delegate-utils";
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("agent");
@@ -57,6 +57,7 @@ export interface CoordinatorHandlerDeps {
   broadcastEvent: (method: string, payload: unknown, metadata?: unknown) => Promise<void>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
+  setModel: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   getState: (
     sessionId: string,
   ) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
@@ -84,6 +85,7 @@ export class CoordinatorHandler {
   public delegateReplyCount = new Map<string, number>();
   public delegateCreatedAt = new Map<string, number>();
   public delegateReplyMode = new Map<string, DelegateReplyMode>();
+  public delegateReplyMetadata = new Map<string, DelegateReplyMetadata>();
   public delegateRepliedSessions = new Set<string>();
   public syncDelegateResolvers = new Map<string, SyncDelegateResolver>();
   public subagentSyncChildren = new Set<string>();
@@ -199,7 +201,13 @@ export class CoordinatorHandler {
     const cleared: string[] = [];
     if (targetSessionId) {
       removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
-      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
+      clearDelegateTracking(
+        this.delegateCreatedAt,
+        this.delegateReplyCount,
+        targetSessionId,
+        undefined,
+        this.delegateReplyMetadata,
+      );
       this.delegateRepliedSessions.delete(targetSessionId);
       cleared.push(targetSessionId);
       return { cleared, removed: cleared.length };
@@ -210,7 +218,13 @@ export class CoordinatorHandler {
       const managed = this.deps.getActiveManaged(childSessionId);
       if (managed?.info.status === "streaming") continue;
       removeDelegateChild(this.parentChildMap, parentSessionId, childSessionId);
-      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, childSessionId);
+      clearDelegateTracking(
+        this.delegateCreatedAt,
+        this.delegateReplyCount,
+        childSessionId,
+        undefined,
+        this.delegateReplyMetadata,
+      );
       this.delegateRepliedSessions.delete(childSessionId);
       cleared.push(childSessionId);
     }
@@ -231,7 +245,13 @@ export class CoordinatorHandler {
 
     removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
     removeSessionFromAllParents(this.parentChildMap, targetSessionId);
-    clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
+    clearDelegateTracking(
+      this.delegateCreatedAt,
+      this.delegateReplyCount,
+      targetSessionId,
+      undefined,
+      this.delegateReplyMetadata,
+    );
     this.delegateRepliedSessions.delete(targetSessionId);
     void this.deps.stop(targetSessionId);
     return { ok: true, removed: true };
@@ -247,6 +267,8 @@ export class CoordinatorHandler {
       getActiveManaged: (sid) => this.deps.getActiveManaged(sid) ?? null,
       start: (id, projectPath, sessionPath) =>
         this.deps.start(id, projectPath, sessionPath, { forceNewProcess: true }),
+      switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
+      setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
       send: (id, content) => this.deps.send(id, content),
       broadcastEvent: this.deps.broadcastEvent,
@@ -254,6 +276,7 @@ export class CoordinatorHandler {
       delegateCreatedAt: this.delegateCreatedAt,
       delegateReplyCount: this.delegateReplyCount,
       delegateReplyMode: this.delegateReplyMode,
+      delegateReplyMetadata: this.delegateReplyMetadata,
     });
   }
 
@@ -274,6 +297,7 @@ export class CoordinatorHandler {
       start: (id, projectPath, sessionPath, startOptions) =>
         this.deps.start(id, projectPath, sessionPath, startOptions),
       switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
+      setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
       send: (id, content) => this.deps.send(id, content),
       steer: (id, content) => this.deps.steer(id, content),
@@ -282,6 +306,7 @@ export class CoordinatorHandler {
       parentChildMap: this.parentChildMap,
       delegateCreatedAt: this.delegateCreatedAt,
       delegateReplyCount: this.delegateReplyCount,
+      delegateReplyMetadata: this.delegateReplyMetadata,
       syncDelegateResolvers: this.syncDelegateResolvers,
       subagentSyncChildren: this.subagentSyncChildren,
       syncDelegateLastText: this.syncDelegateLastText,
@@ -305,6 +330,7 @@ export class CoordinatorHandler {
       delegateReplyCount: this.delegateReplyCount,
       delegateCreatedAt: this.delegateCreatedAt,
       delegateReplyMode: this.delegateReplyMode,
+      delegateReplyMetadata: this.delegateReplyMetadata,
       delegateRepliedSessions: this.delegateRepliedSessions,
       parentChildMap: this.parentChildMap,
       start: (id, projectPath, sessionPath) => this.deps.start(id, projectPath, sessionPath),
@@ -362,6 +388,8 @@ export class CoordinatorHandler {
       clients: this.deps.clients,
       start: (id, projectPath, sessionPath, startOptions) =>
         this.deps.start(id, projectPath, sessionPath, startOptions),
+      switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
+      setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
       send: (id, content) => this.deps.send(id, content),
       broadcastEvent: this.deps.broadcastEvent,

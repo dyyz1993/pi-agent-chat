@@ -7,6 +7,7 @@ import * as path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  buildDelegateReplyParams,
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
@@ -183,6 +184,40 @@ describe("coordinator delegate utils", () => {
         `</delegate-reply>`,
       ].join("\n"),
     );
+
+    expect(
+      wrapDelegateReply({
+        sourceSessionId: "sess_child",
+        targetSessionId: "sess_parent",
+        title: `子任务 "A"`,
+        sequence: 1,
+        createdAt: 123,
+        elapsed: "5s",
+        message: "完成",
+        task: `检查 "hooks"`,
+        agent: "reviewer",
+        projectPath: "/repo/pi-agent-chat",
+        replyMode: "interrupt",
+        params: '{"title":"子任务 \\"A\\"","agent":"reviewer","projectPath":"/repo/pi-agent-chat","replyMode":"interrupt"}',
+      }),
+    ).toContain(
+      `task="检查 &quot;hooks&quot;" agent="reviewer" projectPath="/repo/pi-agent-chat" replyMode="interrupt" params="{&quot;title&quot;:&quot;子任务 \\&quot;A\\&quot;&quot;,&quot;agent&quot;:&quot;reviewer&quot;,&quot;projectPath&quot;:&quot;/repo/pi-agent-chat&quot;,&quot;replyMode&quot;:&quot;interrupt&quot;}"`,
+    );
+  });
+
+  it("builds a compact delegate params payload for reply cards", () => {
+    expect(
+      buildDelegateReplyParams({
+        title: "指派: 检查 hooks",
+        agent: "reviewer",
+        projectPath: "/repo/pi-agent-chat",
+        replyMode: "interrupt",
+      }),
+    ).toBe(
+      '{"title":"指派: 检查 hooks","agent":"reviewer","projectPath":"/repo/pi-agent-chat","replyMode":"interrupt"}',
+    );
+
+    expect(buildDelegateReplyParams({})).toBeUndefined();
   });
 
   it("builds coordinator session_created events with a stable payload shape", () => {

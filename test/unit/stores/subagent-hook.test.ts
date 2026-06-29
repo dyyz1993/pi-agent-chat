@@ -19,6 +19,7 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
 
 vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: vi.fn((_subId: string, apply: () => void) => apply()),
+  flushNow: vi.fn(),
 }));
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
@@ -28,7 +29,19 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
       sessionStatusMap: {},
       sessionContextMap: {},
       updateSessionStatus: vi.fn(),
+      restoreContextFromHistory: vi.fn(),
     })),
+  },
+}));
+
+const uiDialogMocks = vi.hoisted(() => ({
+  registerUIRequest: vi.fn(),
+  resolveFromRemote: vi.fn(),
+}));
+
+vi.mock("../../../src/mainview/stores/use-ui-dialog-store", () => ({
+  useUIDialogStore: {
+    getState: () => uiDialogMocks,
   },
 }));
 
@@ -38,6 +51,7 @@ vi.mock("../../shared/lib/logger", () => ({
 
 import { useSubagentStore } from "../../../src/mainview/stores/use-subagent-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
+import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 
 const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
 const PARENT_PATH = "/sessions/parent-1.jsonl";
@@ -55,6 +69,22 @@ function makeSub(overrides: Partial<SubagentSessionInfo> = {}): SubagentSessionI
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useChatStore.setState({
+    messagesBySession: {},
+    activeToolCallIdsBySession: {},
+    inputText: "",
+    pendingImages: [],
+    isStreaming: false,
+    streamContentVersion: 0,
+    streamVersionBySession: {},
+    loadingSessions: new Set<string>(),
+    historyLoadVersion: 0,
+    historyLoadVersionBySession: {},
+    messageHydrationBySession: {},
+    hasMoreMessagesBySession: {},
+    isLoadingMoreBySession: {},
+    nextCursorBySession: {},
+  });
   useSubagentStore.setState({
     subsessionsByParent: {},
     activeSubsessionId: null,
@@ -97,7 +127,11 @@ describe("useSubagentStore", () => {
 
   it("loadSubsessions calls apiClient and populates subsessionsByParent", async () => {
     const subs = [makeSub()];
-    mockCall.mockResolvedValue({ subsessions: subs });
+    mockCall.mockImplementation(async (method: string) => {
+      if (method === "subagent.listBySession") return { subsessions: subs };
+      if (method === "agent.getState") return null;
+      return {};
+    });
 
     const result = await useSubagentStore.getState().loadSubsessions(PARENT_PATH);
 
@@ -146,15 +180,23 @@ describe("useSubagentStore", () => {
       subsessionsByParent: { [PARENT_PATH]: [sub] },
       messagesBySubsession: {},
     });
-    mockCall.mockResolvedValue({ entries: [] });
+    mockCall.mockResolvedValue({ messages: [], customEntries: [], hasMore: false, totalCount: 0 });
 
     useSubagentStore.getState().setActiveSubsession("parent-1", "sub-1");
 
     await vi.waitFor(() => {
-      expect(mockCall).toHaveBeenCalledWith("session.getEntries", {
-        sessionPath: "/sessions/sub-1.jsonl",
-      });
+      expect(mockCall).toHaveBeenCalledWith(
+        "agent.getFullMessages",
+        expect.objectContaining({
+          sessionId: "sub-1",
+          sessionPath: "/sessions/sub-1.jsonl",
+        }),
+      );
     });
+
+    expect(useSubagentStore.getState().messagesBySubsession["sub-1"]).toEqual(
+      useChatStore.getState().messagesBySession["sub-1"],
+    );
   });
 
   it("setSubMessages", () => {
@@ -236,5 +278,37 @@ describe("useSubagentStore", () => {
       parentSessionPath: PARENT_PATH,
       subSessionId: "sub-1",
     });
+  });
+
+  it("loadSubsessions restores pending interactive UI requests from child runtime state", async () => {
+    const subs = [makeSub()];
+    mockCall.mockImplementation(async (method: string, params?: { sessionId?: string }) => {
+      if (method === "subagent.listBySession") return { subsessions: subs };
+      if (method === "agent.getState" && params?.sessionId === "sub-1") {
+        return {
+          pendingUIRequests: [
+            {
+              id: "req-sub-1",
+              method: "confirm",
+              title: "Allow child command",
+              message: "Approve subagent bash?",
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    await useSubagentStore.getState().loadSubsessions(PARENT_PATH);
+
+    expect(uiDialogMocks.registerUIRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-sub-1",
+        sessionId: "sub-1",
+        method: "confirm",
+        title: "Allow child command",
+      }),
+    );
+    expect(useSubagentStore.getState().subagentStatusMap["sub-1"]).toBe("permission");
   });
 });

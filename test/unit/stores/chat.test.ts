@@ -171,6 +171,185 @@ describe("setMessagesForSession", () => {
     expect(messages.map((message) => message.id)).toEqual(["inject-1", "save-memory"]);
   });
 
+  it("prefers auto-memory cards over duplicated learning cards for the same query", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "learning-prefetch-result",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_prefetch_result",
+            data: {
+              source: "learning",
+              query: "请务必创建一个子会话来完成下面任务",
+              _prefetchQuery: "请务必创建一个子会话来完成下面任务",
+              occurredAt: 1_000,
+            },
+          },
+        ],
+        timestamp: 1_000,
+      },
+      {
+        id: "auto-prefetch-result",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_prefetch_result",
+            data: {
+              _prefetchQuery: "请务必创建一个子会话来完成下面任务",
+              occurredAt: 1_200,
+            },
+          },
+        ],
+        timestamp: 1_200,
+      },
+      {
+        id: "learning-reuse",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_inject",
+            data: {
+              source: "learning",
+              fingerprint: "a.md|70",
+              skipped: true,
+              alreadyInjected: true,
+              occurredAt: 1_300,
+            },
+          },
+        ],
+        timestamp: 1_300,
+      },
+      {
+        id: "auto-reuse",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_inject",
+            data: {
+              fingerprint: "a.md|70",
+              skipped: true,
+              alreadyInjected: true,
+              occurredAt: 1_450,
+            },
+          },
+        ],
+        timestamp: 1_450,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages.map((message) => message.id)).toEqual([
+      "auto-prefetch-result",
+      "auto-reuse",
+    ]);
+  });
+
+  it("collapses duplicate same-query auto-memory operations and drops the redundant linked inject card", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "u1",
+        role: "user",
+        content: [{ type: "text", text: "请创建一个子会话来完成任务" }],
+        timestamp: 1_000,
+      },
+      {
+        id: "prefetch-rich",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_prefetch_result",
+            data: {
+              operationId: "op-rich",
+              _prefetchQuery: "请创建一个子会话来完成任务",
+              occurredAt: 1_100,
+              layer: "llm",
+              injectedBytes: 11 * 1024,
+              selectedFiles: Array.from({ length: 16 }, (_, i) => `file-${i}.md`),
+            },
+          },
+        ],
+        timestamp: 1_120,
+      },
+      {
+        id: "reuse-rich",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_inject",
+            data: {
+              operationId: "op-rich",
+              fingerprint: "rich.md|2842",
+              occurredAt: 1_150,
+              skipped: true,
+              alreadyInjected: true,
+              selectedFiles: ["rich.md"],
+            },
+          },
+        ],
+        timestamp: 1_160,
+      },
+      {
+        id: "prefetch-thin",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_prefetch_result",
+            data: {
+              operationId: "op-thin",
+              _prefetchQuery: "请创建一个子会话来完成任务",
+              occurredAt: 1_180,
+              layer: "auto",
+              injectedBytes: 0,
+              selectedFiles: ["thin.md"],
+            },
+          },
+        ],
+        timestamp: 1_200,
+      },
+      {
+        id: "reuse-thin",
+        role: "custom",
+        content: [
+          {
+            type: "custom",
+            customType: "memory_inject",
+            data: {
+              operationId: "op-thin",
+              fingerprint: "thin.md|70",
+              occurredAt: 1_210,
+              skipped: true,
+              alreadyInjected: true,
+              selectedFiles: ["thin.md"],
+            },
+          },
+        ],
+        timestamp: 1_220,
+      },
+      {
+        id: "a1",
+        role: "assistant",
+        content: [{ type: "text", text: "我来处理。" }],
+        timestamp: 2_000,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages.map((message) => message.id)).toEqual([
+      "u1",
+      "prefetch-rich",
+      "reuse-rich",
+      "a1",
+    ]);
+  });
+
   it("normalizes toolCall and toolResult through the store write gateway", () => {
     useChatStore.getState().setMessagesForSession("sess-1", [
       {
@@ -589,6 +768,149 @@ describe("loadSessionMessages custom entry recovery", () => {
         },
       ],
     });
+  });
+
+  it("drops learning-source memory duplicates after refresh when auto-memory entries exist", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "learning-prefetch",
+          customType: "memory_prefetch_result",
+          data: {
+            source: "learning",
+            operationId: "learning-op-1",
+            query: "创建一个子会话",
+            _prefetchQuery: "创建一个子会话",
+            occurredAt: 1_000,
+          },
+          timestamp: 1_000,
+        },
+        {
+          id: "auto-prefetch",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "auto-op-1",
+            _prefetchQuery: "创建一个子会话",
+            occurredAt: 1_100,
+          },
+          timestamp: 1_100,
+        },
+        {
+          id: "learning-reuse",
+          customType: "memory_inject",
+          data: {
+            source: "learning",
+            operationId: "learning-op-1",
+            fingerprint: "memory.md|70",
+            skipped: true,
+            alreadyInjected: true,
+            occurredAt: 1_200,
+          },
+          timestamp: 1_200,
+        },
+        {
+          id: "auto-reuse",
+          customType: "memory_inject",
+          data: {
+            operationId: "auto-op-1",
+            fingerprint: "memory.md|70",
+            skipped: true,
+            alreadyInjected: true,
+            occurredAt: 1_250,
+          },
+          timestamp: 1_250,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages.map((message) => message.id)).toEqual(["auto-prefetch", "auto-reuse"]);
+  });
+
+  it("drops weaker same-query memory operations after refresh and keeps the richer operation chain", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [
+        {
+          id: "u1",
+          role: "user",
+          content: [{ type: "text", text: "请创建一个子会话来完成任务" }],
+          timestamp: 1_000,
+        },
+        {
+          id: "a1",
+          role: "assistant",
+          content: [{ type: "text", text: "我来处理。" }],
+          timestamp: 2_000,
+        },
+      ],
+      customEntries: [
+        {
+          id: "prefetch-rich",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-rich",
+            _prefetchQuery: "请创建一个子会话来完成任务",
+            occurredAt: 1_100,
+            layer: "llm",
+            injectedBytes: 11 * 1024,
+            selectedFiles: Array.from({ length: 16 }, (_, i) => `file-${i}.md`),
+          },
+          timestamp: 1_120,
+        },
+        {
+          id: "reuse-rich",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-rich",
+            fingerprint: "rich.md|2842",
+            occurredAt: 1_150,
+            skipped: true,
+            alreadyInjected: true,
+          },
+          timestamp: 1_160,
+        },
+        {
+          id: "prefetch-thin",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-thin",
+            _prefetchQuery: "请创建一个子会话来完成任务",
+            occurredAt: 1_180,
+            layer: "auto",
+            injectedBytes: 0,
+            selectedFiles: ["thin.md"],
+          },
+          timestamp: 1_200,
+        },
+        {
+          id: "reuse-thin",
+          customType: "memory_inject",
+          data: {
+            operationId: "op-thin",
+            fingerprint: "thin.md|70",
+            occurredAt: 1_210,
+            skipped: true,
+            alreadyInjected: true,
+          },
+          timestamp: 1_220,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages.map((message) => message.id)).toEqual([
+      "u1",
+      "prefetch-rich",
+      "reuse-rich",
+      "a1",
+    ]);
   });
 });
 

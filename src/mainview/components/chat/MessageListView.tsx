@@ -15,6 +15,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import type { CompactionActivity } from "../../stores/use-compaction-store";
 import { useCompactionStore } from "../../stores/use-compaction-store";
+import { reorderMemoryMessagesWithinTurns } from "../../lib/chat-memory-turn-order";
 
 const EMPTY_MSGS: ChatMessage[] = [];
 
@@ -105,21 +106,14 @@ function useStableMessages(source: "main" | "sub"): ChatMessage[] {
 
   const selector = useCallback(
     (s: { messagesBySession: Record<string, ChatMessage[]> }) => {
-      if (!sessionId) return EMPTY_MSGS;
-      return s.messagesBySession[sessionId] || EMPTY_MSGS;
+      const targetSessionId = source === "sub" ? activeSubId : sessionId;
+      if (!targetSessionId) return EMPTY_MSGS;
+      return s.messagesBySession[targetSessionId] || EMPTY_MSGS;
     },
-    [sessionId],
+    [activeSubId, sessionId, source],
   );
 
-  const subSelector = useCallback(
-    (s: { messagesBySubsession: Record<string, ChatMessage[]> }) => {
-      if (!activeSubId) return EMPTY_MSGS;
-      return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
-    },
-    [activeSubId],
-  );
-
-  return source === "sub" ? useSubagentStore(subSelector) : useChatStore(selector);
+  return useChatStore(selector);
 }
 
 interface ProcessedMessage {
@@ -143,7 +137,7 @@ export function buildProcessedMessages(
   showMemoryEntries: boolean,
   options: { hideLeadingOrphanMemoryEntries?: boolean } = {},
 ): ProcessedMessage[] {
-  const result: ProcessedMessage[] = [];
+  const visibleMessages: ChatMessage[] = [];
   let hasConversationAnchor = false;
 
   for (const msg of dedupeMemoryInjectMessages(messages)) {
@@ -183,13 +177,13 @@ export function buildProcessedMessages(
       if (allHidden) continue;
     }
 
-    result.push({ msg });
+    visibleMessages.push(msg);
     if (isConversationAnchor) {
       hasConversationAnchor = true;
     }
   }
 
-  return result;
+  return reorderMemoryMessagesWithinTurns(visibleMessages).map((msg) => ({ msg }));
 }
 
 function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | undefined {

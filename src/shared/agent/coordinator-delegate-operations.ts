@@ -17,10 +17,12 @@ import {
   type DelegateSessionList,
 } from "./coordinator-session-state";
 import {
+  buildDelegateReplyParams,
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
   type DelegateReplyMode,
+  type DelegateReplyMetadata,
   formatDelegateElapsed,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
@@ -62,6 +64,16 @@ interface DelegateParentManaged {
     projectPath: string;
     sessionPath: string;
   };
+}
+
+function parseCoordinatorModel(model: string | undefined): { provider: string; modelId: string } | null {
+  if (!model) return null;
+  const [provider, ...modelParts] = model.split("/");
+  const modelId = modelParts.join("/");
+  if (!provider || !modelId) {
+    throw new Error(`Invalid model "${model}". Expected format: provider/modelId`);
+  }
+  return { provider, modelId };
 }
 
 export interface DelegateSyncResult {
@@ -194,6 +206,8 @@ export async function handleCoordinatorDelegateOperation<
     sessionPath: string,
     options: { forceNewProcess: true },
   ) => Promise<{ status: "started" | "already_running" }>;
+  switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
+  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
@@ -205,10 +219,13 @@ export async function handleCoordinatorDelegateOperation<
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
   delegateReplyMode?: Map<string, DelegateReplyMode>;
+  delegateReplyMetadata?: Map<string, DelegateReplyMetadata>;
   now?: () => number;
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task } = options.msg;
+  const agent = options.msg.agent;
+  const model = parseCoordinatorModel(options.msg.model);
   const replyMode = options.msg.replyMode ?? "interrupt";
 
   const session = await createAndStartDelegateSession({
@@ -226,8 +243,55 @@ export async function handleCoordinatorDelegateOperation<
   });
   options.delegateReplyMode?.set(session.sessionId, replyMode);
 
+  if (agent && options.switchAgent) {
+    try {
+      await options.switchAgent(session.sessionId, agent);
+      log.info("[handleCoordinatorDelegate] agent switched", {
+        newSessionId: session.sessionId,
+        agent,
+      });
+    } catch (switchErr: unknown) {
+      log.warn("[handleCoordinatorDelegate] switchAgent failed, using default agent", {
+        newSessionId: session.sessionId,
+        agent,
+        err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+      });
+    }
+  }
+
+  if (model && options.setModel) {
+    try {
+      await options.setModel(session.sessionId, model.provider, model.modelId);
+      log.info("[handleCoordinatorDelegate] model switched", {
+        newSessionId: session.sessionId,
+        provider: model.provider,
+        modelId: model.modelId,
+      });
+    } catch (modelErr: unknown) {
+      log.warn("[handleCoordinatorDelegate] setModel failed, using default model", {
+        newSessionId: session.sessionId,
+        provider: model.provider,
+        modelId: model.modelId,
+        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
+      });
+    }
+  }
+
   const rawTitle = options.msg.title ?? task.slice(0, 60);
   const title = `指派: ${rawTitle}`;
+  options.delegateReplyMetadata?.set(session.sessionId, {
+    task,
+    title,
+    projectPath: session.projectPath,
+    replyMode,
+    agent,
+    params: buildDelegateReplyParams({
+      title,
+      agent,
+      projectPath: session.projectPath,
+      replyMode,
+    }),
+  });
   await options.setSessionName(session.sessionId, title);
   const delegatePrompt = buildCoordinatorDelegatePrompt({
     newSessionId: session.sessionId,
@@ -235,6 +299,7 @@ export async function handleCoordinatorDelegateOperation<
     title,
     task,
     projectPath: session.projectPath,
+    agent,
     replyMode,
   });
 
@@ -280,6 +345,7 @@ export async function handleCoordinatorDelegateSendOperation<
   delegateReplyCount: Map<string, number>;
   delegateCreatedAt: Map<string, number>;
   delegateReplyMode?: Map<string, DelegateReplyMode>;
+  delegateReplyMetadata?: Map<string, DelegateReplyMetadata>;
   delegateRepliedSessions?: Set<string>;
   parentChildMap: DelegateChildMap;
   start: (
@@ -357,6 +423,7 @@ export async function handleCoordinatorDelegateSendOperation<
   const now = options.now ?? Date.now;
   const createdAt = options.delegateCreatedAt.get(metadataSessionId) ?? now();
   const elapsed = formatDelegateElapsed(createdAt, now());
+  const replyMetadata = options.delegateReplyMetadata?.get(metadataSessionId);
 
   const parentSessionId = findParentSession(options.parentChildMap, targetSessionId);
   let title = "";
@@ -372,6 +439,11 @@ export async function handleCoordinatorDelegateSendOperation<
     createdAt,
     elapsed,
     message,
+    task: replyMetadata?.task,
+    agent: replyMetadata?.agent,
+    projectPath: replyMetadata?.projectPath,
+    replyMode: replyMetadata?.replyMode,
+    params: replyMetadata?.params,
   });
 
   const configuredMode = options.delegateReplyMode?.get(options.sourceSessionId) ?? "interrupt";
@@ -408,6 +480,7 @@ export async function handleCoordinatorDelegateSyncOperation<
     options: { forceNewProcess: true },
   ) => Promise<unknown>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
+  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   steer: (sessionId: string, content: string) => void;
@@ -420,6 +493,7 @@ export async function handleCoordinatorDelegateSyncOperation<
   parentChildMap: DelegateChildMap;
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
+  delegateReplyMetadata?: Map<string, DelegateReplyMetadata>;
   syncDelegateResolvers: Map<
     string,
     {
@@ -434,6 +508,7 @@ export async function handleCoordinatorDelegateSyncOperation<
   sessionIdFactory?: () => string;
 }): Promise<DelegateSyncResult> {
   const { task, title, agent, timeoutMs = 1800000 } = options.msg;
+  const model = parseCoordinatorModel(options.msg.model);
 
   const session = await createAndStartDelegateSession({
     parentSessionId: options.parentSessionId,
@@ -465,8 +540,40 @@ export async function handleCoordinatorDelegateSyncOperation<
     }
   }
 
+  if (model && options.setModel) {
+    try {
+      await options.setModel(session.sessionId, model.provider, model.modelId);
+      log.info("[handleCoordinatorDelegateSync] model switched", {
+        newSessionId: session.sessionId,
+        provider: model.provider,
+        modelId: model.modelId,
+      });
+    } catch (modelErr: unknown) {
+      log.warn("[handleCoordinatorDelegateSync] setModel failed, using default model", {
+        newSessionId: session.sessionId,
+        provider: model.provider,
+        modelId: model.modelId,
+        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
+      });
+    }
+  }
+
   const rawTitle = title ?? task.slice(0, 60);
-  await options.setSessionName(session.sessionId, `子代理: ${rawTitle}`);
+  const sessionTitle = `子代理: ${rawTitle}`;
+  options.delegateReplyMetadata?.set(session.sessionId, {
+    task,
+    title: sessionTitle,
+    projectPath: session.projectPath,
+    replyMode: "interrupt",
+    agent,
+    params: buildDelegateReplyParams({
+      title: sessionTitle,
+      agent,
+      projectPath: session.projectPath,
+      replyMode: "interrupt",
+    }),
+  });
+  await options.setSessionName(session.sessionId, sessionTitle);
   const delegatePrompt = buildSyncDelegatePrompt({
     task,
     rawTitle,
@@ -583,6 +690,8 @@ export async function handleCoordinatorDelegateForkOperation<
     sessionPath: string,
     options: { forceNewProcess: true },
   ) => Promise<{ status: "started" | "already_running" }>;
+  switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
+  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
@@ -593,7 +702,8 @@ export async function handleCoordinatorDelegateForkOperation<
   parentChildMap: DelegateChildMap;
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
-  const { task, sessionId: targetSessionId } = options.msg;
+  const { task, sessionId: targetSessionId, agent } = options.msg;
+  const model = parseCoordinatorModel(options.msg.model);
   if (!canManageDelegateChild(options.parentChildMap, options.parentSessionId, targetSessionId)) {
     throw new Error(`Session not found: ${targetSessionId}`);
   }
@@ -619,6 +729,40 @@ export async function handleCoordinatorDelegateForkOperation<
   });
 
   registerDelegateChild(options.parentChildMap, options.parentSessionId, forkedSessionId);
+
+  if (agent && options.switchAgent) {
+    try {
+      await options.switchAgent(forkedSessionId, agent);
+      log.info("[handleCoordinatorDelegateFork] agent switched", {
+        forkedSessionId,
+        agent,
+      });
+    } catch (switchErr: unknown) {
+      log.warn("[handleCoordinatorDelegateFork] switchAgent failed, using default agent", {
+        forkedSessionId,
+        agent,
+        err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+      });
+    }
+  }
+
+  if (model && options.setModel) {
+    try {
+      await options.setModel(forkedSessionId, model.provider, model.modelId);
+      log.info("[handleCoordinatorDelegateFork] model switched", {
+        forkedSessionId,
+        provider: model.provider,
+        modelId: model.modelId,
+      });
+    } catch (modelErr: unknown) {
+      log.warn("[handleCoordinatorDelegateFork] setModel failed, using default model", {
+        forkedSessionId,
+        provider: model.provider,
+        modelId: model.modelId,
+        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
+      });
+    }
+  }
 
   const title = options.msg.title ?? task.slice(0, 60);
   await options.setSessionName(forkedSessionId, title);

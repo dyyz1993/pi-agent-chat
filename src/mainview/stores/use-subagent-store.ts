@@ -11,13 +11,102 @@ import type { AgentEvent } from "@dyyz1993/pi-agent-core";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
-import { batchMessageUpdate } from "../lib/message-batcher";
+import { batchMessageUpdate, flushNow } from "../lib/message-batcher";
+import {
+  closeRunningToolExecutions,
+  findMatchingToolExecution,
+  formatToolArgs,
+  isDelayedTerminalMessageUpdate,
+} from "../lib/agent-event-reconciler";
+import { buildSubagentTerminalPatch } from "../lib/subagent-terminal-state";
 import { useSessionStore } from "./use-session-store";
+import { useUIDialogStore } from "./use-ui-dialog-store";
 import { createLogger } from "../../shared/lib/logger";
+import type { ExtensionUIRequestEvent, ExtensionUIResolvedEvent } from "../../shared/modules/agent";
 
 const log = createLogger("subagent");
 
 const subToolCallNameMapBySubId: Record<string, Record<string, string>> = {};
+const INTERACTIVE_UI_METHODS = new Set(["askUserQuestion", "confirm", "input", "select", "editor"]);
+
+type InteractiveSubagentMethod = "askUserQuestion" | "confirm" | "input" | "select" | "editor";
+
+function isInteractiveUIRequest(
+  request: ExtensionUIRequestEvent,
+): request is ExtensionUIRequestEvent & { method: InteractiveSubagentMethod } {
+  return typeof request.id === "string" && INTERACTIVE_UI_METHODS.has(request.method);
+}
+
+function registerSubagentUIRequest(
+  subId: string,
+  request: ExtensionUIRequestEvent & { method: InteractiveSubagentMethod },
+): void {
+  useUIDialogStore.getState().registerUIRequest({
+    requestId: request.id,
+    sessionId: subId,
+    method: request.method,
+    title: request.title,
+    message: request.message,
+    options: request.options,
+    questions: request.questions,
+    multiple: request.multiple,
+    placeholder: request.placeholder,
+    prefill: request.prefill,
+    timeout: request.timeout,
+    toolCallId: request.toolCallId,
+    confirmText: request.confirmText,
+    cancelText: request.cancelText,
+    hookMeta: request.hookMeta,
+    permissionMeta: request.permissionMeta,
+  });
+  useSubagentStore.getState().updateSubagentStatus(subId, "permission");
+}
+
+async function restoreSubagentRuntimeState(sub: SubagentSessionInfo): Promise<void> {
+  try {
+    const result = (await apiClient.call("agent.getState", {
+      sessionId: sub.sessionId,
+    })) as
+      | {
+          isStreaming?: boolean;
+          isCompacting?: boolean;
+          pendingUIRequests?: ExtensionUIRequestEvent[];
+        }
+      | null;
+
+    if (!result) return;
+
+    const pendingUIRequests = Array.isArray(result.pendingUIRequests)
+      ? result.pendingUIRequests.filter(isInteractiveUIRequest)
+      : [];
+
+    if (pendingUIRequests.length > 0) {
+      for (const request of pendingUIRequests) {
+        registerSubagentUIRequest(sub.sessionId, request);
+      }
+      return;
+    }
+
+    if (result.isCompacting) {
+      useSubagentStore.getState().updateSubagentStatus(sub.sessionId, "compacting");
+      return;
+    }
+
+    if (result.isStreaming) {
+      useSubagentStore.getState().updateSubagentStatus(sub.sessionId, "streaming");
+      return;
+    }
+
+    if (!sub.completedAt) {
+      useSubagentStore.getState().updateSubagentStatus(sub.sessionId, "idle");
+    }
+  } catch (error) {
+    log.debug("restoreSubagentRuntimeState skipped", {
+      subId: sub.sessionId,
+      error: String(error),
+    });
+  }
+}
 
 interface SubagentState {
   subsessionsByParent: Record<string, SubagentSessionInfo[]>;
@@ -82,6 +171,7 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: subs },
         loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
       }));
+      await Promise.all(subs.map((sub) => restoreSubagentRuntimeState(sub)));
       return subs;
     } catch (e) {
       log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
@@ -110,31 +200,12 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
   loadSubHistory: async (subSessionPath, subId) => {
     try {
-      const result = await apiClient.call("session.getEntries", { sessionPath: subSessionPath });
-      if (!result?.entries || !Array.isArray(result.entries) || result.entries.length === 0) {
-        return;
-      }
-      const historyMsgs: ChatMessage[] = [];
-      for (const entry of result.entries) {
-        const entryData = entry.data;
-        const raw = entryData.message;
-        if (!raw) continue;
-        const msg = messageToChatMessage(raw as Message, entry.id);
-        if (msg) historyMsgs.push(msg);
-      }
-      if (historyMsgs.length > 0) {
-        set((s) => {
-          const liveMsgs = s.messagesBySubsession[subId] || [];
-          const historyIds = new Set(historyMsgs.map((m) => m.id));
-          const liveOnly = liveMsgs.filter((m) => !historyIds.has(m.id));
-          return {
-            messagesBySubsession: {
-              ...s.messagesBySubsession,
-              [subId]: [...historyMsgs, ...liveOnly],
-            },
-          };
-        });
-      }
+      const { useChatStore } = await import("./use-chat-store");
+      await useChatStore
+        .getState()
+        .loadSessionMessages(subId, { force: true, sessionPath: subSessionPath });
+      const syncedMessages = useChatStore.getState().messagesBySession[subId] || [];
+      get().setSubMessages(subId, syncedMessages);
     } catch (e) {
       log.warn("Failed to load subagent history", { subSessionPath, subId, error: String(e) });
     }
@@ -255,10 +326,68 @@ type SubagentCustomEvent =
     }
   | { type: "auto_retry_end" };
 
-type SubagentEvent = AgentEvent | SubagentCustomEvent;
+type SubagentEvent = AgentEvent | SubagentCustomEvent | ExtensionUIRequestEvent | ExtensionUIResolvedEvent;
 
-export function handleSubagentEvent(subId: string, event: SubagentEvent, parentSessionId?: string) {
+function replaceMsgAt(msgs: ChatMessage[], idx: number, replacement: ChatMessage): ChatMessage[] {
+  return [...msgs.slice(0, idx), replacement, ...msgs.slice(idx + 1)];
+}
+
+interface HandleSubagentEventOptions {
+  skipUIRegistration?: boolean;
+  skipMessageMirroring?: boolean;
+}
+
+function isSubagentMessageMirrorEvent(event: SubagentEvent): boolean {
+  return (
+    event.type === "message_start" ||
+    event.type === "message_update" ||
+    event.type === "message_end" ||
+    event.type === "turn_end" ||
+    event.type === "tool_execution_start" ||
+    event.type === "tool_execution_update" ||
+    event.type === "tool_execution_end"
+  );
+}
+
+export function handleSubagentEvent(
+  subId: string,
+  event: SubagentEvent,
+  parentSessionId?: string,
+  options: HandleSubagentEventOptions = {},
+) {
   const store = useSubagentStore.getState();
+
+  if (event.type === "extension_ui_request" && isInteractiveUIRequest(event as ExtensionUIRequestEvent)) {
+    if (options.skipUIRegistration) {
+      store.updateSubagentStatus(subId, "permission");
+      return;
+    }
+    registerSubagentUIRequest(subId, event as ExtensionUIRequestEvent & { method: InteractiveSubagentMethod });
+    return;
+  }
+
+  if (event.type === "extension_ui_resolved") {
+    if (options.skipUIRegistration) {
+      const current = useSubagentStore.getState().subagentStatusMap[subId];
+      if (current === "permission") {
+        store.updateSubagentStatus(subId, "streaming");
+      }
+      return;
+    }
+    const requestId = typeof event.id === "string" ? event.id : undefined;
+    const reason =
+      event.reason === "timeout" || event.reason === "aborted" || event.reason === "responded"
+        ? event.reason
+        : "responded";
+    if (requestId) {
+      useUIDialogStore.getState().resolveFromRemote(requestId, reason);
+    }
+    const current = useSubagentStore.getState().subagentStatusMap[subId];
+    if (current === "permission") {
+      store.updateSubagentStatus(subId, "streaming");
+    }
+    return;
+  }
 
   if (event.type === "agent_start" || event.type === "subagent_start") {
     store.updateSubagentStatus(subId, "streaming");
@@ -292,6 +421,10 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     }
   }
 
+  if (options.skipMessageMirroring && isSubagentMessageMirrorEvent(event)) {
+    return;
+  }
+
   const existing = store.messagesBySubsession[subId] || [];
 
   if (event.type === "message_start") {
@@ -306,39 +439,94 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       }
     }
   } else if (event.type === "message_update") {
+    const message = event.message as AssistantMessage;
+    const incoming = message.content;
+    const existingBeforeUpdate = useSubagentStore.getState().messagesBySubsession[subId] || [];
+    if (isDelayedTerminalMessageUpdate(existingBeforeUpdate, incoming)) return;
+
     batchMessageUpdate(subId, () => {
       const freshStore = useSubagentStore.getState();
       const freshExisting = freshStore.messagesBySubsession[subId] || [];
-      const lastMsg = freshExisting[freshExisting.length - 1];
+      let lastAssistantIdx = -1;
+      for (let i = freshExisting.length - 1; i >= 0; i--) {
+        if (freshExisting[i].role === "assistant") {
+          lastAssistantIdx = i;
+          break;
+        }
+      }
+      const lastMsg = lastAssistantIdx >= 0 ? freshExisting[lastAssistantIdx] : null;
+
       if (!lastMsg) return;
+      if (!incoming || !Array.isArray(incoming)) return;
 
-      const blocks = (lastMsg.content as ContentBlock[]) || [];
-      const msg = event.message as Message;
-      const content = msg.content as Array<ContentBlock> | undefined;
-      if (!content || !Array.isArray(content)) return;
+      const preservedToolExecs = (lastMsg.content ?? []).filter(
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
+      );
+      const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
+      for (const exec of preservedToolExecs) {
+        execByCallId.set(exec.toolCallId, exec);
+      }
+      const usedExecs = new Set<string>();
+      const orderedBlocks: ContentBlock[] = [];
 
-      const updated: ContentBlock[] = [...blocks];
-      for (const block of content) {
-        if (block.type === "text") {
-          const lastIdx = updated.length - 1;
-          const lastBlock = updated[lastIdx];
-          if (lastIdx >= 0 && lastBlock?.type === "text") {
-            updated[lastIdx] = { type: "text" as const, text: lastBlock.text + block.text };
+      for (const block of incoming) {
+        if (block.type === "toolCall" && block.id) {
+          const { args, timeout, description } = formatToolArgs(block.arguments);
+          const semanticIdx = findMatchingToolExecution(preservedToolExecs, block.name, args, {
+            includeTerminal: true,
+          });
+          const exec = execByCallId.get(block.id) ?? preservedToolExecs[semanticIdx];
+          if (exec) {
+            orderedBlocks.push({
+              ...exec,
+              toolName: exec.toolName === "unknown" ? block.name : exec.toolName,
+              args: args || exec.args,
+              timeout: timeout ?? exec.timeout,
+              description: description ?? exec.description,
+            });
+            usedExecs.add(exec.toolCallId);
           } else {
-            updated.push(block);
+            orderedBlocks.push({
+              type: "toolExecution",
+              toolCallId: block.id,
+              toolName: block.name,
+              args,
+              status: "running",
+              timeout,
+              description,
+            });
+            usedExecs.add(block.id);
           }
-        } else {
-          updated.push(block);
+        } else if (block.type === "text" || block.type === "thinking") {
+          orderedBlocks.push(block);
         }
       }
 
-      freshStore.setSubMessages(subId, [
-        ...freshExisting.slice(0, -1),
-        { ...lastMsg, content: updated },
-      ]);
+      const preservedBlocks = preservedToolExecs.filter((exec) => !usedExecs.has(exec.toolCallId));
+
+      freshStore.setSubMessages(
+        subId,
+        replaceMsgAt(freshExisting, lastAssistantIdx, {
+          ...lastMsg,
+          content: [...preservedBlocks, ...orderedBlocks],
+          isStreaming: true,
+          stopReason: (message.stopReason as string) ?? lastMsg.stopReason ?? null,
+        }),
+      );
     });
   } else if (event.type === "message_end") {
-    const lastMsg = existing[existing.length - 1];
+    flushNow();
+
+    const refreshedStore = useSubagentStore.getState();
+    const refreshedExisting = refreshedStore.messagesBySubsession[subId] || [];
+    let lastMsgIdx = -1;
+    for (let i = refreshedExisting.length - 1; i >= 0; i--) {
+      if (refreshedExisting[i].role === "assistant") {
+        lastMsgIdx = i;
+        break;
+      }
+    }
+    const lastMsg = lastMsgIdx >= 0 ? refreshedExisting[lastMsgIdx] : undefined;
     if (!lastMsg) return;
 
     const msg = event.message as AssistantMessage;
@@ -365,21 +553,30 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     );
 
     if (!hasContent) {
-      store.setSubMessages(subId, existing.slice(0, -1));
+      store.setSubMessages(
+        subId,
+        [...refreshedExisting.slice(0, lastMsgIdx), ...refreshedExisting.slice(lastMsgIdx + 1)],
+      );
       return;
     }
 
-    store.setSubMessages(subId, [
-      ...existing.slice(0, -1),
-      {
+    const closedContent = closeRunningToolExecutions(
+      lastMsg.content,
+      msg.stopReason === "error" ? "error" : "done",
+    );
+
+    store.setSubMessages(
+      subId,
+      replaceMsgAt(refreshedExisting, lastMsgIdx, {
         ...lastMsg,
+        content: closedContent,
         isStreaming: false,
         stopReason: (msg.stopReason as string) ?? null,
         provider,
         model,
         tokenUsage: tokenUsage ?? lastMsg.tokenUsage,
-      },
-    ]);
+      }),
+    );
 
     const usage = msg.usage as Usage;
     if (usage) {
@@ -394,8 +591,6 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       for (const [path, subs] of Object.entries(subsessionsByParent)) {
         if (subs.some((s) => s.sessionId === subId)) {
           useSubagentStore.getState().upsertLiveSubagent(path, subId, {
-            completedAt: Date.now(),
-            exitCode: 0,
             finalText: finalText.slice(0, 200),
             provider,
             model,
@@ -405,16 +600,7 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       }
     }
   } else if (event.type === "turn_end") {
-    if (event.message) {
-      const msg = messageToChatMessage(
-        event.message as Message,
-        undefined,
-        subToolCallNameMapBySubId[subId],
-      );
-      if (msg) {
-        store.setSubMessages(subId, [...existing, msg]);
-      }
-    }
+    return;
   }
 
   if (event.type === "tool_execution_start") {
@@ -427,6 +613,10 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     event.type === "tool_execution_update" ||
     event.type === "tool_execution_end"
   ) {
+    if (event.type === "tool_execution_end") {
+      flushNow();
+    }
+
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
     const toolCallId = event.toolCallId;
     const toolName = event.toolName;
@@ -453,14 +643,44 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       );
 
       if (event.type === "tool_execution_start") {
-        blocks.push({
-          type: "toolExecution",
-          toolCallId,
-          toolName,
-          args: argsStr,
-          status: "running",
-          description,
-        });
+        const matchedByExactId = targetIdx >= 0;
+        let resolvedTargetIdx = matchedByExactId
+          ? targetIdx
+          : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
+
+        if (!matchedByExactId && resolvedTargetIdx >= 0) {
+          const matched = blocks[resolvedTargetIdx] as ToolExecBlock;
+          if (
+            matched.status === "running" &&
+            matched.toolCallId !== toolCallId &&
+            subToolCallNameMapBySubId[subId]?.[matched.toolCallId]
+          ) {
+            resolvedTargetIdx = -1;
+          }
+        }
+
+        if (resolvedTargetIdx >= 0) {
+          const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
+          blocks[resolvedTargetIdx] = {
+            ...prev,
+            toolCallId,
+            toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
+            args: argsStr || prev.args,
+            status: prev.status === "done" || prev.status === "error" ? prev.status : "running",
+            description: description ?? prev.description,
+            startedAt: prev.startedAt ?? event.timestamp ?? Date.now(),
+          };
+        } else {
+          blocks.push({
+            type: "toolExecution",
+            toolCallId,
+            toolName,
+            args: argsStr,
+            status: "running",
+            description,
+            startedAt: event.timestamp ?? Date.now(),
+          });
+        }
       } else if (event.type === "tool_execution_update") {
         let output = "";
         const partial = event.partialResult as Record<string, unknown> | undefined;
@@ -515,15 +735,15 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
   }
 
   if (event.type === "agent_end") {
+    flushNow();
+
     const { subsessionsByParent } = useSubagentStore.getState();
     for (const [path, subs] of Object.entries(subsessionsByParent)) {
       if (subs.some((s) => s.sessionId === subId)) {
         const sub = subs.find((s) => s.sessionId === subId);
         if (sub && !sub.completedAt) {
           useSubagentStore.getState().upsertLiveSubagent(path, subId, {
-            completedAt: Date.now(),
-            exitCode: 0,
-            finalText: sub.finalText ?? "(completed)",
+            ...buildSubagentTerminalPatch(event as { reason?: unknown }, sub.finalText),
           });
         }
         break;

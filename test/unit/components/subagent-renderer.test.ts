@@ -12,6 +12,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useSubagentStore, handleSubagentEvent } from "../../../src/mainview/stores/use-subagent-store";
 import type { AgentEvent } from "@dyyz1993/pi-agent-core";
 
+const uiDialogMocks = vi.hoisted(() => ({
+  registerUIRequest: vi.fn(),
+  resolveFromRemote: vi.fn(),
+}));
+
 // Mock apiClient
 vi.mock("../../../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -33,6 +38,7 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 
 vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: vi.fn((_id: string, fn: () => void) => fn()),
+  flushNow: vi.fn(),
 }));
 
 vi.mock("../../../src/mainview/lib/message-mapper", () => ({
@@ -55,8 +61,10 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   },
 }));
 
-vi.mock("../../../src/mainview/lib/message-batcher", () => ({
-  batchMessageUpdate: vi.fn((_id: string, fn: () => void) => fn()),
+vi.mock("../../../src/mainview/stores/use-ui-dialog-store", () => ({
+  useUIDialogStore: {
+    getState: () => uiDialogMocks,
+  },
 }));
 
 const PARENT_SESSION_ID = "sess_parent_001";
@@ -105,7 +113,7 @@ describe("SubagentRenderer — 进度提取（store 层）", () => {
     expect(useSubagentStore.getState().subagentStatusMap[SUB_SESSION_ID]).toBe("streaming");
   });
 
-  it("message_start → message_update → message_end 正确累积消息", () => {
+  it("message_update 按当前快照重建文本，不会重复拼接累计内容", () => {
     handleSubagentEvent(SUB_SESSION_ID, {
       type: "message_start",
       message: { id: "msg-1", role: "assistant", content: [] },
@@ -118,7 +126,7 @@ describe("SubagentRenderer — 进度提取（store 层）", () => {
 
     handleSubagentEvent(SUB_SESSION_ID, {
       type: "message_update",
-      message: { role: "assistant", content: [{ type: "text", text: " files..." }] },
+      message: { role: "assistant", content: [{ type: "text", text: "Analyzing files..." }] },
     } as unknown as AgentEvent, PARENT_SESSION_ID);
 
     const msgs = useSubagentStore.getState().messagesBySubsession[SUB_SESSION_ID];
@@ -223,6 +231,127 @@ describe("SubagentRenderer — 进度提取（store 层）", () => {
     expect(sub?.completedAt).toBeDefined();
     expect(sub?.exitCode).toBe(0);
     expect(useSubagentStore.getState().subagentStatusMap[SUB_SESSION_ID]).toBe("idle");
+  });
+
+  it("agent_end 带异常原因时不会被标记为成功完成", () => {
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "agent_end",
+      reason: "crashed",
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    const sub = useSubagentStore.getState().subsessionsByParent[PARENT_SESSION_PATH].find(
+      (s) => s.sessionId === SUB_SESSION_ID,
+    );
+    expect(sub?.completedAt).toBeDefined();
+    expect(sub?.exitCode).not.toBe(0);
+    expect(sub?.error).toBe("crashed");
+    expect(useSubagentStore.getState().subagentStatusMap[SUB_SESSION_ID]).toBe("idle");
+  });
+
+  it("message_end 不会把整个子会话提前标记为完成，但会收口当前轮的 running 工具", () => {
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "message_start",
+      message: { id: "msg-1", role: "assistant", content: [] },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "tool_execution_start",
+      toolCallId: "tc-bash-1",
+      toolName: "bash",
+      args: { command: "ls" },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "这一轮做完了，但整个子会话还没结束。" }],
+        stopReason: "end_turn",
+      },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    const sub = useSubagentStore.getState().subsessionsByParent[PARENT_SESSION_PATH].find(
+      (s) => s.sessionId === SUB_SESSION_ID,
+    );
+    const msgs = useSubagentStore.getState().messagesBySubsession[SUB_SESSION_ID];
+    const tool = msgs[0].content.find(
+      (block: { type: string; toolCallId?: string }) =>
+        block.type === "toolExecution" && block.toolCallId === "tc-bash-1",
+    ) as { status?: string } | undefined;
+
+    expect(sub?.completedAt).toBeUndefined();
+    expect(sub?.finalText).toContain("这一轮做完了");
+    expect(tool?.status).toBe("done");
+  });
+
+  it("turn_end 不会重复追加一条 assistant 消息", () => {
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "message_start",
+      message: { id: "msg-1", role: "assistant", content: [] },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "message_update",
+      message: { role: "assistant", content: [{ type: "text", text: "subagent working" }] },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "subagent working" }],
+        stopReason: "end_turn",
+      },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    handleSubagentEvent(SUB_SESSION_ID, {
+      type: "turn_end",
+      message: {
+        id: "msg-1-final",
+        role: "assistant",
+        content: [{ type: "text", text: "subagent working" }],
+      },
+    } as unknown as AgentEvent, PARENT_SESSION_ID);
+
+    const msgs = useSubagentStore.getState().messagesBySubsession[SUB_SESSION_ID];
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toEqual([{ type: "text", text: "subagent working" }]);
+  });
+
+  it("interactive UI 事件会注册审批并在 resolved 后恢复运行态", () => {
+    handleSubagentEvent(
+      SUB_SESSION_ID,
+      {
+        type: "extension_ui_request",
+        id: "sub-approve-1",
+        method: "confirm",
+        title: "Subagent approval",
+        message: "Allow this write?",
+      } as unknown as AgentEvent,
+      PARENT_SESSION_ID,
+    );
+
+    expect(uiDialogMocks.registerUIRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "sub-approve-1",
+        sessionId: SUB_SESSION_ID,
+        method: "confirm",
+      }),
+    );
+    expect(useSubagentStore.getState().subagentStatusMap[SUB_SESSION_ID]).toBe("permission");
+
+    handleSubagentEvent(
+      SUB_SESSION_ID,
+      {
+        type: "extension_ui_resolved",
+        id: "sub-approve-1",
+        reason: "responded",
+      } as unknown as AgentEvent,
+      PARENT_SESSION_ID,
+    );
+
+    expect(uiDialogMocks.resolveFromRemote).toHaveBeenCalledWith("sub-approve-1", "responded");
+    expect(useSubagentStore.getState().subagentStatusMap[SUB_SESSION_ID]).toBe("streaming");
   });
 
   it("多个工具调用（5+）正确累积，供 SubagentProgress 组件截取前5个", () => {

@@ -46,6 +46,7 @@ describe("coordinator delegate operations", () => {
     const parentChildMap = new Map<string, Set<string>>();
     const delegateCreatedAt = new Map<string, number>();
     const delegateReplyCount = new Map<string, number>();
+    const delegateReplyMetadata = new Map<string, unknown>();
     const start = vi.fn().mockResolvedValue({ status: "started" });
     const setSessionName = vi.fn().mockResolvedValue(undefined);
     const send = vi.fn();
@@ -67,6 +68,7 @@ describe("coordinator delegate operations", () => {
         parentChildMap,
         delegateCreatedAt,
         delegateReplyCount,
+        delegateReplyMetadata,
         now: () => 1000,
         sessionIdFactory: () => "child-delegate",
       }),
@@ -85,6 +87,13 @@ describe("coordinator delegate operations", () => {
     expect(parentChildMap.get("parent")?.has("child-delegate")).toBe(true);
     expect(delegateCreatedAt.get("child-delegate")).toBe(1000);
     expect(delegateReplyCount.get("child-delegate")).toBe(0);
+    expect(delegateReplyMetadata.get("child-delegate")).toEqual({
+      task: "inspect repo",
+      title: "指派: Inspect",
+      projectPath: "/project",
+      replyMode: "interrupt",
+      params: '{"title":"指派: Inspect","projectPath":"/project","replyMode":"interrupt"}',
+    });
     expect(broadcastEvent).toHaveBeenCalledWith(
       "coordinator.session_created",
       expect.objectContaining({
@@ -122,6 +131,87 @@ describe("coordinator delegate operations", () => {
         delegateType: "coordinator",
       }),
     ]);
+  });
+
+  it("switches coordinator delegates to the requested agent before sending the task", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-agent-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const delegateReplyMetadata = new Map<string, unknown>();
+    const switchAgent = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo",
+          title: "Inspect",
+          agent: "frontend-dev",
+        },
+        getActiveManaged: () => makeManaged("idle", parentSessionPath),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        switchAgent,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap: new Map(),
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        delegateReplyMetadata,
+        sessionIdFactory: () => "child-agent",
+      }),
+    ).resolves.toEqual({ sessionId: "child-agent", status: "started" });
+
+    expect(switchAgent).toHaveBeenCalledWith("child-agent", "frontend-dev");
+    expect(switchAgent.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
+    expect(send).toHaveBeenCalledWith(
+      "child-agent",
+      expect.stringContaining("**Agent 角色:** frontend-dev"),
+    );
+    expect(delegateReplyMetadata.get("child-agent")).toEqual({
+      task: "inspect repo",
+      title: "指派: Inspect",
+      projectPath: "/project",
+      replyMode: "interrupt",
+      agent: "frontend-dev",
+      params:
+        '{"title":"指派: Inspect","agent":"frontend-dev","projectPath":"/project","replyMode":"interrupt"}',
+    });
+  });
+
+  it("sets coordinator delegate model before sending the task", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-model-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const setModel = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo",
+          title: "Inspect",
+          model: "openai/gpt-4.1",
+        },
+        getActiveManaged: () => makeManaged("idle", parentSessionPath),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        setModel,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap: new Map(),
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        sessionIdFactory: () => "child-model",
+      }),
+    ).resolves.toEqual({ sessionId: "child-model", status: "started" });
+
+    expect(setModel).toHaveBeenCalledWith("child-model", "openai", "gpt-4.1");
+    expect(setModel.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
   });
 
   it("starts cross-project coordinator delegates in the target project session directory", async () => {
@@ -379,6 +469,73 @@ describe("coordinator delegate operations", () => {
       unknown
     >;
     expect(header.parentSession).toBeUndefined();
+  });
+
+  it("switches forked delegate sessions to the requested agent before continuing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-fork-agent-"));
+    const sourcePath = join(dir, "source.jsonl");
+    writeFileSync(sourcePath, '{"type":"session","id":"source"}\n', "utf-8");
+    const parentChildMap = new Map([["parent", new Set(["source"])]]);
+    const switchAgent = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "source",
+          task: "continue from here",
+          title: "Forked Task",
+          agent: "backend-dev",
+        },
+        clients: new Map([["source", makeManaged("idle", sourcePath)]]),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        switchAgent,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap,
+        sessionIdFactory: () => "forked-agent",
+      }),
+    ).resolves.toEqual({ sessionId: "forked-agent", status: "started" });
+
+    expect(switchAgent).toHaveBeenCalledWith("forked-agent", "backend-dev");
+    expect(switchAgent.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
+    expect(send).toHaveBeenCalledWith("forked-agent", "continue from here");
+  });
+
+  it("sets forked delegate model before continuing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-fork-model-"));
+    const sourcePath = join(dir, "source.jsonl");
+    writeFileSync(sourcePath, '{"type":"session","id":"source"}\n', "utf-8");
+    const parentChildMap = new Map([["parent", new Set(["source"])]]);
+    const setModel = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "source",
+          task: "continue from here",
+          title: "Forked Task",
+          model: "openai/gpt-4.1",
+        },
+        clients: new Map([["source", makeManaged("idle", sourcePath)]]),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        setModel,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap,
+        sessionIdFactory: () => "forked-model",
+      }),
+    ).resolves.toEqual({ sessionId: "forked-model", status: "started" });
+
+    expect(setModel).toHaveBeenCalledWith("forked-model", "openai", "gpt-4.1");
+    expect(setModel.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
   });
 
   it("rejects delegate forks when the source session is missing", async () => {
@@ -757,6 +914,7 @@ describe("coordinator delegate operations", () => {
   it("starts sync delegates, broadcasts creation, and cleans parent links after completion", async () => {
     const parentChildMap = new Map<string, Set<string>>();
     const syncDelegateResolvers = new Map();
+    const delegateReplyMetadata = new Map<string, unknown>();
     const send = vi.fn();
     const stop = vi.fn().mockResolvedValue(true);
     const broadcastEvent = vi.fn().mockResolvedValue(undefined);
@@ -780,6 +938,7 @@ describe("coordinator delegate operations", () => {
       parentChildMap,
       delegateCreatedAt: new Map(),
       delegateReplyCount: new Map(),
+      delegateReplyMetadata,
       syncDelegateResolvers,
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
@@ -806,6 +965,14 @@ describe("coordinator delegate operations", () => {
       );
     });
     expect(parentChildMap.get("parent")?.has("child-sync")).toBe(true);
+    expect(delegateReplyMetadata.get("child-sync")).toEqual({
+      task: "inspect repo",
+      title: "子代理: Inspect",
+      projectPath: "/project",
+      replyMode: "interrupt",
+      agent: undefined,
+      params: '{"title":"子代理: Inspect","projectPath":"/project","replyMode":"interrupt"}',
+    });
 
     const resolver = syncDelegateResolvers.get("child-sync");
     expect(resolver).toBeDefined();
@@ -826,6 +993,122 @@ describe("coordinator delegate operations", () => {
     });
     expect(stop).toHaveBeenCalledWith("child-sync");
     expect(parentChildMap.has("parent")).toBe(false);
+  });
+
+  it("records sync delegate agent metadata for later reply cards", async () => {
+    const syncDelegateResolvers = new Map();
+    const delegateReplyMetadata = new Map<string, unknown>();
+
+    const promise = handleCoordinatorDelegateSyncOperation({
+      parentSessionId: "parent",
+      msg: {
+        __call: "session_delegate_sync",
+        task: "review the diff",
+        title: "Review",
+        agent: "reviewer",
+        timeoutMs: 300_000,
+      },
+      getActiveManaged: () => makeManaged("idle", "/tmp/parent.jsonl"),
+      start: vi.fn().mockResolvedValue({ status: "started" }),
+      switchAgent: vi.fn(),
+      setSessionName: vi.fn(),
+      send: vi.fn(),
+      steer: vi.fn(),
+      stop: vi.fn().mockResolvedValue(true),
+      broadcastEvent: vi.fn().mockResolvedValue(undefined),
+      parentChildMap: new Map(),
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      delegateReplyMetadata,
+      syncDelegateResolvers,
+      subagentSyncChildren: new Set(),
+      syncDelegateLastText: new Map(),
+      sessionIdFactory: () => "child-agent-sync",
+    });
+
+    const resolver = await vi.waitFor(() => {
+      const current = syncDelegateResolvers.get("child-agent-sync");
+      expect(current).toBeDefined();
+      return current;
+    });
+    clearTimeout(resolver.timeout);
+    syncDelegateResolvers.delete("child-agent-sync");
+    resolver.resolve({
+      sessionId: "child-agent-sync",
+      status: "completed",
+      exitCode: 0,
+      finalText: "done",
+    });
+
+    await expect(promise).resolves.toEqual({
+      sessionId: "child-agent-sync",
+      status: "completed",
+      exitCode: 0,
+      finalText: "done",
+    });
+    expect(delegateReplyMetadata.get("child-agent-sync")).toEqual({
+      task: "review the diff",
+      title: "子代理: Review",
+      projectPath: "/project",
+      replyMode: "interrupt",
+      agent: "reviewer",
+      params:
+        '{"title":"子代理: Review","agent":"reviewer","projectPath":"/project","replyMode":"interrupt"}',
+    });
+  });
+
+  it("sets sync delegate model before sending the task", async () => {
+    const syncDelegateResolvers = new Map();
+    const setModel = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
+    const send = vi.fn();
+
+    const promise = handleCoordinatorDelegateSyncOperation({
+      parentSessionId: "parent",
+      msg: {
+        __call: "session_delegate_sync",
+        task: "review the diff",
+        title: "Review",
+        model: "openai/gpt-4.1",
+        timeoutMs: 300_000,
+      },
+      getActiveManaged: () => makeManaged("idle", "/tmp/parent.jsonl"),
+      start: vi.fn().mockResolvedValue({ status: "started" }),
+      switchAgent: vi.fn(),
+      setModel,
+      setSessionName: vi.fn(),
+      send,
+      steer: vi.fn(),
+      stop: vi.fn().mockResolvedValue(true),
+      broadcastEvent: vi.fn().mockResolvedValue(undefined),
+      parentChildMap: new Map(),
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      syncDelegateResolvers,
+      subagentSyncChildren: new Set(),
+      syncDelegateLastText: new Map(),
+      sessionIdFactory: () => "child-model-sync",
+    });
+
+    const resolver = await vi.waitFor(() => {
+      const current = syncDelegateResolvers.get("child-model-sync");
+      expect(current).toBeDefined();
+      return current;
+    });
+    clearTimeout(resolver.timeout);
+    syncDelegateResolvers.delete("child-model-sync");
+    resolver.resolve({
+      sessionId: "child-model-sync",
+      status: "completed",
+      exitCode: 0,
+      finalText: "done",
+    });
+
+    await expect(promise).resolves.toMatchObject({
+      sessionId: "child-model-sync",
+      status: "completed",
+    });
+    expect(setModel).toHaveBeenCalledWith("child-model-sync", "openai", "gpt-4.1");
+    expect(setModel.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
   });
 
   it("times out sync delegates and clears pending state", async () => {

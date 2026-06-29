@@ -26,6 +26,7 @@ import { ConfirmDialog } from "../explorer/ConfirmDialog";
 import { DropdownSelect, useCopyFeedback } from "../primitives";
 import { agentColorStyle } from "../../utils/agent-color";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
+import { jumpToSessionById } from "../chat/primitives/useJumpToSession";
 
 const EMPTY: never[] = [];
 
@@ -336,11 +337,31 @@ function SessionList({
   );
 }
 
-function StatusBadge({ sessionId }: { sessionId: string }) {
-  const { t } = useTranslation("common");
-  const status = useSessionStore((s) => s.sessionStatusMap[sessionId]);
+export function getSessionSidebarStatus(
+  session: Pick<SessionMeta, "status" | "sessionStatus">,
+  runtimeStatus?: SessionStatus,
+): "working" | "permission" | "retrying" | "idle" {
+  if (runtimeStatus === "permission") return "permission";
+  if (runtimeStatus === "retrying") return "retrying";
+  if (
+    runtimeStatus === "streaming" ||
+    runtimeStatus === "compacting" ||
+    session.sessionStatus === "streaming" ||
+    session.sessionStatus === "compacting" ||
+    session.sessionStatus === "retrying" ||
+    session.status === "running"
+  ) {
+    return "working";
+  }
+  return "idle";
+}
 
-  if (status === "streaming" || status === "compacting") {
+function StatusBadge({ session }: { session: SessionMeta }) {
+  const { t } = useTranslation("common");
+  const status = useSessionStore((s) => s.sessionStatusMap[session.sessionId]);
+  const badgeStatus = getSessionSidebarStatus(session, status);
+
+  if (badgeStatus === "working") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
@@ -348,7 +369,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
       </span>
     );
   }
-  if (status === "permission") {
+  if (badgeStatus === "permission") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-error" />
@@ -356,7 +377,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
       </span>
     );
   }
-  if (status === "retrying") {
+  if (badgeStatus === "retrying") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-error animate-pulse" />
@@ -386,17 +407,47 @@ function WorkspaceBadge({
   );
 }
 
+export function getSubagentSidebarStatus(
+  sub: SubagentSessionInfo,
+  runtimeStatus?: SessionStatus,
+): "running" | "permission" | "retrying" | "idle" | "error" {
+  if (runtimeStatus === "permission") return "permission";
+  if (runtimeStatus === "retrying") return "retrying";
+  if (runtimeStatus === "streaming" || runtimeStatus === "compacting") return "running";
+  if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) return "error";
+  if (runtimeStatus === "idle" || sub.completedAt || sub.exitCode === 0) return "idle";
+  return "running";
+}
+
 function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   const { t } = useTranslation("common");
-  if (sub.exitCode === 0) {
+  const runtimeStatus = useSubagentStore((s) => s.subagentStatusMap[sub.sessionId]);
+  const badgeStatus = getSubagentSidebarStatus(sub, runtimeStatus);
+  if (badgeStatus === "permission") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/20 whitespace-nowrap">
-        <span className="w-1 h-1 rounded-full bg-status-success" />
-        {t("idle")}
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-error" />
+        {t("needHelp")}
       </span>
     );
   }
-  if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) {
+  if (badgeStatus === "retrying") {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-error animate-pulse" />
+        {t("retrying")}
+      </span>
+    );
+  }
+  if (badgeStatus === "running") {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
+        {t("running")}
+      </span>
+    );
+  }
+  if (badgeStatus === "error") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         {t("error")}
@@ -404,9 +455,9 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
-      <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
-      {t("running")}
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/20 whitespace-nowrap">
+      <span className="w-1 h-1 rounded-full bg-status-success" />
+      {t("idle")}
     </span>
   );
 }
@@ -441,7 +492,6 @@ function SessionItem({
   isChild?: boolean;
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
-  const setActiveSession = useSessionStore((s) => s.setActiveSession);
   const renameSession = useSessionStore((s) => s.renameSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const togglePinSession = useSessionStore((s) => s.togglePinSession);
@@ -485,15 +535,7 @@ function SessionItem({
 
   const handleClick = () => {
     if (isEditing) return;
-
-    const { projectTabs, activeProjectId, setActiveProject } = useSessionStore.getState();
-    const targetTab = projectTabs.find((t) => t.path === session.projectPath);
-    if (targetTab && targetTab.id !== activeProjectId) {
-      setActiveProject(targetTab.id);
-    }
-
-    setActiveSession(session.sessionId);
-    useSubagentStore.getState().setActiveSubsession(session.sessionId, null);
+    void jumpToSessionById(session.sessionId);
     const layout = useLayoutStore.getState();
     if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
       layout.hideSession();
@@ -673,7 +715,7 @@ function SessionItem({
                 )}
               </div>
             )}
-            <StatusBadge sessionId={session.sessionId} />
+            <StatusBadge session={session} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
@@ -772,6 +814,18 @@ function SubagentDuration({ sub }: { sub: SubagentSessionInfo }) {
   return <span className="text-[9px] text-text-tertiary tabular-nums">{text}</span>;
 }
 
+export async function openSidebarSubagentSession(
+  parentSessionId: string,
+  subSessionId: string,
+): Promise<void> {
+  try {
+    await jumpToSessionById(subSessionId);
+  } catch {
+    useSessionStore.getState().setActiveSession(parentSessionId, true);
+    useSubagentStore.getState().setActiveSubsession(parentSessionId, subSessionId);
+  }
+}
+
 function SubagentItem({
   sub,
   parentSessionId,
@@ -798,7 +852,7 @@ function SubagentItem({
 
   const handleClick = () => {
     if (isEditing) return;
-    useSubagentStore.getState().setActiveSubsession(parentSessionId, sub.sessionId);
+    void openSidebarSubagentSession(parentSessionId, sub.sessionId);
     const layout = useLayoutStore.getState();
     if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
       layout.hideSession();
@@ -867,6 +921,7 @@ function SubagentItem({
   return (
     <div className="py-1 first:pt-0.5 last:pb-0.5">
       <div
+        data-testid={`subagent-item-${sub.sessionId}`}
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
           isActive
             ? "border-l-2 border-l-semantic-accent/40 bg-semantic-accent/10 text-accent-text"
@@ -949,13 +1004,6 @@ function SubagentItem({
               ) : (
                 <Copy className="w-3 h-3" />
               )}
-            </button>
-            <button
-              onClick={handleStartRename}
-              className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
-              title={t("common:rename")}
-            >
-              <Pencil className="w-3 h-3" />
             </button>
             <button
               onClick={handleStartRename}

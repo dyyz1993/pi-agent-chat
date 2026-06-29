@@ -103,6 +103,54 @@ describe("agent client history operations", () => {
     expect(getBatchDiffs).toHaveBeenCalledWith({ fromEntryId: "e1", toEntryId: "e2" });
   });
 
+  it("falls back to getBatchDiffs when getModifiedFiles returns an empty file list", async () => {
+    const getModifiedFiles = vi.fn().mockResolvedValue({
+      files: [],
+      resolvedFromEntryId: "snap-2",
+    });
+    const getBatchDiffs = vi.fn().mockResolvedValue({
+      files: [
+        {
+          path: "src/a.ts",
+          status: "modified" as const,
+          diff: {
+            path: "src/a.ts",
+            oldContent: "a",
+            newContent: "b",
+            unifiedDiff: "@@",
+          },
+        },
+        {
+          path: "src/b.ts",
+          status: "added" as const,
+          diff: null,
+        },
+      ],
+      summary: { totalFiles: 2, added: 1, modified: 1, deleted: 0 },
+    });
+
+    const managed = makeManaged({
+      getModifiedFiles,
+      getBatchDiffs,
+    });
+
+    await expect(
+      getModifiedFilesOperation({
+        sessionId: "sess-1",
+        fromEntryId: "snap-2",
+        getActiveManaged: () => managed,
+      }),
+    ).resolves.toEqual({
+      files: [
+        { path: "src/a.ts", status: "modified", turnIndex: 0, entryId: "snap-2" },
+        { path: "src/b.ts", status: "added", turnIndex: 1, entryId: "snap-2" },
+      ],
+      resolvedFromEntryId: "snap-2",
+    });
+
+    expect(getBatchDiffs).toHaveBeenCalledWith({ fromEntryId: "snap-2", toEntryId: undefined });
+  });
+
   it("forks by copy-forking a branched session without switching the active client", async () => {
     const copyFork = vi.fn().mockResolvedValue({
       newSessionFile: "/tmp/forked.jsonl",

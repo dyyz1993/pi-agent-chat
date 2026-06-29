@@ -339,6 +339,14 @@ export interface ProjectMethods {
     params: { modelKey: string };
     result: { added: boolean; favorites: string[] };
   };
+  "project.getAgentFavorites": {
+    params: {};
+    result: { favorites: string[] };
+  };
+  "project.toggleAgentFavorite": {
+    params: { agentName: string };
+    result: { added: boolean; favorites: string[] };
+  };
   "project.listSshProfiles": {
     params: {};
     result: { profiles: SshProfile[] };

@@ -23,6 +23,8 @@ const perfLog = createLogger("session-perf");
 
 const PAGE_SIZE = 50;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
+const MEMORY_CROSS_SOURCE_DEDUP_WINDOW_MS = 5_000;
+const MEMORY_SAME_QUERY_DEDUP_WINDOW_MS = 15_000;
 const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
   "memory_prefetch",
   "memory_prefetch_result",
@@ -57,12 +59,170 @@ function getMemoryInjectMessageKey(message: ChatMessage): string | undefined {
   return getMemoryInjectDataKey(block.data);
 }
 
+function getNormalizedMemoryQuery(data: unknown): string | null {
+  const record = data as Record<string, unknown> | undefined;
+  const query =
+    typeof record?._prefetchQuery === "string"
+      ? record._prefetchQuery
+      : typeof record?.query === "string"
+        ? record.query
+        : "";
+  const normalized = query.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function getMemoryOperationIdFromMessage(message: ChatMessage): string | undefined {
+  const block = getCustomBlock(message);
+  if (!block) return undefined;
+  const data = block.data as Record<string, unknown> | undefined;
+  return typeof data?.operationId === "string" ? data.operationId : undefined;
+}
+
+function getMemorySearchScore(message: ChatMessage): number {
+  const block = getCustomBlock(message);
+  if (!block) return Number.NEGATIVE_INFINITY;
+  const data = block.data as Record<string, unknown> | undefined;
+  const sourceBonus = data?.source === "learning" ? 0 : 1_000;
+  const bytes = typeof data?.injectedBytes === "number" ? data.injectedBytes : 0;
+  const selectedFiles = Array.isArray(data?.selectedFiles) ? data.selectedFiles.length : 0;
+  const availableFiles = typeof data?.availableFiles === "number" ? data.availableFiles : 0;
+  const fileScore = Math.max(selectedFiles, availableFiles) * 10;
+  const layer =
+    typeof data?.layer === "string"
+      ? data.layer
+      : typeof data?._prefetchLayer === "string"
+        ? data._prefetchLayer
+        : "";
+  const layerBonus =
+    layer === "llm" ? 50 : layer === "auto" ? 10 : layer === "skip" ? -10 : 0;
+  const noResultPenalty =
+    typeof data?.summary === "string" && data.summary === "No relevant memories" ? -100 : 0;
+  return sourceBonus + bytes + fileScore + layerBonus + noResultPenalty;
+}
+
+function findRedundantMemoryOperationIds(messages: ChatMessage[]): {
+  operationIds: Set<string>;
+  messageIds: Set<string>;
+} {
+  const winners = new Map<
+    string,
+    { message: ChatMessage; timestamp: number; score: number; operationId?: string }
+  >();
+  const redundantOperationIds = new Set<string>();
+  const redundantMessageIds = new Set<string>();
+
+  for (const message of messages) {
+    if (message.role !== "custom") continue;
+    const block = getCustomBlock(message);
+    if (!block || block.customType !== "memory_prefetch_result") continue;
+
+    const queryKey = getNormalizedMemoryQuery(block.data);
+    if (!queryKey) continue;
+
+    const timestamp = getMemorySemanticTimestamp(block.data, message.timestamp);
+    const score = getMemorySearchScore(message);
+    const existing = winners.get(queryKey);
+    if (
+      !existing ||
+      Math.abs(existing.timestamp - timestamp) > MEMORY_SAME_QUERY_DEDUP_WINDOW_MS
+    ) {
+      winners.set(queryKey, {
+        message,
+        timestamp,
+        score,
+        operationId: getMemoryOperationIdFromMessage(message),
+      });
+      continue;
+    }
+
+    const currentOperationId = getMemoryOperationIdFromMessage(message);
+    if (currentOperationId && currentOperationId === existing.operationId) continue;
+
+    if (score > existing.score) {
+      redundantMessageIds.add(existing.message.id);
+      if (existing.operationId) redundantOperationIds.add(existing.operationId);
+      winners.set(queryKey, { message, timestamp, score, operationId: currentOperationId });
+      continue;
+    }
+
+    redundantMessageIds.add(message.id);
+    if (currentOperationId) redundantOperationIds.add(currentOperationId);
+  }
+
+  return { operationIds: redundantOperationIds, messageIds: redundantMessageIds };
+}
+
+type MemoryCrossSourceInfo = {
+  key: string;
+  source: "learning" | "default";
+  timestamp: number;
+};
+
+function getMemoryCrossSourceInfo(message: ChatMessage): MemoryCrossSourceInfo | null {
+  if (message.role !== "custom") return null;
+  const block = getCustomBlock(message);
+  if (!block) return null;
+
+  const data = block.data as Record<string, unknown> | undefined;
+  const source = data?.source === "learning" ? "learning" : "default";
+  const timestamp = getMemorySemanticTimestamp(block.data, message.timestamp);
+
+  if (block.customType === "memory_prefetch" || block.customType === "memory_prefetch_result") {
+    const query =
+      typeof data?._prefetchQuery === "string"
+        ? data._prefetchQuery
+        : typeof data?.query === "string"
+          ? data.query
+          : "";
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return null;
+    return {
+      key: `${block.customType}:${normalizedQuery}`,
+      source,
+      timestamp,
+    };
+  }
+
+  if (block.customType === "memory_inject") {
+    const fingerprint = typeof data?.fingerprint === "string" ? data.fingerprint : "";
+    if (!fingerprint) return null;
+    const reuse = data?.alreadyInjected === true || data?.skipped === true ? "reuse" : "inject";
+    return {
+      key: `memory_inject:${reuse}:${fingerprint}`,
+      source,
+      timestamp,
+    };
+  }
+
+  return null;
+}
+
 export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage[] {
+  const redundantOperations = findRedundantMemoryOperationIds(messages);
   const seenInjectKeys = new Set<string>();
   let changed = false;
   const result: ChatMessage[] = [];
 
   for (const message of messages) {
+    if (redundantOperations.messageIds.has(message.id)) {
+      changed = true;
+      continue;
+    }
+
+    const customBlock = getCustomBlock(message);
+    const operationId = getMemoryOperationIdFromMessage(message);
+    if (
+      customBlock &&
+      operationId &&
+      redundantOperations.operationIds.has(operationId) &&
+      (customBlock.customType === "memory_prefetch" ||
+        customBlock.customType === "memory_prefetch_result" ||
+        customBlock.customType === "memory_inject")
+    ) {
+      changed = true;
+      continue;
+    }
+
     const injectKey = getMemoryInjectMessageKey(message);
     if (injectKey) {
       if (seenInjectKeys.has(injectKey)) {
@@ -71,6 +231,40 @@ export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage
       }
       seenInjectKeys.add(injectKey);
     }
+
+    const crossSourceInfo = getMemoryCrossSourceInfo(message);
+    if (crossSourceInfo) {
+      if (crossSourceInfo.source === "learning") {
+        const hasPreferredDuplicate = result.some((existing) => {
+          const existingInfo = getMemoryCrossSourceInfo(existing);
+          return (
+            existingInfo?.key === crossSourceInfo.key &&
+            existingInfo.source === "default" &&
+            Math.abs(existingInfo.timestamp - crossSourceInfo.timestamp) <=
+              MEMORY_CROSS_SOURCE_DEDUP_WINDOW_MS
+          );
+        });
+        if (hasPreferredDuplicate) {
+          changed = true;
+          continue;
+        }
+      } else {
+        for (let i = result.length - 1; i >= 0; i--) {
+          const existingInfo = getMemoryCrossSourceInfo(result[i]);
+          if (
+            existingInfo?.key === crossSourceInfo.key &&
+            existingInfo.source === "learning" &&
+            Math.abs(existingInfo.timestamp - crossSourceInfo.timestamp) <=
+              MEMORY_CROSS_SOURCE_DEDUP_WINDOW_MS
+          ) {
+            result.splice(i, 1);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
     result.push(message);
   }
 

@@ -191,6 +191,41 @@ describe("agent event routing", () => {
     ]);
   });
 
+  it("maps crashed agent_end to an error sync-delegate result", async () => {
+    const resolved: unknown[] = [];
+    const timeout = setTimeout(() => undefined, 10_000);
+    const syncDelegateResolvers = new Map<string, SyncDelegateResolver>([
+      [
+        "sess-1",
+        {
+          resolve: (value) => resolved.push(value),
+          timeout,
+          parentSessionId: "parent-1",
+        },
+      ],
+    ]);
+    const syncDelegateLastText = new Map([["sess-1", "partial answer"]]);
+    const options = makeOptions({
+      event: { type: "agent_end", reason: "crashed" } as AgentEvent,
+      syncDelegateResolvers,
+      subagentSyncChildren: new Map([["sess-1", "parent-1"]]),
+      syncDelegateLastText,
+    });
+
+    handleAgentEventOperation(options);
+    await flushMicrotasks();
+
+    expect(resolved).toEqual([
+      {
+        sessionId: "sess-1",
+        status: "error",
+        exitCode: 1,
+        finalText: "partial answer",
+        error: "crashed",
+      },
+    ]);
+  });
+
   it("broadcasts child session events to the coordinator and sync subagent stream", () => {
     const broadcastEvent = vi.fn().mockResolvedValue(undefined);
     const clients = new Map([

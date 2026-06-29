@@ -5,6 +5,15 @@ import {
   toolExecutionItemToBlock,
 } from "./tool-execution-reconciler";
 
+function shouldAttachCustomEntryToCurrentTurn(
+  customType: string,
+  currentTurn: Partial<TimelineTurn> | null,
+): boolean {
+  if (!currentTurn?.userMessageId) return false;
+  if (ALL_MEMORY_TYPE_KEYS.has(customType)) return true;
+  return Boolean(currentTurn.assistantMessageId);
+}
+
 export function aggregateTurns(messages: ChatMessage[]): {
   turns: TimelineTurn[];
   standalone: StandaloneEntry[];
@@ -103,7 +112,6 @@ export function aggregateTurns(messages: ChatMessage[]): {
               currentTurn.items.push(item);
             }
           } else if (block.type === "custom") {
-            if (ALL_MEMORY_TYPE_KEYS.has(block.customType)) continue;
             currentTurn.items = currentTurn.items ?? [];
             currentTurn.items.push({
               itemType: "customEntry",
@@ -122,7 +130,6 @@ export function aggregateTurns(messages: ChatMessage[]): {
           (b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom",
         );
         if (!customBlock) break;
-        if (ALL_MEMORY_TYPE_KEYS.has(customBlock.customType)) break;
 
         const entry: StandaloneEntry = {
           id: msg.id,
@@ -131,7 +138,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
           timestamp: msg.timestamp,
         };
 
-        if (currentTurn && currentTurn.assistantMessageId) {
+        if (currentTurn && shouldAttachCustomEntryToCurrentTurn(customBlock.customType, currentTurn)) {
           currentTurn.items = currentTurn.items ?? [];
           currentTurn.items.push({
             itemType: "customEntry",

@@ -18,7 +18,7 @@ import {
   type DelegateSendNotFoundReason,
   type DelegateSyncResult,
 } from "./coordinator-delegate-operations";
-import type { DelegateReplyMode } from "./coordinator-delegate-utils";
+import type { DelegateReplyMetadata, DelegateReplyMode } from "./coordinator-delegate-utils";
 
 interface CoordinatorManagedClient {
   info: {
@@ -78,6 +78,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
   delegateReplyMode: Map<string, DelegateReplyMode>;
+  delegateReplyMetadata: Map<string, DelegateReplyMetadata>;
   delegateRepliedSessions: Set<string>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: Set<string>;
@@ -90,6 +91,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
     options?: { forceNewProcess?: boolean; userId?: string },
   ) => Promise<{ status: "started" | "already_running" }>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
+  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   steer: (sessionId: string, content: string) => void;
@@ -114,7 +116,13 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
       const cleared: string[] = [];
       if (targetSessionId) {
         removeDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId);
-        clearDelegateTracking(deps.delegateCreatedAt, deps.delegateReplyCount, targetSessionId);
+        clearDelegateTracking(
+          deps.delegateCreatedAt,
+          deps.delegateReplyCount,
+          targetSessionId,
+          undefined,
+          deps.delegateReplyMetadata,
+        );
         deps.delegateRepliedSessions.delete(targetSessionId);
         cleared.push(targetSessionId);
         return { cleared, removed: cleared.length };
@@ -125,7 +133,13 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         const managed = deps.clients.get(childSessionId);
         if (managed?.info.status === "streaming") continue;
         removeDelegateChild(deps.parentChildMap, parentSessionId, childSessionId);
-        clearDelegateTracking(deps.delegateCreatedAt, deps.delegateReplyCount, childSessionId);
+        clearDelegateTracking(
+          deps.delegateCreatedAt,
+          deps.delegateReplyCount,
+          childSessionId,
+          undefined,
+          deps.delegateReplyMetadata,
+        );
         deps.delegateRepliedSessions.delete(childSessionId);
         cleared.push(childSessionId);
       }
@@ -141,7 +155,13 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
       }
       removeDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId);
       removeSessionFromAllParents(deps.parentChildMap, targetSessionId);
-      clearDelegateTracking(deps.delegateCreatedAt, deps.delegateReplyCount, targetSessionId);
+      clearDelegateTracking(
+        deps.delegateCreatedAt,
+        deps.delegateReplyCount,
+        targetSessionId,
+        undefined,
+        deps.delegateReplyMetadata,
+      );
       deps.delegateRepliedSessions.delete(targetSessionId);
       void deps.stop(targetSessionId);
       return { ok: true, removed: true };
@@ -153,6 +173,8 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         getActiveManaged: deps.getActiveManaged,
         start: (id, projectPath, sessionPath) =>
           deps.start(id, projectPath, sessionPath, { forceNewProcess: true }),
+        switchAgent: deps.switchAgent,
+        setModel: deps.setModel,
         setSessionName: deps.setSessionName,
         send: deps.send,
         broadcastEvent: deps.broadcastEvent,
@@ -160,6 +182,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         delegateCreatedAt: deps.delegateCreatedAt,
         delegateReplyCount: deps.delegateReplyCount,
         delegateReplyMode: deps.delegateReplyMode,
+        delegateReplyMetadata: deps.delegateReplyMetadata,
       });
     },
     handleDelegateSync(parentSessionId, msg) {
@@ -170,6 +193,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         start: (id, projectPath, sessionPath, startOptions) =>
           deps.start(id, projectPath, sessionPath, startOptions),
         switchAgent: deps.switchAgent,
+        setModel: deps.setModel,
         setSessionName: deps.setSessionName,
         send: deps.send,
         steer: deps.steer,
@@ -178,6 +202,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         parentChildMap: deps.parentChildMap,
         delegateCreatedAt: deps.delegateCreatedAt,
         delegateReplyCount: deps.delegateReplyCount,
+        delegateReplyMetadata: deps.delegateReplyMetadata,
         syncDelegateResolvers: deps.syncDelegateResolvers,
         subagentSyncChildren: deps.subagentSyncChildren,
         syncDelegateLastText: deps.syncDelegateLastText,
@@ -193,6 +218,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         delegateReplyCount: deps.delegateReplyCount,
         delegateCreatedAt: deps.delegateCreatedAt,
         delegateReplyMode: deps.delegateReplyMode,
+        delegateReplyMetadata: deps.delegateReplyMetadata,
         delegateRepliedSessions: deps.delegateRepliedSessions,
         parentChildMap: deps.parentChildMap,
         start: (sessionId, projectPath, sessionPath) =>
@@ -236,6 +262,8 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         clients: deps.clients,
         start: (id, projectPath, sessionPath, startOptions) =>
           deps.start(id, projectPath, sessionPath, startOptions),
+        switchAgent: deps.switchAgent,
+        setModel: deps.setModel,
         setSessionName: deps.setSessionName,
         send: deps.send,
         broadcastEvent: deps.broadcastEvent,

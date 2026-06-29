@@ -15,6 +15,7 @@ import {
   Target,
   Settings2,
   RefreshCw,
+  Star,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -107,11 +108,14 @@ export function SidebarBottomControls() {
     activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
   );
   const agents = useAgentStore((s) => s.agents);
+  const agentFavorites = useAgentStore((s) => s.agentFavorites);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const agentSwitching = useAgentStore((s) =>
     activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
   );
   const switchAgent = useAgentStore((s) => s.switchAgent);
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
+  const toggleAgentFavorite = useAgentStore((s) => s.toggleAgentFavorite);
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
 
@@ -403,7 +407,11 @@ export function SidebarBottomControls() {
       <div className="relative" ref={agentRef}>
         <button
           onClick={() => {
-            setAgentOpen(!agentOpen);
+            const nextOpen = !agentOpen;
+            setAgentOpen(nextOpen);
+            if (nextOpen && activeSessionId && agentReady) {
+              void fetchAgents(activeSessionId);
+            }
             setThinkingOpen(false);
             setWorkspaceOpen(false);
             setTierConfigOpen(false);
@@ -443,6 +451,7 @@ export function SidebarBottomControls() {
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
+                const isFavorite = agentFavorites.has(agent.name);
                 const iconMap: Record<string, LucideIcon> = {
                   build: Wrench,
                   explore: Search,
@@ -524,6 +533,22 @@ export function SidebarBottomControls() {
                         {agent.tier}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void toggleAgentFavorite(agent.name);
+                      }}
+                      className={`p-0.5 rounded transition-colors shrink-0 mt-0.5 ${
+                        isFavorite
+                          ? "text-status-warning"
+                          : "text-text-tertiary hover:text-text-secondary"
+                      }`}
+                      title={isFavorite ? t("unfavorite") : t("favorite")}
+                      aria-label={isFavorite ? t("unfavorite") : t("favorite")}
+                    >
+                      <Star className={`w-3 h-3 ${isFavorite ? "fill-status-warning" : ""}`} />
+                    </button>
                   </div>
                 );
               })}

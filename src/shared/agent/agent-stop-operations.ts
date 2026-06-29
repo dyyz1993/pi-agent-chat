@@ -5,6 +5,7 @@ import {
   type DelegateChildMap,
   type SyncDelegateResolver,
 } from "./coordinator-session-state";
+import type { DelegateReplyMetadata } from "./coordinator-delegate-utils";
 
 const log = createLogger("agent");
 
@@ -38,6 +39,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   parentChildMap: DelegateChildMap;
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
+  delegateReplyMetadata: Map<string, DelegateReplyMetadata>;
   delegateRepliedSessions: Set<string>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: Set<string>;
@@ -69,6 +71,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
     parentChildMap: options.parentChildMap,
     delegateCreatedAt: options.delegateCreatedAt,
     delegateReplyCount: options.delegateReplyCount,
+    delegateReplyMetadata: options.delegateReplyMetadata,
     delegateRepliedSessions: options.delegateRepliedSessions,
     syncDelegateResolvers: options.syncDelegateResolvers,
     subagentSyncChildren: options.subagentSyncChildren,

@@ -47,6 +47,7 @@ import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { GoalActionCard } from "./GoalActionCard";
+import { useReturnToSourceSession } from "./primitives/useReturnToSourceSession";
 import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { ForkDialog } from "./ForkDialog";
@@ -120,6 +121,16 @@ function evictMsgIdsIfNeeded(): void {
 
 const EMPTY_MSGS: never[] = [];
 
+export function getDisplayedMessagesForChatPanel(params: {
+  activeSessionId: string | null;
+  activeSubsessionId: string | null;
+  messagesBySession: Record<string, ChatMessage[] | undefined>;
+}): ChatMessage[] {
+  const targetSessionId = params.activeSubsessionId ?? params.activeSessionId;
+  if (!targetSessionId) return EMPTY_MSGS;
+  return params.messagesBySession[targetSessionId] ?? EMPTY_MSGS;
+}
+
 function RefineGoalOverlay({ step }: { step: number }) {
   const { t } = useTranslation("chat");
   const steps = [
@@ -173,13 +184,22 @@ export function ChatPanel() {
   const subStatus = useSubagentStore((s) =>
     activeSubId ? (s.subagentStatusMap[activeSubId] ?? "idle") : "idle",
   );
-  const subMessages = useSubagentStore((s) => {
-    if (!activeSubId) return EMPTY_MSGS;
-    return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
+  const subSessionStatus = useSessionStore((s) =>
+    activeSubId ? s.sessionStatusMap[activeSubId] : undefined,
+  );
+  const subMessages = useChatStore((s) => {
+    return getDisplayedMessagesForChatPanel({
+      activeSessionId: null,
+      activeSubsessionId: activeSubId,
+      messagesBySession: s.messagesBySession,
+    });
   });
   const mainMessages = useChatStore((s) => {
-    if (!activeSessionId) return EMPTY_MSGS;
-    return s.messagesBySession[activeSessionId] || EMPTY_MSGS;
+    return getDisplayedMessagesForChatPanel({
+      activeSessionId,
+      activeSubsessionId: null,
+      messagesBySession: s.messagesBySession,
+    });
   });
   const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
@@ -187,10 +207,23 @@ export function ChatPanel() {
   const composerPlaceholders = useComposerPlaceholderStore((s) => s.placeholders);
   const hasComposerPlaceholders = composerPlaceholders.length > 0;
 
-  const effectiveStatus = isViewingSubagent ? subStatus : parentStatus;
+  const effectiveStatus = isViewingSubagent ? (subSessionStatus ?? subStatus) : parentStatus;
 
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const currentModel = useSessionStore((s) => s.currentModel);
+  const activeSessionPath = useSessionStore(
+    useCallback(
+      (s) => {
+        if (!activeSessionId) return null;
+        for (const sessions of Object.values(s.sessionsByProject)) {
+          const match = sessions.find((session) => session.sessionId === activeSessionId);
+          if (match?.sessionPath) return match.sessionPath;
+        }
+        return null;
+      },
+      [activeSessionId],
+    ),
+  );
   const projectFailed = useSessionStore(
     useCallback(
       (s) => !!activeProjectId && s.projectStartFailed[activeProjectId],
@@ -372,6 +405,11 @@ export function ChatPanel() {
   const [refineStep, setRefineStep] = useState(0); // 0=idle, 1=gathering, 2=calling LLM, 3=done
   const preGoalInputRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (!activeSessionPath) return;
+    void useSubagentStore.getState().loadSubsessions(activeSessionPath);
+  }, [activeSessionPath]);
 
   useEffect(() => {
     if (!isStreaming && isAborting) {
@@ -832,12 +870,6 @@ export function ChatPanel() {
     loadMoreMessages,
   ]);
 
-  const handleBackToMain = () => {
-    if (activeSessionId) {
-      useSubagentStore.getState().setActiveSubsession(activeSessionId, null);
-    }
-  };
-
   return (
     <div
       className="flex-1 min-h-0 flex flex-col overflow-hidden relative bg-bg-elevated"
@@ -848,17 +880,8 @@ export function ChatPanel() {
       <ForkDialog />
       <div className="flex items-center gap-4 px-4 py-1.5 bg-bg-secondary/90 border-b border-border-primary text-[11px] text-text-tertiary flex-shrink-0">
         <SessionToggleIcon />
-        {isViewingSubagent && (
-          <button
-            onClick={handleBackToMain}
-            className="flex items-center gap-1 text-semantic-agent hover:text-semantic-agent transition-colors"
-          >
-            <ArrowLeft className="w-3 h-3" />
-            <Bot className="w-3 h-3" />
-            <span>{t("backToMain")}</span>
-          </button>
-        )}
         {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
+        <ReturnToSourceButton variant="top" />
         <div className="ml-auto flex items-center gap-1">
           <UIPendingCenter />
           <NotificationCenter />
@@ -1129,6 +1152,7 @@ export function ChatPanel() {
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
             <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>
+            <ReturnToSourceButton variant="bottom" />
             <button
               onClick={handleSubagentFork}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
@@ -1160,6 +1184,69 @@ export function ChatPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+export function ReturnToSourceButton({ variant = "bottom" }: { variant?: "top" | "bottom" }) {
+  const { t } = useTranslation("chat");
+  const returnTarget = useReturnToSourceSession();
+  if (!returnTarget) return null;
+
+  const label =
+    returnTarget.kind === "subagent"
+      ? t("backToMain")
+      : returnTarget.kind === "delegate"
+        ? t("backToDelegate", "返回委派方")
+        : t("backToSource", "返回来源");
+  const sizeClass =
+    variant === "top" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
+
+  return (
+    <button
+      type="button"
+      onClick={returnTarget.handleReturn}
+      className={`inline-flex items-center justify-center gap-1 rounded-md font-medium whitespace-nowrap text-semantic-agent bg-semantic-agent/10 hover:bg-semantic-agent/15 border border-semantic-agent/20 transition-colors ${sizeClass}`}
+      title={label}
+      aria-label={label}
+    >
+      <ArrowLeft className="w-3 h-3 shrink-0" />
+      <Bot className="w-3 h-3 shrink-0" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+export function BackToMainSessionButton({
+  activeSessionId,
+  onBack,
+}: {
+  activeSessionId?: string | null;
+  onBack?: () => void;
+}) {
+  const { t } = useTranslation("chat");
+
+  const handleClick = useCallback(() => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    if (activeSessionId) {
+      useSubagentStore.getState().setActiveSubsession(activeSessionId, null);
+    }
+  }, [activeSessionId, onBack]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap text-semantic-agent bg-semantic-agent/10 hover:bg-semantic-agent/15 border border-semantic-agent/20 transition-colors"
+      title={t("backToMain")}
+      aria-label={t("backToMain")}
+    >
+      <ArrowLeft className="w-3 h-3 shrink-0" />
+      <Bot className="w-3 h-3 shrink-0" />
+      <span>{t("backToMain")}</span>
+    </button>
   );
 }
 

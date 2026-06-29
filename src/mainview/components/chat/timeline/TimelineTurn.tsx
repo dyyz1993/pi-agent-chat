@@ -21,6 +21,8 @@ import { useChatStore } from "../../../stores/use-chat-store";
 import { useForkDialogStore } from "../../../stores/use-fork-dialog-store";
 import { apiClient } from "../../../lib/api-client";
 import { useActiveSessionActionGuard } from "../../../hooks/use-active-session-action-guard";
+import { getCustomEntryMeta } from "../../../lib/custom-entry-registry";
+import { getMemoryConfig, getMemorySummary, isMemoryEntryType } from "../memory-config";
 
 const log = createLogger("chat");
 
@@ -457,15 +459,22 @@ function TimelineItemRenderer({
           </div>
         </div>
       );
-    case "customEntry":
+    case "customEntry": {
+      const memoryConfig = isMemoryEntryType(item.customType) ? getMemoryConfig(item.customType) : undefined;
+      const registryMeta = getCustomEntryMeta(item.customType);
+      const customLabel = memoryConfig?.label ?? registryMeta?.label ?? item.customType;
+      const customSummary =
+        isMemoryEntryType(item.customType) ? getMemorySummary(item.customType, item.data) : null;
       return (
         <div className="group/item relative flex gap-2">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <div className="px-3 py-2 rounded-lg bg-surface-code/40 dark:bg-surface-dim/40 text-sm text-text-secondary">
-            <span className="text-semantic-tool font-medium">[{item.customType}]</span>
+            <span className="text-semantic-tool font-medium">{customLabel}</span>
+            {customSummary && <span className="ml-2 text-text-tertiary">{customSummary}</span>}
           </div>
         </div>
       );
+    }
     default:
       return null;
   }

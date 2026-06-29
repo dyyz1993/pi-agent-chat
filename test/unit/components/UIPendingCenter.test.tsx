@@ -45,7 +45,11 @@ let mockActiveProjectId: string | null = null;
 let mockProjectTabs: { id: string; name: string; path: string }[] = [];
 let mockSessionsByProject: Record<
   string,
-  { sessionId: string; name: string; firstMessage?: string }[]
+  { sessionId: string; name: string; firstMessage?: string; sessionPath?: string }[]
+> = {};
+let mockSubsessionsByParent: Record<
+  string,
+  Array<{ sessionId: string; sessionPath: string; description?: string; instruction?: string }>
 > = {};
 const mockSetActiveSession = mockFns.setActiveSession;
 
@@ -87,6 +91,20 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
         projectTabs: mockProjectTabs,
         sessionsByProject: mockSessionsByProject,
         setActiveSession: mockSetActiveSession,
+      }),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
+  useSubagentStore: Object.assign(
+    (sel: (s: Record<string, unknown>) => unknown) =>
+      sel({
+        subsessionsByParent: mockSubsessionsByParent,
+      }),
+    {
+      getState: () => ({
+        subsessionsByParent: mockSubsessionsByParent,
       }),
     },
   ),
@@ -147,6 +165,7 @@ describe("UIPendingCenter", () => {
     mockActiveProjectId = null;
     mockProjectTabs = [];
     mockSessionsByProject = {};
+    mockSubsessionsByParent = {};
   });
 
   afterEach(() => {
@@ -170,6 +189,19 @@ describe("UIPendingCenter", () => {
     const button = screen.getByTitle(/uiPending\.pendingRequestsCount/i);
     expect(button).toBeInTheDocument();
     expect(button).toHaveTextContent("1");
+  });
+
+  it("auto-opens the project pending modal when a new current-project request appears", async () => {
+    setupProject();
+    const { rerender } = render(<UIPendingCenter />);
+    expect(mockSetPanelOpen).not.toHaveBeenCalledWith(true);
+
+    currentPending = [makeRequest({ requestId: "r1", sessionId: "sess-2" })];
+    rerender(<UIPendingCenter />);
+
+    await waitFor(() => {
+      expect(mockSetPanelOpen).toHaveBeenCalledWith(true);
+    });
   });
 
   it("renders badge count > 9 as 9+", () => {
@@ -1270,6 +1302,7 @@ describe("UIPendingCenter nested subtask requests", () => {
     };
     mockPanelOpen = true;
     currentPending = [];
+    mockSubsessionsByParent = {};
   });
 
   afterEach(() => {
@@ -1315,5 +1348,56 @@ describe("UIPendingCenter nested subtask requests", () => {
 
     expect(mockSetPanelOpen).toHaveBeenCalledWith(false);
     expect(mockSetActiveSession).toHaveBeenCalledWith("sess-grandchild");
+  });
+});
+
+describe("UIPendingCenter subagent request recovery", () => {
+  beforeEach(() => {
+    mockActiveProjectId = "proj-1";
+    mockProjectTabs = [{ id: "proj-1", name: "My Project", path: "/projects/my-project" }];
+    mockSessionsByProject = {
+      "/projects/my-project": [
+        {
+          sessionId: "sess-parent",
+          name: "Parent Session",
+          sessionPath: "/sessions/parent.jsonl",
+        },
+      ],
+    };
+    mockSubsessionsByParent = {
+      "/sessions/parent.jsonl": [
+        {
+          sessionId: "sess_sub_001",
+          sessionPath: "/sessions/sess_sub_001.jsonl",
+          description: "Child Task",
+          instruction: "Handle child approval",
+        },
+      ],
+    };
+    currentPending = [];
+    mockPanelOpen = true;
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("counts and renders current-project subagent requests even when child session is only in subsessionsByParent", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "subagent-approval",
+        sessionId: "sess_sub_001",
+        title: "Child approval",
+        message: "Allow child write?",
+      }),
+    ];
+
+    const { result } = renderHook(() => useProjectPendingCount());
+    expect(result.current).toBe(1);
+
+    render(<UIPendingCenter />);
+    expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toHaveTextContent("1");
+    expect(screen.getAllByText("Child approval").length).toBeGreaterThan(0);
   });
 });

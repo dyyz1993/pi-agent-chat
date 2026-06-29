@@ -7,6 +7,8 @@ import type { ContentBlock, SubagentSessionInfo } from "../../../src/mainview/ty
 
 const hoisted = vi.hoisted(() => ({
   sub: null as SubagentSessionInfo | null,
+  sessionStatus: undefined as string | undefined,
+  messages: [] as Array<{ role: string; content: ContentBlock[]; isStreaming?: boolean }>,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -44,7 +46,9 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
     vi.fn((selector: (s: unknown) => unknown) =>
       selector({
         activeSessionId: "sess_parent_001",
-        sessionStatusMap: {},
+        sessionStatusMap: hoisted.sessionStatus
+          ? { sess_sub_test_001: hoisted.sessionStatus }
+          : {},
         sessionsByProject: {
           "/fake/project": [
             {
@@ -75,6 +79,22 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
         setActiveProject: vi.fn(),
         setActiveSession: vi.fn(),
         loadSessionsForProject: vi.fn(),
+      })),
+      subscribe: vi.fn(),
+    },
+  ),
+}));
+
+vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
+  useChatStore: Object.assign(
+    vi.fn((selector: (s: unknown) => unknown) =>
+      selector({
+        messagesBySession: hoisted.messages.length > 0 ? { sess_sub_test_001: hoisted.messages } : {},
+      }),
+    ),
+    {
+      getState: vi.fn(() => ({
+        messagesBySession: {},
       })),
       subscribe: vi.fn(),
     },
@@ -130,6 +150,8 @@ function makeSyncBlock(
 afterEach(() => {
   cleanup();
   hoisted.sub = null;
+  hoisted.sessionStatus = undefined;
+  hoisted.messages = [];
 });
 
 describe("DelegateSyncCard", () => {
@@ -154,5 +176,81 @@ describe("DelegateSyncCard", () => {
     expect(screen.getByText("SUBTASK_SMOKE_OK")).toBeInTheDocument();
     expect(screen.getByText("Session sess_sub_test_001")).toBeInTheDocument();
     expect(screen.getByTitle("View")).toBeInTheDocument();
+  });
+
+  it("prefers terminal completion evidence over stale streaming session status", () => {
+    hoisted.sessionStatus = "streaming";
+    hoisted.sub = {
+      sessionId: "sess_sub_test_001",
+      sessionPath: "/fake/sub.jsonl",
+      description: "Read-only smoke test",
+      instruction: "只读检查当前目录",
+      startedAt: Date.now() - 1000,
+      completedAt: Date.now(),
+      finalText: "SUBTASK_SMOKE_OK",
+    };
+    hoisted.messages = [
+      {
+        role: "assistant",
+        isStreaming: true,
+        content: [
+          { type: "text", text: "已经完成" },
+          {
+            type: "toolExecution",
+            toolCallId: "tool-1",
+            toolName: "bash",
+            args: "",
+            status: "running",
+          },
+        ],
+      },
+    ];
+
+    render(<DelegateSyncCard block={makeSyncBlock({ status: "running" })} />);
+
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.queryByText("Running")).toBeNull();
+
+    fireEvent.click(screen.getByText("Read-only smoke test"));
+
+    expect(screen.queryByText("Waiting for the delegated session to continue…")).toBeNull();
+    expect(screen.queryByText("Running")).toBeNull();
+  });
+
+  it("treats final markdown output as terminal even when the tool block is still marked running", () => {
+    hoisted.sessionStatus = "streaming";
+    render(
+      <DelegateSyncCard
+        block={makeSyncBlock({
+          status: "running",
+          output: "## 最终总结\n\n全部完成。",
+          details: { sessionId: "sess_sub_test_001" },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.queryByText("Running")).toBeNull();
+
+    fireEvent.click(screen.getByText("Read-only smoke test"));
+
+    expect(screen.queryByText("等待子任务继续响应...")).toBeNull();
+    expect(screen.getByRole("heading", { name: "最终总结" })).toBeInTheDocument();
+  });
+
+  it("uses the shared dark-mode markdown styling for final output", () => {
+    render(
+      <DelegateSyncCard
+        block={makeSyncBlock({
+          output: "## 最终总结\n\n全部完成。",
+          details: { sessionId: "sess_sub_test_001", status: "completed" },
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Read-only smoke test"));
+
+    const heading = screen.getByRole("heading", { name: "最终总结" });
+    expect(heading.closest(".prose")).toHaveClass("dark:prose-invert");
   });
 });
