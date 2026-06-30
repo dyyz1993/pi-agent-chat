@@ -14,6 +14,7 @@ import {
   GitBranch,
   Pin,
   PinOff,
+  RefreshCw,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -21,6 +22,8 @@ import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { useNotificationStore } from "../../stores/use-notification-store";
+import { apiClient } from "../../lib/api-client";
 import type { SessionMeta, SessionStatus, SubagentSessionInfo } from "../../types";
 import { ConfirmDialog } from "../explorer/ConfirmDialog";
 import { DropdownSelect, useCopyFeedback } from "../primitives";
@@ -685,6 +688,52 @@ function DelegateChildItem({ session }: { session: SessionMeta }) {
   );
 }
 
+function SessionReloadButton({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation("sidebar");
+  const sessionStatus = useSessionStore((s) => s.sessionStatusMap[sessionId]);
+  const isIdle = sessionStatus === "idle";
+  const [isLoading, setIsLoading] = useState(false);
+  const pushNotif = useNotificationStore((s) => s.push);
+
+  const handleReload = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (isLoading) return;
+      setIsLoading(true);
+      try {
+        await apiClient.call("agent.reload", { sessionId });
+        pushNotif({ message: t("sidebar:reloaded"), level: "info" });
+        useSessionStore.getState().fetchInitialState(sessionId);
+      } catch (err) {
+        pushNotif({
+          message: t("sidebar:reloadFailed"),
+          level: "error",
+        });
+        void err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isLoading, pushNotif, sessionId, t],
+  );
+
+  if (!isIdle) return null;
+
+  return (
+    <button
+      onClick={handleReload}
+      disabled={isLoading}
+      className={`p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors ${
+        isLoading ? "text-semantic-accent animate-spin" : ""
+      }`}
+      title={t("sidebar:reload")}
+      aria-label={t("sidebar:reload")}
+    >
+      <RefreshCw className="w-3 h-3" />
+    </button>
+  );
+}
+
 function SessionItem({
   session,
   isActive,
@@ -937,6 +986,7 @@ function SessionItem({
             <StatusBadge session={session} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+              <SessionReloadButton sessionId={session.sessionId} />
               <button
                 onClick={handleTogglePin}
                 className={`p-1 rounded-md hover:bg-surface-hover/60 transition-colors ${session.pinned ? "text-semantic-accent" : "text-text-secondary hover:text-text-primary"}`}

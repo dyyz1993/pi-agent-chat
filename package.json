@@ -134,6 +134,7 @@
     ]
   },
   "overrides": {
-    "@dyyz1993/pi-agent-core": "0.78.3"
+    "@dyyz1993/pi-agent-core": "0.78.3",
+    "@dyyz1993/pi-tui": "file:.yalc/@dyyz1993/pi-tui"
   }
 }

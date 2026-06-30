@@ -156,5 +156,17 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  {
+    files: ['src/mainview/components/chat/clickable-file-paths.ts'],
+    rules: {
+      'no-useless-escape': 'off',
+    },
+  },
+  {
+    files: ['src/mainview/components/chat/CachedReactMarkdown.tsx'],
+    rules: {
+      'jsx-a11y/anchor-has-content': 'off',
+    },
+  },
   eslintConfigPrettier,
 );
