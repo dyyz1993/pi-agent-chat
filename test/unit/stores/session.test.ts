@@ -366,6 +366,36 @@ describe("reorderProjectTabs", () => {
 });
 
 describe("setActiveProject", () => {
+  it("does not override a newly created active session when the same project reconnects", () => {
+    const oldSession = makeSession({
+      sessionId: "old-sess",
+      projectPath: TAB_A.path,
+      messageCount: 2,
+      firstMessage: "old",
+    });
+    const newSession = makeSession({
+      sessionId: "new-worktree-sess",
+      projectPath: "/worktree-a",
+      messageCount: 0,
+      firstMessage: "",
+    });
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: "new-worktree-sess",
+      sessionsByProject: {
+        [TAB_A.path]: [oldSession],
+        "/worktree-a": [newSession],
+      },
+      lastActiveSessionByProject: { [TAB_A.path]: "old-sess" },
+      newSessionCreatedAt: Date.now(),
+    });
+
+    useSessionStore.getState().setActiveProject(TAB_A.id);
+
+    expect(useSessionStore.getState().activeSessionId).toBe("new-worktree-sess");
+  });
+
   it("uses the remote workspace path for explorer and git operations", async () => {
     const localPath = "/Users/me/.pi-agent-chat/remote-projects/ssh-demo";
     const remotePath = "/Users/xyz/Projects/demo1";
@@ -555,6 +585,39 @@ describe("createNewSession", () => {
     const sessions = state.sessionsByProject["/project-a"];
     expect(sessions).toHaveLength(1);
     expect(sessions[0].sessionId).toBe("new-sess");
+  });
+
+  it("creates a session under the explicit project path instead of the active tab path", async () => {
+    useSessionStore.getState().addProjectTab(TAB_A);
+    useSessionStore.setState({ activeProjectId: "tab-a" });
+
+    mockedCall.mockResolvedValueOnce({
+      sessionId: "new-worktree-sess",
+      sessionPath: "/sessions/new-worktree-sess",
+    });
+
+    await useSessionStore.getState().createNewSession("/worktree-a");
+
+    expect(mockedCall).toHaveBeenCalledWith("session.create", { projectPath: "/worktree-a" });
+    expect(useSessionStore.getState().sessionsByProject["/project-a"]).toBeUndefined();
+    expect(useSessionStore.getState().sessionsByProject["/worktree-a"]).toEqual([
+      expect.objectContaining({
+        sessionId: "new-worktree-sess",
+        projectPath: "/worktree-a",
+      }),
+    ]);
+    expect(useSessionStore.getState().activeSessionId).toBe("new-worktree-sess");
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockedCall).toHaveBeenCalledWith(
+      "agent.start",
+      expect.objectContaining({
+        sessionId: "new-worktree-sess",
+        projectPath: "/worktree-a",
+        sessionPath: "/sessions/new-worktree-sess",
+      }),
+    );
   });
 
   it("handles API error gracefully", async () => {
