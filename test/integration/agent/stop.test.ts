@@ -48,6 +48,7 @@ describe("stopAgentClientOperation", () => {
         parentChildMap: new Map(),
         delegateCreatedAt: new Map(),
         delegateReplyCount: new Map(),
+        delegateReplyMetadata: new Map(),
         syncDelegateResolvers: new Map(),
         subagentSyncChildren: new Set(),
         syncDelegateLastText: new Map(),
@@ -137,5 +138,48 @@ describe("stopAgentClientOperation", () => {
     expect(removeFromPool).toHaveBeenCalledWith("/project::sandbox-user", managed);
     expect(deleteLspState).toHaveBeenCalledWith("sess-1");
     expect(clearSessionCache).toHaveBeenCalledWith("sess-1");
+  });
+
+  it("delivers agent_end before clearing child-to-parent tracking", async () => {
+    const managed = makeManaged();
+    const clients = new Map([["child-1", managed]]);
+    const parentChildMap = new Map([["parent-1", new Set(["child-1"])]]);
+    let parentWasVisibleDuringEnd = false;
+    const emitAgentEvent = vi.fn().mockImplementation(async () => {
+      await Promise.resolve();
+      parentWasVisibleDuringEnd = [...parentChildMap.values()].some((children) =>
+        children.has("child-1"),
+      );
+    });
+
+    await expect(
+      stopAgentClientOperation({
+        sessionId: "child-1",
+        getActiveManaged: () => managed,
+        clients,
+        parentChildMap,
+        delegateCreatedAt: new Map([["child-1", 1000]]),
+        delegateReplyCount: new Map(),
+        delegateReplyMetadata: new Map(),
+        delegateRepliedSessions: new Set(),
+        syncDelegateResolvers: new Map(),
+        subagentSyncChildren: new Set(),
+        syncDelegateLastText: new Map(),
+        leafIds: new Map(),
+        getPoolKey: (cwd) => cwd,
+        removeFromPool: vi.fn(),
+        stopChild: vi.fn(),
+        emitAgentEvent,
+        deleteLspState: vi.fn(),
+        clearSessionCache: vi.fn(),
+      }),
+    ).resolves.toBe(true);
+
+    expect(emitAgentEvent).toHaveBeenCalledWith(
+      "child-1",
+      expect.objectContaining({ type: "agent_end" }),
+    );
+    expect(parentWasVisibleDuringEnd).toBe(true);
+    expect(parentChildMap.has("parent-1")).toBe(false);
   });
 });
