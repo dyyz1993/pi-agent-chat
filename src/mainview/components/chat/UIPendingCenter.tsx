@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   Clock,
   Terminal,
+  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -18,7 +19,7 @@ import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dia
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useStatusStore } from "../../stores/use-status-store";
-import { IconButton, ModalDialog } from "../primitives";
+import { IconButton } from "../primitives";
 import { PermissionActionButtons } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 import { jumpToSessionById } from "./primitives/useJumpToSession";
@@ -826,7 +827,7 @@ export function UIPendingCenter() {
   };
 
   return (
-    <>
+    <div className="relative inline-flex">
       <IconButton
         label={t("uiPending.pendingRequestsCount", { count: pendingCount })}
         size="sm"
@@ -845,43 +846,53 @@ export function UIPendingCenter() {
       </IconButton>
 
       {panelOpen && (
-        <ModalDialog
-          title={
-            <span className="flex items-center gap-2">
+        <div
+          role="dialog"
+          aria-modal="false"
+          data-testid="ui-pending-center-panel"
+          data-ui-pending-scope="chat"
+          className="absolute right-0 top-full z-[15] mt-2 w-[min(28rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border-secondary bg-surface-code shadow-2xl shadow-black/20 ring-1 ring-border-primary/30 dark:bg-surface-dim"
+        >
+          <div className="flex items-center gap-2 border-b border-border-secondary px-3 py-2">
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-text-primary">
               <span>{t("uiPending.pendingRequestsTitle")}</span>
               <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[11px] font-medium tabular-nums">
                 {pendingCount}
               </span>
             </span>
-          }
-          onClose={() => setPanelOpen(false)}
-          closeLabel={t("common:close")}
-          size="md"
-          className="max-w-lg bg-surface-code dark:bg-surface-dim max-h-[min(520px,80vh)]"
-          bodyClassName="overflow-y-auto px-3 pb-3 pt-2 space-y-2.5"
-        >
-          {pendingCount === 0 ? (
-            <div className="py-8 text-center text-[11px] text-text-tertiary">
-              {t("uiPending.noPendingRequests")}
-            </div>
-          ) : (
-            Array.from(grouped.entries()).map(([sessionId, requests]) => (
-              <SessionGroup
-                key={sessionId}
-                sessionId={sessionId}
-                sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
-                isSubtaskSource={
-                  subtaskSessionIds.has(sessionId) ||
-                  requests.some((request) => Boolean(request.parentSessionId))
-                }
-                requests={requests}
-                onGotoSession={handleGotoSession}
-              />
-            ))
-          )}
-        </ModalDialog>
+            <IconButton
+              label={t("common:close")}
+              size="sm"
+              onClick={() => setPanelOpen(false)}
+              className="h-7 w-7"
+            >
+              <X className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
+          <div className="max-h-[min(520px,70dvh)] space-y-2.5 overflow-y-auto px-3 pb-3 pt-2">
+            {pendingCount === 0 ? (
+              <div className="py-8 text-center text-[11px] text-text-tertiary">
+                {t("uiPending.noPendingRequests")}
+              </div>
+            ) : (
+              Array.from(grouped.entries()).map(([sessionId, requests]) => (
+                <SessionGroup
+                  key={sessionId}
+                  sessionId={sessionId}
+                  sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
+                  isSubtaskSource={
+                    subtaskSessionIds.has(sessionId) ||
+                    requests.some((request) => Boolean(request.parentSessionId))
+                  }
+                  requests={requests}
+                  onGotoSession={handleGotoSession}
+                />
+              ))
+            )}
+          </div>
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
