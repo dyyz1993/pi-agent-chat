@@ -180,6 +180,8 @@
   "chartRenderFailed": "图表渲染失败",
   "mermaidChart": "Mermaid 图表",
   "reloadTitle": "重新加载",
+  "reloadSuccess": "会话已重新加载",
+  "reloadFailed": "会话重新加载失败",
   "fullscreenTitle": "全屏展开",
   "copyLinkTitle": "复制链接",
   "openInNewWindowTitle": "在新窗口打开",

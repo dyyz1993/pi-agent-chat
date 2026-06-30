@@ -180,6 +180,8 @@
   "chartRenderFailed": "Chart render failed",
   "mermaidChart": "Mermaid Chart",
   "reloadTitle": "Reload",
+  "reloadSuccess": "Session reloaded",
+  "reloadFailed": "Failed to reload session",
   "fullscreenTitle": "Fullscreen",
   "copyLinkTitle": "Copy link",
   "openInNewWindowTitle": "Open in new window",
