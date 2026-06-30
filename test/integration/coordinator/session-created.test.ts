@@ -67,8 +67,17 @@ interface CoordinatorHandlerLike {
   parentChildMap: Map<string, Set<string>>;
   handleCoordinatorDelegate: (
     parentSessionId: string,
-    msg: { __call: "session_delegate"; task: string; title?: string; invokeId?: string },
+    msg: {
+      __call: "session_delegate";
+      task: string;
+      title?: string;
+      timeoutMs?: number;
+      invokeId?: string;
+    },
   ) => Promise<{ sessionId: string; status: string }>;
+  handleCoordinatorDelegateList: (
+    parentSessionId: string,
+  ) => { sessions: Array<{ sessionId: string; status: string; projectPath: string }> };
   handleCoordinatorCall: (sessionId: string, msg: Record<string, unknown>) => Promise<void>;
   handleCoordinatorClearStopped: (
     sessionId: string,
@@ -160,6 +169,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -282,6 +292,67 @@ describe("coordinator.session_created — TDD 诊断", () => {
       startSpy.mockRestore();
       sendSpy.mockRestore();
       setSessionNameSpy.mockRestore();
+    });
+
+    it("should stop async delegates when their timeout elapses", async () => {
+      vi.useFakeTimers();
+      const parentSessionId = "parent-session-timeout";
+      const projectPath = "/fake/project";
+      const sessionPath = join(tmpDir, "parent-session-timeout.jsonl");
+      writeFileSync(
+        sessionPath,
+        JSON.stringify({ type: "session", version: 3, id: parentSessionId }) + "\n",
+      );
+
+      const m = internals(manager);
+      const parentManaged = makeMockManaged({
+        sessionId: parentSessionId,
+        projectPath,
+        sessionPath,
+      });
+      m.clients.set(parentSessionId, parentManaged);
+      m.processByCwd.set(projectPath, parentManaged);
+
+      vi.spyOn(manager, "start").mockImplementation(async (sid: string) => {
+        const childManaged = makeMockManaged({
+          sessionId: sid,
+          projectPath,
+          sessionPath: join(tmpDir, `${sid}.jsonl`),
+          status: "streaming",
+        });
+        m.clients.set(sid, childManaged);
+        return { agentId: sid, status: "started" };
+      });
+      vi.spyOn(manager, "send").mockReturnValue(true);
+      vi.spyOn(
+        manager as unknown as { setSessionName: (a: string, b: string) => Promise<void> },
+        "setSessionName",
+      ).mockResolvedValue(undefined);
+      const stopSpy = vi.spyOn(manager, "stop").mockImplementation(async (sid: string) => {
+        const child = m.clients.get(sid);
+        if (child) child.info.status = "stopped";
+        return true;
+      });
+
+      const result = await m.coordinatorHandler.handleCoordinatorDelegate(parentSessionId, {
+        __call: "session_delegate",
+        task: "wait forever",
+        title: "Timeout",
+        timeoutMs: 50,
+      });
+
+      await vi.advanceTimersByTimeAsync(51);
+
+      expect(stopSpy).toHaveBeenCalledWith(result.sessionId);
+      expect(m.coordinatorHandler.handleCoordinatorDelegateList(parentSessionId)).toEqual({
+        sessions: [
+          {
+            sessionId: result.sessionId,
+            status: "stopped",
+            projectPath,
+          },
+        ],
+      });
     });
 
     it("should pass forceNewProcess:true to start() to avoid evicting parent from process pool", async () => {

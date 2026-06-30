@@ -135,6 +135,7 @@ export type CoordinatorMethodCall =
       agentName?: string;
       model?: string;
       replyMode?: DelegateReplyMode;
+      timeoutMs?: number;
       projectPath?: string;
       invokeId?: string;
     }
@@ -215,6 +216,7 @@ export interface CoordinatorMethods {
     agentName?: string;
     model?: string;
     replyMode?: DelegateReplyMode;
+    timeoutMs?: number;
     projectPath?: string;
     invokeId?: string;
   }): Promise<DelegateCreateResult>;
