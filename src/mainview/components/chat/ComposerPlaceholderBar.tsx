@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, MessageSquareQuote, X } from "lucide-react";
+import { ChevronDown, ChevronUp, FileText, MessageSquareQuote, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useComposerPlaceholderStore } from "../../stores/use-composer-placeholder-store";
 
@@ -28,7 +28,11 @@ export function ComposerPlaceholderBar() {
           data-testid="composer-placeholder"
         >
           <div className="flex min-h-8 max-w-full items-center gap-1.5 px-2">
-            <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-text-secondary" />
+            {placeholder.type === "longContent" ? (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-status-info" />
+            ) : (
+              <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-text-secondary" />
+            )}
             <button
               type="button"
               onClick={() => togglePlaceholder(placeholder.id)}
@@ -38,7 +42,9 @@ export function ComposerPlaceholderBar() {
                 placeholder.expanded ? t("composerQuoteCollapse") : t("composerQuoteExpand")
               }
             >
-              <span className="shrink-0 font-medium text-text-primary">{t("composerQuote")}</span>
+              <span className="shrink-0 font-medium text-text-primary">
+                {placeholder.type === "longContent" ? t("longContent.title") : t("composerQuote")}
+              </span>
               <span className="max-w-52 truncate text-text-secondary">{placeholder.title}</span>
               <span className="shrink-0 text-[11px] text-text-tertiary">
                 {getTextStats(placeholder.text, t("composerQuoteChars"), t("composerQuoteLines"))}

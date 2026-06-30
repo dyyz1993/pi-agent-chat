@@ -466,11 +466,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const target = await resolveFileTarget(params.path);
     const filePath = target.path;
     if (target.kind === "ssh") {
+      runSshCommand(target.remote, `mkdir -p ${shellQuote(remoteDirname(filePath))}`);
       runSshCommand(target.remote, `cat > ${shellQuote(filePath)}`, { stdin: params.content });
       log.info("Remote file written", { path: filePath, host: target.remote.host });
       return { ok: true };
     }
     log.info("File written", { path: filePath });
+    await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, params.content, "utf-8");
     return { ok: true };
   });

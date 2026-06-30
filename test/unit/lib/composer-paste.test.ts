@@ -8,11 +8,14 @@ describe("shouldPasteTextAsPlaceholder", () => {
   });
 
   it("converts long text paste into a composer placeholder", () => {
-    expect(shouldPasteTextAsPlaceholder("x".repeat(240))).toBe(true);
+    expect(shouldPasteTextAsPlaceholder("x".repeat(1_999))).toBe(false);
+    expect(shouldPasteTextAsPlaceholder("x".repeat(2_000))).toBe(true);
   });
 
   it("converts multiline text paste into a composer placeholder", () => {
-    expect(shouldPasteTextAsPlaceholder("line one\nline two\nline three")).toBe(true);
+    expect(
+      shouldPasteTextAsPlaceholder(Array.from({ length: 21 }, (_, i) => `line ${i}`).join("\n")),
+    ).toBe(true);
   });
 
   it("converts fenced code paste into a composer placeholder", () => {

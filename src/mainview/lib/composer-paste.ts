@@ -1,6 +1,5 @@
-const MIN_LONG_PASTE_CHARS = 240;
-const MIN_MULTILINE_PASTE_CHARS = 120;
-const MIN_PLACEHOLDER_LINES = 3;
+export const MIN_LONG_PASTE_CHARS = 2_000;
+const MIN_PLACEHOLDER_LINES = 20;
 
 export function shouldPasteTextAsPlaceholder(text: string): boolean {
   const trimmed = text.trim();
@@ -10,6 +9,5 @@ export function shouldPasteTextAsPlaceholder(text: string): boolean {
 
   const lineCount = trimmed.split(/\r\n|\r|\n/u).length;
   if (lineCount >= MIN_PLACEHOLDER_LINES) return true;
-  if (trimmed.length >= MIN_LONG_PASTE_CHARS) return true;
-  return lineCount >= 2 && trimmed.length >= MIN_MULTILINE_PASTE_CHARS;
+  return trimmed.length >= MIN_LONG_PASTE_CHARS;
 }
