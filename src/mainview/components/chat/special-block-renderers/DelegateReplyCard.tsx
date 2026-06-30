@@ -27,6 +27,20 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
   const sourceProjectName = getProjectDisplayName(sourceProjectPath);
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  // 当前活跃 session 的 projectPath，用于判断是否为同项目委派
+  const activeProjectPath = useSessionStore((s) => {
+    const sid = s.activeSessionId;
+    if (!sid) return null;
+    for (const sessions of Object.values(s.sessionsByProject)) {
+      const session = sessions.find((item) => item.sessionId === sid);
+      if (session?.projectPath) return session.projectPath;
+    }
+    return null;
+  });
+  // 同项目委派时隐藏项目标签（当前项目无需重复标注）
+  const isSameProject =
+    !!sourceProjectPath && !!activeProjectPath && sourceProjectPath === activeProjectPath;
+  const showProjectTag = !!sourceProjectName && !isSameProject;
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const cs = activeSessionId ? agentColorStyle(agentDetailBySession[activeSessionId]?.color) : null;
 
@@ -79,19 +93,23 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
         >
           委托回复
         </span>
-        {title && <span className="font-medium text-text-primary truncate">{title}</span>}
-        {sourceProjectName && (
+        {title && <span className="font-medium text-text-primary truncate min-w-0">{title}</span>}
+        {showProjectTag && (
           <span
-            className="inline-flex min-w-0 max-w-[160px] shrink-0 items-center gap-1 rounded bg-bg-secondary/70 px-1.5 py-0.5 text-[10px] text-text-tertiary"
+            className="inline-flex min-w-0 max-w-[160px] items-center gap-1 rounded bg-bg-secondary/70 px-1.5 py-0.5 text-[10px] text-text-tertiary"
             title={sourceProjectPath}
           >
             <Folder className="h-3 w-3 shrink-0" />
             <span className="truncate">{sourceProjectName}</span>
           </span>
         )}
-        {elapsed && <span className="text-text-tertiary text-[10px] shrink-0">{elapsed}</span>}
+        {elapsed && (
+          <span className="text-text-tertiary text-[10px] shrink-0 max-sm:hidden">{elapsed}</span>
+        )}
         {historyCount && (
-          <span className="text-text-tertiary text-[10px] shrink-0">({historyCount}条历史)</span>
+          <span className="text-text-tertiary text-[10px] shrink-0 max-sm:hidden">
+            ({historyCount}条历史)
+          </span>
         )}
         {hasBody && (
           <ChevronDown
