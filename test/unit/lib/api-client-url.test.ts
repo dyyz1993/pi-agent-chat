@@ -1,9 +1,11 @@
 /**
  * @vitest-environment node
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { resolveBrowserWebSocketUrl } from "../../../src/mainview/lib/api-client";
+const { resolveBrowserWebSocketUrl } = await vi.importActual<
+  typeof import("../../../src/mainview/lib/api-client")
+>("../../../src/mainview/lib/api-client");
 
 describe("resolveBrowserWebSocketUrl", () => {
   it("keeps public reverse-proxy pages on the same origin instead of leaking to :3100", () => {
@@ -20,7 +22,7 @@ describe("resolveBrowserWebSocketUrl", () => {
     ).toBe("wss://chat.example.com/ws?token=tok");
   });
 
-  it("still points loopback dev pages at the local backend port", () => {
+  it("keeps loopback Vite dev pages on the same origin so Vite proxies /ws", () => {
     expect(
       resolveBrowserWebSocketUrl({
         token: "tok",
@@ -31,10 +33,10 @@ describe("resolveBrowserWebSocketUrl", () => {
         isDev: true,
         viteApiTarget: "http://localhost:3100",
       }),
-    ).toBe("ws://localhost:3100/ws?token=tok");
+    ).toBe("ws://localhost:5173/ws?token=tok");
   });
 
-  it("keeps LAN dev pages paired with the same LAN host backend port", () => {
+  it("keeps LAN Vite dev pages on the same origin so reverse proxies do not need :3100", () => {
     expect(
       resolveBrowserWebSocketUrl({
         token: "tok",
@@ -45,7 +47,7 @@ describe("resolveBrowserWebSocketUrl", () => {
         isDev: true,
         viteApiTarget: "http://localhost:3100",
       }),
-    ).toBe("ws://192.168.0.29:3100/ws?token=tok");
+    ).toBe("ws://192.168.0.29:5173/ws?token=tok");
   });
 
   it("honors explicit non-loopback API targets", () => {

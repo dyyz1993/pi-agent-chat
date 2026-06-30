@@ -45,9 +45,8 @@ function isLoopbackHost(hostname: string): boolean {
 
 /**
  * Check if a hostname is a private/LAN address (RFC 1918) or loopback.
- * In DEV mode, local/LAN pages may connect directly to the paired backend port.
- * Public reverse-proxy pages should stay same-origin so they keep using the
- * 5173 proxy entrypoint instead of leaking through to :3100.
+ * Dev Vite pages should stay same-origin by default so `/ws` and HTTP calls
+ * keep flowing through the Vite/proxy entrypoint instead of leaking `:3100`.
  */
 export function isPrivateOrLoopbackHost(hostname: string): boolean {
   if (isLoopbackHost(hostname)) return true;
@@ -85,11 +84,10 @@ function getDevWebSocketTarget(
   if (!isDev || !viteApiTarget) return null;
   try {
     const apiTarget = new URL(viteApiTarget);
-    if (
-      pageHostname &&
-      !isPrivateOrLoopbackHost(pageHostname) &&
-      isLoopbackHost(apiTarget.hostname)
-    ) {
+    // Vite already proxies `/ws` to VITE_API_TARGET. Only bypass same-origin
+    // when the target is an explicit public API host; loopback/LAN targets must
+    // not leak through browser-visible ports such as :3100.
+    if (isPrivateOrLoopbackHost(apiTarget.hostname)) {
       return null;
     }
     const rewrittenTarget = rewriteLoopbackTargetForPageHost(apiTarget.toString(), pageHostname);
@@ -118,7 +116,6 @@ export function resolveBrowserWebSocketUrl(options: BrowserWebSocketUrlOptions):
     protocol: pageProtocol,
     hostname: pageHostname,
     host: pageHost,
-    port: pagePort,
     isDev,
     viteApiTarget,
     customUrl,
@@ -131,17 +128,6 @@ export function resolveBrowserWebSocketUrl(options: BrowserWebSocketUrlOptions):
   const devTarget = getDevWebSocketTarget(token, pageHostname, isDev, viteApiTarget);
   if (devTarget) {
     return devTarget;
-  }
-
-  if (
-    isDev &&
-    pageProtocol === "http:" &&
-    isPrivateOrLoopbackHost(pageHostname) &&
-    pagePort !== "3100"
-  ) {
-    // Loopback → localhost:3100; LAN IP → same host on port 3100.
-    const wsHost = isLoopbackHost(pageHostname) ? "localhost" : pageHostname;
-    return `ws://${wsHost}:3100/ws?token=${token}`;
   }
 
   const protocol = pageProtocol === "https:" ? "wss:" : "ws:";
@@ -365,7 +351,7 @@ class APIClientImpl {
       hostname: window.location.hostname,
       host: window.location.host,
       port: window.location.port,
-      isDev: import.meta.env.DEV,
+      isDev: String(import.meta.env.DEV) === "true",
       viteApiTarget: import.meta.env.VITE_API_TARGET,
       customUrl,
     });
