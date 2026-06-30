@@ -25,6 +25,17 @@ function packageYalcPath(name) {
   return join(process.cwd(), ".yalc", scope, pkg);
 }
 
+function getHydratedPackageVersion(pkg) {
+  const packageJsonPath = join(packageYalcPath(pkg.name), "package.json");
+  if (existsSync(packageJsonPath)) {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    if (typeof packageJson.version === "string" && packageJson.version.length > 0) {
+      return packageJson.version;
+    }
+  }
+  return pkg.version;
+}
+
 function hydratePackage({ name, version }) {
   const target = packageYalcPath(name);
   if (existsSync(join(target, "package.json"))) {
@@ -76,10 +87,11 @@ function patchCodingAgentPackage(codingAgentPath) {
   if (!tuiPackage) {
     return;
   }
+  const tuiVersion = getHydratedPackageVersion(tuiPackage);
 
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   packageJson.dependencies ??= {};
-  packageJson.dependencies["@dyyz1993/pi-tui"] = tuiPackage.version;
+  packageJson.dependencies["@dyyz1993/pi-tui"] = tuiVersion;
   writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   const shrinkwrapPath = join(codingAgentPath, "npm-shrinkwrap.json");
@@ -127,11 +139,12 @@ function pinCodingAgentTransitiveDependencies() {
   if (!tuiPackage) {
     return;
   }
+  const tuiVersion = getHydratedPackageVersion(tuiPackage);
 
   patchCodingAgentPackage(codingAgentPath);
   patchIncompatibleExtensionSetName(codingAgentPath);
   console.log(
-    `[ci-hydrate-yalc] pinned @dyyz1993/pi-coding-agent -> @dyyz1993/pi-tui@${tuiPackage.version}`,
+    `[ci-hydrate-yalc] pinned @dyyz1993/pi-coding-agent -> @dyyz1993/pi-tui@${tuiVersion}`,
   );
 }
 
