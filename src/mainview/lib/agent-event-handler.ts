@@ -101,15 +101,14 @@ function refreshAuthoritativeContextUsage(sessionId: string): void {
 }
 
 function refreshAuthoritativeSessionStats(sessionId: string): void {
-  useSessionStore
-    .getState()
-    .refreshSessionStats(sessionId)
-    .catch((err) => {
-      log.warn("refreshAuthoritativeSessionStats failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+  const refreshSessionStats = useSessionStore.getState().refreshSessionStats;
+  if (typeof refreshSessionStats !== "function") return;
+  refreshSessionStats(sessionId).catch((err) => {
+    log.warn("refreshAuthoritativeSessionStats failed", {
+      sessionId,
+      err: err instanceof Error ? err.message : String(err),
     });
+  });
 }
 
 function setToolActive(sessionId: string, toolCallId: string, active: boolean): void {
