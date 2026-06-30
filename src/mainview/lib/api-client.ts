@@ -45,9 +45,11 @@ function isLoopbackHost(hostname: string): boolean {
 
 /**
  * Check if a hostname is a private/LAN address (RFC 1918) or loopback.
- * In DEV mode, these should all connect to the local backend at localhost:3100.
+ * In DEV mode, local/LAN pages may connect directly to the paired backend port.
+ * Public reverse-proxy pages should stay same-origin so they keep using the
+ * 5173 proxy entrypoint instead of leaking through to :3100.
  */
-function isPrivateOrLoopbackHost(hostname: string): boolean {
+export function isPrivateOrLoopbackHost(hostname: string): boolean {
   if (isLoopbackHost(hostname)) return true;
   // IPv4 private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
   if (/^10\./.test(hostname)) return true;
@@ -74,10 +76,22 @@ function rewriteLoopbackTargetForPageHost(url: string, pageHostname?: string): s
   }
 }
 
-function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
-  if (!import.meta.env.DEV || !import.meta.env.VITE_API_TARGET) return null;
+function getDevWebSocketTarget(
+  token: string,
+  pageHostname: string | undefined,
+  isDev: boolean,
+  viteApiTarget?: string,
+): string | null {
+  if (!isDev || !viteApiTarget) return null;
   try {
-    const apiTarget = new URL(import.meta.env.VITE_API_TARGET);
+    const apiTarget = new URL(viteApiTarget);
+    if (
+      pageHostname &&
+      !isPrivateOrLoopbackHost(pageHostname) &&
+      isLoopbackHost(apiTarget.hostname)
+    ) {
+      return null;
+    }
     const rewrittenTarget = rewriteLoopbackTargetForPageHost(apiTarget.toString(), pageHostname);
     const resolvedTarget = new URL(rewrittenTarget);
     const protocol = apiTarget.protocol === "https:" ? "wss:" : "ws:";
@@ -85,6 +99,53 @@ function getDevWebSocketTarget(token: string, pageHostname?: string): string | n
   } catch {
     return null;
   }
+}
+
+export interface BrowserWebSocketUrlOptions {
+  token: string;
+  protocol: string;
+  hostname: string;
+  host: string;
+  port: string;
+  isDev: boolean;
+  viteApiTarget?: string;
+  customUrl?: string | null;
+}
+
+export function resolveBrowserWebSocketUrl(options: BrowserWebSocketUrlOptions): string {
+  const {
+    token,
+    protocol: pageProtocol,
+    hostname: pageHostname,
+    host: pageHost,
+    port: pagePort,
+    isDev,
+    viteApiTarget,
+    customUrl,
+  } = options;
+
+  if (customUrl) {
+    return appendToken(rewriteLoopbackTargetForPageHost(customUrl, pageHostname), token);
+  }
+
+  const devTarget = getDevWebSocketTarget(token, pageHostname, isDev, viteApiTarget);
+  if (devTarget) {
+    return devTarget;
+  }
+
+  if (
+    isDev &&
+    pageProtocol === "http:" &&
+    isPrivateOrLoopbackHost(pageHostname) &&
+    pagePort !== "3100"
+  ) {
+    // Loopback → localhost:3100; LAN IP → same host on port 3100.
+    const wsHost = isLoopbackHost(pageHostname) ? "localhost" : pageHostname;
+    return `ws://${wsHost}:3100/ws?token=${token}`;
+  }
+
+  const protocol = pageProtocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${pageHost}/ws?token=${token}`;
 }
 
 class APIClientImpl {
@@ -298,33 +359,16 @@ class APIClientImpl {
     const customUrl =
       new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url");
-    if (customUrl) {
-      return appendToken(
-        rewriteLoopbackTargetForPageHost(customUrl, window.location.hostname),
-        token,
-      );
-    }
-
-    const devTarget = getDevWebSocketTarget(token, window.location.hostname);
-    if (devTarget) {
-      return devTarget;
-    }
-
-    if (
-      import.meta.env.DEV &&
-      window.location.protocol === "http:" &&
-      isPrivateOrLoopbackHost(window.location.hostname) &&
-      window.location.port !== "3100"
-    ) {
-      // Loopback → localhost:3100; LAN IP → same host on port 3100
-      const wsHost = isLoopbackHost(window.location.hostname)
-        ? "localhost"
-        : window.location.hostname;
-      return `ws://${wsHost}:3100/ws?token=${token}`;
-    }
-
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/ws?token=${token}`;
+    return resolveBrowserWebSocketUrl({
+      token,
+      protocol: window.location.protocol,
+      hostname: window.location.hostname,
+      host: window.location.host,
+      port: window.location.port,
+      isDev: import.meta.env.DEV,
+      viteApiTarget: import.meta.env.VITE_API_TARGET,
+      customUrl,
+    });
   }
 
   /**

@@ -8,6 +8,32 @@ const API_TARGET = process.env.VITE_API_TARGET || "http://localhost:3100";
 // Vite 端口也可通过环境变量覆盖（dev 脚本自动分配）
 const VITE_PORT = parseInt(process.env.VITE_PORT || "5173", 10);
 const VITE_STRICT_PORT = process.env.VITE_STRICT_PORT !== "false";
+const VITE_PUBLIC_ORIGIN = process.env.VITE_PUBLIC_ORIGIN || "";
+
+function parsePublicOrigin(origin: string):
+  | {
+      origin: string;
+      hmr: { protocol: "ws" | "wss"; host: string; clientPort?: number };
+    }
+  | undefined {
+  if (!origin) return undefined;
+  try {
+    const url = new URL(origin);
+    const isHttps = url.protocol === "https:";
+    return {
+      origin: url.origin,
+      hmr: {
+        protocol: isHttps ? "wss" : "ws",
+        host: url.hostname,
+        clientPort: url.port ? Number(url.port) : isHttps ? 443 : 80,
+      },
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+const publicOriginConfig = parsePublicOrigin(VITE_PUBLIC_ORIGIN);
 
 export default defineConfig({
   plugins: [react()],
@@ -47,6 +73,8 @@ export default defineConfig({
     strictPort: VITE_STRICT_PORT,
     host: true,
     allowedHosts: true,
+    origin: publicOriginConfig?.origin,
+    hmr: publicOriginConfig?.hmr,
     proxy: {
       "/health": {
         target: API_TARGET,
