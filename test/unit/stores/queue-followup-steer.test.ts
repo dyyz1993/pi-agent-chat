@@ -470,6 +470,29 @@ describe("clearQueue — 行为验证", () => {
     });
   });
 
+  it("有 steering 且会话正在运行时，清空队列后会 abort 当前轮以关闭已出队竞态窗口", async () => {
+    useSessionStore.setState({
+      sessionStatusMap: { [SID]: "streaming" },
+    });
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["请改方向"],
+          followUp: [],
+        },
+      },
+    });
+
+    await useChatStore.getState().clearQueue();
+
+    expect(apiClient.call).toHaveBeenNthCalledWith(1, "agent.clearQueue", {
+      sessionId: SID,
+    });
+    expect(apiClient.call).toHaveBeenNthCalledWith(2, "agent.abort", {
+      sessionId: SID,
+    });
+  });
+
   it("无 activeSessionId 不触发 RPC", async () => {
     useSessionStore.setState({ activeSessionId: null });
 

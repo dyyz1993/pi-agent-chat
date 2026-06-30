@@ -835,8 +835,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearQueue: async () => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
+    const queueBeforeClear = useSessionQueueStore.getState().queueBySession[sessionId];
+    const sessionStatus = useSessionStore.getState().sessionStatusMap[sessionId] ?? "idle";
+    const shouldAbortAfterClear =
+      Boolean(queueBeforeClear?.steering.length) &&
+      (sessionStatus === "streaming" || sessionStatus === "retrying");
     try {
       await apiClient.call("agent.clearQueue", { sessionId });
+      if (shouldAbortAfterClear) {
+        await apiClient.call("agent.abort", { sessionId });
+      }
     } catch (err) {
       log.warn("clearQueue failed", { error: String(err) });
     }
