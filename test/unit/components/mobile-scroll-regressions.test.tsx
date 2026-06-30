@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockApiCall = vi.fn();
 const sessionStoreState = {
   activeSessionId: "session-1",
+  sessionsByProject: {},
   availableModels: [],
   fetchModelState: vi.fn(),
 };
