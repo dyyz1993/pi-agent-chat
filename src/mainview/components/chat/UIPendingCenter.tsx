@@ -750,7 +750,7 @@ function SessionGroup({
             className="max-w-[6rem] shrink-0 truncate rounded bg-semantic-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-semantic-agent"
             title={sessionName}
           >
-            ↳ 子任务
+            ↳ {t("uiPending.subtaskSource")}
           </span>
         )}
         <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-status-warning">

@@ -1451,7 +1451,7 @@ describe("UIPendingCenter subagent request recovery", () => {
     expect(screen.getAllByText("Child approval").length).toBeGreaterThan(0);
     expect(screen.getByText("uiPending.fromSession")).toBeInTheDocument();
     expect(screen.getAllByText("uiPending.subtaskSource").length).toBeGreaterThan(0);
-    expect(screen.getByText("↳ 子任务")).toBeInTheDocument();
+    expect(screen.getByText("↳ uiPending.subtaskSource")).toBeInTheDocument();
   });
 
   it("keeps project pending visible for live child requests before subagent list is restored", () => {
