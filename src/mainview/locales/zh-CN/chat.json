@@ -376,6 +376,8 @@
   "uiPending.editor": "编辑",
   "uiPending.handleRequest": "处理",
   "uiPending.moreRequests": "还有 {{count}} 个待处理请求",
+  "uiPending.fromSession": "来自",
+  "uiPending.subtaskSource": "子任务",
 
   "hookPermission.allow": "允许",
   "hookPermission.deny": "拒绝",
