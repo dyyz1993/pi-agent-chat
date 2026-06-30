@@ -32,7 +32,9 @@ interface ManagedClientLike {
     | "getContextUsage"
   > & {
     clearQueue(item?: QueueItemRef): Promise<{ steering: string[]; followUp: string[] }>;
-    promoteQueuedFollowUp(item: FollowUpQueueItemRef): Promise<{ steering: string[]; followUp: string[] }>;
+    promoteQueuedFollowUp?(
+      item: FollowUpQueueItemRef,
+    ): Promise<{ steering: string[]; followUp: string[] }>;
   };
 }
 
@@ -243,6 +245,9 @@ export async function promoteQueuedFollowUpOperation<TManaged extends ManagedCli
 }): Promise<{ steering: string[]; followUp: string[] }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) return { steering: [], followUp: [] };
+  if (!managed.client.promoteQueuedFollowUp) {
+    throw new Error("promoteQueuedFollowUp RPC is not available in the active agent runtime");
+  }
   return managed.client.promoteQueuedFollowUp(options.item).catch((err: unknown) => {
     log.warn("promoteQueuedFollowUp error", {
       sessionId: options.sessionId,

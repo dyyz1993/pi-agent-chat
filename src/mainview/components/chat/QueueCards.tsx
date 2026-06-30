@@ -61,7 +61,11 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
             <button
               type="button"
               onClick={() => {
-                void promoteQueuedFollowUp(item);
+                void promoteQueuedFollowUp({
+                  type: "followUp",
+                  index: item.index,
+                  text: item.text,
+                });
               }}
               className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
               title={t("sendQueuedMessageNow", { text: preview })}
