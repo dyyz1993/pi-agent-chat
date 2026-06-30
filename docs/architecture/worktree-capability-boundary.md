@@ -96,7 +96,7 @@ Recommended app/runtime split:
 | `<PI_APP_CONFIG_DIR>`        | `~/.pi/chat`                    | App-shell state: recent projects, tabs, favorites, UI preferences, remote project records.                        |
 | `<PI_WORKTREE_STATE_DIR>`    | `~/.pi/chat/worktrees`          | App-owned worktree stack state: registry, per-stack app config, agent runtime dir, logs that are not source code. |
 | `<PI_WORKTREE_REGISTRY_DIR>` | `~/.pi/chat/worktrees/registry` | Port and app/fork pairing records.                                                                                |
-| `<PI_MANAGED_WORKTREE_ROOT>` | `~/.pi/worktrees`               | Optional future root for framework-managed source worktrees.                                                      |
+| `<PI_MANAGED_WORKTREE_ROOT>` | `<PI_AGENT_DIR>/worktrees`      | Default root for source worktrees created by `git.worktreeAdd`.                                                   |
 
 Do not use `~/.pi-agent-chat` for new code. The app has not been released, so the
 clean target should be `~/.pi/chat`.
@@ -115,14 +115,20 @@ Good defaults:
 or an explicit managed framework root:
 
 ```text
-~/.pi/worktrees/<stack-id>/pi-agent-chat
-~/.pi/worktrees/<stack-id>/pi-momo-fork
+~/.pi/agent/worktrees/<project-key>/<branch>
 ```
 
 Avoid making `~/.pi/chat/worktrees` the default source checkout root. That path
 should primarily hold state and registry files. Source worktrees can be large,
 user-edited, and reviewed in editors, so hiding them under an app config dotdir
 is only appropriate for explicitly managed temporary stacks.
+
+The app primitive `git.worktreeAdd` is one of those explicitly managed cases.
+For local repositories it creates the default path under
+`<PI_AGENT_DIR>/worktrees/<encoded-project-path>/<safe-branch>`, where
+`PI_AGENT_DIR` is `PI_CODING_AGENT_DIR` or `~/.pi/agent`. This keeps ad-hoc
+worktrees out of the project parent directory while still separating source
+checkouts from app-shell state under `~/.pi/chat/worktrees`.
 
 ## Multi-Repo User Project Case
 

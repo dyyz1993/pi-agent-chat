@@ -1,5 +1,5 @@
 import { dirname, basename, join, posix, resolve } from "node:path";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
@@ -7,6 +7,7 @@ import type { GitFileChange } from "../modules/git";
 import { createLogger } from "../lib/logger";
 import type { RemoteProjectRecord } from "../modules/project";
 import { listRemoteProjects } from "../lib/project-config";
+import { encodeProjectPath, getPiAgentDir, normalizeProjectPath } from "../lib/pi-agent-paths";
 
 const log = createLogger("git");
 
@@ -105,6 +106,19 @@ function isGitRepo(target: GitTarget): boolean {
 
 function getRepoRoot(target: GitTarget): string {
   return execGit(["rev-parse", "--show-toplevel"], target).trim();
+}
+
+function sanitizeWorktreeSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 96) || "worktree";
+}
+
+function getDefaultLocalWorktreePath(repoRoot: string, branch: string): string {
+  return join(
+    getPiAgentDir(),
+    "worktrees",
+    encodeProjectPath(normalizeProjectPath(repoRoot)),
+    sanitizeWorktreeSegment(branch),
+  );
 }
 
 function readWorktreeFile(target: GitTarget, repoRoot: string, filePath: string): string {
@@ -477,7 +491,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const newDir =
       target.kind === "ssh"
         ? posix.join(repoDir, `${repoName}-${params.branch}`)
-        : join(repoDir, `${repoName}-${params.branch}`);
+        : getDefaultLocalWorktreePath(repoRoot, params.branch);
+    if (target.kind === "local") {
+      mkdirSync(dirname(newDir), { recursive: true });
+    }
     const args = ["worktree", "add", newDir, "-b", params.branch];
     if (params.sourceBranch) {
       args.push(params.sourceBranch);

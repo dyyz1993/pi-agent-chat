@@ -237,6 +237,8 @@ Current policy: project orchestration agents should have complete tool permissio
 
 Project startup policy: new stacks use `scripts/worktree-create.sh <slug> --dev --start --with-agent-fork`; existing stacks use `scripts/worktree-dev.sh <app-worktree> --with-agent-fork --agent-path <paired-fork> --agent-build`; `--no-start` prepares env/registry only. The scripts derive worktree `.env` from the main repo `.env`, rewrite `PORT`, `PI_CLI_PATH`, `PI_CODING_AGENT_DIR`, and `PI_APP_CONFIG_DIR`, and export Vite runtime env. Default dependencies are linked; use install modes only when dependency metadata changes. yalc is required for app-imported package API/type changes, not for every CLI-only fork runtime change.
 
+`git.worktreeAdd` is the app-side primitive for ad-hoc source worktree creation. For local repositories, its default path is `<PI_AGENT_DIR>/worktrees/<encoded-project-path>/<safe-branch>`, where `PI_AGENT_DIR` is `PI_CODING_AGENT_DIR` or `~/.pi/agent`; do not create those worktrees beside the source repo by default.
+
 Validation policy: every issue/PR-style change set needs a validation packet before merge: automated test cases, manual acceptance cases, evidence, negative/edge cases, and residual risk. The default lifecycle is issue/local ledger -> branch/PR-style change set -> Review -> User Acceptance -> merge/close issue. Do not create a new issue after every merge by default; create follow-up issues only for known gaps, regressions, new user requests, or failed acceptance. Screenshot/browser automation may provide evidence, but user-facing acceptance remains pending unless the user accepts or explicitly waives it.
 
 ## Development Workflow

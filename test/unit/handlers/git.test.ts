@@ -1,4 +1,6 @@
+import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { encodeProjectPath } from "../../../src/shared/lib/pi-agent-paths";
 
 const mocks = vi.hoisted(() => ({
   listRemoteProjects: vi.fn(),
@@ -10,7 +12,10 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
 
 const mockFn = vi.fn<(args: string[]) => string>(() => "");
 type BunLike = {
-  spawnSync?: (cmd: unknown[], options?: unknown) => {
+  spawnSync?: (
+    cmd: unknown[],
+    options?: unknown,
+  ) => {
     exitCode: number;
     stdout: Buffer;
     stderr: Buffer;
@@ -170,7 +175,8 @@ describe("git handler", () => {
         if (args[0] !== "-o") return "";
         const command = args.at(-1) ?? "";
         if (command.includes("'rev-parse' '--is-inside-work-tree'")) return "true";
-        if (command.includes("'rev-parse' '--show-toplevel'")) return "/srv/remote app/pi-agent-app";
+        if (command.includes("'rev-parse' '--show-toplevel'"))
+          return "/srv/remote app/pi-agent-app";
         if (command.includes("'status' '--porcelain=v1' '--branch'")) return "## main\n";
         if (command.includes("'diff' '--cached' '--numstat'")) return "";
         if (command.includes("'diff' '--numstat'")) return "";
@@ -440,6 +446,45 @@ describe("git handler", () => {
       expect(result.worktree.isMain).toBe(false);
       expect(typeof result.worktree.path).toBe("string");
       expect((result.worktree.path as string).length).toBeGreaterThan(0);
+    });
+
+    it("creates default local worktrees under the agent worktree root", async () => {
+      const agentDir = "/tmp/pi-agent-test";
+      const oldAgentDir = process.env.PI_CODING_AGENT_DIR;
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+      let worktreeAddPath = "";
+
+      try {
+        mockFn.mockImplementation((args) => {
+          if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
+          if (args[0] === "rev-parse") return "/projects/my-repo";
+          if (args[0] === "worktree" && args[1] === "add") {
+            worktreeAddPath = args[2] ?? "";
+            return "";
+          }
+          return "";
+        });
+
+        const handler = server.handlers.get("git.worktreeAdd")!;
+        const result = (await handler({ repoPath: REPO_PATH, branch: "feature-x" })) as {
+          worktree: Record<string, unknown>;
+        };
+        const expectedPath = join(
+          agentDir,
+          "worktrees",
+          encodeProjectPath("/projects/my-repo"),
+          "feature-x",
+        );
+
+        expect(worktreeAddPath).toBe(expectedPath);
+        expect(result.worktree.path).toBe(expectedPath);
+      } finally {
+        if (oldAgentDir === undefined) {
+          delete process.env.PI_CODING_AGENT_DIR;
+        } else {
+          process.env.PI_CODING_AGENT_DIR = oldAgentDir;
+        }
+      }
     });
   });
 });
