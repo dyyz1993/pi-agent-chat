@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2 } from "lucide-react";
 
@@ -15,8 +15,7 @@ import {
   extractHookInterventionSegments,
   type HookIntervention,
 } from "./HookInterventionCard";
-
-const StreamingMarkdownContent = lazy(() => import("./StreamingMarkdownContent"));
+import StreamingMarkdownContent from "./StreamingMarkdownContent";
 
 /** A flattened text/hook/references segment used for rendering. */
 type RenderSegment =
@@ -83,9 +82,7 @@ export const TextContentCard = memo(function TextContentCard({
         </div>
         {!hasInternalReferences && visibleText.trim() ? (
           <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent prose-hr:my-0.5">
-            <Suspense fallback={<span className="whitespace-pre-wrap">{visibleText}</span>}>
-              <StreamingMarkdownContent text={visibleText} />
-            </Suspense>
+            <StreamingMarkdownContent text={visibleText} />
           </div>
         ) : (
           <div className="whitespace-pre-wrap">
