@@ -55,14 +55,15 @@ const TOGGLE_ITEMS: {
   labelKey: string;
   descKey: string;
 }[] = [
-  { key: "showToolCalls", labelKey: "showToolCalls", descKey: "showToolCallsDesc" },
-  { key: "showToolResults", labelKey: "showToolResults", descKey: "showToolResultsDesc" },
-  { key: "showThinking", labelKey: "showThinking", descKey: "showThinkingDesc" },
-  { key: "collapseThinking", labelKey: "collapseThinking", descKey: "collapseThinkingDesc" },
-  { key: "collapseToolCards", labelKey: "collapseToolCards", descKey: "collapseToolCardsDesc" },
-  { key: "showTimeline", labelKey: "showTimeline", descKey: "showTimelineDesc" },
-  { key: "showMemoryEntries", labelKey: "showMemoryEntries", descKey: "showMemoryEntriesDesc" },
-];
+    { key: "showToolCalls", labelKey: "showToolCalls", descKey: "showToolCallsDesc" },
+    { key: "showToolResults", labelKey: "showToolResults", descKey: "showToolResultsDesc" },
+    { key: "showThinking", labelKey: "showThinking", descKey: "showThinkingDesc" },
+    { key: "collapseThinking", labelKey: "collapseThinking", descKey: "collapseThinkingDesc" },
+    { key: "collapseToolCards", labelKey: "collapseToolCards", descKey: "collapseToolCardsDesc" },
+    { key: "showTimeline", labelKey: "showTimeline", descKey: "showTimelineDesc" },
+    { key: "showMemoryEntries", labelKey: "showMemoryEntries", descKey: "showMemoryEntriesDesc" },
+    { key: "showCacheDisplay", labelKey: "showCacheDisplay", descKey: "showCacheDisplayDesc" },
+  ];
 
 const RETRY_OPTIONS = [
   { value: 1, label: "1" },
@@ -100,12 +101,12 @@ const SETTINGS_TABS: Array<{
   icon: ComponentType<{ className?: string }>;
   label: string;
 }> = [
-  { id: "display", icon: SlidersHorizontal, label: "显示" },
-  { id: "retry", icon: Activity, label: "重试" },
-  { id: "models", icon: Brain, label: "模型" },
-  { id: "network", icon: Network, label: "网络" },
-  { id: "usage", icon: Trophy, label: "战绩" },
-];
+    { id: "display", icon: SlidersHorizontal, label: "显示" },
+    { id: "retry", icon: Activity, label: "重试" },
+    { id: "models", icon: Brain, label: "模型" },
+    { id: "network", icon: Network, label: "网络" },
+    { id: "usage", icon: Trophy, label: "战绩" },
+  ];
 
 const SETTINGS_GROUPS: Array<{
   id: SettingsGroupId;
@@ -113,10 +114,10 @@ const SETTINGS_GROUPS: Array<{
   label: string;
   items: SettingsTabId[];
 }> = [
-  { id: "conversation", icon: SlidersHorizontal, label: "对话", items: ["display", "retry"] },
-  { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage"] },
-  { id: "connection", icon: Network, label: "连接", items: ["network"] },
-];
+    { id: "conversation", icon: SlidersHorizontal, label: "对话", items: ["display", "retry"] },
+    { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage"] },
+    { id: "connection", icon: Network, label: "连接", items: ["network"] },
+  ];
 
 function getSettingsTab(tabId: SettingsTabId) {
   return SETTINGS_TABS.find((tab) => tab.id === tabId) ?? SETTINGS_TABS[0];
@@ -275,7 +276,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [sessionId, setRetryConfig]);
 
   const persistRetry = useCallback(
@@ -295,7 +296,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             },
           },
         })
-        .catch(() => {});
+        .catch(() => { });
     },
     [sessionId, retryConfig, setRetryConfig],
   );
@@ -319,11 +320,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               key={mode}
               type="button"
               onClick={() => setViewMode(mode)}
-              className={`h-8 text-[12px] font-medium transition-colors ${
-                chatViewMode === mode
+              className={`h-8 text-[12px] font-medium transition-colors ${chatViewMode === mode
                   ? "bg-semantic-accent text-white"
                   : "text-text-secondary hover:bg-surface-hover/60"
-              }`}
+                }`}
             >
               {t(`chatViewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}` as const)}
             </button>
@@ -344,11 +344,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               key={option.key}
               type="button"
               onClick={() => setFontPreset(option.key)}
-              className={`min-w-0 whitespace-nowrap rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
-                fontPreset === option.key
+              className={`min-w-0 whitespace-nowrap rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${fontPreset === option.key
                   ? "bg-semantic-accent text-white"
                   : "text-text-secondary hover:bg-surface-hover/60"
-              }`}
+                }`}
             >
               {t(option.labelKey)}
             </button>
@@ -447,11 +446,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       <div className="flex flex-wrap items-center justify-end gap-2">
         {tierSaveMessage && (
           <div
-            className={`mr-auto flex min-h-8 min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] ${
-              tierSaveMessage.type === "success"
+            className={`mr-auto flex min-h-8 min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] ${tierSaveMessage.type === "success"
                 ? "border-status-success/30 bg-status-success/10 text-status-success"
                 : "border-status-error/30 bg-status-error/10 text-status-error"
-            }`}
+              }`}
             role="status"
           >
             {tierSaveMessage.type === "success" ? (
@@ -472,9 +470,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const networkContent = (
     <SettingsSection title={t("proxyTitle")}>
       <label
-        className={`flex items-start gap-3 rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5 transition-colors ${
-          proxyStatusLoading ? "cursor-wait opacity-80" : "cursor-pointer hover:bg-surface-hover/40"
-        }`}
+        className={`flex items-start gap-3 rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5 transition-colors ${proxyStatusLoading ? "cursor-wait opacity-80" : "cursor-pointer hover:bg-surface-hover/40"
+          }`}
       >
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-medium text-text-primary">{t("proxyEnabled")}</div>
@@ -482,13 +479,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             {t("proxyEnabledDesc")}
           </div>
           <div
-            className={`mt-1 text-[11px] ${
-              proxyStatus.active
+            className={`mt-1 text-[11px] ${proxyStatus.active
                 ? "text-status-success"
                 : proxyStatus.configured === false
                   ? "text-status-warning"
                   : "text-text-tertiary"
-            }`}
+              }`}
           >
             {proxyStatusLoading
               ? t("proxyStatusChecking")
@@ -561,11 +557,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
-                    selected
+                  className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${selected
                       ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
                       : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
-                  }`}
+                    }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="min-w-0">
@@ -586,11 +581,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   type="button"
                   aria-current={selected ? "page" : undefined}
                   onClick={() => setActiveTab(group.items[0])}
-                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center transition-colors ${
-                    selected
+                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center transition-colors ${selected
                       ? "bg-semantic-accent/10 text-semantic-accent"
                       : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
-                  }`}
+                    }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="max-w-full truncate text-[11px] font-medium">{group.label}</span>
@@ -617,11 +611,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     type="button"
                     aria-current={selected ? "page" : undefined}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex min-h-[40px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
-                      selected
+                    className={`flex min-h-[40px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${selected
                         ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
                         : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
-                    }`}
+                      }`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="min-w-0 truncate text-[12px] font-medium">{tab.label}</span>
@@ -781,16 +774,14 @@ function ToggleSwitch({
         if (disabled) return;
         onChange();
       }}
-      className={`relative inline-flex h-[22px] min-h-[22px] w-[38px] shrink-0 cursor-pointer items-center rounded-full border p-[2px] transition-[background-color,border-color,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary disabled:cursor-not-allowed disabled:opacity-60 ${
-        checked
+      className={`relative inline-flex h-[22px] min-h-[22px] w-[38px] shrink-0 cursor-pointer items-center rounded-full border p-[2px] transition-[background-color,border-color,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary disabled:cursor-not-allowed disabled:opacity-60 ${checked
           ? "border-[var(--color-accent)] bg-[var(--color-accent)] shadow-sm shadow-black/10"
           : "border-border-secondary bg-surface-dim hover:bg-surface-hover dark:bg-bg-tertiary dark:hover:bg-surface-dim"
-      }`}
+        }`}
     >
       <span
-        className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-out ${
-          checked ? "translate-x-4" : "translate-x-0"
-        }`}
+        className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-out ${checked ? "translate-x-4" : "translate-x-0"
+          }`}
       />
     </button>
   );
