@@ -17,6 +17,7 @@ const DEFAULTS = {
   showThinking: false,
   collapseThinking: true,
   showTimeline: true,
+  showCacheDisplay: false,
 };
 
 beforeEach(() => {
@@ -30,11 +31,20 @@ describe("useSettingsStore", () => {
     expect(s.showToolCalls).toBe(true);
     expect(s.showThinking).toBe(false);
     expect(s.showTimeline).toBe(true);
+    expect(s.showCacheDisplay).toBe(false);
   });
 
   it("toggle flips showToolCalls", () => {
     useSettingsStore.getState().toggle("showToolCalls");
     expect(useSettingsStore.getState().showToolCalls).toBe(false);
+  });
+
+  it("keeps cache display hidden by default and toggles it explicitly", () => {
+    expect(useSettingsStore.getState().showCacheDisplay).toBe(false);
+
+    useSettingsStore.getState().toggle("showCacheDisplay");
+
+    expect(useSettingsStore.getState().showCacheDisplay).toBe(true);
   });
 
   it("setAll only changes specified keys", () => {
