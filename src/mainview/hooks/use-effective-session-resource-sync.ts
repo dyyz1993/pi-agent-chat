@@ -130,7 +130,7 @@ export function useEffectiveSessionResourceSync(): void {
       useSessionStore.getState().fetchInitialState(effectiveSessionId);
     };
 
-    if (targetKey && lastSyncedTargetKeyRef.current !== targetKey) {
+    if (target && targetKey && lastSyncedTargetKeyRef.current !== targetKey) {
       lastSyncedTargetKeyRef.current = targetKey;
       void ensureRuntime(target)
         .catch(() => {})
