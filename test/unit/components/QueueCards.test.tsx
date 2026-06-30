@@ -22,6 +22,7 @@ vi.mock("react-i18next", () => ({
       ({
         revokeQueuedMessages: `Dismiss ${String(params?.count ?? "")} queued messages`,
         revokeQueuedMessage: `Dismiss queued message: ${String(params?.text ?? "")}`,
+        sendQueuedMessageNow: `Send queued message now: ${String(params?.text ?? "")}`,
         expandQueuedMessage: `Expand queued message: ${String(params?.text ?? "")}`,
         collapseQueuedMessage: `Collapse queued message: ${String(params?.text ?? "")}`,
         queuedSteeringLabel: "Steering",
@@ -82,6 +83,26 @@ describe("QueueCards", () => {
 
     expect(useSessionQueueStore.getState().queueBySession["sess-1"]).toEqual({
       steering: ["steer now"],
+      followUp: ["second follow-up with\nmore detail"],
+    });
+  });
+
+  it("promotes only the selected follow-up message to steering", async () => {
+    render(<QueueCards sessionId="sess-1" />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send queued message now: first follow-up" }),
+    );
+
+    await waitFor(() => {
+      expect(apiClient.call).toHaveBeenCalledWith("agent.promoteQueuedFollowUp", {
+        sessionId: "sess-1",
+        item: { type: "followUp", index: 0, text: "first follow-up" },
+      });
+    });
+
+    expect(useSessionQueueStore.getState().queueBySession["sess-1"]).toEqual({
+      steering: ["steer now", "first follow-up"],
       followUp: ["second follow-up with\nmore detail"],
     });
   });

@@ -7,6 +7,7 @@ const log = createLogger("agent");
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
 export type QueueItemRef = { type: "steering" | "followUp"; index: number; text: string };
+export type FollowUpQueueItemRef = { type: "followUp"; index: number; text: string };
 
 interface ManagedClientLike {
   client: Pick<
@@ -31,6 +32,7 @@ interface ManagedClientLike {
     | "getContextUsage"
   > & {
     clearQueue(item?: QueueItemRef): Promise<{ steering: string[]; followUp: string[] }>;
+    promoteQueuedFollowUp(item: FollowUpQueueItemRef): Promise<{ steering: string[]; followUp: string[] }>;
   };
 }
 
@@ -227,6 +229,22 @@ export async function clearQueueOperation<TManaged extends ManagedClientLike>(op
   if (!managed) return { steering: [], followUp: [] };
   return managed.client.clearQueue(options.item).catch((err: unknown) => {
     log.warn("clearQueue error", {
+      sessionId: options.sessionId,
+      err: errorMessage(err),
+    });
+    return { steering: [], followUp: [] };
+  });
+}
+
+export async function promoteQueuedFollowUpOperation<TManaged extends ManagedClientLike>(options: {
+  sessionId: string;
+  item: FollowUpQueueItemRef;
+  getActiveManaged: (sessionId: string) => TManaged | null;
+}): Promise<{ steering: string[]; followUp: string[] }> {
+  const managed = options.getActiveManaged(options.sessionId);
+  if (!managed) return { steering: [], followUp: [] };
+  return managed.client.promoteQueuedFollowUp(options.item).catch((err: unknown) => {
+    log.warn("promoteQueuedFollowUp error", {
       sessionId: options.sessionId,
       err: errorMessage(err),
     });

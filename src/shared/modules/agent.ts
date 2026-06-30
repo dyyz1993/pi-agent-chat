@@ -212,6 +212,13 @@ export interface AgentMethods {
     };
     result: { steering: string[]; followUp: string[] };
   };
+  "agent.promoteQueuedFollowUp": {
+    params: {
+      sessionId: string;
+      item: { type: "followUp"; index: number; text: string };
+    };
+    result: { steering: string[]; followUp: string[] };
+  };
   "agent.getExtensions": {
     params: { sessionId: string };
     result: {

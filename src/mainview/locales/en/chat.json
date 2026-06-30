@@ -164,6 +164,7 @@
   "cancelSelection": "Cancel selection",
   "revokeQueuedMessages": "Dismiss {{count}} queued messages",
   "revokeQueuedMessage": "Dismiss queued message: {{text}}",
+  "sendQueuedMessageNow": "Send queued message now: {{text}}",
   "expandQueuedMessage": "Expand queued message: {{text}}",
   "collapseQueuedMessage": "Collapse queued message: {{text}}",
   "queuedSteeringLabel": "Steer",

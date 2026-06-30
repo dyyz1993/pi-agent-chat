@@ -25,6 +25,7 @@ import {
   getQueueOperation,
   getSkillsOperation,
   getToolsOperation,
+  promoteQueuedFollowUpOperation,
   reloadOperation,
   restartMcpServerOperation,
   setActiveToolsOperation,
@@ -34,6 +35,7 @@ import {
   setPermissionModeOperation,
   setSteeringModeOperation,
   toggleMcpServerOperation,
+  type FollowUpQueueItemRef,
   type QueueItemRef,
 } from "./agent-client-session-operations";
 import {
@@ -130,6 +132,10 @@ export interface AgentClientApiAdapter {
   clearQueue: (
     sessionId: string,
     item?: QueueItemRef,
+  ) => Promise<{ steering: string[]; followUp: string[] }>;
+  promoteQueuedFollowUp: (
+    sessionId: string,
+    item: FollowUpQueueItemRef,
   ) => Promise<{ steering: string[]; followUp: string[] }>;
   getExtensions: (sessionId: string) => Promise<{
     extensions: Array<{
@@ -360,6 +366,13 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
     },
     clearQueue(sessionId, item) {
       return clearQueueOperation({ sessionId, item, getActiveManaged: deps.getActiveManaged });
+    },
+    promoteQueuedFollowUp(sessionId, item) {
+      return promoteQueuedFollowUpOperation({
+        sessionId,
+        item,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     getExtensions(sessionId) {
       return getExtensionsOperation({ sessionId, getActiveManaged: deps.getActiveManaged });

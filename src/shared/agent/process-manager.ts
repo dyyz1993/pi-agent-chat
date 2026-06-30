@@ -54,6 +54,7 @@ import {
   setActiveToolsOperation,
   getQueueOperation,
   clearQueueOperation,
+  promoteQueuedFollowUpOperation,
   getExtensionsOperation,
   getSkillsOperation,
   reloadOperation,
@@ -1559,6 +1560,17 @@ export class AgentProcessManager {
     item?: { type: "steering" | "followUp"; index: number; text: string },
   ): Promise<{ steering: string[]; followUp: string[] }> {
     return clearQueueOperation({
+      sessionId,
+      item,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
+  }
+
+  async promoteQueuedFollowUp(
+    sessionId: string,
+    item: { type: "followUp"; index: number; text: string },
+  ): Promise<{ steering: string[]; followUp: string[] }> {
+    return promoteQueuedFollowUpOperation({
       sessionId,
       item,
       getActiveManaged: (sid) => this.getActiveManaged(sid),

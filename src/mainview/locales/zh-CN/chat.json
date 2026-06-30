@@ -164,6 +164,7 @@
   "cancelSelection": "取消选择",
   "revokeQueuedMessages": "撤销 {{count}} 条排队消息",
   "revokeQueuedMessage": "撤销排队消息：{{text}}",
+  "sendQueuedMessageNow": "立即发送排队消息：{{text}}",
   "expandQueuedMessage": "展开排队消息：{{text}}",
   "collapseQueuedMessage": "收起排队消息：{{text}}",
   "queuedSteeringLabel": "Steer",

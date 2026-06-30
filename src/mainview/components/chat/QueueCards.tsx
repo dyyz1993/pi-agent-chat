@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Clock, X, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, SendHorizontal, X, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { type QueueItemRef, useSessionQueueStore } from "../../stores/use-session-queue-store";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -10,6 +10,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
   const queue = useSessionQueueStore((s) => s.queueBySession[sessionId]);
   const clearQueue = useChatStore((s) => s.clearQueue);
   const clearQueuedMessage = useChatStore((s) => s.clearQueuedMessage);
+  const promoteQueuedFollowUp = useChatStore((s) => s.promoteQueuedFollowUp);
 
   if (!queue || (queue.steering.length === 0 && queue.followUp.length === 0)) return null;
 
@@ -56,6 +57,19 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
             <span className="shrink-0 text-[10px] uppercase tracking-wide opacity-80">{label}</span>
             <span className="truncate">{preview}</span>
           </button>
+          {item.type === "followUp" ? (
+            <button
+              type="button"
+              onClick={() => {
+                void promoteQueuedFollowUp(item);
+              }}
+              className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+              title={t("sendQueuedMessageNow", { text: preview })}
+              aria-label={t("sendQueuedMessageNow", { text: preview })}
+            >
+              <SendHorizontal className="w-3 h-3" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {

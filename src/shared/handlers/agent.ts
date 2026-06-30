@@ -355,6 +355,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return m.clearQueue(params.sessionId, params.item) as Promise<R<"agent.clearQueue">>;
   });
 
+  r("agent.promoteQueuedFollowUp", async (params) => {
+    return m.promoteQueuedFollowUp(params.sessionId, params.item) as Promise<
+      R<"agent.promoteQueuedFollowUp">
+    >;
+  });
+
   r("agent.getExtensions", async (params) => {
     return m.getExtensions(params.sessionId) as Promise<R<"agent.getExtensions">>;
   });

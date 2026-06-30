@@ -9,7 +9,11 @@ import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useNotificationStore } from "./use-notification-store";
 import { clearAgentStarted, useSessionStore } from "./use-session-store";
-import { useSessionQueueStore, type QueueItemRef } from "./use-session-queue-store";
+import {
+  useSessionQueueStore,
+  type FollowUpQueueItemRef,
+  type QueueItemRef,
+} from "./use-session-queue-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { isBashBackgroundProcessType } from "../components/chat/bash-background-process";
@@ -611,6 +615,7 @@ interface ChatState {
   sendFollowUp: () => Promise<void>;
   clearQueue: () => Promise<void>;
   clearQueuedMessage: (item: QueueItemRef) => Promise<void>;
+  promoteQueuedFollowUp: (item: FollowUpQueueItemRef) => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (
     sessionId: string,
@@ -850,6 +855,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
       }
       log.warn("clearQueuedMessage failed", { error: String(err) });
+    }
+  },
+
+  promoteQueuedFollowUp: async (item) => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    const queueStore = useSessionQueueStore.getState();
+    const previous = queueStore.queueBySession[sessionId];
+    queueStore.promoteFollowUpToSteering(sessionId, item);
+    try {
+      await apiClient.call("agent.promoteQueuedFollowUp", { sessionId, item });
+    } catch (err) {
+      if (previous) {
+        useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
+      }
+      log.warn("promoteQueuedFollowUp failed", { error: String(err) });
     }
   },
 
