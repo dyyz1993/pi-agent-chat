@@ -272,6 +272,9 @@ let _builtinExtensionArgsNoLspCache: string[] | undefined;
 const SUBAGENT_EXCLUDED_EXTENSIONS = new Set(["lsp"]);
 
 function getExtensionArgs(excludeLsp = false, includeUser = true): string[] {
+  if (process.env.PI_AGENT_CHAT_TEST_NO_EXTENSIONS === "1") {
+    return ["--no-extensions"];
+  }
   if (excludeLsp) {
     const cached = includeUser ? _extensionArgsNoLspCache : _builtinExtensionArgsNoLspCache;
     if (cached === undefined) {
@@ -439,6 +442,7 @@ async function createRpcClient(
   excludeLsp = false,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
+  const shouldExcludeLsp = excludeLsp || process.env.PI_AGENT_CHAT_TEST_SKIP_LSP === "1";
   const runtime = await resolveActiveRuntimeSelection(cwd);
   const useRemoteChild = runtime.kind === "remote-agent-child";
   const remoteChildRuntime = runtime.kind === "remote-agent-child" ? runtime : undefined;
@@ -524,7 +528,7 @@ async function createRpcClient(
         ...getRemoteExtensionArgs(
           localRemoteChildExtensionsDir,
           remoteChildBootstrap?.remoteExtensionsDir,
-          excludeLsp,
+          shouldExcludeLsp,
         ),
         ...(remoteChildRuntime
           ? getRemoteProjectTrustArgs({ runtime: remoteChildRuntime, cwd })
@@ -532,7 +536,7 @@ async function createRpcClient(
         ...(remoteSessionDir ? ["--session-dir", remoteSessionDir] : []),
         ...(remoteSessionId ? ["--session-id", remoteSessionId] : []),
       ]
-    : [...getExtensionArgs(excludeLsp, runtime.kind !== "ssh-command")];
+    : [...getExtensionArgs(shouldExcludeLsp, runtime.kind !== "ssh-command")];
   if (!useRemoteChild && sessionPath && existsSync(sessionPath)) {
     args.push("--session", sessionPath);
   }
@@ -564,7 +568,7 @@ async function createRpcClient(
       : undefined,
     sessionPath,
     args: args.join(" "),
-    excludeLsp,
+    excludeLsp: shouldExcludeLsp,
   });
 
   // 子代理进程（forceNewProcess）跳过 MCP 连接，避免多进程竞争同一个 stdio MCP server
@@ -572,7 +576,7 @@ async function createRpcClient(
     ...applyExecutionSandboxEnv(process.env, readProjectExecutionSandbox(cwd).mode),
     NODE_OPTIONS: "--max-old-space-size=8192",
   };
-  if (excludeLsp) {
+  if (shouldExcludeLsp) {
     childEnv.PI_SKIP_MCP = "1";
   }
   if (runtime.kind === "ssh-command") {
@@ -595,7 +599,7 @@ async function createRpcClient(
             env: buildRemoteAgentChildRuntimeEnv({
               remotePiAgentDir,
               nodeOptions: config.remoteChildNodeOptions,
-              skipMcp: excludeLsp,
+              skipMcp: shouldExcludeLsp,
               modelProxyEnv: modelProxy?.env,
             }),
           },
@@ -628,7 +632,7 @@ async function createRpcClient(
     perfLog.error("[createRpcClient] client.start failed", {
       cwd,
       sessionPath,
-      excludeLsp,
+      excludeLsp: shouldExcludeLsp,
       argsCount: args.length,
       stderr:
         typeof debugClient.getStderr === "function" ? debugClient.getStderr().slice(-2000) : "",

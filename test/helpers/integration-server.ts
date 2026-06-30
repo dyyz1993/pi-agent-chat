@@ -60,14 +60,19 @@ export async function startTestServer(config: TestServerConfig): Promise<TestSer
   await mkdir(isolatedHome, { recursive: true });
   await mkdir(join(isolatedHome, ".claude"), { recursive: true });
 
-  // Symlink .pi/agent/ from real home so pi CLI can find models.json, auth.json, extensions, etc.
+  // Keep tests isolated from user settings/MCP, while still allowing local auth/model files.
   const realPiAgent = join(homedir(), ".pi", "agent");
   const isolatedPi = join(isolatedHome, ".pi");
+  const isolatedPiAgent = join(isolatedPi, "agent");
   if (existsSync(realPiAgent)) {
     await mkdir(isolatedPi, { recursive: true });
-    const isolatedPiAgent = join(isolatedPi, "agent");
-    if (!existsSync(isolatedPiAgent)) {
-      await symlink(realPiAgent, isolatedPiAgent, "junction");
+    await mkdir(isolatedPiAgent, { recursive: true });
+    for (const fileName of ["models.json", "auth.json", "oauth.json"]) {
+      const source = join(realPiAgent, fileName);
+      const target = join(isolatedPiAgent, fileName);
+      if (existsSync(source) && !existsSync(target)) {
+        await symlink(source, target);
+      }
     }
   }
 
@@ -78,7 +83,10 @@ export async function startTestServer(config: TestServerConfig): Promise<TestSer
     AUTH_TOKEN: config.authToken,
     LOG_DIR: join(tmpDir, "logs"),
     HOME: isolatedHome,
+    PI_CODING_AGENT_DIR: isolatedPiAgent,
     PI_CLI_PATH: resolvePiCliPath(),
+    PI_AGENT_CHAT_TEST_NO_EXTENSIONS: "1",
+    PI_AGENT_CHAT_TEST_SKIP_LSP: "1",
   };
 
   const proc = spawn("bun", ["src/server.ts"], {

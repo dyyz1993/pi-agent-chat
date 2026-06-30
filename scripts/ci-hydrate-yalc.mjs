@@ -5,7 +5,9 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +16,7 @@ import { execFileSync } from "node:child_process";
 
 const packages = [
   { name: "@dyyz1993/pi-coding-agent", version: "0.78.2" },
-  // 0.78.1 is the latest npm tag, but that tarball currently lacks dist/index.js.
+  // 0.78.1 lacks dist/index.js.
   { name: "@dyyz1993/pi-tui", version: "0.74.56" },
 ];
 
@@ -86,6 +88,39 @@ function patchCodingAgentPackage(codingAgentPath) {
   }
 }
 
+function patchIncompatibleExtensionSetName(codingAgentPath) {
+  const loaderPath = join(codingAgentPath, "dist", "core", "extensions", "loader.js");
+  const extensionsPath = join(codingAgentPath, "dist", "extensions");
+  if (!existsSync(loaderPath) || !existsSync(extensionsPath)) {
+    return;
+  }
+
+  const loader = readFileSync(loaderPath, "utf8");
+  if (loader.includes("setName(name")) {
+    return;
+  }
+
+  let patched = 0;
+  for (const entry of readdirSync(extensionsPath)) {
+    const indexPath = join(extensionsPath, entry, "index.ts");
+    if (!existsSync(indexPath) || !statSync(indexPath).isFile()) {
+      continue;
+    }
+    const source = readFileSync(indexPath, "utf8");
+    const next = source.replace(/^\s*pi\.setName\([^)]*\);\r?\n/m, "");
+    if (next !== source) {
+      writeFileSync(indexPath, next);
+      patched += 1;
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[ci-hydrate-yalc] removed pi.setName calls from ${patched} extension(s) for this package version`,
+    );
+  }
+}
+
 function pinCodingAgentTransitiveDependencies() {
   const codingAgentPath = packageYalcPath("@dyyz1993/pi-coding-agent");
   const tuiPackage = packages.find((pkg) => pkg.name === "@dyyz1993/pi-tui");
@@ -94,6 +129,7 @@ function pinCodingAgentTransitiveDependencies() {
   }
 
   patchCodingAgentPackage(codingAgentPath);
+  patchIncompatibleExtensionSetName(codingAgentPath);
   console.log(
     `[ci-hydrate-yalc] pinned @dyyz1993/pi-coding-agent -> @dyyz1993/pi-tui@${tuiPackage.version}`,
   );
@@ -116,6 +152,7 @@ function repairInstalledCodingAgentDependencies() {
   }
 
   patchCodingAgentPackage(installedCodingAgentPath);
+  patchIncompatibleExtensionSetName(installedCodingAgentPath);
 
   const target = join(installedCodingAgentPath, "node_modules", "@dyyz1993", "pi-tui");
   rmSync(target, { recursive: true, force: true });

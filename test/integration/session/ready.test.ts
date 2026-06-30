@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import WebSocket from "ws";
 import { randomUUID } from "crypto";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import {
   startTestServer,
   stopTestServer,
@@ -10,8 +13,8 @@ import {
 const TEST_PORT = 3201;
 const AUTH_TOKEN = "pi-agent-chat-chat-token";
 const WS_URL = `ws://localhost:${TEST_PORT}/ws?token=${AUTH_TOKEN}`;
-const PROJECT_PATH = process.cwd();
 const RPC_TIMEOUT = 30000;
+let projectPath: string;
 
 interface RPCMessage {
   id: string;
@@ -84,26 +87,28 @@ async function createSession(
 let server: TestServerResult;
 
 beforeAll(async () => {
+  projectPath = await mkdtemp(join(tmpdir(), "pi-agent-ready-project-"));
   server = await startTestServer({
     port: TEST_PORT,
     authToken: AUTH_TOKEN,
-    projectPath: PROJECT_PATH,
+    projectPath,
   });
 }, 40000);
 
 afterAll(async () => {
   await stopTestServer(server);
+  await rm(projectPath, { recursive: true, force: true });
 });
 
 describe("Session Ready Lifecycle", () => {
   it("agent.start should return 'started' on first call", async () => {
     const ws = await createWsClient();
     try {
-      const { sessionId, sessionPath } = await createSession(ws, PROJECT_PATH);
+      const { sessionId, sessionPath } = await createSession(ws, projectPath);
 
       const resp = await sendRPC(ws, "agent.start", {
         sessionId,
-        projectPath: PROJECT_PATH,
+        projectPath,
         sessionPath,
       });
 
@@ -120,18 +125,18 @@ describe("Session Ready Lifecycle", () => {
   it("agent.start should return 'already_running' when called twice", async () => {
     const ws = await createWsClient();
     try {
-      const { sessionId, sessionPath } = await createSession(ws, PROJECT_PATH);
+      const { sessionId, sessionPath } = await createSession(ws, projectPath);
 
       const resp1 = await sendRPC(ws, "agent.start", {
         sessionId,
-        projectPath: PROJECT_PATH,
+        projectPath,
         sessionPath,
       });
       expect((resp1.result as { status: string }).status).toBe("started");
 
       const resp2 = await sendRPC(ws, "agent.start", {
         sessionId,
-        projectPath: PROJECT_PATH,
+        projectPath,
         sessionPath,
       });
       expect(resp2.error).toBeUndefined();
@@ -145,11 +150,11 @@ describe("Session Ready Lifecycle", () => {
 
   it("should recover sessionReady after WebSocket reconnect", async () => {
     const ws1 = await createWsClient();
-    const { sessionId, sessionPath } = await createSession(ws1, PROJECT_PATH);
+    const { sessionId, sessionPath } = await createSession(ws1, projectPath);
 
     const startResp = await sendRPC(ws1, "agent.start", {
       sessionId,
-      projectPath: PROJECT_PATH,
+      projectPath,
       sessionPath,
     });
     expect((startResp.result as { status: string }).status).toBe("started");
@@ -161,7 +166,7 @@ describe("Session Ready Lifecycle", () => {
     try {
       const recoverResp = await sendRPC(ws2, "agent.start", {
         sessionId,
-        projectPath: PROJECT_PATH,
+        projectPath,
         sessionPath,
       });
 
@@ -183,7 +188,7 @@ describe("Session Ready Lifecycle", () => {
 
       const resp = await sendRPC(ws, "agent.start", {
         sessionId: fakeSessionId,
-        projectPath: PROJECT_PATH,
+        projectPath,
         sessionPath: fakeSessionPath,
       });
 
@@ -201,15 +206,15 @@ describe("Session Ready Lifecycle", () => {
     const ws = await createWsClient();
     try {
       const sessions = await Promise.all([
-        createSession(ws, PROJECT_PATH),
-        createSession(ws, PROJECT_PATH),
-        createSession(ws, PROJECT_PATH),
+        createSession(ws, projectPath),
+        createSession(ws, projectPath),
+        createSession(ws, projectPath),
       ]);
 
       for (const s of sessions) {
         const resp = await sendRPC(ws, "agent.start", {
           sessionId: s.sessionId,
-          projectPath: PROJECT_PATH,
+          projectPath,
           sessionPath: s.sessionPath,
         });
         expect(resp.error).toBeUndefined();
