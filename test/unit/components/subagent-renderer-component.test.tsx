@@ -396,6 +396,22 @@ describe("SubagentExecutionCard — 状态文案", () => {
     expect(screen.getByText("sub_test_001")).toBeTruthy();
   });
 
+  it("兼容 agentName 参数展示指定智能体名称", () => {
+    setupMockStore({ status: "done", agent: undefined });
+    const block = makeBlock({
+      status: "done",
+      args: JSON.stringify({
+        description: "Refactor module",
+        instruction: "Refactor the auth module",
+        agentName: "code-reviewer",
+      }),
+    });
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("code-reviewer")).toBeTruthy();
+    expect(screen.queryByText("build")).toBeNull();
+  });
+
   it("折叠态优先展示子任务档位和思考级别", () => {
     setupMockStore({
       status: "done",

@@ -1524,12 +1524,17 @@ export class AgentProcessManager {
   }
 
   async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
-    return setPermissionModeOperation({
+    const result = await setPermissionModeOperation({
       sessionId,
       mode,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
       ensureManagedClient: (sid) => this.ensureManagedClient(sid),
     });
+    const managed = this.clients.get(sessionId);
+    if (managed) {
+      managed.info.permissionMode = result.mode;
+    }
+    return result;
   }
 
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {

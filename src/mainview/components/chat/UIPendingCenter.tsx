@@ -21,6 +21,7 @@ import { useStatusStore } from "../../stores/use-status-store";
 import { IconButton, ModalDialog } from "../primitives";
 import { PermissionActionButtons } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
+import { jumpToSessionById } from "./primitives/useJumpToSession";
 
 type ApprovalRisk = "Low" | "Medium" | "High";
 
@@ -116,6 +117,132 @@ function buildApprovalSummaryRows(
   });
 
   return rows;
+}
+
+function requestBelongsToProject(req: UIPendingRequest, projectSessionIds: Set<string>): boolean {
+  return (
+    projectSessionIds.has(req.sessionId) ||
+    (!!req.parentSessionId && projectSessionIds.has(req.parentSessionId))
+  );
+}
+
+type SessionNameSource = {
+  sessionId: string;
+  name?: string;
+  firstMessage?: string;
+  sessionPath?: string;
+  parentSessionPath?: string | null;
+  delegateType?: string | null;
+};
+
+type SubsessionNameSource = {
+  sessionId: string;
+  sessionPath?: string;
+  description?: string;
+  instruction?: string;
+};
+
+function getSessionDisplayName(session: SessionNameSource): string {
+  const name = session.name?.trim();
+  if (name) return name;
+  const firstMessage = session.firstMessage?.trim();
+  if (firstMessage) return firstMessage.slice(0, 30);
+  return session.sessionId.slice(0, 8);
+}
+
+function getSubsessionDisplayName(sub: SubsessionNameSource): string {
+  const description = sub.description?.trim();
+  if (description) return description;
+  const instruction = sub.instruction?.trim();
+  if (instruction) return instruction.slice(0, 30);
+  return sub.sessionId.slice(0, 8);
+}
+
+function buildSessionNameMap(
+  sessionsByProject: Record<string, SessionNameSource[]>,
+  subsessionsByParent: Record<string, SubsessionNameSource[]>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const sessions of Object.values(sessionsByProject)) {
+    for (const session of sessions) {
+      map.set(session.sessionId, getSessionDisplayName(session));
+    }
+  }
+  for (const subsessions of Object.values(subsessionsByParent)) {
+    for (const sub of subsessions) {
+      map.set(sub.sessionId, getSubsessionDisplayName(sub));
+    }
+  }
+  return map;
+}
+
+function buildSubtaskSessionIds(
+  sessionsByProject: Record<string, SessionNameSource[]>,
+  subsessionsByParent: Record<string, SubsessionNameSource[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const sessions of Object.values(sessionsByProject)) {
+    for (const session of sessions) {
+      if (session.parentSessionPath || session.delegateType === "subagent") {
+        ids.add(session.sessionId);
+      }
+    }
+  }
+  for (const subsessions of Object.values(subsessionsByParent)) {
+    for (const sub of subsessions) {
+      ids.add(sub.sessionId);
+    }
+  }
+  return ids;
+}
+
+function collectDescendantSessionIds(
+  activeSessionId: string | null,
+  sessionsByProject: Record<string, SessionNameSource[]>,
+  subsessionsByParent: Record<string, SubsessionNameSource[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  if (!activeSessionId) return ids;
+
+  const pathBySessionId = new Map<string, string>();
+  for (const sessions of Object.values(sessionsByProject)) {
+    for (const session of sessions) {
+      if (session.sessionPath) pathBySessionId.set(session.sessionId, session.sessionPath);
+    }
+  }
+  for (const subsessions of Object.values(subsessionsByParent)) {
+    for (const sub of subsessions) {
+      if (sub.sessionPath) pathBySessionId.set(sub.sessionId, sub.sessionPath);
+    }
+  }
+
+  const queue = [activeSessionId];
+  while (queue.length > 0) {
+    const sessionId = queue.shift();
+    if (!sessionId || ids.has(sessionId)) continue;
+    ids.add(sessionId);
+
+    const sessionPath = pathBySessionId.get(sessionId);
+    if (!sessionPath) continue;
+    const children = subsessionsByParent[sessionPath] ?? [];
+    for (const child of children) {
+      if (!ids.has(child.sessionId)) queue.push(child.sessionId);
+    }
+  }
+
+  return ids;
+}
+
+function requestBelongsToActiveSessionTree(
+  req: UIPendingRequest,
+  activeSessionId: string | null,
+  activeTreeSessionIds: Set<string>,
+): boolean {
+  if (!activeSessionId) return false;
+  return (
+    activeTreeSessionIds.has(req.sessionId) ||
+    (!!req.parentSessionId && activeTreeSessionIds.has(req.parentSessionId))
+  );
 }
 
 function ApprovalContextSummary({
@@ -534,11 +661,18 @@ function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: 
 interface SessionGroupProps {
   sessionId: string;
   sessionName: string;
+  isSubtaskSource: boolean;
   requests: UIPendingRequest[];
   onGotoSession: (sessionId: string, requestId: string) => void;
 }
 
-function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: SessionGroupProps) {
+function SessionGroup({
+  sessionId,
+  sessionName,
+  isSubtaskSource,
+  requests,
+  onGotoSession,
+}: SessionGroupProps) {
   const { t } = useTranslation("chat");
   const [expanded, setExpanded] = useState(true);
 
@@ -564,6 +698,14 @@ function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: Sessi
         <span className="flex-1 truncate text-left text-xs font-semibold text-text-primary">
           {sessionName}
         </span>
+        {isSubtaskSource && (
+          <span
+            className="max-w-[6rem] shrink-0 truncate rounded bg-semantic-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-semantic-agent"
+            title={sessionName}
+          >
+            ↳ 子任务
+          </span>
+        )}
         <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-status-warning">
           {requests.length}
         </span>
@@ -631,7 +773,7 @@ export function UIPendingCenter() {
       }
     }
 
-    return allPending.filter((req) => projectSessionIds.has(req.sessionId));
+    return allPending.filter((req) => requestBelongsToProject(req, projectSessionIds));
   }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 
   const pendingCount = projectPending.length;
@@ -641,13 +783,21 @@ export function UIPendingCenter() {
     if (!activeProjectId) return new Map<string, string>();
     const tab = projectTabs.find((t) => t.id === activeProjectId);
     if (!tab) return new Map<string, string>();
-    const sessions = sessionsByProject[tab.path] ?? [];
-    const map = new Map<string, string>();
-    for (const s of sessions) {
-      map.set(s.sessionId, s.name || s.firstMessage?.slice(0, 30) || s.sessionId.slice(0, 8));
-    }
-    return map;
-  }, [activeProjectId, projectTabs, sessionsByProject]);
+    return buildSessionNameMap(
+      { [tab.path]: sessionsByProject[tab.path] ?? [] },
+      subsessionsByParent,
+    );
+  }, [activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
+
+  const subtaskSessionIds = useMemo(() => {
+    if (!activeProjectId) return new Set<string>();
+    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    if (!tab) return new Set<string>();
+    return buildSubtaskSessionIds(
+      { [tab.path]: sessionsByProject[tab.path] ?? [] },
+      subsessionsByParent,
+    );
+  }, [activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, UIPendingRequest[]>();
@@ -668,7 +818,7 @@ export function UIPendingCenter() {
 
   const handleGotoSession = (sessionId: string, requestId: string) => {
     setPanelOpen(false);
-    useSessionStore.getState().setActiveSession(sessionId);
+    void jumpToSessionById(sessionId);
     requestAnimationFrame(() => {
       const el = document.querySelector(`[data-ui-request-id="${requestId}"]`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -720,6 +870,10 @@ export function UIPendingCenter() {
                 key={sessionId}
                 sessionId={sessionId}
                 sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
+                isSubtaskSource={
+                  subtaskSessionIds.has(sessionId) ||
+                  requests.some((request) => Boolean(request.parentSessionId))
+                }
                 requests={requests}
                 onGotoSession={handleGotoSession}
               />
@@ -741,23 +895,26 @@ export function ProjectRuntimePendingRequests({
   const { t } = useTranslation("chat");
   const allPending = useUIDialogStore((s) => s.pending);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const statusWidth = useLayoutStore((s) => s.statusWidth);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
 
-  const sessionPending = useMemo(() => {
-    if (!activeSessionId) return [];
-    return allPending.filter((req) => req.sessionId === activeSessionId);
-  }, [allPending, activeSessionId]);
+  const activeTreeSessionIds = useMemo(
+    () => collectDescendantSessionIds(activeSessionId, sessionsByProject, subsessionsByParent),
+    [activeSessionId, sessionsByProject, subsessionsByParent],
+  );
 
-  const activeSessionName = useMemo(() => {
-    if (!activeSessionId) return undefined;
-    for (const sessions of Object.values(sessionsByProject)) {
-      const match = sessions.find((session) => session.sessionId === activeSessionId);
-      if (match) return match.name || match.firstMessage?.slice(0, 30) || match.sessionId;
-    }
-    return undefined;
-  }, [activeSessionId, sessionsByProject]);
+  const sessionPending = useMemo(() => {
+    return allPending.filter((req) =>
+      requestBelongsToActiveSessionTree(req, activeSessionId, activeTreeSessionIds),
+    );
+  }, [allPending, activeSessionId, activeTreeSessionIds]);
+
+  const sessionNameMap = useMemo(
+    () => buildSessionNameMap(sessionsByProject, subsessionsByParent),
+    [sessionsByProject, subsessionsByParent],
+  );
 
   if (sessionPending.length === 0) return null;
 
@@ -770,6 +927,8 @@ export function ProjectRuntimePendingRequests({
   };
 
   const [primary, ...secondary] = sessionPending;
+  const primarySessionName = sessionNameMap.get(primary.sessionId) ?? primary.sessionId;
+  const primaryFromChild = activeSessionId !== null && primary.sessionId !== activeSessionId;
   const shouldAvoidRightOverlay = statusPanel === "visible" && breakpoint !== "mobile";
   const isComposerOverlay = placement === "composerOverlay";
   const rootClassName = isComposerOverlay
@@ -801,12 +960,20 @@ export function ProjectRuntimePendingRequests({
             {methodLabel[primary.method] ?? primary.method}
             {primary.title ? ` · ${primary.title}` : ""}
           </span>
+          {primaryFromChild && (
+            <span
+              className="max-w-[9rem] shrink-0 truncate rounded bg-semantic-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-semantic-agent"
+              title={primarySessionName}
+            >
+              ↳ {primarySessionName}
+            </span>
+          )}
           <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-status-warning">
             {sessionPending.length}
           </span>
         </div>
         <div className={`${bodyMaxHeightClassName} overflow-y-auto px-2.5 py-2`}>
-          <PanelCard req={primary} sessionName={activeSessionName} />
+          <PanelCard req={primary} sessionName={primarySessionName} />
         </div>
         {secondary.length > 0 && (
           <div className="space-y-1 border-t border-border-secondary/50 px-2.5 py-2">
@@ -824,6 +991,14 @@ export function ProjectRuntimePendingRequests({
                   <span className="min-w-0 flex-1 truncate text-text-secondary">
                     {req.title ?? req.message ?? req.requestId}
                   </span>
+                  {activeSessionId !== null && req.sessionId !== activeSessionId && (
+                    <span
+                      className="max-w-[8rem] shrink-0 truncate text-[10px] text-semantic-agent"
+                      title={sessionNameMap.get(req.sessionId) ?? req.sessionId}
+                    >
+                      ↳ {sessionNameMap.get(req.sessionId) ?? req.sessionId}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -866,6 +1041,6 @@ export function useProjectPendingCount(): number {
       }
     }
 
-    return allPending.filter((req) => projectSessionIds.has(req.sessionId)).length;
+    return allPending.filter((req) => requestBelongsToProject(req, projectSessionIds)).length;
   }, [allPending, activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 }

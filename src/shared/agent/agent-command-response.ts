@@ -41,6 +41,14 @@ export function getResponseData<T>(response: unknown): T | undefined {
   return response.data as T | undefined;
 }
 
+export function getResponseError(response: unknown): string | undefined {
+  if (!isRecord(response) || !("error" in response)) return undefined;
+  const error = response.error;
+  if (typeof error === "string") return error;
+  if (isRecord(error) && typeof error.message === "string") return error.message;
+  return undefined;
+}
+
 export function normalizeAgentList(agents: AgentListItem[] | undefined): NormalizedAgentListItem[] {
   return (agents ?? []).map((agent) => ({
     ...agent,

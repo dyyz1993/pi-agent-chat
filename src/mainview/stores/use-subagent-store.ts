@@ -40,10 +40,12 @@ function isInteractiveUIRequest(
 function registerSubagentUIRequest(
   subId: string,
   request: ExtensionUIRequestEvent & { method: InteractiveSubagentMethod },
+  parentSessionId?: string,
 ): void {
   useUIDialogStore.getState().registerUIRequest({
     requestId: request.id,
     sessionId: subId,
+    parentSessionId,
     method: request.method,
     title: request.title,
     message: request.message,
@@ -62,7 +64,37 @@ function registerSubagentUIRequest(
   useSubagentStore.getState().updateSubagentStatus(subId, "permission");
 }
 
-async function restoreSubagentRuntimeState(sub: SubagentSessionInfo): Promise<void> {
+function findParentSessionIdByPath(parentSessionPath: string): string | undefined {
+  for (const sessions of Object.values(useSessionStore.getState().sessionsByProject ?? {})) {
+    const match = sessions.find((session) => session.sessionPath === parentSessionPath);
+    if (match) return match.sessionId;
+  }
+  return undefined;
+}
+
+function findSessionPathById(sessionId: string): string | undefined {
+  for (const sessions of Object.values(useSessionStore.getState().sessionsByProject ?? {})) {
+    const match = sessions.find((session) => session.sessionId === sessionId);
+    if (match) return match.sessionPath;
+  }
+  return undefined;
+}
+
+function findKnownSubsession(
+  subsessionsByParent: Record<string, SubagentSessionInfo[]>,
+  subId: string,
+): SubagentSessionInfo | undefined {
+  for (const subs of Object.values(subsessionsByParent)) {
+    const match = subs.find((sub) => sub.sessionId === subId);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+async function restoreSubagentRuntimeState(
+  sub: SubagentSessionInfo,
+  parentSessionId?: string,
+): Promise<void> {
   try {
     const result = (await apiClient.call("agent.getState", {
       sessionId: sub.sessionId,
@@ -82,7 +114,7 @@ async function restoreSubagentRuntimeState(sub: SubagentSessionInfo): Promise<vo
 
     if (pendingUIRequests.length > 0) {
       for (const request of pendingUIRequests) {
-        registerSubagentUIRequest(sub.sessionId, request);
+        registerSubagentUIRequest(sub.sessionId, request, parentSessionId);
       }
       return;
     }
@@ -171,7 +203,15 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: subs },
         loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
       }));
-      await Promise.all(subs.map((sub) => restoreSubagentRuntimeState(sub)));
+      const parentSessionId = findParentSessionIdByPath(parentSessionPath);
+      const activeSubId = get().activeSubsessionId;
+      const activeSub = activeSubId ? subs.find((sub) => sub.sessionId === activeSubId) : null;
+      await Promise.all([
+        ...subs.map((sub) => restoreSubagentRuntimeState(sub, parentSessionId)),
+        activeSub?.sessionPath
+          ? get().loadSubHistory(activeSub.sessionPath, activeSub.sessionId)
+          : Promise.resolve(),
+      ]);
       return subs;
     } catch (e) {
       log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
@@ -185,13 +225,15 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
     if (!subId) return;
 
-    const { subsessionsByParent } = get();
-    for (const subs of Object.values(subsessionsByParent)) {
-      const match = subs.find((s) => s.sessionId === subId);
-      if (match && match.sessionPath) {
-        get().loadSubHistory(match.sessionPath, subId);
-        break;
-      }
+    const match = findKnownSubsession(get().subsessionsByParent, subId);
+    if (match?.sessionPath) {
+      get().loadSubHistory(match.sessionPath, subId);
+      return;
+    }
+
+    const parentSessionPath = findSessionPathById(_parentSessionId);
+    if (parentSessionPath) {
+      void get().loadSubsessions(parentSessionPath, true);
     }
   },
 
@@ -362,7 +404,11 @@ export function handleSubagentEvent(
       store.updateSubagentStatus(subId, "permission");
       return;
     }
-    registerSubagentUIRequest(subId, event as ExtensionUIRequestEvent & { method: InteractiveSubagentMethod });
+    registerSubagentUIRequest(
+      subId,
+      event as ExtensionUIRequestEvent & { method: InteractiveSubagentMethod },
+      parentSessionId,
+    );
     return;
   }
 

@@ -150,4 +150,80 @@ describe("subagent handler", () => {
       }),
     ]);
   });
+
+  it("merges completed parent custom records even when older entries have an empty sessionPath", async () => {
+    const sessionDir = join(TMP, "sessions");
+    mkdirSync(sessionDir, { recursive: true });
+    const parentPath = join(sessionDir, "sess_parent.jsonl");
+    const childPath = join(sessionDir, "sess_sub_001.jsonl");
+
+    writeJsonl(parentPath, [
+      {
+        type: "session",
+        version: 3,
+        id: "sess_parent",
+        timestamp: "2026-06-29T10:00:00.000Z",
+        cwd: TMP,
+      },
+      {
+        type: "custom",
+        customType: "subagent",
+        data: {
+          sessionId: "sess_sub_001",
+          sessionPath: "",
+          description: "Completed child",
+          instruction: "Do the finished task",
+          startedAt: 1719655260000,
+          completedAt: 1719655360000,
+          exitCode: 0,
+          finalText: "Finished",
+        },
+      },
+    ]);
+
+    writeJsonl(childPath, [
+      {
+        type: "session",
+        version: 3,
+        id: "sess_sub_001",
+        timestamp: "2026-06-29T10:01:00.000Z",
+        cwd: TMP,
+        delegateParentSessionId: "sess_parent",
+      },
+      {
+        type: "delegate_info",
+        id: "delegate_info",
+        parentId: null,
+        timestamp: "2026-06-29T10:01:00.000Z",
+        delegateParentSessionId: "sess_parent",
+        parentSessionPath: parentPath,
+        delegateType: "subagent",
+        createdAt: 1719655260000,
+      },
+    ]);
+
+    const server = makeServer();
+    register(server as never, { platform: "web" });
+
+    const handler = server.handlers.get("subagent.listBySession");
+    const result = (await handler?.({ sessionPath: parentPath })) as {
+      subsessions: Array<{
+        sessionId: string;
+        sessionPath: string;
+        completedAt?: number;
+        exitCode?: number;
+        finalText?: string;
+      }>;
+    };
+
+    expect(result.subsessions).toEqual([
+      expect.objectContaining({
+        sessionId: "sess_sub_001",
+        sessionPath: childPath,
+        completedAt: 1719655360000,
+        exitCode: 0,
+        finalText: "Finished",
+      }),
+    ]);
+  });
 });

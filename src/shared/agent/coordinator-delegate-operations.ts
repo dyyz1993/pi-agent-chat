@@ -85,6 +85,44 @@ function parseCoordinatorModel(
   return { provider, modelId };
 }
 
+async function cleanupFailedDelegateBootstrap(options: {
+  sessionId: string;
+  parentSessionId: string;
+  parentChildMap: DelegateChildMap;
+  delegateCreatedAt?: Map<string, number>;
+  delegateReplyCount?: Map<string, number>;
+  delegateReplyMode?: Map<string, DelegateReplyMode>;
+  delegateReplyMetadata?: Map<string, DelegateReplyMetadata>;
+  stop?: (sessionId: string) => Promise<unknown>;
+}): Promise<void> {
+  removeDelegateChild(options.parentChildMap, options.parentSessionId, options.sessionId);
+  options.delegateCreatedAt?.delete(options.sessionId);
+  options.delegateReplyCount?.delete(options.sessionId);
+  options.delegateReplyMode?.delete(options.sessionId);
+  options.delegateReplyMetadata?.delete(options.sessionId);
+
+  if (!options.stop) return;
+  try {
+    await options.stop(options.sessionId);
+  } catch (stopErr: unknown) {
+    log.warn("[createDelegateSession] failed to stop delegate after setup failure", {
+      sessionId: options.sessionId,
+      err: stopErr instanceof Error ? stopErr.message : String(stopErr),
+    });
+  }
+}
+
+function buildRequiredAgentSwitchError(options: {
+  sessionId: string;
+  agent: string;
+  err: unknown;
+}): Error {
+  const reason = options.err instanceof Error ? options.err.message : String(options.err);
+  return new Error(
+    `Failed to switch delegated session ${options.sessionId} to agent "${options.agent}": ${reason}`,
+  );
+}
+
 export interface DelegateSyncResult {
   sessionId: string;
   status: string;
@@ -244,6 +282,7 @@ export async function handleCoordinatorDelegateOperation<
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  stop?: (sessionId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
@@ -260,7 +299,7 @@ export async function handleCoordinatorDelegateOperation<
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task } = options.msg;
-  const agent = options.msg.agent;
+  const agent = options.msg.agent ?? options.msg.agentName;
   const model = parseCoordinatorModel(options.msg.model);
   const replyMode = options.msg.replyMode ?? "interrupt";
 
@@ -288,10 +327,25 @@ export async function handleCoordinatorDelegateOperation<
         agent,
       });
     } catch (switchErr: unknown) {
-      log.warn("[handleCoordinatorDelegate] switchAgent failed, using default agent", {
+      log.warn("[handleCoordinatorDelegate] switchAgent failed, aborting delegate", {
         newSessionId: session.sessionId,
         agent,
         err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+      });
+      await cleanupFailedDelegateBootstrap({
+        sessionId: session.sessionId,
+        parentSessionId: options.parentSessionId,
+        parentChildMap: options.parentChildMap,
+        delegateCreatedAt: options.delegateCreatedAt,
+        delegateReplyCount: options.delegateReplyCount,
+        delegateReplyMode: options.delegateReplyMode,
+        delegateReplyMetadata: options.delegateReplyMetadata,
+        stop: options.stop,
+      });
+      throw buildRequiredAgentSwitchError({
+        sessionId: session.sessionId,
+        agent,
+        err: switchErr,
       });
     }
   }
@@ -545,7 +599,8 @@ export async function handleCoordinatorDelegateSyncOperation<
   now?: () => number;
   sessionIdFactory?: () => string;
 }): Promise<DelegateSyncResult> {
-  const { task, title, agent, timeoutMs = 1800000 } = options.msg;
+  const { task, title, timeoutMs = 1800000 } = options.msg;
+  const agent = options.msg.agent ?? options.msg.agentName;
   const model = parseCoordinatorModel(options.msg.model);
 
   const session = await createAndStartDelegateSession({
@@ -571,10 +626,24 @@ export async function handleCoordinatorDelegateSyncOperation<
         agent,
       });
     } catch (switchErr: unknown) {
-      log.warn("[handleCoordinatorDelegateSync] switchAgent failed, using default agent", {
+      log.warn("[handleCoordinatorDelegateSync] switchAgent failed, aborting delegate", {
         newSessionId: session.sessionId,
         agent,
         err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+      });
+      await cleanupFailedDelegateBootstrap({
+        sessionId: session.sessionId,
+        parentSessionId: options.parentSessionId,
+        parentChildMap: options.parentChildMap,
+        delegateCreatedAt: options.delegateCreatedAt,
+        delegateReplyCount: options.delegateReplyCount,
+        delegateReplyMetadata: options.delegateReplyMetadata,
+        stop: options.stop,
+      });
+      throw buildRequiredAgentSwitchError({
+        sessionId: session.sessionId,
+        agent,
+        err: switchErr,
       });
     }
   }
@@ -731,6 +800,7 @@ export async function handleCoordinatorDelegateForkOperation<
   ) => Promise<{ status: "started" | "already_running" }>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  stop?: (sessionId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
@@ -741,7 +811,8 @@ export async function handleCoordinatorDelegateForkOperation<
   parentChildMap: DelegateChildMap;
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
-  const { task, sessionId: targetSessionId, agent } = options.msg;
+  const { task, sessionId: targetSessionId } = options.msg;
+  const agent = options.msg.agent ?? options.msg.agentName;
   const model = parseCoordinatorModel(options.msg.model);
   if (!canManageDelegateChild(options.parentChildMap, options.parentSessionId, targetSessionId)) {
     throw new Error(`Session not found: ${targetSessionId}`);
@@ -777,10 +848,21 @@ export async function handleCoordinatorDelegateForkOperation<
         agent,
       });
     } catch (switchErr: unknown) {
-      log.warn("[handleCoordinatorDelegateFork] switchAgent failed, using default agent", {
+      log.warn("[handleCoordinatorDelegateFork] switchAgent failed, aborting delegate", {
         forkedSessionId,
         agent,
         err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+      });
+      await cleanupFailedDelegateBootstrap({
+        sessionId: forkedSessionId,
+        parentSessionId: options.parentSessionId,
+        parentChildMap: options.parentChildMap,
+        stop: options.stop,
+      });
+      throw buildRequiredAgentSwitchError({
+        sessionId: forkedSessionId,
+        agent,
+        err: switchErr,
       });
     }
   }

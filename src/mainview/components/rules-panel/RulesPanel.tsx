@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRulesStore } from "../../stores/use-rules-store";
-import { useSessionStore } from "../../stores/use-session-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import { useShallow } from "zustand/react/shallow";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
@@ -247,7 +247,7 @@ function LifecycleEntryCard({ entry }: { entry: LifecycleEntry }) {
 
 export function RulesPanel() {
   const { t } = useTranslation("rules");
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const collapsedSections = useRulesStore((s) => s.collapsedSections);
   const toggleSection = useRulesStore((s) => s.toggleSection);
   const expandedRule = useRulesStore(

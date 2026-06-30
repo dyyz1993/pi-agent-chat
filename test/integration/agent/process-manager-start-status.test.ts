@@ -24,6 +24,11 @@ vi.mock("../../../src/shared/lib/logger", () => ({
   }),
 }));
 
+vi.mock("@dyyz1993/pi-coding-agent", () => ({
+  AuthStorage: vi.fn(),
+  ModelRegistry: vi.fn(),
+}));
+
 import { AgentProcessManager as BaseAgentProcessManager } from "../../../src/shared/agent/process-manager";
 
 class TestAgentProcessManager extends BaseAgentProcessManager {
@@ -214,5 +219,21 @@ describe("AgentProcessManager — start() with multi-process support", () => {
 
     expect(setA?.size).toBe(2);
     expect(setB?.size).toBe(1);
+  });
+
+  it("updates cached permission mode after changing a live parent session", async () => {
+    const sessionId = "parent-session";
+    await manager.start(sessionId, "/fake/project", "/fake/sessions/parent-session.jsonl");
+
+    const m = internals(manager);
+    const managed = m.clients.get(sessionId)!;
+    managed.info.permissionMode = "normal";
+    managed.client.setPermissionMode = vi.fn().mockResolvedValue({ mode: "yolo" });
+
+    const result = await manager.setPermissionMode(sessionId, "yolo");
+
+    expect(result).toEqual({ mode: "yolo" });
+    expect(managed.client.setPermissionMode).toHaveBeenCalledWith("yolo");
+    expect(managed.info.permissionMode).toBe("yolo");
   });
 });

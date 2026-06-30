@@ -8,6 +8,7 @@ let mockProcesses: BashProcess[] = [];
 let mockBackgroundedIds: Set<string> = new Set();
 let mockPermissionProfile = "normal";
 const mockSetPermissionProfile = vi.fn();
+let mockActiveSubsessionId: string | null = null;
 let mockProjectTabs: ProjectTab[] = [];
 let mockActiveProjectId: string | null = null;
 let mockSessionsByProject: Record<string, unknown[]> = {};
@@ -110,7 +111,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
 
 vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
   useSubagentStore: (selector?: (s: Record<string, unknown>) => unknown) => {
-    const state = { activeSubsessionId: undefined };
+    const state = { activeSubsessionId: mockActiveSubsessionId };
     return selector ? selector(state) : state;
   },
 }));
@@ -152,6 +153,7 @@ describe("StatusPanel shell section", () => {
     mockProcesses = [];
     mockBackgroundedIds = new Set();
     mockPermissionProfile = "normal";
+    mockActiveSubsessionId = null;
     mockCollapsedSections = new Set();
     mockProjectTabs = [];
     mockActiveProjectId = null;
@@ -237,6 +239,20 @@ describe("StatusPanel shell section", () => {
     fireEvent.click(shellBtn!);
     expect(mockToggleSection).toHaveBeenCalledWith("shell");
   });
+
+  it("applies permission changes to the visible subagent session", () => {
+    mockActiveSubsessionId = "child-session";
+
+    const { container } = render(<StatusPanel />);
+    const fullAccessButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("permissionPresetFull"),
+    );
+
+    expect(fullAccessButton).toBeTruthy();
+    fireEvent.click(fullAccessButton!);
+
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("yolo", "child-session");
+  });
 });
 
 describe("StatusPanel remote section", () => {
@@ -244,6 +260,7 @@ describe("StatusPanel remote section", () => {
     mockProcesses = [];
     mockBackgroundedIds = new Set();
     mockPermissionProfile = "normal";
+    mockActiveSubsessionId = null;
     mockCollapsedSections = new Set();
     mockProjectTabs = [];
     mockActiveProjectId = null;
@@ -358,6 +375,7 @@ describe("StatusPanel permission section", () => {
     mockProcesses = [];
     mockBackgroundedIds = new Set();
     mockPermissionProfile = "normal";
+    mockActiveSubsessionId = null;
     mockCollapsedSections = new Set();
     mockProjectTabs = [];
     mockActiveProjectId = null;
@@ -392,10 +410,10 @@ describe("StatusPanel permission section", () => {
     const buttons = Array.from(container.querySelectorAll("button"));
 
     fireEvent.click(buttons.find((button) => button.textContent?.includes("permissionPresetFull"))!);
-    expect(mockSetPermissionProfile).toHaveBeenCalledWith("yolo");
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("yolo", "test-session");
 
     fireEvent.click(buttons.find((button) => button.textContent?.includes("permissionPresetReadonly"))!);
-    expect(mockSetPermissionProfile).toHaveBeenCalledWith("readonly");
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("readonly", "test-session");
   });
 
   it("clicks autopilot permission preset", () => {
@@ -407,7 +425,7 @@ describe("StatusPanel permission section", () => {
     expect(autopilotButton).toBeDefined();
     expect(autopilotButton).not.toBeDisabled();
     fireEvent.click(autopilotButton!);
-    expect(mockSetPermissionProfile).toHaveBeenCalledWith("autopilot");
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("autopilot", "test-session");
   });
 
   it("expands advanced permission details", () => {

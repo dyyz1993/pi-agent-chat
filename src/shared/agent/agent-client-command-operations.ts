@@ -2,6 +2,7 @@ import { createLogger } from "../lib/logger";
 import {
   asAgentCommandClient,
   getResponseData,
+  getResponseError,
   normalizeAgentList,
   type AgentListItem,
   type NormalizedAgentListItem,
@@ -115,7 +116,10 @@ export async function switchAgentOperation<TManaged extends ManagedClientLike>(o
     tier?: string;
     thinkingLevel?: string;
   }>(response);
-  if (!data) throw new Error("switch_agent returned no data");
+  if (!data) {
+    const error = getResponseError(response);
+    throw new Error(error ? `switch_agent failed: ${error}` : "switch_agent returned no data");
+  }
   return data;
 }
 

@@ -3,6 +3,7 @@ import { Brain, Search, FileText, History, Shield, X, Maximize2 } from "lucide-r
 import { useTranslation } from "react-i18next";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { useShallow } from "zustand/react/shallow";
 import { apiClient } from "../../lib/api-client";
@@ -92,7 +93,7 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 
 export function MemoryPanel() {
   const { t } = useTranslation("memory");
-  const sessionId = useSessionStore((s) => s.activeSessionId);
+  const sessionId = useEffectiveSessionId();
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
 

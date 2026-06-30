@@ -91,7 +91,7 @@ describe("setPermissionProfile", () => {
     });
   });
 
-  it("remembers the selected permission profile per session", async () => {
+  it("remembers permission profile snapshots without overwriting the active session", async () => {
     useStatusStore.getState().setPermissionProfile("autopilot");
     await vi.waitFor(() => {
       expect(useStatusStore.getState().permissionProfile).toBe("autopilot");
@@ -103,7 +103,7 @@ describe("setPermissionProfile", () => {
 
     useStatusStore.getState().applyPermissionProfileSnapshot("readonly", "other-session");
 
-    expect(useStatusStore.getState().permissionProfile).toBe("readonly");
+    expect(useStatusStore.getState().permissionProfile).toBe("autopilot");
     expect(useStatusStore.getState().getRememberedPermissionProfile("test-session")).toBe(
       "autopilot",
     );

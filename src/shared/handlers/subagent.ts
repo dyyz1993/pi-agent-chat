@@ -38,6 +38,44 @@ function normalizeSubagentDescription(name: string, sessionId: string): string {
   return trimmed;
 }
 
+function normalizePersistedSubagent(data: Partial<SubagentSessionInfo>): SubagentSessionInfo | null {
+  if (typeof data.sessionId !== "string" || !data.sessionId.trim()) return null;
+  const sessionId = data.sessionId;
+  return {
+    ...data,
+    sessionId,
+    sessionPath: typeof data.sessionPath === "string" ? data.sessionPath : "",
+    description:
+      typeof data.description === "string" && data.description.trim()
+        ? data.description
+        : sessionId,
+    instruction: typeof data.instruction === "string" ? data.instruction : "",
+    startedAt: typeof data.startedAt === "number" ? data.startedAt : 0,
+  };
+}
+
+function preferNonEmpty(primary: string | undefined, fallback: string | undefined): string {
+  const trimmed = primary?.trim();
+  if (trimmed) return primary ?? "";
+  return fallback ?? "";
+}
+
+function mergeSubagentInfo(
+  fallback: SubagentSessionInfo | undefined,
+  persisted: SubagentSessionInfo,
+): SubagentSessionInfo {
+  return {
+    ...fallback,
+    ...persisted,
+    sessionPath: preferNonEmpty(persisted.sessionPath, fallback?.sessionPath),
+    description:
+      preferNonEmpty(persisted.description, fallback?.description) || persisted.sessionId,
+    instruction:
+      preferNonEmpty(persisted.instruction, fallback?.instruction) || persisted.description,
+    startedAt: persisted.startedAt > 0 ? persisted.startedAt : (fallback?.startedAt ?? Date.now()),
+  };
+}
+
 async function loadFallbackSubagentSessions(parentSessionPath: string): Promise<SubagentSessionInfo[]> {
   const parentSessionId = await readSessionHeaderId(parentSessionPath);
   if (!parentSessionId) return [];
@@ -79,10 +117,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         const entry = JSON.parse(line) as Record<string, unknown>;
 
         if (entry.type === "custom" && entry.customType === "subagent") {
-          const data = entry.data as SubagentSessionInfo | undefined;
-          if (data?.sessionId && data?.sessionPath) {
-            subsessions.push(data);
-          }
+          const data = normalizePersistedSubagent(
+            (entry.data as Partial<SubagentSessionInfo> | undefined) ?? {},
+          );
+          if (data) subsessions.push(data);
         }
       } catch (e) {
         log.debug("subagent.listBySession: skipping malformed entry", { error: String(e) });
@@ -97,10 +135,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       merged.set(sub.sessionId, sub);
     }
     for (const sub of subsessions) {
-      merged.set(sub.sessionId, {
-        ...merged.get(sub.sessionId),
-        ...sub,
-      });
+      merged.set(sub.sessionId, mergeSubagentInfo(merged.get(sub.sessionId), sub));
     }
 
     return { subsessions: [...merged.values()] };

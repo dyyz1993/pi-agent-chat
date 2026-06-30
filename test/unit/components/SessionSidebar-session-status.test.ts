@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getSessionSidebarStatus } from "../../../src/mainview/components/session-sidebar/SessionSidebar";
-import type { SessionMeta } from "../../../src/mainview/types";
+import {
+  getSessionSidebarStatus,
+  getVisibleDelegateChildren,
+} from "../../../src/mainview/components/session-sidebar/SessionSidebar";
+import type { SessionMeta, SubagentSessionInfo } from "../../../src/mainview/types";
 
 function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   return {
@@ -20,6 +23,17 @@ function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   };
 }
 
+function makeSubagent(overrides: Partial<SubagentSessionInfo> = {}): SubagentSessionInfo {
+  return {
+    sessionId: "sess_sub_1",
+    sessionPath: "/tmp/sess-sub-1.jsonl",
+    description: "Subtask",
+    instruction: "Do the subtask",
+    startedAt: 1,
+    ...overrides,
+  };
+}
+
 describe("getSessionSidebarStatus", () => {
   it("prefers runtime state for permission and retrying", () => {
     expect(getSessionSidebarStatus(makeSession(), "permission")).toBe("permission");
@@ -35,5 +49,43 @@ describe("getSessionSidebarStatus", () => {
   it("keeps idle only when neither runtime nor persisted state is live", () => {
     expect(getSessionSidebarStatus(makeSession(), "idle")).toBe("idle");
     expect(getSessionSidebarStatus(makeSession())).toBe("idle");
+  });
+
+  it("bubbles child permission and retrying states to the parent sidebar badge", () => {
+    expect(getSessionSidebarStatus(makeSession(), "idle", ["permission"])).toBe("permission");
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["retrying"])).toBe("retrying");
+  });
+
+  it("bubbles child live work to the parent sidebar badge without changing idle children", () => {
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["streaming"])).toBe("working");
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["compacting"])).toBe("working");
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["idle"])).toBe("idle");
+  });
+});
+
+describe("getVisibleDelegateChildren", () => {
+  it("hides subagent child rows that are already represented by subagent index cards", () => {
+    const subagentChild = makeSession({
+      sessionId: "sess_sub_1",
+      delegateType: "subagent",
+    });
+    const delegateChild = makeSession({
+      sessionId: "sess_coord_1",
+      delegateType: "coordinator",
+    });
+
+    expect(getVisibleDelegateChildren([subagentChild, delegateChild], [makeSubagent()])).toEqual([
+      delegateChild,
+    ]);
+  });
+
+  it("keeps the raw subagent child visible when the subagent index is unavailable", () => {
+    const subagentChild = makeSession({
+      sessionId: "sess_sub_1",
+      delegateType: "subagent",
+    });
+
+    expect(getVisibleDelegateChildren([subagentChild], [])).toEqual([subagentChild]);
+    expect(getVisibleDelegateChildren([subagentChild], undefined)).toEqual([subagentChild]);
   });
 });

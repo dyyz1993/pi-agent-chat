@@ -74,6 +74,10 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
+function agentValue(args: Record<string, unknown>): string | undefined {
+  return stringValue(args.agent) ?? stringValue(args.agentName);
+}
+
 function extractDetails(detailData: unknown): CoordinatorDetails {
   if (!detailData || typeof detailData !== "object") return {};
   return detailData as CoordinatorDetails;
@@ -297,7 +301,7 @@ export const DelegateCard = memo(function DelegateCard({
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
-  const agentText = stringValue(args.agent) ?? "build";
+  const agentText = agentValue(args) ?? "build";
   const details = extractDetails(block.details);
   const rawModelInfo: SessionTaskModelInfo = {
     tier: stringValue(args.tier) ?? details.tier,
@@ -406,7 +410,7 @@ export const ForkCard = memo(function ForkCard({
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
   const titleText = (args.title as string) ?? taskText.slice(0, 60);
-  const agentText = stringValue(args.agent) ?? "build";
+  const agentText = agentValue(args) ?? "build";
   const details = extractDetails(block.details);
   const modelFallback = useSessionTaskModelFallback();
   const modelInfo = mergeSessionTaskModelInfo(
@@ -573,7 +577,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
 
   const taskText = stringValue(args.task) ?? details.task ?? "";
   const titleText = stringValue(args.title) ?? details.title ?? taskText.slice(0, 60);
-  const agentText = stringValue(args.agent);
+  const agentText = agentValue(args);
   const displayTitle = titleText || t("coordinator.syncTask");
   const modelFallback = useSessionTaskModelFallback();
 

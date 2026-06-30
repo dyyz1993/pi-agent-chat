@@ -18,6 +18,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useHooksStore } from "../../stores/use-hooks-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useShallow } from "zustand/react/shallow";
@@ -451,7 +452,7 @@ function ConfigEvents({
 }
 
 export function HooksPanel() {
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const activeProjectPath = useSessionStore(
     useShallow((s) => s.projectTabs.find((tab) => tab.id === s.activeProjectId)?.path ?? null),
   );

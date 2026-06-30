@@ -816,6 +816,7 @@ export interface AgentProcessInfo {
   projectPath: string;
   sessionPath: string;
   status: "idle" | "streaming";
+  permissionMode?: string;
   activeToolExecutions?: Array<{
     toolCallId: string;
     toolName: string;

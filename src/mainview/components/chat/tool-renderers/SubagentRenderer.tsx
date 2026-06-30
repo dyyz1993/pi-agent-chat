@@ -48,6 +48,10 @@ function firstNonEmptyString(...values: Array<string | undefined>): string | und
   return values.find((value) => value !== undefined && value.trim().length > 0)?.trim();
 }
 
+function getAgentArg(record: Record<string, unknown>): string {
+  return getStringArg(record, "agent") || getStringArg(record, "agentName");
+}
+
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
   blockId,
@@ -66,7 +70,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   let requestedThinkingLevel = "";
   try {
     const parsed = JSON.parse(block.args ?? "{}") as Record<string, unknown>;
-    requestedAgent = getStringArg(parsed, "agent");
+    requestedAgent = getAgentArg(parsed);
     requestedTier = getStringArg(parsed, "tier");
     requestedModel = getStringArg(parsed, "model");
     requestedProvider = getStringArg(parsed, "provider");

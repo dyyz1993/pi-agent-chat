@@ -33,7 +33,8 @@ import { PanelPinButton } from "../primitives/PanelPinButton";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useGitStore } from "../../stores/use-git-store";
-import { useSessionStore } from "../../stores/use-session-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
+import { useEffectiveSessionResourceSync } from "../../hooks/use-effective-session-resource-sync";
 import { useEffect, useRef } from "react";
 
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
@@ -58,6 +59,7 @@ interface RightSidebarProps {
 
 export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const { t } = useTranslation("sidebar");
+  useEffectiveSessionResourceSync();
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const toggleStatus = useLayoutStore((s) => s.toggleStatus);
   const activePanelTab = useLayoutStore((s) => s.activePanelTab);
@@ -85,12 +87,12 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const hideStatus = useLayoutStore((s) => s.hideStatus);
   const refreshAll = useGitStore((s) => s.refreshAll);
   const prevPanelVisible = useRef(statusPanel !== "hidden");
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const fetchPending = useChangeReviewStore((s) => s.fetchPending);
 
   useEffect(() => {
     if (activeSessionId && activePanelTab === "changeReview") {
-      fetchPending();
+      fetchPending(activeSessionId);
     }
   }, [activeSessionId, activePanelTab, fetchPending]);
 

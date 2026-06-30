@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { mockCall } = vi.hoisted(() => ({
+const { mockCall, mockSessionState } = vi.hoisted(() => ({
   mockCall: vi.fn(),
+  mockSessionState: {
+    activeSessionId: "sess-1",
+    sessionsByProject: {} as Record<string, unknown[]>,
+  },
 }));
 
 vi.mock("../../../src/mainview/lib/api-client", () => ({
@@ -11,7 +15,7 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   clearAgentStarted: () => {},
   useSessionStore: {
-    getState: vi.fn(() => ({ activeSessionId: "sess-1" })),
+    getState: vi.fn(() => mockSessionState),
   },
 }));
 
@@ -23,6 +27,7 @@ vi.mock("../../../src/mainview/stores/use-notification-store", () => ({
 
 import { useChangeReviewStore } from "../../../src/mainview/stores/use-change-review-store";
 import type { PendingChange } from "../../../src/mainview/stores/use-change-review-store";
+import { useSubagentStore } from "../../../src/mainview/stores/use-subagent-store";
 
 function makeChange(overrides: Partial<PendingChange> = {}): PendingChange {
   return {
@@ -45,7 +50,19 @@ function resetStore() {
     loading: false,
     selectedPath: null,
     processingPaths: new Set(),
+    childReviewSummaries: [],
+    childReviewLoading: false,
   });
+  useSubagentStore.setState({
+    subsessionsByParent: {},
+    activeSubsessionId: null,
+    messagesBySubsession: {},
+    loadingByParent: {},
+    subagentStatusMap: {},
+    subagentContextMap: {},
+  });
+  mockSessionState.activeSessionId = "sess-1";
+  mockSessionState.sessionsByProject = {};
 }
 
 describe("useChangeReviewStore", () => {
@@ -221,6 +238,133 @@ describe("useChangeReviewStore", () => {
 
       expect(useChangeReviewStore.getState().changes).toEqual([]);
       expect(useChangeReviewStore.getState().loading).toBe(false);
+    });
+  });
+
+  describe("fetchChildReviewSummaries", () => {
+    it("stores child review summaries without merging child files into parent changes", async () => {
+      const parentSessionPath = "/sessions/parent.jsonl";
+      mockSessionState.sessionsByProject = {
+        "/repo": [
+          {
+            sessionId: "sess-1",
+            sessionPath: parentSessionPath,
+            name: "Parent",
+          },
+        ],
+      };
+      useSubagentStore.setState({
+        subsessionsByParent: {
+          [parentSessionPath]: [
+            {
+              sessionId: "sub-1",
+              sessionPath: "/sessions/sub-1.jsonl",
+              description: "子任务 Review",
+              instruction: "create file",
+              startedAt: 1,
+            },
+          ],
+        },
+      });
+      useChangeReviewStore.setState({
+        changes: [makeChange({ path: "src/parent.ts" })],
+      });
+
+      mockCall.mockResolvedValueOnce([makeChange({ path: "src/child.ts" })]);
+
+      await useChangeReviewStore.getState().fetchChildReviewSummaries("sess-1");
+
+      expect(mockCall).toHaveBeenCalledWith("change-review.pending", {
+        sessionId: "sub-1",
+        sessionPath: "/sessions/sub-1.jsonl",
+      });
+      expect(useChangeReviewStore.getState().childReviewSummaries).toEqual([
+        {
+          parentSessionId: "sess-1",
+          subSessionId: "sub-1",
+          subSessionPath: "/sessions/sub-1.jsonl",
+          title: "子任务 Review",
+          pendingCount: 1,
+        },
+      ]);
+      expect(useChangeReviewStore.getState().changes.map((change) => change.path)).toEqual([
+        "src/parent.ts",
+      ]);
+    });
+
+    it("omits child sessions that have no pending review", async () => {
+      const parentSessionPath = "/sessions/parent.jsonl";
+      mockSessionState.sessionsByProject = {
+        "/repo": [{ sessionId: "sess-1", sessionPath: parentSessionPath }],
+      };
+      useSubagentStore.setState({
+        subsessionsByParent: {
+          [parentSessionPath]: [
+            {
+              sessionId: "sub-empty",
+              sessionPath: "/sessions/sub-empty.jsonl",
+              description: "empty",
+              instruction: "noop",
+              startedAt: 1,
+            },
+          ],
+        },
+      });
+
+      mockCall.mockResolvedValueOnce([]);
+
+      await useChangeReviewStore.getState().fetchChildReviewSummaries("sess-1");
+
+      expect(useChangeReviewStore.getState().childReviewSummaries).toEqual([]);
+      expect(useChangeReviewStore.getState().childReviewLoading).toBe(false);
+    });
+
+    it("loads child sessions before summarizing review after a refresh", async () => {
+      const parentSessionPath = "/sessions/parent.jsonl";
+      mockSessionState.sessionsByProject = {
+        "/repo": [{ sessionId: "sess-1", sessionPath: parentSessionPath }],
+      };
+
+      mockCall.mockImplementation(async (method, params) => {
+        if (method === "subagent.listBySession") {
+          expect(params).toEqual({ sessionPath: parentSessionPath });
+          return {
+            subsessions: [
+              {
+                sessionId: "sub-restored",
+                sessionPath: "/sessions/sub-restored.jsonl",
+                description: "刷新恢复 Review",
+                instruction: "edit file",
+                startedAt: 1,
+              },
+            ],
+          };
+        }
+        if (method === "agent.getState") return null;
+        if (method === "change-review.pending") {
+          expect(params).toEqual({
+            sessionId: "sub-restored",
+            sessionPath: "/sessions/sub-restored.jsonl",
+          });
+          return [makeChange({ path: "src/restored-child.ts" })];
+        }
+        throw new Error(`Unexpected method: ${method}`);
+      });
+
+      await useChangeReviewStore.getState().fetchChildReviewSummaries("sess-1");
+
+      expect(mockCall).toHaveBeenCalledWith("subagent.listBySession", {
+        sessionPath: parentSessionPath,
+      });
+      expect(useChangeReviewStore.getState().childReviewSummaries).toEqual([
+        {
+          parentSessionId: "sess-1",
+          subSessionId: "sub-restored",
+          subSessionPath: "/sessions/sub-restored.jsonl",
+          title: "刷新恢复 Review",
+          pendingCount: 1,
+        },
+      ]);
     });
   });
 

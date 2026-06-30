@@ -198,6 +198,37 @@ describe("useSubagentStore", () => {
     expect(useChatStore.getState().messagesBySession["sub-1"] ?? []).toEqual([]);
   });
 
+  it("loads active subagent history after refreshed subsession list restores its sessionPath", async () => {
+    const sub = makeSub({ sessionId: "sub-1", sessionPath: "/sessions/sub-1.jsonl" });
+    useSubagentStore.getState().setActiveSubsession("parent-1", "sub-1");
+
+    expect(mockCall).not.toHaveBeenCalledWith(
+      "agent.getFullMessages",
+      expect.objectContaining({ sessionId: "sub-1" }),
+    );
+
+    mockCall.mockImplementation(async (method: string) => {
+      if (method === "subagent.listBySession") return { subsessions: [sub] };
+      if (method === "agent.getState") return null;
+      if (method === "agent.getFullMessages") {
+        return { messages: [], customEntries: [], hasMore: false, totalCount: 0 };
+      }
+      return {};
+    });
+
+    await useSubagentStore.getState().loadSubsessions(PARENT_PATH);
+
+    await vi.waitFor(() => {
+      expect(mockCall).toHaveBeenCalledWith(
+        "agent.getFullMessages",
+        expect.objectContaining({
+          sessionId: "sub-1",
+          sessionPath: "/sessions/sub-1.jsonl",
+        }),
+      );
+    });
+  });
+
   it("setSubMessages", () => {
     const msgs: ChatMessage[] = [{ id: "m1", role: "user", content: [], timestamp: 0 }];
     useSubagentStore.getState().setSubMessages("sub-1", msgs);
