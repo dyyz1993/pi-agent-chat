@@ -97,6 +97,11 @@ export interface AgentMethods {
         total: number;
       };
       cost: number;
+      toolCalls: number;
+      totalMessages: number;
+      userMessages?: number;
+      assistantMessages?: number;
+      toolResults?: number;
       contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
     } | null;
   };

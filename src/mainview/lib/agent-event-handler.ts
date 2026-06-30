@@ -100,6 +100,18 @@ function refreshAuthoritativeContextUsage(sessionId: string): void {
     });
 }
 
+function refreshAuthoritativeSessionStats(sessionId: string): void {
+  useSessionStore
+    .getState()
+    .refreshSessionStats(sessionId)
+    .catch((err) => {
+      log.warn("refreshAuthoritativeSessionStats failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
+
 function setToolActive(sessionId: string, toolCallId: string, active: boolean): void {
   const chat = useChatStore.getState();
   if (typeof chat.setActiveToolCallIds !== "function") return;
@@ -556,6 +568,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     useUIDialogStore.getState().clearPendingBySession(sessionId);
     useChangeReviewStore.getState().fetchPending();
     useSessionQueueStore.getState().clearSessionQueue(sessionId);
+    refreshAuthoritativeSessionStats(sessionId);
     const allSessions = storeGet().sessionsByProject;
     for (const sessList of Object.values(allSessions)) {
       const session = sessList.find((s) => s.sessionId === sessionId);
@@ -651,6 +664,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "compaction_end") {
     log.info("compaction_end → force reload", { sessionId });
     refreshAuthoritativeContextUsage(sessionId);
+    refreshAuthoritativeSessionStats(sessionId);
 
     finishCompactionAfterMinimumVisibility(sessionId, () => {
       if (event.aborted || (event.reason && event.reason !== "success")) {
@@ -1090,6 +1104,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const assistantMsg = message as AssistantMessage;
 
     refreshAuthoritativeContextUsage(sessionId);
+    refreshAuthoritativeSessionStats(sessionId);
 
     const hasContent = hasRenderableContent(lastMsg);
 
