@@ -41,6 +41,22 @@ const log = createLogger("event-handler");
 export const toolCallNameMap: Record<string, string> = {};
 export const toolCallArgsMap: Record<string, string> = {};
 
+const INACTIVE_SESSION_RENDER_EVENT_TYPES = new Set<string>([
+  "message_start",
+  "message_update",
+  "message_end",
+  "tool_execution_start",
+  "tool_execution_update",
+  "tool_execution_end",
+  "custom_entry",
+]);
+
+function shouldDropInactiveSessionRenderEvent(sessionId: string, event: AgentEvent): boolean {
+  const activeSessionId = useSessionStore.getState().activeSessionId;
+  if (!activeSessionId || activeSessionId === sessionId) return false;
+  return INACTIVE_SESSION_RENDER_EVENT_TYPES.has(event.type);
+}
+
 // Track sessions where compaction_end was deferred due to active streaming.
 // When agent_end fires for these sessions, a force reload is triggered to sync
 // messages with the compacted JSONL data.
@@ -193,7 +209,9 @@ function upsertMemoryCustomMessage(messages: ChatMessage[], customMsg: ChatMessa
     if (message.role !== "custom") return false;
     const candidateBlock = message.content[0];
     if (candidateBlock?.type !== "custom") return false;
-    return getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) === dedupeKey;
+    return (
+      getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) === dedupeKey
+    );
   });
   if (existingSameKey) {
     const existingBlock = existingSameKey.content[0];
@@ -209,7 +227,9 @@ function upsertMemoryCustomMessage(messages: ChatMessage[], customMsg: ChatMessa
     if (message.role !== "custom") return true;
     const candidateBlock = message.content[0];
     if (candidateBlock?.type !== "custom") return true;
-    return getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) !== dedupeKey;
+    return (
+      getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) !== dedupeKey
+    );
   });
 
   return insertChatMessageByDisplayOrder(filtered, customMsg);
@@ -528,6 +548,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if ((event as { type?: string }).type === "test_clear_all") {
     useUIDialogStore.getState().clearPendingBySession(sessionId);
+    return;
+  }
+
+  if (shouldDropInactiveSessionRenderEvent(sessionId, event)) {
     return;
   }
 
@@ -1468,8 +1492,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
-    const customData =
-      event.customType === "memory_inject" ? effectiveMemoryData : event.data;
+    const customData = event.customType === "memory_inject" ? effectiveMemoryData : event.data;
     const customMsg: ChatMessage = {
       id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",

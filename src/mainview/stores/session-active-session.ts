@@ -12,7 +12,9 @@ import { formatProjectStartError, getErrorMessage } from "./session-start-error"
 import {
   requestRulesSnapshot,
   setupSubscriptions,
+  cleanupSession,
   cleanupSessionLight,
+  clearSubscriptionState,
   type SubscriptionMaps,
 } from "./session-subscriptions";
 
@@ -59,7 +61,15 @@ interface HotSwitchMessageLoadParams {
  * 保证 _backgroundRefreshMessages 只调用一次（#37）。
  */
 export async function runHotSwitchMessageLoad(params: HotSwitchMessageLoadParams): Promise<void> {
-  const { sessionId, sessionPath, hasCached, backgroundRefresh, loadSessionMessages, getContextUsage, updateSessionContext } = params;
+  const {
+    sessionId,
+    sessionPath,
+    hasCached,
+    backgroundRefresh,
+    loadSessionMessages,
+    getContextUsage,
+    updateSessionContext,
+  } = params;
 
   const loadPromise: Promise<void> = hasCached
     ? backgroundRefresh(sessionId, sessionPath)
@@ -95,7 +105,8 @@ interface ReconnectMessageLoadParams {
  * 保证 _backgroundRefreshMessages 不被额外调用（#37 root cause #2/#3）。
  */
 export async function runReconnectMessageLoad(params: ReconnectMessageLoadParams): Promise<void> {
-  const { sessionId, sessionPath, loadSessionMessages, getContextUsage, updateSessionContext } = params;
+  const { sessionId, sessionPath, loadSessionMessages, getContextUsage, updateSessionContext } =
+    params;
 
   // loadSessionMessages(force: true) 已经做了完整加载，不需要额外 _backgroundRefreshMessages (#37)
   await loadSessionMessages(sessionId, { force: true, sessionPath }).catch(() => {});
@@ -160,9 +171,11 @@ export function createSetActiveSessionAction({
       const t0 = performance.now();
       clearStatusWatchdog(prevId);
       useChatStore.getState().saveInputDraft(prevId);
+      cleanupSession(get(), prevId);
       cleanupSessionLight(prevId);
+      set((s) => clearSubscriptionState(s, prevId));
       useGitStore.getState().clearDiff();
-      perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
+      perfLog.info("[switch] step-1 cleanup old session subscriptions (keep cached data)", {
         prevId,
         ms: Math.round(performance.now() - t0),
       });
