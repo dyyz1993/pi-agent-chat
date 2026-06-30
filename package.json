@@ -33,6 +33,7 @@
     "build:desktop": "vite build && electrobun build",
     "build:desktop:native": "PI_ELECTROBUN_RENDERER=native vite build && PI_ELECTROBUN_RENDERER=native electrobun build",
     "lint": "eslint .",
+    "lint:persistence": "bun scripts/lint-persistence-paths.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\"",
