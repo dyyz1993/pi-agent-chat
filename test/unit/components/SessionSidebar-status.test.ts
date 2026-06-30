@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getSubagentSidebarStatus } from "../../../src/mainview/components/session-sidebar/SessionSidebar";
+import {
+  getSubagentSidebarStatus,
+  sortSubagentsForSidebar,
+} from "../../../src/mainview/components/session-sidebar/SessionSidebar";
 import type { SubagentSessionInfo } from "../../../src/mainview/types";
 
 function makeSub(overrides: Partial<SubagentSessionInfo> = {}): SubagentSessionInfo {
@@ -33,5 +36,33 @@ describe("getSubagentSidebarStatus", () => {
     expect(getSubagentSidebarStatus(makeSub({ exitCode: 1 }))).toBe("error");
     expect(getSubagentSidebarStatus(makeSub({ completedAt: 456 }))).toBe("idle");
     expect(getSubagentSidebarStatus(makeSub())).toBe("running");
+  });
+});
+
+describe("sortSubagentsForSidebar", () => {
+  it("moves subagents needing help above running and idle subagents", () => {
+    const idle = makeSub({ sessionId: "idle", startedAt: 30, completedAt: 40 });
+    const running = makeSub({ sessionId: "running", startedAt: 20 });
+    const permission = makeSub({ sessionId: "permission", startedAt: 10 });
+
+    const sorted = sortSubagentsForSidebar([idle, running, permission], {
+      permission: "permission",
+      running: "streaming",
+      idle: "idle",
+    });
+
+    expect(sorted.map((sub) => sub.sessionId)).toEqual(["permission", "running", "idle"]);
+  });
+
+  it("keeps newer subagents first when they share the same sidebar status", () => {
+    const older = makeSub({ sessionId: "older", startedAt: 10 });
+    const newer = makeSub({ sessionId: "newer", startedAt: 20 });
+
+    const sorted = sortSubagentsForSidebar([older, newer], {
+      older: "streaming",
+      newer: "streaming",
+    });
+
+    expect(sorted.map((sub) => sub.sessionId)).toEqual(["newer", "older"]);
   });
 });

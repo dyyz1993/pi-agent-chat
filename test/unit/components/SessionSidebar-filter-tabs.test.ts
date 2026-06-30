@@ -103,4 +103,25 @@ describe("SessionSidebar filter tabs", () => {
 
     expect(items.map((item) => item.sub.sessionId)).toEqual(["sub-live"]);
   });
+
+  it("sorts loaded live subagents by active sidebar state before start time", () => {
+    const items = getStandaloneSubagentItems(
+      {
+        "/tmp/main.jsonl": [
+          makeSubagent({ sessionId: "idle", description: "Idle", startedAt: 30, completedAt: 40 }),
+          makeSubagent({ sessionId: "running", description: "Running", startedAt: 20 }),
+          makeSubagent({ sessionId: "permission", description: "Permission", startedAt: 10 }),
+        ],
+      },
+      [main],
+      "",
+      {
+        idle: "idle",
+        running: "streaming",
+        permission: "permission",
+      },
+    );
+
+    expect(items.map((item) => item.sub.sessionId)).toEqual(["permission", "running", "idle"]);
+  });
 });

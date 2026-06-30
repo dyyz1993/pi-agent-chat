@@ -209,6 +209,10 @@ export const useStatusStore = create<StatusState>((set) => ({
       })
       .then(() => {
         rememberPermissionProfileForSession(sessionId, profile);
+        if (getEffectiveSessionId() !== sessionId) {
+          set({ permissionProfileLoading: false, yoloLoading: false });
+          return;
+        }
         set({
           permissionProfile: profile,
           permissionProfileLoading: false,
@@ -225,6 +229,9 @@ export const useStatusStore = create<StatusState>((set) => ({
     const normalized = normalizePermissionProfileName(profile);
     if (!normalized) return;
     if (sessionId) rememberPermissionProfileForSession(sessionId, normalized);
+    if (sessionId && getEffectiveSessionId() !== sessionId) {
+      return;
+    }
     set({
       permissionProfile: normalized,
       permissionProfileLoading: false,

@@ -50,6 +50,17 @@ describe("getSessionSidebarStatus", () => {
     expect(getSessionSidebarStatus(makeSession(), "idle")).toBe("idle");
     expect(getSessionSidebarStatus(makeSession())).toBe("idle");
   });
+
+  it("bubbles child permission and retrying states to the parent sidebar badge", () => {
+    expect(getSessionSidebarStatus(makeSession(), "idle", ["permission"])).toBe("permission");
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["retrying"])).toBe("retrying");
+  });
+
+  it("bubbles child live work to the parent sidebar badge without changing idle children", () => {
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["streaming"])).toBe("working");
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["compacting"])).toBe("working");
+    expect(getSessionSidebarStatus(makeSession(), undefined, ["idle"])).toBe("idle");
+  });
 });
 
 describe("getVisibleDelegateChildren", () => {

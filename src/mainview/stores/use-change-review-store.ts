@@ -10,6 +10,14 @@ import { useSubagentStore } from "./use-subagent-store";
 export type PendingChange = PendingChangeResult;
 export type ReviewApproval = ApprovalResult;
 
+export interface ChildReviewSummary {
+  parentSessionId: string;
+  subSessionId: string;
+  subSessionPath: string;
+  title: string;
+  pendingCount: number;
+}
+
 /** In-flight dedup promise by session — prevents triple-fire without crossing parent/child views. */
 const _fetchPendingPromises = new Map<string, Promise<void>>();
 
@@ -36,11 +44,27 @@ function findKnownSessionPath(sessionId: string): string | undefined {
     .find((item) => item.sessionId === sessionId)?.sessionPath;
 }
 
+function findParentSessionPath(sessionId: string): string | undefined {
+  return Object.values(useSessionStore.getState().sessionsByProject ?? {})
+    .flat()
+    .find((item) => item.sessionId === sessionId)?.sessionPath;
+}
+
+function formatSubtaskTitle(sub: { description?: string; instruction?: string; sessionId: string }): string {
+  const description = sub.description?.trim();
+  if (description) return description;
+  const instruction = sub.instruction?.trim();
+  if (instruction) return instruction.slice(0, 60);
+  return sub.sessionId.slice(0, 8);
+}
+
 interface ChangeReviewState {
   open: boolean;
   changes: PendingChange[];
   approvals: ReviewApproval[];
+  childReviewSummaries: ChildReviewSummary[];
   loading: boolean;
+  childReviewLoading: boolean;
   selectedPath: string | null;
   /** Paths currently being approved/rejected — for disabling buttons to prevent dup clicks */
   processingPaths: Set<string>;
@@ -48,9 +72,11 @@ interface ChangeReviewState {
   setOpen: (open: boolean) => void;
   setChanges: (changes: PendingChange[]) => void;
   setApprovals: (approvals: ReviewApproval[]) => void;
+  setChildReviewSummaries: (summaries: ChildReviewSummary[]) => void;
   setLoading: (loading: boolean) => void;
   setSelectedPath: (path: string | null) => void;
   fetchPending: (sessionId?: string | null) => Promise<void>;
+  fetchChildReviewSummaries: (parentSessionId?: string | null) => Promise<void>;
   approveChange: (path: string) => Promise<void>;
   rejectChange: (path: string) => Promise<void>;
   approveAll: () => Promise<void>;
@@ -62,7 +88,9 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
   open: false,
   changes: [],
   approvals: [],
+  childReviewSummaries: [],
   loading: false,
+  childReviewLoading: false,
   selectedPath: null,
   processingPaths: new Set(),
 
@@ -71,6 +99,8 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
   setChanges: (changes) => set({ changes }),
 
   setApprovals: (approvals) => set({ approvals }),
+
+  setChildReviewSummaries: (childReviewSummaries) => set({ childReviewSummaries }),
 
   setLoading: (loading) => set({ loading }),
 
@@ -115,6 +145,65 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
       await promise;
     } finally {
       _fetchPendingPromises.delete(sessionId);
+    }
+  },
+
+  fetchChildReviewSummaries: async (targetParentSessionId) => {
+    const parentSessionId = targetParentSessionId ?? useSessionStore.getState().activeSessionId;
+    if (!parentSessionId) return;
+
+    const parentSessionPath = findParentSessionPath(parentSessionId);
+    if (!parentSessionPath) {
+      set({ childReviewSummaries: [], childReviewLoading: false });
+      return;
+    }
+
+    const subagentStore = useSubagentStore.getState();
+    const cachedSubsessions = subagentStore.subsessionsByParent[parentSessionPath];
+    const loadedSubsessions =
+      cachedSubsessions ?? (await subagentStore.loadSubsessions(parentSessionPath));
+    const subsessions = loadedSubsessions.filter((sub) => {
+      return Boolean(sub.sessionId && sub.sessionPath);
+    });
+
+    if (subsessions.length === 0) {
+      set({ childReviewSummaries: [], childReviewLoading: false });
+      return;
+    }
+
+    set({ childReviewLoading: true });
+    try {
+      const summaries = await Promise.all(
+        subsessions.map(async (sub) => {
+          try {
+            const pendingResult = await apiClient.call("change-review.pending", {
+              sessionId: sub.sessionId,
+              sessionPath: sub.sessionPath,
+            });
+            const pending = (Array.isArray(pendingResult) ? pendingResult : []) as PendingChange[];
+            const pendingCount = pending.filter((change) => change.status === "pending").length;
+            if (pendingCount === 0) return null;
+            return {
+              parentSessionId,
+              subSessionId: sub.sessionId,
+              subSessionPath: sub.sessionPath,
+              title: formatSubtaskTitle(sub),
+              pendingCount,
+            } satisfies ChildReviewSummary;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      set({
+        childReviewSummaries: summaries.filter((summary): summary is ChildReviewSummary =>
+          Boolean(summary),
+        ),
+        childReviewLoading: false,
+      });
+    } catch {
+      set({ childReviewSummaries: [], childReviewLoading: false });
     }
   },
 
@@ -247,8 +336,10 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
       open: false,
       changes: [],
       approvals: [],
+      childReviewSummaries: [],
       selectedPath: null,
       loading: false,
+      childReviewLoading: false,
       processingPaths: new Set(),
     }),
 }));

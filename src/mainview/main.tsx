@@ -24,11 +24,28 @@ if (typeof globalThis.crypto !== "undefined" && !globalThis.crypto.randomUUID) {
   });
 }
 
-if ("serviceWorker" in navigator) {
+const serviceWorkerScope = new URL("/", window.location.href).href;
+
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => {
       /* service worker registration fails in non-PWA contexts */
     });
+  });
+} else if ("serviceWorker" in navigator && import.meta.env.DEV) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        Promise.all(
+          registrations
+            .filter((registration) => registration.scope === serviceWorkerScope)
+            .map((registration) => registration.unregister()),
+        ),
+      )
+      .catch(() => {
+        /* stale development service workers should never block app startup */
+      });
   });
 }
 

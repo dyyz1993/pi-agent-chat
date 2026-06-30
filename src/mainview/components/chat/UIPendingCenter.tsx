@@ -131,6 +131,8 @@ type SessionNameSource = {
   name?: string;
   firstMessage?: string;
   sessionPath?: string;
+  parentSessionPath?: string | null;
+  delegateType?: string | null;
 };
 
 type SubsessionNameSource = {
@@ -172,6 +174,26 @@ function buildSessionNameMap(
     }
   }
   return map;
+}
+
+function buildSubtaskSessionIds(
+  sessionsByProject: Record<string, SessionNameSource[]>,
+  subsessionsByParent: Record<string, SubsessionNameSource[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const sessions of Object.values(sessionsByProject)) {
+    for (const session of sessions) {
+      if (session.parentSessionPath || session.delegateType === "subagent") {
+        ids.add(session.sessionId);
+      }
+    }
+  }
+  for (const subsessions of Object.values(subsessionsByParent)) {
+    for (const sub of subsessions) {
+      ids.add(sub.sessionId);
+    }
+  }
+  return ids;
 }
 
 function collectDescendantSessionIds(
@@ -639,11 +661,18 @@ function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: 
 interface SessionGroupProps {
   sessionId: string;
   sessionName: string;
+  isSubtaskSource: boolean;
   requests: UIPendingRequest[];
   onGotoSession: (sessionId: string, requestId: string) => void;
 }
 
-function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: SessionGroupProps) {
+function SessionGroup({
+  sessionId,
+  sessionName,
+  isSubtaskSource,
+  requests,
+  onGotoSession,
+}: SessionGroupProps) {
   const { t } = useTranslation("chat");
   const [expanded, setExpanded] = useState(true);
 
@@ -669,6 +698,14 @@ function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: Sessi
         <span className="flex-1 truncate text-left text-xs font-semibold text-text-primary">
           {sessionName}
         </span>
+        {isSubtaskSource && (
+          <span
+            className="max-w-[6rem] shrink-0 truncate rounded bg-semantic-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-semantic-agent"
+            title={sessionName}
+          >
+            ↳ 子任务
+          </span>
+        )}
         <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-status-warning">
           {requests.length}
         </span>
@@ -752,6 +789,16 @@ export function UIPendingCenter() {
     );
   }, [activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
 
+  const subtaskSessionIds = useMemo(() => {
+    if (!activeProjectId) return new Set<string>();
+    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    if (!tab) return new Set<string>();
+    return buildSubtaskSessionIds(
+      { [tab.path]: sessionsByProject[tab.path] ?? [] },
+      subsessionsByParent,
+    );
+  }, [activeProjectId, projectTabs, sessionsByProject, subsessionsByParent]);
+
   const grouped = useMemo(() => {
     const groups = new Map<string, UIPendingRequest[]>();
     for (const req of projectPending) {
@@ -823,6 +870,10 @@ export function UIPendingCenter() {
                 key={sessionId}
                 sessionId={sessionId}
                 sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
+                isSubtaskSource={
+                  subtaskSessionIds.has(sessionId) ||
+                  requests.some((request) => Boolean(request.parentSessionId))
+                }
                 requests={requests}
                 onGotoSession={handleGotoSession}
               />

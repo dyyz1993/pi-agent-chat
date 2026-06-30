@@ -34,6 +34,7 @@ import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
+import { useEffectiveSessionResourceSync } from "../../hooks/use-effective-session-resource-sync";
 import { useEffect, useRef } from "react";
 
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
@@ -58,6 +59,7 @@ interface RightSidebarProps {
 
 export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const { t } = useTranslation("sidebar");
+  useEffectiveSessionResourceSync();
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const toggleStatus = useLayoutStore((s) => s.toggleStatus);
   const activePanelTab = useLayoutStore((s) => s.activePanelTab);

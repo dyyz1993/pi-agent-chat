@@ -186,6 +186,8 @@ export function getStandaloneSubagentItems(
   subsessionsByParent: Record<string, SubagentSessionInfo[]>,
   rawSessions: SessionMeta[],
   searchQuery: string,
+  subagentStatusMap: Record<string, SessionStatus | undefined> = {},
+  sessionStatusMap: Record<string, SessionStatus | undefined> = {},
 ): Array<{ sub: SubagentSessionInfo; parentSessionId: string }> {
   const q = searchQuery.trim().toLowerCase();
   const parentIdByPath = new Map(
@@ -210,7 +212,59 @@ export function getStandaloneSubagentItems(
     }
   }
 
-  return items.sort((a, b) => b.sub.startedAt - a.sub.startedAt);
+  return items.sort(
+    (a, b) =>
+      compareSubagentsForSidebar(a.sub, b.sub, subagentStatusMap, sessionStatusMap) ||
+      a.parentSessionId.localeCompare(b.parentSessionId),
+  );
+}
+
+function getSubagentSidebarSortPriority(status: ReturnType<typeof getSubagentSidebarStatus>): number {
+  switch (status) {
+    case "permission":
+      return 0;
+    case "retrying":
+      return 1;
+    case "running":
+      return 2;
+    case "error":
+      return 3;
+    case "idle":
+      return 4;
+  }
+}
+
+function compareSubagentsForSidebar(
+  a: SubagentSessionInfo,
+  b: SubagentSessionInfo,
+  subagentStatusMap: Record<string, SessionStatus | undefined>,
+  sessionStatusMap: Record<string, SessionStatus | undefined>,
+): number {
+  const aStatus = getSubagentSidebarStatus(
+    a,
+    subagentStatusMap[a.sessionId],
+    sessionStatusMap[a.sessionId],
+  );
+  const bStatus = getSubagentSidebarStatus(
+    b,
+    subagentStatusMap[b.sessionId],
+    sessionStatusMap[b.sessionId],
+  );
+  const priorityDiff =
+    getSubagentSidebarSortPriority(aStatus) - getSubagentSidebarSortPriority(bStatus);
+  if (priorityDiff !== 0) return priorityDiff;
+
+  return b.startedAt - a.startedAt;
+}
+
+export function sortSubagentsForSidebar(
+  subsessions: SubagentSessionInfo[] | undefined,
+  subagentStatusMap: Record<string, SessionStatus | undefined> = {},
+  sessionStatusMap: Record<string, SessionStatus | undefined> = {},
+): SubagentSessionInfo[] {
+  return [...(subsessions ?? [])].sort((a, b) =>
+    compareSubagentsForSidebar(a, b, subagentStatusMap, sessionStatusMap),
+  );
 }
 
 export function getVisibleDelegateChildren(
@@ -338,6 +392,7 @@ function SessionList({
   const loading = useSessionStore((s) => s.loading);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
   const agentBySession = useAgentStore((s) => s.currentAgentBySession);
+  const subagentStatusMap = useSubagentStore((s) => s.subagentStatusMap);
 
   const activeSessionPath = useMemo(() => {
     const sess = rawSessions.find((s) => s.sessionId === activeSessionId);
@@ -367,10 +422,22 @@ function SessionList({
   const standaloneSubagents = useMemo(() => {
     if (filterType !== "subagent") return [];
     const rawSubagentIds = new Set(rootSessions.map((session) => session.sessionId));
-    return getStandaloneSubagentItems(subsessionsByParent, rawSessions, searchQuery).filter(
-      (item) => !rawSubagentIds.has(item.sub.sessionId),
-    );
-  }, [filterType, rootSessions, subsessionsByParent, rawSessions, searchQuery]);
+    return getStandaloneSubagentItems(
+      subsessionsByParent,
+      rawSessions,
+      searchQuery,
+      subagentStatusMap,
+      sessionStatusMap,
+    ).filter((item) => !rawSubagentIds.has(item.sub.sessionId));
+  }, [
+    filterType,
+    rootSessions,
+    subsessionsByParent,
+    rawSessions,
+    searchQuery,
+    subagentStatusMap,
+    sessionStatusMap,
+  ]);
 
   const hasVisibleItems = rootSessions.length > 0 || standaloneSubagents.length > 0;
 
@@ -413,12 +480,17 @@ function SessionList({
 export function getSessionSidebarStatus(
   session: Pick<SessionMeta, "status" | "sessionStatus">,
   runtimeStatus?: SessionStatus,
+  childStatuses: Array<SessionStatus | undefined> = [],
 ): "working" | "permission" | "retrying" | "idle" {
   if (runtimeStatus === "permission") return "permission";
+  if (childStatuses.includes("permission")) return "permission";
   if (runtimeStatus === "retrying") return "retrying";
+  if (childStatuses.includes("retrying")) return "retrying";
   if (
     runtimeStatus === "streaming" ||
     runtimeStatus === "compacting" ||
+    childStatuses.includes("streaming") ||
+    childStatuses.includes("compacting") ||
     session.sessionStatus === "streaming" ||
     session.sessionStatus === "compacting" ||
     session.sessionStatus === "retrying" ||
@@ -429,10 +501,54 @@ export function getSessionSidebarStatus(
   return "idle";
 }
 
+function collectChildSidebarStatuses(
+  parentSessionPath: string,
+  subsessionsByParent: Record<string, SubagentSessionInfo[]>,
+  subagentStatusMap: Record<string, SessionStatus | undefined>,
+  sessionStatusMap: Record<string, SessionStatus | undefined>,
+): Array<SessionStatus | undefined> {
+  const result: Array<SessionStatus | undefined> = [];
+  const pendingParentPaths = [parentSessionPath];
+  const visitedParentPaths = new Set<string>();
+
+  while (pendingParentPaths.length > 0) {
+    const parentPath = pendingParentPaths.shift();
+    if (!parentPath || visitedParentPaths.has(parentPath)) continue;
+    visitedParentPaths.add(parentPath);
+
+    const children = subsessionsByParent[parentPath] ?? [];
+    for (const child of children) {
+      const childRuntimeStatus = subagentStatusMap[child.sessionId];
+      const childSessionRuntimeStatus = sessionStatusMap[child.sessionId];
+      const childSidebarStatus = getSubagentSidebarStatus(
+        child,
+        childRuntimeStatus,
+        childSessionRuntimeStatus,
+      );
+      if (childSidebarStatus === "permission") result.push("permission");
+      else if (childSidebarStatus === "retrying") result.push("retrying");
+      else if (childSidebarStatus === "running") result.push("streaming");
+
+      if (child.sessionPath) pendingParentPaths.push(child.sessionPath);
+    }
+  }
+
+  return result;
+}
+
 function StatusBadge({ session }: { session: SessionMeta }) {
   const { t } = useTranslation("common");
-  const status = useSessionStore((s) => s.sessionStatusMap[session.sessionId]);
-  const badgeStatus = getSessionSidebarStatus(session, status);
+  const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
+  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
+  const subagentStatusMap = useSubagentStore((s) => s.subagentStatusMap);
+  const status = sessionStatusMap[session.sessionId];
+  const childStatuses = collectChildSidebarStatuses(
+    session.sessionPath,
+    subsessionsByParent,
+    subagentStatusMap,
+    sessionStatusMap,
+  );
+  const badgeStatus = getSessionSidebarStatus(session, status, childStatuses);
 
   if (badgeStatus === "working") {
     return (
@@ -590,6 +706,8 @@ function SessionItem({
   const togglePinSession = useSessionStore((s) => s.togglePinSession);
   const subsessions = useSubagentStore((s) => s.subsessionsByParent[session.sessionPath]);
   const loadingSubs = useSubagentStore((s) => s.loadingByParent[session.sessionPath]);
+  const subagentStatusMap = useSubagentStore((s) => s.subagentStatusMap);
+  const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
   const worktrees = useGitStore((s) => s.worktrees);
   const currentAgentName = useAgentStore((s) => s.currentAgentBySession[session.sessionId] ?? "");
   const agents = useAgentStore((s) => s.agents);
@@ -610,6 +728,10 @@ function SessionItem({
   );
   const hasPiChildren = visibleDelegateChildren.length > 0;
   const hasSubagents = !!(subsessions && subsessions.length > 0);
+  const sortedSubsessions = useMemo(
+    () => sortSubagentsForSidebar(subsessions, subagentStatusMap, sessionStatusMap),
+    [subsessions, subagentStatusMap, sessionStatusMap],
+  );
   const isDelegate = session.sessionId.startsWith("sess_coord_");
   const isSubtask = session.sessionId.startsWith("sess_sub_");
   const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
@@ -867,7 +989,7 @@ function SessionItem({
             ))}
           {!loadingSubs &&
             hasSubagents &&
-            subsessions?.map((sub) => (
+            sortedSubsessions.map((sub) => (
               <SubagentItem key={sub.sessionId} sub={sub} parentSessionId={session.sessionId} />
             ))}
         </div>
