@@ -21,7 +21,7 @@ import {
 import { createLogger } from "./logger";
 
 const log = createLogger("usage-index");
-const USAGE_INDEX_VERSION = 2;
+const USAGE_INDEX_VERSION = 3;
 
 interface UsageIndexedFile {
   sessionId: string;
