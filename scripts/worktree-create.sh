@@ -132,7 +132,7 @@ done
 [ -n "$AGENT_BUILD" ] || { [ "$WITH_AGENT_FORK" = true ] && AGENT_BUILD="true" || AGENT_BUILD="false"; }
 
 WORKTREE_SLUG=$(wt_sanitize "$BRANCH")
-WORKTREE_PATH="${WORKTREE_BASE}-${WORKTREE_SLUG}"
+WORKTREE_PATH="${PI_WORKTREE_ROOT}/$(basename ${REPO_ROOT})-${WORKTREE_SLUG}"
 MAIN_YALC="$REPO_ROOT/.yalc"
 MAIN_NM="$REPO_ROOT/node_modules"
 MAIN_ENV="$REPO_ROOT/.env"
