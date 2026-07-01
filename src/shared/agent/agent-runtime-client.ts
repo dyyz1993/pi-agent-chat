@@ -38,6 +38,7 @@ import {
   resolveRemoteResourceSyncPlan,
   toRemoteResourceSyncOptions,
 } from "./remote-resource-sync-policy";
+import { ensureLocalCodingAgentRuntimeDependencies } from "./agent-runtime-package-repair";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -193,6 +194,8 @@ export async function createRpcClient(
     perfLog.info("[createRpcClient] sandbox mode", { userId, endpoint: sandbox.endpoint });
     return { client, timings };
   }
+
+  ensureLocalCodingAgentRuntimeDependencies(cliPath);
 
   cachedModule ??= (await import("@dyyz1993/pi-coding-agent")) as unknown as {
     RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
