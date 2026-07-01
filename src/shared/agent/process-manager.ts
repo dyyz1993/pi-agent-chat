@@ -125,6 +125,7 @@ import {
   addToProcessPool,
   removeFromProcessPool,
   selectLruEvictionCandidate,
+  countProcessPoolEntries,
 } from "./agent-process-pool";
 
 const log = createLogger("agent");
@@ -349,6 +350,8 @@ interface ManagedClient {
   _activeSessionId: string;
   lastActiveAt: number;
   activeBackgroundTools: Set<string>;
+  /** Non-empty when this process hosts a delegated child session; LRU eviction skips such processes so background tasks are not killed mid-flight. */
+  delegateParentSessionId?: string;
 }
 
 import type { AgentProcessInfo } from "../modules/agent";
@@ -734,7 +737,18 @@ export class AgentProcessManager {
       currentPoolKey,
       AgentProcessManager.MAX_POOL_SIZE,
     );
-    if (!candidate) return;
+    if (!candidate) {
+      const total = countProcessPoolEntries(this.processByCwd);
+      if (total >= AgentProcessManager.MAX_POOL_SIZE) {
+        // Pool is full but nothing eligible — likely all non-current entries are
+        // streaming, running background tools, or protected delegate children.
+        log.info("[evictLRU] pool full but no eviction candidate", {
+          totalProcesses: total,
+          poolKey: currentPoolKey,
+        });
+      }
+      return;
+    }
 
     const { poolKey, managed: oldest, totalProcesses } = candidate;
     const sid = oldest._activeSessionId;
@@ -994,7 +1008,7 @@ export class AgentProcessManager {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    options?: { forceNewProcess?: boolean; userId?: string },
+    options?: { forceNewProcess?: boolean; userId?: string; delegateParentSessionId?: string },
   ): Promise<AgentStartResult> {
     const inFlightStart = this._startPromises.get(sessionId);
     if (inFlightStart) {
