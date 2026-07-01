@@ -567,7 +567,7 @@ function applyToolResultMessage(sessionId: string, rawMessage: unknown): boolean
         details: resultBlock.details,
         endedAt,
       };
-    } else {
+    } else if (previous.type === "toolCall") {
       const { args } = formatToolArgs(previous.input);
       blocks[toolIdx] = {
         type: "toolExecution",
@@ -579,6 +579,8 @@ function applyToolResultMessage(sessionId: string, rawMessage: unknown): boolean
         details: resultBlock.details,
         endedAt,
       };
+    } else {
+      continue;
     }
 
     const updated = [...existing];
