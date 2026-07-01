@@ -223,7 +223,8 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
     }
     if (customType === "memory_prefetch_result") {
       const layer = typeof record?.layer === "string" ? record.layer : "";
-      const layerScore = layer === "llm" ? 300 : layer === "auto" ? 200 : layer === "skip" ? 100 : 0;
+      const layerScore =
+        layer === "llm" ? 300 : layer === "auto" ? 200 : layer === "skip" ? 100 : 0;
       return injectedBytes + selectedFileScore + layerScore;
     }
     return 0;
@@ -996,6 +997,69 @@ describe("tool_execution_end", () => {
     expect(block!.status).toBe("error");
     expect(block!.output).toBe("failed");
     expect(useChatStore.getState().activeToolCallIdsBySession[SID]).toEqual([]);
+  });
+});
+
+describe("toolResult message events", () => {
+  it("merges parallel toolResult messages into their matching toolExecution blocks", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-read",
+            toolName: "read",
+            args: "/tmp/a.txt",
+            status: "running",
+          },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-grep",
+            toolName: "grep",
+            args: "needle",
+            status: "running",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_start",
+      message: {
+        role: "toolResult",
+        toolCallId: "tc-read",
+        toolName: "read",
+        content: [{ type: "text", text: "read output\n" }],
+        isError: false,
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    handleAgentEvent(SID, {
+      type: "message_start",
+      message: {
+        role: "toolResult",
+        toolCallId: "tc-grep",
+        toolName: "grep",
+        content: [{ type: "text", text: "grep output\n" }],
+        isError: false,
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const readBlock = getToolExecBlock("tc-read");
+    const grepBlock = getToolExecBlock("tc-grep");
+
+    expect(readBlock?.status).toBe("done");
+    expect(readBlock?.output).toBe("read output\n");
+    expect(grepBlock?.status).toBe("done");
+    expect(grepBlock?.output).toBe("grep output\n");
   });
 });
 

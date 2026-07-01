@@ -193,7 +193,9 @@ function upsertMemoryCustomMessage(messages: ChatMessage[], customMsg: ChatMessa
     if (message.role !== "custom") return false;
     const candidateBlock = message.content[0];
     if (candidateBlock?.type !== "custom") return false;
-    return getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) === dedupeKey;
+    return (
+      getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) === dedupeKey
+    );
   });
   if (existingSameKey) {
     const existingBlock = existingSameKey.content[0];
@@ -209,7 +211,9 @@ function upsertMemoryCustomMessage(messages: ChatMessage[], customMsg: ChatMessa
     if (message.role !== "custom") return true;
     const candidateBlock = message.content[0];
     if (candidateBlock?.type !== "custom") return true;
-    return getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) !== dedupeKey;
+    return (
+      getChatMemoryCustomDedupeKey(candidateBlock.customType, candidateBlock.data) !== dedupeKey
+    );
   });
 
   return insertChatMessageByDisplayOrder(filtered, customMsg);
@@ -523,6 +527,88 @@ function applyToolExecutionEvent(
   chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
 }
 
+function applyToolResultMessage(sessionId: string, rawMessage: unknown): boolean {
+  const msg = messageToChatMessage(rawMessage as Message, undefined, toolCallNameMap);
+  if (!msg || msg.role !== "toolResult") return false;
+
+  const resultBlock = msg.content.find(
+    (block): block is Extract<ContentBlock, { type: "toolResult" }> => block.type === "toolResult",
+  );
+  if (!resultBlock) return false;
+
+  const toolCallId = resultBlock.toolCallId;
+  setToolActive(sessionId, toolCallId, false);
+
+  const chat = useChatStore.getState();
+  const existing = chat.messagesBySession[sessionId] || [];
+  const endedAt = (rawMessage as { timestamp?: number } | undefined)?.timestamp ?? Date.now();
+  const nextStatus = resultBlock.isError ? "error" : "done";
+
+  for (let i = existing.length - 1; i >= 0; i--) {
+    const current = existing[i];
+    if (current.role !== "assistant") continue;
+
+    const toolIdx = current.content.findIndex(
+      (block) =>
+        (block.type === "toolExecution" && block.toolCallId === toolCallId) ||
+        (block.type === "toolCall" && block.id === toolCallId),
+    );
+    if (toolIdx < 0) continue;
+
+    const blocks = [...current.content];
+    const previous = blocks[toolIdx];
+    if (previous.type === "toolExecution") {
+      blocks[toolIdx] = {
+        ...previous,
+        toolName:
+          previous.toolName === "unknown" ? (resultBlock.toolName ?? "unknown") : previous.toolName,
+        status: nextStatus,
+        output: resultBlock.content,
+        details: resultBlock.details,
+        endedAt,
+      };
+    } else {
+      const { args } = formatToolArgs(previous.input);
+      blocks[toolIdx] = {
+        type: "toolExecution",
+        toolCallId,
+        toolName: resultBlock.toolName ?? previous.name ?? "unknown",
+        args: resultBlock.args ?? args,
+        status: nextStatus,
+        output: resultBlock.content,
+        details: resultBlock.details,
+        endedAt,
+      };
+    }
+
+    const updated = [...existing];
+    updated[i] = { ...current, content: blocks };
+    chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+    return true;
+  }
+
+  for (let i = existing.length - 1; i >= 0; i--) {
+    const current = existing[i];
+    if (current.role !== "assistant") continue;
+    const fallbackBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
+      type: "toolExecution",
+      toolCallId,
+      toolName: resultBlock.toolName ?? toolCallNameMap[toolCallId] ?? "unknown",
+      args: resultBlock.args ?? toolCallArgsMap[toolCallId] ?? "",
+      status: nextStatus,
+      output: resultBlock.content,
+      details: resultBlock.details,
+      endedAt,
+    };
+    const updated = [...existing];
+    updated[i] = { ...current, content: [...current.content, fallbackBlock] };
+    chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+    return true;
+  }
+
+  return true;
+}
+
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   const storeGet = () => useSessionStore.getState();
 
@@ -809,6 +895,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const role: string =
       msgObj && "role" in msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
 
+    if (role === "toolResult") {
+      applyToolResultMessage(sessionId, raw);
+      return;
+    }
+
     if (role === "custom") {
       if (!msgObj) return;
       if ("display" in msgObj && msgObj.display === false) return;
@@ -1049,6 +1140,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const entryId = (event as { entryId?: string }).entryId;
     const message = event.message as Message;
     const role = message.role;
+
+    if (role === "toolResult") {
+      applyToolResultMessage(sessionId, message);
+      return;
+    }
 
     if (role === "user" && entryId) {
       const chat = useChatStore.getState();
@@ -1468,8 +1564,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
-    const customData =
-      event.customType === "memory_inject" ? effectiveMemoryData : event.data;
+    const customData = event.customType === "memory_inject" ? effectiveMemoryData : event.data;
     const customMsg: ChatMessage = {
       id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",
