@@ -3,10 +3,11 @@ import { randomBytes, randomInt } from "node:crypto";
 import { once } from "node:events";
 import { buffer as readStreamBuffer } from "node:stream/consumers";
 
-import { AuthStorage, ModelRegistry } from "@dyyz1993/pi-coding-agent";
 import type { Api, Model } from "@dyyz1993/pi-ai";
 
+import { config } from "../../server-config";
 import { createLogger } from "../lib/logger";
+import { ensureLocalCodingAgentRuntimeDependencies } from "./agent-runtime-package-repair";
 
 const log = createLogger("model-proxy");
 
@@ -15,7 +16,34 @@ const PROXY_HEADER_PROVIDER = "x-pi-model-proxy-provider";
 const PROXY_HEADER_MODEL = "x-pi-model-proxy-model";
 const PROXY_HEADER_API = "x-pi-model-proxy-api";
 
-type LocalModelRegistry = Pick<ModelRegistry, "getAvailable" | "getAll" | "getApiKeyAndHeaders">;
+type LocalModelRegistry = {
+  getAvailable: () => Model<Api>[];
+  getAll: () => Model<Api>[];
+  getApiKeyAndHeaders: (
+    model: Model<Api>,
+  ) => Promise<
+    | { ok: true; apiKey?: string; headers?: Record<string, string> }
+    | { ok: false; error: string }
+  >;
+};
+
+type ModelRegistryModule = {
+  AuthStorage: { create: () => unknown };
+  ModelRegistry: { create: (storage: unknown) => LocalModelRegistry };
+};
+
+let modelRegistryModule: Promise<ModelRegistryModule> | null = null;
+
+async function createDefaultModelRegistry(): Promise<LocalModelRegistry> {
+  ensureLocalCodingAgentRuntimeDependencies(config.piCliPath);
+  if (!modelRegistryModule) {
+    modelRegistryModule = import("@dyyz1993/pi-coding-agent").then(
+      (mod) => mod as unknown as ModelRegistryModule,
+    );
+  }
+  const { AuthStorage, ModelRegistry } = await modelRegistryModule;
+  return ModelRegistry.create(AuthStorage.create());
+}
 
 export interface StartedModelProxy {
   localPort: number;
@@ -213,10 +241,13 @@ export function createModelProxyServer(options: {
   token: string;
   registry?: LocalModelRegistry;
 }): Server {
-  const registry = options.registry ?? ModelRegistry.create(AuthStorage.create());
+  const registryPromise = options.registry
+    ? Promise.resolve(options.registry)
+    : createDefaultModelRegistry();
 
   return createServer(async (req, res) => {
     try {
+      const registry = await registryPromise;
       const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
       const token = req.headers[PROXY_HEADER_TOKEN];
       const bearer = req.headers.authorization?.startsWith("Bearer ")
@@ -328,7 +359,7 @@ export async function startModelProxy(options?: {
   remotePort?: number;
 }): Promise<StartedModelProxy> {
   const token = randomBytes(24).toString("base64url");
-  const registry = options?.registry ?? ModelRegistry.create(AuthStorage.create());
+  const registry = options?.registry ?? (await createDefaultModelRegistry());
   const server = createModelProxyServer({ token, registry });
   const localPort = await listen(server);
   const remotePort = options?.remotePort ?? randomInt(39000, 49000);

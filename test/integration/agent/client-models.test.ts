@@ -1,7 +1,17 @@
 /**
  * @vitest-environment node
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const runtimeRepair = vi.hoisted(() => ({
+  ensureLocalCodingAgentRuntimeDependencies: vi.fn(),
+}));
+
+vi.mock("../../../src/server-config", () => ({
+  config: { piCliPath: "/mock/app/node_modules/.bin/pi" },
+}));
+
+vi.mock("../../../src/shared/agent/agent-runtime-package-repair", () => runtimeRepair);
 
 vi.mock("@dyyz1993/pi-coding-agent", () => ({
   AuthStorage: {
@@ -46,6 +56,10 @@ function makeManaged(overrides: Record<string, unknown> = {}) {
 }
 
 describe("agent client model operations", () => {
+  beforeEach(() => {
+    runtimeRepair.ensureLocalCodingAgentRuntimeDependencies.mockClear();
+  });
+
   it("ensures a missing client before fetching available models", async () => {
     const managed = makeManaged();
     const ensureManagedClient = vi.fn().mockResolvedValue(managed);
@@ -93,6 +107,9 @@ describe("agent client model operations", () => {
           id: "deepseek-v4-flash",
         }),
       ]),
+    );
+    expect(runtimeRepair.ensureLocalCodingAgentRuntimeDependencies).toHaveBeenCalledWith(
+      "/mock/app/node_modules/.bin/pi",
     );
     expect(cleanupDeadClient).toHaveBeenCalledWith("sess-1", "getAvailableModels failed: boom");
   });

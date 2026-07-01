@@ -1,7 +1,9 @@
-import { AuthStorage, ModelRegistry, type RpcClientAPI } from "@dyyz1993/pi-coding-agent";
+import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
 
+import { config } from "../../server-config";
 import { createLogger } from "../lib/logger";
 import { parseTierModel, TIER_KEYS, type TierKey } from "./agent-runtime-config";
+import { ensureLocalCodingAgentRuntimeDependencies } from "./agent-runtime-package-repair";
 
 const log = createLogger("agent");
 
@@ -64,7 +66,25 @@ async function resolveManagedClient<TManaged extends ManagedClientLike>(
   return managed;
 }
 
-function getAvailableModelsFromRegistry(): AvailableModelInfo[] {
+type ModelRegistryModule = {
+  AuthStorage: { create: () => unknown };
+  ModelRegistry: { create: (storage: unknown) => { getAvailable: () => RawAvailableModelInfo[] } };
+};
+
+let modelRegistryModule: Promise<ModelRegistryModule> | null = null;
+
+async function loadModelRegistryModule(): Promise<ModelRegistryModule> {
+  ensureLocalCodingAgentRuntimeDependencies(config.piCliPath);
+  if (!modelRegistryModule) {
+    modelRegistryModule = import("@dyyz1993/pi-coding-agent").then(
+      (mod) => mod as unknown as ModelRegistryModule,
+    );
+  }
+  return modelRegistryModule;
+}
+
+async function getAvailableModelsFromRegistry(): Promise<AvailableModelInfo[]> {
+  const { AuthStorage, ModelRegistry } = await loadModelRegistryModule();
   const registry = ModelRegistry.create(AuthStorage.create());
   return registry.getAvailable().map(normalizeAvailableModel);
 }
