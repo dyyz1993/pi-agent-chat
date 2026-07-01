@@ -36,12 +36,9 @@ let modelRegistryModule: Promise<ModelRegistryModule> | null = null;
 
 async function createDefaultModelRegistry(): Promise<LocalModelRegistry> {
   ensureLocalCodingAgentRuntimeDependencies(config.piCliPath);
-  if (!modelRegistryModule) {
-    modelRegistryModule = import("@dyyz1993/pi-coding-agent").then(
-      (mod) => mod as unknown as ModelRegistryModule,
-    );
-  }
-  const { AuthStorage, ModelRegistry } = await modelRegistryModule;
+  const { AuthStorage, ModelRegistry } = await (modelRegistryModule ??= import(
+    "@dyyz1993/pi-coding-agent"
+  ).then((mod) => mod as unknown as ModelRegistryModule));
   return ModelRegistry.create(AuthStorage.create());
 }
 

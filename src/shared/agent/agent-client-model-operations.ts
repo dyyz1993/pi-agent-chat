@@ -75,12 +75,9 @@ let modelRegistryModule: Promise<ModelRegistryModule> | null = null;
 
 async function loadModelRegistryModule(): Promise<ModelRegistryModule> {
   ensureLocalCodingAgentRuntimeDependencies(config.piCliPath);
-  if (!modelRegistryModule) {
-    modelRegistryModule = import("@dyyz1993/pi-coding-agent").then(
-      (mod) => mod as unknown as ModelRegistryModule,
-    );
-  }
-  return modelRegistryModule;
+  return (modelRegistryModule ??= import("@dyyz1993/pi-coding-agent").then(
+    (mod) => mod as unknown as ModelRegistryModule,
+  ));
 }
 
 async function getAvailableModelsFromRegistry(): Promise<AvailableModelInfo[]> {
