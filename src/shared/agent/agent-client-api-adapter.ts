@@ -448,7 +448,11 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
       ).getSystemPrompt();
     },
     getLatestAgentChange(sessionId) {
-      return getLatestAgentChangeOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
+      return getLatestAgentChangeOperation({
+        sessionId,
+        getActiveManaged: deps.getActiveManaged,
+        ensureManagedClient: deps.ensureManagedClient,
+      });
     },
     async getSettings(sessionId, scope) {
       const managed = deps.getActiveManaged(sessionId);
