@@ -1,5 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const chatStoreState = vi.hoisted(() => ({
+  loadSessionMessages: vi.fn().mockResolvedValue(undefined),
+  _backgroundRefreshMessages: vi.fn().mockResolvedValue(undefined),
+  clearSessionMessages: vi.fn(),
+  messagesBySession: {} as Record<string, unknown[]>,
+  saveInputDraft: vi.fn(),
+  restoreInputDraft: vi.fn(),
+  clearInputDraft: vi.fn(),
+}));
+
 vi.mock("zustand/middleware", async (importOriginal) => {
   const actual = await importOriginal<typeof import("zustand/middleware")>();
   return {
@@ -23,15 +33,7 @@ vi.mock("../../../src/mainview/stores/use-rpc-debug-store", () => ({
 
 vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
   useChatStore: {
-    getState: vi.fn(() => ({
-      loadSessionMessages: vi.fn().mockResolvedValue(undefined),
-      _backgroundRefreshMessages: vi.fn().mockResolvedValue(undefined),
-      clearSessionMessages: vi.fn(),
-      messagesBySession: {},
-      saveInputDraft: vi.fn(),
-      restoreInputDraft: vi.fn(),
-      clearInputDraft: vi.fn(),
-    })),
+    getState: vi.fn(() => chatStoreState),
     setState: vi.fn(),
   },
 }));
@@ -161,6 +163,9 @@ function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chatStoreState.loadSessionMessages.mockResolvedValue(undefined);
+  chatStoreState._backgroundRefreshMessages.mockResolvedValue(undefined);
+  chatStoreState.messagesBySession = {};
   vi.mocked(useExplorerStore.getState).mockReturnValue({
     setCurrentPath: vi.fn(),
     listRootDir: vi.fn(),
@@ -413,6 +418,57 @@ describe("setActiveProject", () => {
 });
 
 describe("setActiveSession", () => {
+  it("cold-starts by preloading messages once without a second background refresh", async () => {
+    const session = makeSession({ sessionId: "sess-cold", projectPath: TAB_A.path });
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.start") {
+        return Promise.resolve({ agentId: "sess-cold", status: "started" });
+      }
+      if (method === "agent.getContextUsage") return Promise.resolve({ tokens: 123 });
+      if (method === "agent.getAvailableModels") return Promise.resolve({ models: [] });
+      if (method === "agent.getSettings") return Promise.resolve({});
+      if (method === "agent.getExtensions") return Promise.resolve({ extensions: [] });
+      if (method === "agent.getSkills") return Promise.resolve({ skills: [] });
+      if (method === "agent.getMcpServers") return Promise.resolve({ servers: [] });
+      if (method === "agent.getQueue") return Promise.resolve({ queue: [] });
+      if (method === "agent.getLatestAgentChange") return Promise.resolve({ change: null });
+      if (method === "agent.getAgents") return Promise.resolve({ agents: [] });
+      if (method === "agent.getCurrentAgent") return Promise.resolve({ agent: null });
+      if (method === "agent.getTierModels") return Promise.resolve({});
+      if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "session.loadTierConfig") return Promise.resolve(null);
+      return Promise.resolve({});
+    });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: null,
+      sessionsByProject: { [TAB_A.path]: [session] },
+      projectStartFailed: { [TAB_A.id]: false },
+      projectStartError: { [TAB_A.id]: "" },
+      sessionReady: {},
+      agentReady: {},
+    });
+
+    useSessionStore.getState().setActiveSession("sess-cold", true);
+
+    await vi.waitFor(() => {
+      expect(useSessionStore.getState().agentReady["sess-cold"]).toBe(true);
+      expect(mockedCall).toHaveBeenCalledWith("agent.getContextUsage", {
+        sessionId: "sess-cold",
+      });
+    });
+
+    expect(chatStoreState.loadSessionMessages).toHaveBeenCalledTimes(1);
+    expect(chatStoreState.loadSessionMessages).toHaveBeenCalledWith("sess-cold", {
+      force: true,
+      sessionPath: "/sessions/sess-cold",
+    });
+    expect(chatStoreState._backgroundRefreshMessages).not.toHaveBeenCalled();
+  });
+
   it("ignores stale agent.start timeout after a newer start succeeds", async () => {
     vi.useFakeTimers();
 
