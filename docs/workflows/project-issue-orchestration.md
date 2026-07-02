@@ -15,6 +15,33 @@ It is intentionally project-specific. It encodes the current app repository, pai
 - Require every issue/PR-style deliverable to carry validation cases: automated tests when possible, manual acceptance cases always when user-visible behavior is affected, and evidence for what passed or remains unverified.
 - Do not merge a branch just because code review passed. Merge requires review approval plus recorded validation evidence plus explicit user acceptance.
 
+## Issue #41 Closure Contract
+
+Issue #41 asks for a Leader + Worker workflow that can split many issues across
+isolated worktrees, merge completed work, update issue state, and clean up the
+owned worktrees afterward. The current project implementation satisfies that
+request through the following artifacts:
+
+| Requirement from #41                                                   | Current artifact                                                                                                                   | Verification                                                                                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Leader role for issue intake, splitting, dispatch, review, and cleanup | `.pi/agents/pi-issue-leader.md`                                                                                                    | Agent prompt lists intake, decompose, dispatch, track, review, user acceptance, land, and cleanup responsibilities     |
+| Worker role for one issue/slice in an isolated worktree                | `.pi/agents/pi-worktree-dev.md`                                                                                                    | Agent prompt requires worktree isolation, branch/PR-style output, validation packet, and report-back format            |
+| Worktree-isolated execution for app/fork changes                       | `docs/workflows/local-paired-worktree-stack.md`, `scripts/worktree-create.sh`, `scripts/worktree-dev.sh`                           | `./scripts/worktree-dev.sh list` plus registry/manifest files show app/fork paths, ports, config dirs, and CLI paths   |
+| Structured batch/worker state instead of chat-only planning            | `~/.pi/chat/worktrees/<worktree-id>/manifest.json`, `project.getWorktreeStackManifest`, `project.updateWorktreeStackOrchestration` | `bun run verify:worktree-stack` exercises manifest generation, orchestration updates, and execution context resolution |
+| PR-style deliverable per issue or coherent slice                       | This workflow plus both project agents                                                                                             | Delegate template requires branch suggestion, PR target, validation packet, and merge gate                             |
+| Merge and cleanup after accepted work                                  | This workflow section "Merge And Cleanup" plus both agent closeout rules                                                           | Cleanup targets must be listed before deletion; only owned stacks/worktrees/registry entries are removed               |
+
+The acceptance command for the structured orchestration path is:
+
+```bash
+bun run verify:worktree-stack
+```
+
+That command must remain green before claiming the Leader/Worker workflow is
+ready for new issue batches. Any future enhancement that changes manifest shape,
+worktree stack scripts, or project handler semantics should update this section
+and the verification command together.
+
 ## Project Topology
 
 | Role            | Repository / worktree                               | Notes                                             |
@@ -41,6 +68,13 @@ Default order:
 6. Merge closes the issue or marks the local ledger item accepted.
 
 Do not create a new issue after every merge by default. Create a follow-up issue only when acceptance finds a gap, the PR intentionally leaves known follow-up work, a regression is discovered, or the user wants a separate tracking item. If using GitHub, prefer PR text such as `Closes #123` only after the acceptance cases are complete enough for merge.
+
+After merge, the leader must also finish the owned local cleanup for that
+issue/slice: stop only its recorded stack processes, remove only its app/fork
+worktrees, prune only its registry/manifest/log/pid entries, and delete only its
+local branch when the remote branch has already been merged or deleted. Do not
+leave a solved issue's worktree behind unless the user explicitly asks to keep
+it for further debugging.
 
 ## Agents
 
