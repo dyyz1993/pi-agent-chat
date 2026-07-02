@@ -83,11 +83,7 @@ describe("extracted message bubble components", () => {
 
   it("uses the shared code block renderer while text content is streaming", async () => {
     render(
-      <TextContentCard
-        text={"```ts\nconst ok = true;\n```"}
-        isStreaming
-        blockId="msg-1-code"
-      />,
+      <TextContentCard text={"```ts\nconst ok = true;\n```"} isStreaming blockId="msg-1-code" />,
     );
 
     await waitFor(() => {
@@ -177,6 +173,23 @@ describe("extracted message bubble components", () => {
     expect(screen.getByText("Memory 1")).toBeInTheDocument();
     expect(screen.getByText("remote-preference.md")).toBeInTheDocument();
     expect(screen.queryByText(/secret memory body/)).not.toBeInTheDocument();
+  });
+
+  it("renders long-content XML as a compact attachment card", () => {
+    render(
+      <TextContentCard
+        blockId="msg-long-content"
+        text={`请参考：\n<long-content path="/tmp/pi-agent-chat-pastes/pasted-content-abc123.txt" originalLength="2400" lineCount="80" summary="pasted-content-abc123.txt">\n第 1-20 行：\nline 1\n... 省略中间 40 行 ...\n第 61-80 行：\nline 80\n</long-content>`}
+      />,
+    );
+
+    expect(screen.getByText("longContent.title")).toBeInTheDocument();
+    expect(screen.getByText("pasted-content-abc123.txt")).toBeInTheDocument();
+    expect(
+      screen.getByText("/tmp/pi-agent-chat-pastes/pasted-content-abc123.txt"),
+    ).toBeInTheDocument();
+    expect(screen.getByText('longContent.stats:{"chars":"2400","lines":"80"}')).toBeInTheDocument();
+    expect(screen.queryByText(/<long-content/)).not.toBeInTheDocument();
   });
 
   it("opens context reference files through the shared file overlay", () => {

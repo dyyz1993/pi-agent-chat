@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   composeInputWithPlaceholders,
+  persistComposerPlaceholders,
   serializeComposerPlaceholders,
   useComposerPlaceholderStore,
   type ComposerPlaceholder,
@@ -14,6 +15,20 @@ function quotePlaceholder(text: string, title = "snippet"): ComposerPlaceholder 
     title,
     createdAt: 1,
     expanded: false,
+  };
+}
+
+function longTextPlaceholder(text: string): ComposerPlaceholder {
+  return {
+    id: "long-1",
+    type: "longContent",
+    text,
+    title: "pasted-content-long-1.txt",
+    createdAt: 1,
+    expanded: false,
+    originalLength: text.length,
+    lineCount: text.split(/\r\n|\r|\n/u).length,
+    path: "/tmp/pi-agent-chat-pastes/pasted-content-long-1.txt",
   };
 }
 
@@ -51,5 +66,50 @@ describe("composer placeholder store", () => {
     expect(
       composeInputWithPlaceholders("please explain  \n", [quotePlaceholder("line one\nline two")]),
     ).toBe("please explain\n\n引用 1: snippet\n```text\nline one\nline two\n```");
+  });
+
+  it("stores long pasted content with a temp path and full original text", () => {
+    const text = Array.from({ length: 80 }, (_, index) => `line ${index + 1}`).join("\n");
+
+    const id = useComposerPlaceholderStore.getState().addLongContentPaste(text);
+
+    const placeholder = useComposerPlaceholderStore.getState().placeholders[0];
+    expect(id).toBe(placeholder.id);
+    expect(placeholder).toMatchObject({
+      type: "longContent",
+      text,
+      originalLength: text.length,
+      lineCount: 80,
+    });
+    expect(placeholder.path).toMatch(
+      /^\/tmp\/pi-agent-chat-pastes\/pasted-content-[a-z0-9]+\.txt$/,
+    );
+  });
+
+  it("serializes long pasted content as a compact long-content XML block", () => {
+    const text = Array.from({ length: 80 }, (_, index) => `line ${index + 1}`).join("\n");
+
+    const serialized = serializeComposerPlaceholders([longTextPlaceholder(text)]);
+
+    expect(serialized).toContain(
+      '<long-content path="/tmp/pi-agent-chat-pastes/pasted-content-long-1.txt"',
+    );
+    expect(serialized).toContain(`originalLength="${text.length}"`);
+    expect(serialized).toContain('summary="pasted-content-long-1.txt"');
+    expect(serialized).toContain("第 1-");
+    expect(serialized).toContain("省略中间");
+    expect(serialized).toContain("line 80");
+    expect(serialized).toContain("</long-content>");
+    expect(serialized).not.toContain("line 40");
+  });
+
+  it("persists long pasted content before sending", async () => {
+    const text = "x".repeat(2_100);
+    const placeholder = longTextPlaceholder(text);
+    const write = vi.fn(async () => undefined);
+
+    await persistComposerPlaceholders([placeholder], write);
+
+    expect(write).toHaveBeenCalledWith(placeholder.path, text);
   });
 });

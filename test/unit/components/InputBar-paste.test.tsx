@@ -51,9 +51,10 @@ describe("InputBar paste placeholders", () => {
     const onPasteTextAsPlaceholder = vi.fn(() => true);
     render(<InputBar sessionId="s1" onPasteTextAsPlaceholder={onPasteTextAsPlaceholder} />);
 
-    pasteText("line one\nline two\nline three");
+    const text = "x".repeat(2_000);
+    pasteText(text);
 
-    expect(onPasteTextAsPlaceholder).toHaveBeenCalledWith("line one\nline two\nline three");
+    expect(onPasteTextAsPlaceholder).toHaveBeenCalledWith(text);
     expect(useChatStore.getState().inputText).toBe("");
   });
 });

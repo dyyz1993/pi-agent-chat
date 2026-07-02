@@ -65,6 +65,7 @@ import { ComposerPlaceholderBar } from "./ComposerPlaceholderBar";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import {
   composeInputWithPlaceholders,
+  persistComposerPlaceholders,
   useComposerPlaceholderStore,
 } from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
@@ -757,6 +758,9 @@ export function ChatPanel() {
 
     const placeholders = useComposerPlaceholderStore.getState().placeholders;
     if (placeholders.length > 0) {
+      await persistComposerPlaceholders(placeholders, (path, content) =>
+        apiClient.call("file.writeFile", { path, content }),
+      );
       const currentText = useChatStore.getState().inputText;
       useChatStore.getState().setInputText(composeInputWithPlaceholders(currentText, placeholders));
     }
@@ -1110,7 +1114,9 @@ export function ChatPanel() {
                     onPasteTextAsPlaceholder={
                       !goalMode
                         ? (text) =>
-                            Boolean(useComposerPlaceholderStore.getState().addTextQuote(text))
+                            Boolean(
+                              useComposerPlaceholderStore.getState().addLongContentPaste(text),
+                            )
                         : undefined
                     }
                     onTriggerPopup={
