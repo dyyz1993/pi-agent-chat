@@ -46,6 +46,34 @@ states whenever possible.
 | Agent permission mode summary        | `src/mainview/components/agent-panel/AgentPanel.tsx`                                       | Shows agent `permissionMode` metadata in the Agent panel.                                      |
 | Status/plugin context                | `src/mainview/components/status-panel/StatusPanel.tsx`                                     | Shows runtime mode, plugins, MCP, LSP, and related status context around permissions.          |
 
+## Issue #7 Closure Contract
+
+Issue #7 asks for permission requests to use one event-driven, global pending
+request model instead of being split across per-session local UI state. The
+current implementation satisfies that contract through these paths:
+
+| Requirement from #7                                                        | Current artifact                                                                                                                      | Verification                                                                                                      |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Current-session permission requests enter a shared store                   | `agent-event-handler.ts` handles `extension_ui_request` and registers `useUIDialogStore.pending`                                      | `test/unit/stores/ui-dialog.test.ts`, `test/unit/stores/ui-dialog-hook.test.ts`                                   |
+| Child/subtask permission requests project to the parent UI                 | `session-subscriptions.ts` routes `coordinator.session_event` through both `handleAgentEvent` and `handleSubagentEvent`               | `test/unit/stores/session-subscriptions-coordinator-ui.test.ts`, `test/unit/components/subagent-renderer.test.ts` |
+| Pending requests recover after refresh/reconnect                           | `session-initial-state.ts` and `use-subagent-store.ts` restore `pendingUIRequests` from runtime state                                 | `test/unit/stores/subagent-hook.test.ts`, `test/unit/stores/status-visibility.test.ts`                            |
+| UIPendingCenter aggregates by project/session and supports jump-to-session | `UIPendingCenter.tsx` builds project/session/subtask groups from `useUIDialogStore.pending`, session lists, and `subsessionsByParent` | `test/unit/components/UIPendingCenter.test.tsx`                                                                   |
+| Project tab shows pending permission signal and count                      | `TabBar.tsx` reads `useUIDialogStore.pending`; `tab-dot.ts` prioritizes permission over streaming                                     | `test/unit/components/TabBar-permission-badge.test.tsx`                                                           |
+| Resolution/cancel clears stale pending UI                                  | `use-ui-dialog-store.ts` handles `respondById`, `dismissById`, `resolveFromRemote`, and `clearPendingBySession`                       | `test/unit/stores/ui-dialog.test.ts`                                                                              |
+
+Focused acceptance command for the #7 contract:
+
+```bash
+bunx vitest run --config vitest.config.ts \
+  test/unit/stores/ui-dialog.test.ts \
+  test/unit/stores/ui-dialog-hook.test.ts \
+  test/unit/stores/session-subscriptions-coordinator-ui.test.ts \
+  test/unit/stores/subagent-hook.test.ts \
+  test/unit/components/UIPendingCenter.test.tsx \
+  test/unit/components/TabBar-permission-badge.test.tsx \
+  test/unit/components/subagent-renderer.test.ts
+```
+
 ## Surface Inventory
 
 | ID  | Surface                                           | Required States                                                         | Real-chain Evidence                                                                                                                                   | Current Status                                                                                                |
@@ -207,14 +235,26 @@ Expected UI:
 - Answered state stays in the message list with the selected values.
 - Mobile layout keeps the card inside the viewport without horizontal overflow.
 
-## Known Runtime Recovery Note
+## Runtime Recovery Note
 
 The `19-top-modal-multi-session-after-visit.png` screenshot proves the modal can
-render multiple session groups, but also shows an important recovery constraint:
-the frontend only displayed both session pending requests after those sessions
-had been visited and their snapshots had been restored into the UI store. A
-future stronger validation should prove project-wide pending discovery without
-manual session visits, if that is a product requirement.
+render multiple session groups. Earlier validation showed a weaker recovery path
+where the frontend only displayed both session pending requests after those
+sessions had been visited and their snapshots had been restored into the UI
+store.
+
+The current #7 contract is stronger for subtask and live-child flows:
+
+- `parentSessionId` lets a live child request remain visible in the current
+  project before the child list is restored.
+- `subsessionsByParent` lets restored child sessions count and render in
+  `UIPendingCenter`.
+- `agent.getState.pendingUIRequests` restoration covers child runtime state on
+  reload.
+
+Cross-project delegate discovery without visiting the delegate source remains a
+separate product decision because delegate sessions can point at another
+project.
 
 ## Completion Audit
 
@@ -258,6 +298,19 @@ Focused component coverage:
 
 ```bash
 bunx vitest run --config vitest.config.ts test/unit/components/UIPendingCenter.test.tsx
+```
+
+Focused #7 pending-store coverage:
+
+```bash
+bunx vitest run --config vitest.config.ts \
+  test/unit/stores/ui-dialog.test.ts \
+  test/unit/stores/ui-dialog-hook.test.ts \
+  test/unit/stores/session-subscriptions-coordinator-ui.test.ts \
+  test/unit/stores/subagent-hook.test.ts \
+  test/unit/components/UIPendingCenter.test.tsx \
+  test/unit/components/TabBar-permission-badge.test.tsx \
+  test/unit/components/subagent-renderer.test.ts
 ```
 
 Build:
