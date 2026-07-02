@@ -27,6 +27,7 @@ afterEach(() => {
   cleanup();
   useSessionStore.setState({
     sessionContextMap: {},
+    sessionStatsMap: {},
     sessionStatusMap: {},
   });
   useSubagentStore.setState({
@@ -37,6 +38,45 @@ afterEach(() => {
 });
 
 describe("TokenStatusBar", () => {
+  it("shows cumulative session token stats next to current context usage", () => {
+    useSessionStore.setState({
+      sessionContextMap: {
+        "sess-ctx": { tokens: 12000, contextWindow: 200000, percent: 6 },
+      },
+      sessionStatsMap: {
+        "sess-ctx": {
+          tokens: {
+            input: 58000,
+            output: 23000,
+            cacheRead: 14000,
+            cacheWrite: 1000,
+            total: 96000,
+          },
+          cost: 0.0123,
+          toolCalls: 7,
+          totalMessages: 11,
+        },
+      },
+      sessionStatusMap: { "sess-ctx": "idle" },
+    });
+
+    render(<TokenStatusBar sessionId="sess-ctx" />);
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("tokenStatus.cumulative");
+    expect(text).toContain("tokenStatus.sessionInput");
+    expect(text).toContain("58K");
+    expect(text).toContain("tokenStatus.sessionOutput");
+    expect(text).toContain("23K");
+    expect(text).toContain("tokenStatus.sessionCache");
+    expect(text).toContain("15K");
+    expect(text).toContain("$0.012");
+    expect(text).toContain("tokenStatus.sessionTools");
+    expect(text).toContain("7");
+    expect(text).toContain("tokenStatus.sessionMessages");
+    expect(text).toContain("11");
+  });
+
   it("groups memory, rules, and LSP context under message history", () => {
     useSessionStore.setState({
       sessionContextMap: {

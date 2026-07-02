@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import {
   ArrowUp,
   PanelLeft,
@@ -57,10 +65,11 @@ import { ComposerPlaceholderBar } from "./ComposerPlaceholderBar";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import {
   composeInputWithPlaceholders,
+  persistComposerPlaceholders,
   useComposerPlaceholderStore,
 } from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
-import type { ChatMessage } from "../../types";
+import type { ChatMessage, SessionStatus } from "../../types";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
@@ -78,6 +87,16 @@ const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const MAX_MSG_IDS_CACHE = 10;
 
 const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
+
+export function shouldShowChatReloadButton({
+  sessionId,
+  status,
+}: {
+  sessionId: string | null | undefined;
+  status: SessionStatus | undefined;
+}): boolean {
+  return Boolean(sessionId) && status === "idle";
+}
 
 interface TopLoadScrollAnchor {
   sessionId: string;
@@ -260,6 +279,7 @@ export function ChatPanel() {
   const chatProjectName = getProjectDisplayName(chatProjectPath);
 
   const effectiveStatus = isViewingSubagent ? (subSessionStatus ?? subStatus) : parentStatus;
+  const reloadSessionId = isViewingSubagent ? activeSubId : activeSessionId;
 
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const currentModel = useSessionStore((s) => s.currentModel);
@@ -738,6 +758,9 @@ export function ChatPanel() {
 
     const placeholders = useComposerPlaceholderStore.getState().placeholders;
     if (placeholders.length > 0) {
+      await persistComposerPlaceholders(placeholders, (path, content) =>
+        apiClient.call("file.writeFile", { path, content }),
+      );
       const currentText = useChatStore.getState().inputText;
       useChatStore.getState().setInputText(composeInputWithPlaceholders(currentText, placeholders));
     }
@@ -957,6 +980,7 @@ export function ChatPanel() {
         <div className="ml-auto flex items-center gap-1">
           <UIPendingCenter />
           <NotificationCenter />
+          <ChatReloadButton sessionId={reloadSessionId} status={effectiveStatus} />
           <ChangeReviewBell />
           <StatusToggleIcon />
         </div>
@@ -1090,7 +1114,9 @@ export function ChatPanel() {
                     onPasteTextAsPlaceholder={
                       !goalMode
                         ? (text) =>
-                            Boolean(useComposerPlaceholderStore.getState().addTextQuote(text))
+                            Boolean(
+                              useComposerPlaceholderStore.getState().addLongContentPaste(text),
+                            )
                         : undefined
                     }
                     onTriggerPopup={
@@ -1394,6 +1420,60 @@ function StatusToggleIcon() {
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
+export function ChatReloadButton({
+  sessionId,
+  status,
+}: {
+  sessionId: string | null | undefined;
+  status: SessionStatus | undefined;
+}) {
+  const { t } = useTranslation("chat");
+  const pushNotif = useNotificationStore((s) => s.push);
+  const [isReloading, setIsReloading] = useState(false);
+  const isVisible = shouldShowChatReloadButton({ sessionId, status });
+
+  const handleReload = useCallback(
+    async (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      if (!sessionId || isReloading) return;
+      setIsReloading(true);
+      try {
+        await apiClient.call("agent.reload", { sessionId });
+        useSessionStore.getState().fetchInitialState(sessionId);
+        pushNotif({ message: t("reloadSuccess"), level: "info" });
+      } catch (err) {
+        log.warn("agent.reload failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        pushNotif({ message: t("reloadFailed"), level: "error" });
+      } finally {
+        setIsReloading(false);
+      }
+    },
+    [isReloading, pushNotif, sessionId, t],
+  );
+
+  if (!isVisible && !isReloading) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={handleReload}
+      disabled={isReloading}
+      className={`p-1 rounded transition-colors ${
+        isReloading
+          ? "text-semantic-accent cursor-wait"
+          : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
+      }`}
+      title={t("reloadTitle")}
+      aria-label={t("reloadTitle")}
+    >
+      <RefreshCw className={`w-3.5 h-3.5 ${isReloading ? "animate-spin" : ""}`} />
     </button>
   );
 }

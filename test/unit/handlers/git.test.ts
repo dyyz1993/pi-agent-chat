@@ -8,6 +8,14 @@ vi.mock("../../../src/shared/lib/project-config", () => ({
   listRemoteProjects: mocks.listRemoteProjects,
 }));
 
+vi.mock("../../../src/shared/lib/pi-agent-paths", async () => {
+  const actual = await vi.importActual<typeof import("../../../src/shared/lib/pi-agent-paths")>("../../../src/shared/lib/pi-agent-paths");
+  return {
+    ...actual,
+    getWorktreePath: (_repoPath: string, branch: string) => `/mock/worktrees/test_repo-${branch}`,
+  };
+});
+
 const mockFn = vi.fn<(args: string[]) => string>(() => "");
 type BunLike = {
   spawnSync?: (cmd: unknown[], options?: unknown) => {
