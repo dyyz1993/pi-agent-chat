@@ -80,6 +80,7 @@ describe("coordinator delegate operations", () => {
       "/project",
       childSessionPath,
       expect.objectContaining({
+        delegateParentSessionId: "parent",
         forceNewProcess: true,
       }),
     );
@@ -264,6 +265,7 @@ describe("coordinator delegate operations", () => {
         targetProjectPath,
         childSessionPath,
         expect.objectContaining({
+          delegateParentSessionId: "parent",
           forceNewProcess: true,
         }),
       );
@@ -371,6 +373,7 @@ describe("coordinator delegate operations", () => {
       localShadowPath,
       childSessionPath,
       expect.objectContaining({
+        delegateParentSessionId: "parent",
         forceNewProcess: true,
       }),
     );
@@ -463,6 +466,7 @@ describe("coordinator delegate operations", () => {
       "/project",
       forkedPath,
       expect.objectContaining({
+        delegateParentSessionId: "parent",
         forceNewProcess: true,
       }),
     );
