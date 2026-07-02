@@ -138,6 +138,71 @@ describe("setMessagesForSession", () => {
     expect(useChatStore.getState().messagesBySession["sess-1"][0].id).toBe("new");
   });
 
+  it("keeps only the most recent eight sessions in the message cache", () => {
+    for (let i = 1; i <= 9; i += 1) {
+      useChatStore.getState().setMessagesForSession(`sess-${i}`, [
+        {
+          id: `m-${i}`,
+          role: "user",
+          content: [{ type: "text", text: `message ${i}` }],
+          timestamp: i,
+        },
+      ]);
+    }
+
+    expect(Object.keys(useChatStore.getState().messagesBySession)).toEqual([
+      "sess-2",
+      "sess-3",
+      "sess-4",
+      "sess-5",
+      "sess-6",
+      "sess-7",
+      "sess-8",
+      "sess-9",
+    ]);
+  });
+
+  it("refreshes the cache recency when a session is written again", () => {
+    for (let i = 1; i <= 8; i += 1) {
+      useChatStore.getState().setMessagesForSession(`sess-${i}`, [
+        {
+          id: `m-${i}`,
+          role: "user",
+          content: [{ type: "text", text: `message ${i}` }],
+          timestamp: i,
+        },
+      ]);
+    }
+
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "m-1-refresh",
+        role: "user",
+        content: [{ type: "text", text: "message 1 refreshed" }],
+        timestamp: 10,
+      },
+    ]);
+    useChatStore.getState().setMessagesForSession("sess-9", [
+      {
+        id: "m-9",
+        role: "user",
+        content: [{ type: "text", text: "message 9" }],
+        timestamp: 11,
+      },
+    ]);
+
+    expect(Object.keys(useChatStore.getState().messagesBySession)).toEqual([
+      "sess-3",
+      "sess-4",
+      "sess-5",
+      "sess-6",
+      "sess-7",
+      "sess-8",
+      "sess-1",
+      "sess-9",
+    ]);
+  });
+
   it("deduplicates memory inject custom messages at the store write gateway", () => {
     const data = {
       operationId: "op-1",

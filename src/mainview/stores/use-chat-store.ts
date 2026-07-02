@@ -39,6 +39,7 @@ const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
 const PAGE_SIZE = 50;
+const MAX_MESSAGE_CACHE_SESSIONS = 8;
 const MEMORY_SAME_QUERY_DEDUP_WINDOW_MS = 15_000;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
 const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
@@ -59,6 +60,25 @@ export function clearBackgroundRefreshGeneration(sessionId: string): void {
 }
 
 export type MessageHydrationState = "idle" | "loading" | "ready" | "error";
+
+function setSessionMessagesWithCacheLimit(
+  current: Record<string, ChatMessage[]>,
+  sessionId: string,
+  messages: ChatMessage[],
+): Record<string, ChatMessage[]> {
+  const { [sessionId]: _existing, ...rest } = current;
+  const next = { ...rest, [sessionId]: messages };
+  const sessionIds = Object.keys(next);
+  if (sessionIds.length <= MAX_MESSAGE_CACHE_SESSIONS) {
+    return next;
+  }
+
+  const trimmed = { ...next };
+  for (const id of sessionIds.slice(0, sessionIds.length - MAX_MESSAGE_CACHE_SESSIONS)) {
+    delete trimmed[id];
+  }
+  return trimmed;
+}
 
 function getMemoryMessageDedupeKey(message: ChatMessage): string | undefined {
   if (message.role !== "custom") return undefined;
@@ -720,10 +740,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((s) => {
         const existing = s.messagesBySession[sessionId] || [];
         return {
-          messagesBySession: {
-            ...s.messagesBySession,
-            [sessionId]: [...existing, userMsg],
-          },
+          messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sessionId, [
+            ...existing,
+            userMsg,
+          ]),
         };
       });
 
@@ -749,10 +769,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const msgs = s.messagesBySession[sessionId] || [];
         return {
           isStreaming: false,
-          messagesBySession: {
-            ...s.messagesBySession,
-            [sessionId]: msgs.filter((m) => !m._local),
-          },
+          messagesBySession: setSessionMessagesWithCacheLimit(
+            s.messagesBySession,
+            sessionId,
+            msgs.filter((m) => !m._local),
+          ),
         };
       });
       // ❌ 不再强制切到 idle，保持当前状态
@@ -888,10 +909,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const existing = s.messagesBySession[sessionId] || [];
       return {
-        messagesBySession: {
-          ...s.messagesBySession,
-          [sessionId]: [...existing, msg],
-        },
+        messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sessionId, [
+          ...existing,
+          msg,
+        ]),
       };
     });
   },
@@ -905,7 +926,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
           });
       const next: Partial<ChatState> = {
-        messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
+        messagesBySession: setSessionMessagesWithCacheLimit(
+          s.messagesBySession,
+          sessionId,
+          nextMsgs,
+        ),
       };
       if (options.bumpStreamVersion) {
         next.streamContentVersion = s.streamContentVersion + 1;
@@ -957,10 +982,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       return {
         activeToolCallIdsBySession,
-        messagesBySession: {
-          ...s.messagesBySession,
-          [sessionId]: prepareMessagesForStore(existing, { activeToolCallIds: toolCallIds }),
-        },
+        messagesBySession: setSessionMessagesWithCacheLimit(
+          s.messagesBySession,
+          sessionId,
+          prepareMessagesForStore(existing, { activeToolCallIds: toolCallIds }),
+        ),
       };
     }),
 
@@ -1235,7 +1261,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
       } else {
         set((s) => ({
-          messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+          messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, finalMsgs),
           ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
@@ -1412,7 +1438,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           newCount: finalMsgs.length,
         });
         set((s) => ({
-          messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+          messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, finalMsgs),
           ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
@@ -1536,7 +1562,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: preparedMsgs },
+        messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, preparedMsgs),
         ...bumpHistoryLoadVersion(s, sid),
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
