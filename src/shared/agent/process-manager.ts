@@ -54,6 +54,7 @@ import {
   setActiveToolsOperation,
   getQueueOperation,
   clearQueueOperation,
+  promoteQueuedFollowUpOperation,
   getExtensionsOperation,
   getSkillsOperation,
   reloadOperation,
@@ -1359,6 +1360,11 @@ export class AgentProcessManager {
   async getSessionStats(sessionId: string): Promise<{
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
     cost: number;
+    toolCalls: number;
+    totalMessages: number;
+    userMessages?: number;
+    assistantMessages?: number;
+    toolResults?: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null> {
     const managed = this.getActiveManaged(sessionId);
@@ -1378,6 +1384,11 @@ export class AgentProcessManager {
           total: Number(tokens?.total ?? 0),
         },
         cost: Number(stats.cost ?? 0),
+        toolCalls: Number(stats.toolCalls ?? 0),
+        totalMessages: Number(stats.totalMessages ?? 0),
+        userMessages: Number(stats.userMessages ?? 0),
+        assistantMessages: Number(stats.assistantMessages ?? 0),
+        toolResults: Number(stats.toolResults ?? 0),
         contextUsage: cu
           ? {
               tokens: cu.tokens,
@@ -1573,9 +1584,24 @@ export class AgentProcessManager {
     });
   }
 
-  async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
+  async clearQueue(
+    sessionId: string,
+    item?: { type: "steering" | "followUp"; index: number; text: string },
+  ): Promise<{ steering: string[]; followUp: string[] }> {
     return clearQueueOperation({
       sessionId,
+      item,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
+  }
+
+  async promoteQueuedFollowUp(
+    sessionId: string,
+    item: { type: "followUp"; index: number; text: string },
+  ): Promise<{ steering: string[]; followUp: string[] }> {
+    return promoteQueuedFollowUpOperation({
+      sessionId,
+      item,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }

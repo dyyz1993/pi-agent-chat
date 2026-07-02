@@ -25,6 +25,7 @@ import {
   getQueueOperation,
   getSkillsOperation,
   getToolsOperation,
+  promoteQueuedFollowUpOperation,
   reloadOperation,
   restartMcpServerOperation,
   setActiveToolsOperation,
@@ -34,6 +35,8 @@ import {
   setPermissionModeOperation,
   setSteeringModeOperation,
   toggleMcpServerOperation,
+  type FollowUpQueueItemRef,
+  type QueueItemRef,
 } from "./agent-client-session-operations";
 import {
   getAgentsOperation,
@@ -74,6 +77,11 @@ export interface AgentClientApiAdapter {
   getSessionStats: (sessionId: string) => Promise<{
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
     cost: number;
+    toolCalls: number;
+    totalMessages: number;
+    userMessages?: number;
+    assistantMessages?: number;
+    toolResults?: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null>;
   getMessages: (
@@ -126,7 +134,14 @@ export interface AgentClientApiAdapter {
   getActiveTools: (sessionId: string) => Promise<{ toolNames: string[] }>;
   setActiveTools: (sessionId: string, toolNames: string[]) => Promise<void>;
   getQueue: (sessionId: string) => Promise<{ steering: string[]; followUp: string[] }>;
-  clearQueue: (sessionId: string) => Promise<{ steering: string[]; followUp: string[] }>;
+  clearQueue: (
+    sessionId: string,
+    item?: QueueItemRef,
+  ) => Promise<{ steering: string[]; followUp: string[] }>;
+  promoteQueuedFollowUp: (
+    sessionId: string,
+    item: FollowUpQueueItemRef,
+  ) => Promise<{ steering: string[]; followUp: string[] }>;
   getExtensions: (sessionId: string) => Promise<{
     extensions: Array<{
       path: string;
@@ -354,8 +369,15 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
     getQueue(sessionId) {
       return getQueueOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
     },
-    clearQueue(sessionId) {
-      return clearQueueOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
+    clearQueue(sessionId, item) {
+      return clearQueueOperation({ sessionId, item, getActiveManaged: deps.getActiveManaged });
+    },
+    promoteQueuedFollowUp(sessionId, item) {
+      return promoteQueuedFollowUpOperation({
+        sessionId,
+        item,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     getExtensions(sessionId) {
       return getExtensionsOperation({ sessionId, getActiveManaged: deps.getActiveManaged });

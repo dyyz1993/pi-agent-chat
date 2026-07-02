@@ -35,6 +35,81 @@ describe("session jsonl message readers", () => {
     expect(accumulator.lastJsonlLeafPointer).toBe("u1");
   });
 
+  it("keeps hidden system events out of chat messages but preserves metadata", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-jsonl-system-event-hidden-"));
+    const sessionPath = join(dir, "session.jsonl");
+    writeFileSync(
+      sessionPath,
+      [
+        JSON.stringify({ type: "message", id: "u1", parentId: null, message: { role: "user" } }),
+        JSON.stringify({
+          type: "system_event",
+          id: "sys1",
+          parentId: "u1",
+          timestamp: "2026-01-01T00:00:00Z",
+          eventType: "agent_changed",
+          eventLabel: "Agent changed to frontend-dev",
+          data: { agentName: "frontend-dev" },
+          display: false,
+        }),
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const accumulator = await readFullJsonlAccumulator({ sessionPath });
+
+    expect(accumulator.allMessages.map((message) => message.entryId)).toEqual(["u1"]);
+    expect(accumulator.allCustomEntries).toMatchObject([
+      {
+        id: "sys1",
+        customType: "system_event",
+        data: {
+          eventType: "agent_changed",
+          eventLabel: "Agent changed to frontend-dev",
+          data: { agentName: "frontend-dev" },
+          display: false,
+        },
+      },
+    ]);
+  });
+
+  it("renders displayable system events as custom messages", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-jsonl-system-event-display-"));
+    const sessionPath = join(dir, "session.jsonl");
+    writeFileSync(
+      sessionPath,
+      JSON.stringify({
+        type: "system_event",
+        id: "sys1",
+        parentId: null,
+        timestamp: "2026-01-01T00:00:00Z",
+        eventType: "approval_mode_changed",
+        eventLabel: "Approval mode changed to yolo",
+        data: { permissionMode: "yolo" },
+        display: true,
+      }),
+      "utf-8",
+    );
+
+    const accumulator = await readFullJsonlAccumulator({ sessionPath });
+
+    expect(accumulator.allMessages).toHaveLength(1);
+    expect(accumulator.allMessages[0]).toMatchObject({
+      entryId: "sys1",
+      message: {
+        role: "custom",
+        customType: "system_event",
+        display: true,
+        details: {
+          eventType: "approval_mode_changed",
+          eventLabel: "Approval mode changed to yolo",
+          data: { permissionMode: "yolo" },
+          display: true,
+        },
+      },
+    });
+  });
+
   it("reads UI entries through sandbox reader when sandbox path is used", async () => {
     const messages: unknown[] = [];
     const customEntries: Array<{
