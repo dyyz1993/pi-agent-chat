@@ -248,6 +248,11 @@ export function createSetActiveSessionAction({
     if (!tab) return;
 
     const ensureSession = async (): Promise<SessionMeta | null> => {
+      for (const sessions of Object.values(get().sessionsByProject)) {
+        const session = sessions.find((s) => s.sessionId === id);
+        if (session) return session;
+      }
+
       let sessions = get().sessionsByProject[tab.path];
       if (!sessions) {
         sessions = await get().loadSessionsForProject(tab.path);

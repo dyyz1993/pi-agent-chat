@@ -51,6 +51,7 @@ const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
 const _resourceRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const _modelStatePromises = new Map<string, Promise<void>>();
 const STATUS_STUCK_TIMEOUT_MS = 30 * 60 * 1000;
+const RECENT_SESSION_CREATE_GUARD_MS = 5_000;
 
 export function clearStatusWatchdog(sessionId: string) {
   const watchdog = _statusWatchdogs.get(sessionId);
@@ -391,6 +392,13 @@ export const useSessionStore = create<SessionState>()(
         const prevProjectId = get().activeProjectId;
         const prevSessionId = get().activeSessionId;
         const skipAutoSession = options?.skipAutoSession ?? false;
+        const shouldPreserveRecentSession =
+          !skipAutoSession &&
+          prevProjectId === id &&
+          !!prevSessionId &&
+          get().newSessionCreatedAt > 0 &&
+          Date.now() - get().newSessionCreatedAt <= RECENT_SESSION_CREATE_GUARD_MS &&
+          !!findSessionProjectPath(get(), prevSessionId);
 
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
           clearStatusWatchdog(prevSessionId);
@@ -402,7 +410,11 @@ export const useSessionStore = create<SessionState>()(
         }
 
         const version = get()._projectVersion + 1;
-        set({ activeProjectId: id, activeSessionId: null, _projectVersion: version });
+        set({
+          activeProjectId: id,
+          activeSessionId: shouldPreserveRecentSession ? prevSessionId : null,
+          _projectVersion: version,
+        });
         const tabs = get().projectTabs;
         syncTabsToBackend(tabs, id);
         const tab = tabs.find((t) => t.id === id);
@@ -421,7 +433,7 @@ export const useSessionStore = create<SessionState>()(
           gitStore.fetchBranches(workspacePath);
         });
 
-        if (!skipAutoSession) {
+        if (!skipAutoSession && !shouldPreserveRecentSession) {
           const cached = get().sessionsByProject[tab.path];
 
           if (cached && cached.length > 0) {
@@ -480,6 +492,9 @@ export const useSessionStore = create<SessionState>()(
                 }
               });
           }
+        } else if (shouldPreserveRecentSession) {
+          get().refreshSessionsInBackground(tab.path);
+          get().fetchProjectSessionStatuses(tab.path);
         }
       },
 
