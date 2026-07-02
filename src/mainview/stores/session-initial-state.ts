@@ -17,7 +17,7 @@ import { useSupervisorStore } from "./use-supervisor-store";
 import { useSessionQueueStore } from "./use-session-queue-store";
 import { useUIDialogStore } from "./use-ui-dialog-store";
 import { useCompactionStore } from "./use-compaction-store";
-import type { ContextUsage, SessionMeta, SessionStatus } from "../types";
+import type { ContextUsage, SessionMeta, SessionStatus, SessionUsageStats } from "../types";
 import type { ExtensionUIRequestEvent } from "../../shared/modules/agent";
 
 interface ExtensionEntry {
@@ -94,6 +94,7 @@ interface InitialStateSessionState {
   sessionStatusMap: Record<string, SessionStatus>;
   sessionsByProject: Record<string, SessionMeta[]>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
+  updateSessionStats: (sessionId: string, stats: SessionUsageStats) => void;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   fetchModelState: (
     sessionId: string,
@@ -141,13 +142,13 @@ export function createFetchInitialStateAction({
   set: SetState;
   log: InitialStateLogger;
   perfLog: InitialStateLogger;
-}): (sessionId: string) => Promise<void> {
-  return (sessionId) => {
+}): (sessionId: string, options?: { force?: boolean }) => Promise<void> {
+  return (sessionId, options) => {
     const existing = fetchInitPromiseMap.get(sessionId);
     if (existing) return existing;
 
     const lastFetch = fetchInitTimestampMap.get(sessionId);
-    if (lastFetch && Date.now() - lastFetch < FETCH_INIT_TTL_MS) {
+    if (!options?.force && lastFetch && Date.now() - lastFetch < FETCH_INIT_TTL_MS) {
       perfLog.info("[fetchInit] TTL cache hit, skipping", {
         sessionId,
         ageMs: Date.now() - lastFetch,
@@ -370,9 +371,10 @@ export function createFetchInitialStateAction({
             });
           });
 
-        // --- Priority 2 (parallel, max 3) ---
+        // --- Priority 2 (parallel, lightweight session snapshots) ---
         const modelsPromise = get().fetchModelState(sessionId, { includeFavorites: false });
         const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
+        const sessionStatsPromise = apiClient.call("agent.getSessionStats", { sessionId });
         const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
 
         modelsPromise.catch((err) => {
@@ -447,9 +449,25 @@ export function createFetchInitialStateAction({
             setTimeout(() => handleContextRetry(1), 1500);
           });
 
+        sessionStatsPromise
+          .then((stats) => {
+            if (!stats) return;
+            get().updateSessionStats(sessionId, stats);
+            if (stats.contextUsage) {
+              get().updateSessionContext(sessionId, stats.contextUsage);
+            }
+          })
+          .catch((err) => {
+            log.warn("agent.getSessionStats failed in fetchInitialState", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+
         await Promise.allSettled([
           modelsPromise,
           contextPromise,
+          sessionStatsPromise,
           settingsPromise,
           projectTrustPromise,
         ]);
