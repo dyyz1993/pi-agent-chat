@@ -75,9 +75,14 @@ describe("coordinator delegate operations", () => {
     ).resolves.toEqual({ sessionId: "child-delegate", status: "started" });
 
     const childSessionPath = join(dir, "child-delegate.jsonl");
-    expect(start).toHaveBeenCalledWith("child-delegate", "/project", childSessionPath, {
-      forceNewProcess: true,
-    });
+    expect(start).toHaveBeenCalledWith(
+      "child-delegate",
+      "/project",
+      childSessionPath,
+      expect.objectContaining({
+        forceNewProcess: true,
+      }),
+    );
     expect(setSessionName).toHaveBeenCalledWith("child-delegate", "指派: Inspect");
     expect(send).toHaveBeenCalledWith("child-delegate", expect.stringContaining("inspect repo"));
     expect(send).toHaveBeenCalledWith(
@@ -254,9 +259,14 @@ describe("coordinator delegate operations", () => {
         }),
       ).resolves.toEqual({ sessionId: "child-cross", status: "started" });
 
-      expect(start).toHaveBeenCalledWith("child-cross", targetProjectPath, childSessionPath, {
-        forceNewProcess: true,
-      });
+      expect(start).toHaveBeenCalledWith(
+        "child-cross",
+        targetProjectPath,
+        childSessionPath,
+        expect.objectContaining({
+          forceNewProcess: true,
+        }),
+      );
       expect(setSessionName).toHaveBeenCalledWith("child-cross", "指派: Inspect Target");
       expect(send).toHaveBeenCalledWith(
         "child-cross",
@@ -356,9 +366,14 @@ describe("coordinator delegate operations", () => {
     });
 
     const childSessionPath = join(dir, "child-remote.jsonl");
-    expect(start).toHaveBeenCalledWith("child-remote", localShadowPath, childSessionPath, {
-      forceNewProcess: true,
-    });
+    expect(start).toHaveBeenCalledWith(
+      "child-remote",
+      localShadowPath,
+      childSessionPath,
+      expect.objectContaining({
+        forceNewProcess: true,
+      }),
+    );
     expect(send).toHaveBeenCalledWith(
       "child-remote",
       expect.stringContaining(`- 项目路径: ${localShadowPath}`),
@@ -443,9 +458,14 @@ describe("coordinator delegate operations", () => {
     ).resolves.toEqual({ sessionId: "forked-child", status: "started" });
 
     const forkedPath = join(dir, "forked-child.jsonl");
-    expect(start).toHaveBeenCalledWith("forked-child", "/project", forkedPath, {
-      forceNewProcess: true,
-    });
+    expect(start).toHaveBeenCalledWith(
+      "forked-child",
+      "/project",
+      forkedPath,
+      expect.objectContaining({
+        forceNewProcess: true,
+      }),
+    );
     expect(setSessionName).toHaveBeenCalledWith("forked-child", "Forked Task");
     expect(send).toHaveBeenCalledWith("forked-child", "continue from here");
     expect(parentChildMap.get("parent")?.has("forked-child")).toBe(true);
@@ -877,7 +897,11 @@ describe("coordinator delegate operations", () => {
     const clients = new Map([["child", makeManaged("idle", "/tmp/child.jsonl")]]);
 
     expect(
-      handleCoordinatorDelegateListOperation({ parentSessionId: "parent", parentChildMap, clients }),
+      handleCoordinatorDelegateListOperation({
+        parentSessionId: "parent",
+        parentChildMap,
+        clients,
+      }),
     ).toEqual({
       sessions: [{ sessionId: "child", status: "idle", projectPath: "/project" }],
     });
