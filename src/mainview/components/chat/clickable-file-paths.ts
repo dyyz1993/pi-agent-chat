@@ -2,7 +2,7 @@ import type { Element, Root, Text } from "hast";
 import { CONTINUE, visit } from "unist-util-visit";
 
 const FILE_PATH_REGEX =
-  /(?:^|(?<=[\s,.;:!?()[\]{}'"`]))((?:\.\/|\.\.\/)?[a-zA-Z0-9._-]+\/[a-zA-Z0-9._/-]+\.[a-zA-Z0-9]{1,8})(?=[\s,.;:!?()[\]{}'"`]|$)/g;
+  /(?:^|(?<=[\s,.;:!?()[\]{}'"`]))(\/[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)+\.[a-zA-Z0-9]{1,8}|(?:\.\/|\.\.\/)?[a-zA-Z0-9._-]+\/[a-zA-Z0-9._/-]+\.[a-zA-Z0-9]{1,8})(?=[\s,.;:!?()[\]{}'"`]|$)/g;
 
 const SKIP_TAGS = new Set(["a", "script", "style"]);
 
