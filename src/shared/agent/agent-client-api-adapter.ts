@@ -77,6 +77,11 @@ export interface AgentClientApiAdapter {
   getSessionStats: (sessionId: string) => Promise<{
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
     cost: number;
+    toolCalls: number;
+    totalMessages: number;
+    userMessages?: number;
+    assistantMessages?: number;
+    toolResults?: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null>;
   getMessages: (

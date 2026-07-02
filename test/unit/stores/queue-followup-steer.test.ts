@@ -141,6 +141,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     _projectVersion: number;
     updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
     updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
+    refreshSessionStats: (sessionId: string) => Promise<void>;
     restoreContextFromHistory: (sessionId: string) => void;
   }
   const useSessionStore = create<MockSessionState>(() => ({
@@ -176,6 +177,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
         },
       }));
     },
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
     restoreContextFromHistory: () => {},
   }));
   return { useSessionStore, clearAgentStarted: vi.fn() };
