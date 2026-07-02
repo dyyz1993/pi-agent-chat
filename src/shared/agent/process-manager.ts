@@ -163,7 +163,12 @@ function scanExtensionDir(dir: string, extensionPaths: string[]): void {
 
   try {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__tests__")
+      if (
+        entry.name.startsWith(".") ||
+        entry.name.startsWith("_") ||
+        entry.name === "node_modules" ||
+        entry.name === "__tests__"
+      )
         continue;
 
       let isDir = entry.isDirectory();

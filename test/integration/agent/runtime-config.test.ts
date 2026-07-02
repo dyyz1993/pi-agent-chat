@@ -59,6 +59,8 @@ describe("agent runtime config", () => {
     touch(path.join(root, "module-b", "index.js"));
     touch(path.join(root, "module-c", "other.ts"));
     touch(path.join(root, ".hidden.ts"));
+    touch(path.join(root, "_single.ts"));
+    touch(path.join(root, "_disabled", "index.ts"));
     touch(path.join(root, "__tests__", "index.ts"));
     touch(path.join(root, "node_modules", "dep.ts"));
     touch(path.join(root, "notes.md"));
