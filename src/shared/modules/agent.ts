@@ -97,6 +97,11 @@ export interface AgentMethods {
         total: number;
       };
       cost: number;
+      toolCalls: number;
+      totalMessages: number;
+      userMessages?: number;
+      assistantMessages?: number;
+      toolResults?: number;
       contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
     } | null;
   };
@@ -206,7 +211,17 @@ export interface AgentMethods {
     result: { steering: string[]; followUp: string[] };
   };
   "agent.clearQueue": {
-    params: { sessionId: string };
+    params: {
+      sessionId: string;
+      item?: { type: "steering" | "followUp"; index: number; text: string };
+    };
+    result: { steering: string[]; followUp: string[] };
+  };
+  "agent.promoteQueuedFollowUp": {
+    params: {
+      sessionId: string;
+      item: { type: "followUp"; index: number; text: string };
+    };
     result: { steering: string[]; followUp: string[] };
   };
   "agent.getExtensions": {
@@ -634,11 +649,13 @@ export interface AgentMethods {
 export interface RemoteSshStatus {
   enabled: boolean;
   configured: boolean;
+  status?: "connecting" | "connected" | "disconnected" | "error";
   host?: string;
   remoteCwd?: string;
   localCwd?: string;
   sshArgs?: string[];
   shell?: string;
+  error?: string;
 }
 
 export interface AgentMessageForUI {
@@ -663,6 +680,11 @@ export interface AgentEvents {
   "agent.event": AgentEventPayload;
   "agent.notify": { sessionId: string; message: string; notifyType: "info" | "warning" | "error" };
   "agent.session_status_changed": { sessionId: string; projectPath: string; status: string };
+  "agent.ssh_connection_changed": {
+    sessionId: string;
+    projectPath: string;
+    status: RemoteSshStatus;
+  };
   "agent.session_renamed": { sessionId: string; projectPath: string; newName: string };
 }
 

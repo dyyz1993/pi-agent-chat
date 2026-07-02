@@ -1,6 +1,7 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { ProjectTab, SessionMeta } from "../../../src/mainview/types";
+import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
 
 const sessionStoreState: Record<string, unknown> = {};
 const uiDialogStoreState: Record<string, unknown> = {};
@@ -89,6 +90,7 @@ function getBadgeTextForTab(tabName: string): string | null {
 describe("TabBar permission icon badge", () => {
   afterEach(() => {
     cleanup();
+    useStatusStore.setState({ remoteRuntimeBySession: {} });
   });
 
   it("middle-truncates long project names while preserving the tail", () => {
@@ -151,6 +153,98 @@ describe("TabBar permission icon badge", () => {
     const badge = screen.getByTestId("tab-session-identity-badge");
     expect(badge).toHaveTextContent("委派");
     expect(badge).toHaveAttribute("data-session-kind", "delegate");
+  });
+
+  it("shows a connecting SSH state on the remote project tab", () => {
+    setupStore({
+      tabs: [
+        {
+          id: "remote-1",
+          name: "SSH Project",
+          path: "/Users/me/.pi-agent-chat/remote-projects/ssh-demo/project",
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            id: "remote-1",
+            name: "SSH Project",
+            host: "devbox",
+            remotePath: "/srv/project",
+            localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-demo/project",
+            sshRuntimeKind: "remote-agent-child",
+          },
+        },
+      ],
+      sessionsByProject: {
+        "/Users/me/.pi-agent-chat/remote-projects/ssh-demo/project": [
+          { sessionId: "sess-remote", name: "Remote Session" },
+        ],
+      },
+      activeProjectId: "remote-1",
+      activeSessionId: "sess-remote",
+      statusMap: { "sess-remote": "idle" },
+    });
+    useStatusStore.getState().setRemoteRuntimeStatus("sess-remote", {
+      enabled: true,
+      configured: true,
+      status: "connecting",
+      host: "devbox",
+      remoteCwd: "/srv/project",
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const indicator = screen.getByTestId("tab-remote-runtime-indicator");
+    expect(indicator).toHaveAttribute("data-connection-status", "connecting");
+    expect(indicator).toHaveClass("text-text-tertiary");
+    expect(indicator.querySelector(".animate-spin")).not.toBeNull();
+    expect(indicator).toHaveAttribute("title", "remoteRuntimeConnecting");
+  });
+
+  it("shows an error SSH state on the remote project tab before session status", () => {
+    setupStore({
+      tabs: [
+        {
+          id: "remote-1",
+          name: "SSH Project",
+          path: "/Users/me/.pi-agent-chat/remote-projects/ssh-demo/project",
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            id: "remote-1",
+            name: "SSH Project",
+            host: "devbox",
+            remotePath: "/srv/project",
+            localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-demo/project",
+            sshRuntimeKind: "remote-agent-child",
+          },
+        },
+      ],
+      sessionsByProject: {
+        "/Users/me/.pi-agent-chat/remote-projects/ssh-demo/project": [
+          { sessionId: "sess-remote", name: "Remote Session" },
+        ],
+      },
+      activeProjectId: "remote-1",
+      activeSessionId: "sess-remote",
+      statusMap: { "sess-remote": "idle" },
+    });
+    useStatusStore.getState().setRemoteRuntimeStatus("sess-remote", {
+      enabled: true,
+      configured: true,
+      status: "error",
+      host: "devbox",
+      remoteCwd: "/srv/project",
+      error: "Connection timed out",
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    const indicator = screen.getByTestId("tab-remote-runtime-indicator");
+    const dot = screen.getByRole("tab", { name: "SSH Project" }).querySelector("span.w-2");
+    expect(indicator).toHaveAttribute("data-connection-status", "error");
+    expect(indicator).toHaveClass("text-status-error");
+    expect(dot).toHaveClass("bg-status-error");
+    expect(indicator).toHaveAttribute("title", "remoteRuntimeError");
   });
 
   it("shows permission icon only on the tab with permission sessions", () => {

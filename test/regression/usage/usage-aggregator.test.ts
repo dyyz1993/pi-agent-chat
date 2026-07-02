@@ -106,4 +106,91 @@ describe("usage aggregator", () => {
       "agent-test-harness",
     ]);
   });
+
+  it("extracts observability signals from context usage and tool execution sequences", () => {
+    const stats = aggregateUsageEntries(
+      [
+        entry("s-observe", {
+          type: "custom",
+          customType: "context_usage",
+          timestamp: "2026-06-25T09:00:00+08:00",
+          data: {
+            tokens: 64000,
+            contextWindow: 128000,
+            percent: 50,
+            breakdown: [
+              {
+                id: "context_files",
+                label: "Context files",
+                tokens: 30000,
+                source: "core",
+                estimated: true,
+                details: [
+                  { label: "src/a.ts", tokens: 12000 },
+                  { label: "src/a.ts", tokens: 11000 },
+                  { label: "src/b.ts", tokens: 7000 },
+                ],
+              },
+            ],
+          },
+        }),
+        entry("s-observe", {
+          type: "message",
+          timestamp: "2026-06-25T09:01:00+08:00",
+          message: {
+            role: "assistant",
+            timestamp: "2026-06-25T09:01:00+08:00",
+            content: [
+              {
+                type: "toolExecution",
+                toolName: "read",
+                args: JSON.stringify({ path: "src/a.ts" }),
+              },
+              {
+                type: "toolExecution",
+                toolName: "edit",
+                args: JSON.stringify({ path: "src/a.ts" }),
+              },
+              {
+                type: "toolExecution",
+                toolName: "read",
+                args: JSON.stringify({ path: "src/a.ts" }),
+              },
+              {
+                type: "toolExecution",
+                toolName: "edit",
+                args: JSON.stringify({ path: "src/a.ts" }),
+              },
+              { type: "toolExecution", toolName: "bash", args: "bun test" },
+            ],
+          },
+        }),
+      ],
+      { projectPath: "/tmp/project", range: "7d", now, scannedSessionFiles: 1 },
+    );
+
+    expect(stats.observability.contextSamples).toBe(1);
+    expect(stats.observability.maxContextTokens).toBe(64000);
+    expect(stats.observability.avgContextTokens).toBe(64000);
+    expect(stats.observability.maxContextPercent).toBe(50);
+    expect(stats.observability.contextRefTotal).toBe(3);
+    expect(stats.observability.contextRefDuplicateCount).toBe(1);
+    expect(stats.observability.topDuplicateContextRefs[0]).toMatchObject({
+      ref: "src/a.ts",
+      count: 2,
+      tokens: 23000,
+    });
+    expect(stats.observability.toolCalls).toBe(5);
+    expect(stats.observability.toolDistribution.map((item) => [item.name, item.calls])).toEqual([
+      ["edit", 2],
+      ["read", 2],
+      ["bash", 1],
+    ]);
+    expect(stats.observability.inefficientPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "read_edit_churn", sessionId: "s-observe" }),
+        expect.objectContaining({ type: "repeated_read", sessionId: "s-observe", count: 2 }),
+      ]),
+    );
+  });
 });

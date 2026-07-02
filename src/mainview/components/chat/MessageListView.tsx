@@ -8,6 +8,7 @@ import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./lsp-constants";
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
+import { SUPERVISOR_CONTINUE_CUSTOM_TYPE } from "./SupervisorContinueCard";
 import { CHAT_LIST_ITEM_CLASS } from "./chat-layout-classes";
 import { dedupeMemoryInjectMessages, useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
@@ -125,9 +126,7 @@ interface ProcessedMessage {
 type CustomContentBlock = Extract<ChatMessage["content"][number], { type: "custom" }>;
 
 function getCustomBlock(message: ChatMessage): CustomContentBlock | undefined {
-  return message.content.find(
-    (block): block is CustomContentBlock => block.type === "custom",
-  );
+  return message.content.find((block): block is CustomContentBlock => block.type === "custom");
 }
 
 function mergeMemoryEntriesIntoMessage(
@@ -214,10 +213,7 @@ function mergeInstantMemoryInjectsIntoSearch(messages: ChatMessage[]): ChatMessa
       const targetId = turn[searchIndex].id;
       const targetIndex = nextTurn.findIndex((msg) => msg.id === targetId);
       if (targetIndex >= 0) {
-        nextTurn[targetIndex] = mergeMemoryEntriesIntoMessage(
-          nextTurn[targetIndex],
-          mergedEntries,
-        );
+        nextTurn[targetIndex] = mergeMemoryEntriesIntoMessage(nextTurn[targetIndex], mergedEntries);
       }
     }
 
@@ -275,7 +271,8 @@ export function buildProcessedMessages(
           !isLspCustomType(b.customType) &&
           !isBashBackgroundProcessType(b.customType) &&
           b.customType !== "step_snapshot" &&
-          b.customType !== "supervisor_goal_complete"
+          b.customType !== "supervisor_goal_complete" &&
+          b.customType !== SUPERVISOR_CONTINUE_CUSTOM_TYPE
         )
           return true;
         return false;

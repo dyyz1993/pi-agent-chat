@@ -13,6 +13,7 @@ import {
 import type { ChatMessage } from "../../types";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { GoalCompleteCard } from "./GoalCompleteCard";
+import { SUPERVISOR_CONTINUE_CUSTOM_TYPE, SupervisorContinueCard } from "./SupervisorContinueCard";
 import {
   type MessageCardProps,
   ROLE_CONFIG,
@@ -68,7 +69,8 @@ function getCustomBlockPreview(block: Extract<ChatMessage["content"][number], { 
   if (
     MEMORY_CUSTOM_TYPES.has(block.customType) ||
     block.customType === "step_snapshot" ||
-    block.customType === "supervisor_goal_complete"
+    block.customType === "supervisor_goal_complete" ||
+    block.customType === SUPERVISOR_CONTINUE_CUSTOM_TYPE
   ) {
     return cleanPreviewText(block.customType);
   }
@@ -196,7 +198,8 @@ export const MessageCard = memo(function MessageCard({
         !isLspCustomType(b.customType) &&
         !isBashBackgroundProcessType(b.customType) &&
         b.customType !== "step_snapshot" &&
-        b.customType !== "supervisor_goal_complete"
+        b.customType !== "supervisor_goal_complete" &&
+        b.customType !== SUPERVISOR_CONTINUE_CUSTOM_TYPE
       )
         return true;
       return false;
@@ -208,6 +211,18 @@ export const MessageCard = memo(function MessageCard({
     return (
       <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
         <GoalCompleteCard data={(customBlock as { data?: unknown }).data} blockId={message.id} />
+      </div>
+    );
+  }
+
+  if (
+    hasCustomContent &&
+    customBlock &&
+    customBlock.customType === SUPERVISOR_CONTINUE_CUSTOM_TYPE
+  ) {
+    return (
+      <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
+        <SupervisorContinueCard data={(customBlock as { data?: unknown }).data} />
       </div>
     );
   }
