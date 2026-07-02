@@ -17,8 +17,8 @@ import {
   toggleMcpServerOperation,
 } from "../../../src/shared/agent/agent-client-session-operations";
 
-function makeManaged(client: Record<string, unknown>) {
-  return { client };
+function makeManaged(client: Record<string, unknown>, info: Record<string, unknown> = {}) {
+  return { client, info };
 }
 
 describe("agent client session operations", () => {
@@ -67,6 +67,24 @@ describe("agent client session operations", () => {
     expect(client.abortRetry).toHaveBeenCalledTimes(1);
     expect(client.setPermissionMode).toHaveBeenCalledWith("default");
     expect(client.setActiveTools).toHaveBeenCalledWith(["bash"]);
+  });
+
+  it("mirrors setPermissionMode results into managed session info for delegate inheritance", async () => {
+    const client = {
+      setPermissionMode: vi.fn().mockResolvedValue({ mode: "yolo" }),
+    };
+    const managed = makeManaged(client, { permissionMode: "normal" });
+
+    await expect(
+      setPermissionModeOperation({
+        sessionId: "parent-session",
+        mode: "yolo",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn().mockResolvedValue(managed),
+      }),
+    ).resolves.toEqual({ mode: "yolo" });
+
+    expect(managed.info.permissionMode).toBe("yolo");
   });
 
   it("returns empty or client-not-found fallbacks when no active client exists", async () => {

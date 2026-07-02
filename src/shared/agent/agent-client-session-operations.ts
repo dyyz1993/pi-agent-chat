@@ -36,6 +36,13 @@ interface ManagedClientLike {
       item: FollowUpQueueItemRef,
     ): Promise<{ steering: string[]; followUp: string[] }>;
   };
+  info?: {
+    projectPath?: string;
+    sessionPath?: string;
+    status?: string;
+    activeToolExecutions?: unknown;
+    permissionMode?: string;
+  };
 }
 
 interface ManagedClientAccess<TManaged extends ManagedClientLike> {
@@ -165,13 +172,16 @@ export async function setPermissionModeOperation<TManaged extends ManagedClientL
 }): Promise<{ mode: string }> {
   const managed = await resolveManagedClient(options);
   if (!managed) throw new Error("Client not found");
-  return withTimeout(
+  const result = await withTimeout(
     managed.client.setPermissionMode(
       options.mode as Parameters<RpcClientAPI["setPermissionMode"]>[0],
     ),
     15_000,
     "setPermissionMode",
   );
+  managed.info ??= {};
+  managed.info.permissionMode = result.mode;
+  return result;
 }
 
 export async function getActiveToolsOperation<TManaged extends ManagedClientLike>(options: {

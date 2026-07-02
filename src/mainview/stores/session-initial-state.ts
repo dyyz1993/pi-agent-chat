@@ -142,13 +142,13 @@ export function createFetchInitialStateAction({
   set: SetState;
   log: InitialStateLogger;
   perfLog: InitialStateLogger;
-}): (sessionId: string) => Promise<void> {
-  return (sessionId) => {
+}): (sessionId: string, options?: { force?: boolean }) => Promise<void> {
+  return (sessionId, options) => {
     const existing = fetchInitPromiseMap.get(sessionId);
     if (existing) return existing;
 
     const lastFetch = fetchInitTimestampMap.get(sessionId);
-    if (lastFetch && Date.now() - lastFetch < FETCH_INIT_TTL_MS) {
+    if (!options?.force && lastFetch && Date.now() - lastFetch < FETCH_INIT_TTL_MS) {
       perfLog.info("[fetchInit] TTL cache hit, skipping", {
         sessionId,
         ageMs: Date.now() - lastFetch,
