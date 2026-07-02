@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
-import { FullscreenOverlay } from "../../primitives";
+import { ContentSurface } from "../../primitives";
 
 interface CodeExpandOverlayProps {
   open: boolean;
@@ -20,7 +20,7 @@ export const CodeExpandOverlay = memo(function CodeExpandOverlay({
   if (!open) return null;
 
   return (
-    <FullscreenOverlay
+    <ContentSurface
       title={title}
       onClose={onClose}
       closeLabel={t("common:close")}
@@ -28,6 +28,6 @@ export const CodeExpandOverlay = memo(function CodeExpandOverlay({
       bodyClassName="overflow-auto"
     >
       {children}
-    </FullscreenOverlay>
+    </ContentSurface>
   );
 });

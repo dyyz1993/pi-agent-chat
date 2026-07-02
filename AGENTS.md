@@ -246,8 +246,8 @@ Current scattered preview/editing entry points to check before adding a new one:
 - `src/mainview/layouts/MainLayout.tsx` currently hosts `FileOverlay`, `DiffOverlay`, `CodeExpandOverlay`, and `MarkdownExpandOverlay` over the chat area.
 - `src/mainview/stores/use-chat-overlay-store.ts` currently models `diff | file | expand | markdown`; new chat-scoped content surfaces should extend or replace this store instead of adding unrelated local state.
 - `src/mainview/components/primitives/ImageViewerOverlay.tsx` is body-portaled because message-triggered fullscreen previews must not live inside message rows; it uses `ContentSurface` for shared header/chrome.
-- `src/mainview/components/chat/preview/HtmlCard.tsx` and `PdfCard.tsx` currently use `IframeFullscreenOverlay`; when unifying surfaces, route their expanded mode through the shared preview host.
-- `src/mainview/components/file-preview/FileOverlay.tsx` and `src/mainview/components/diff/DiffOverlay.tsx` are chat-area overlays today; keep simple read-only states chat-scoped, but move editing, review, and multi-file flows to workspace fullscreen.
+- `src/mainview/components/primitives/IframeFullscreenOverlay.tsx` is still body-portaled for embedded HTML/PDF/URL previews, but its chrome is `ContentSurface`; keep `position="fixed"` for this portal path.
+- `src/mainview/components/file-preview/FileOverlay.tsx`, `src/mainview/components/diff/DiffOverlay.tsx`, `src/mainview/components/chat/MarkdownExpandOverlay.tsx`, `src/mainview/components/chat/primitives/CodeExpandOverlay.tsx`, and `src/mainview/components/chat/mermaid/MermaidFullscreen.tsx` are chat-area content surfaces and should use `ContentSurface`.
 - `src/mainview/components/change-review/ChangeReviewPanel.tsx` is review workflow UI and should not be treated as a small modal or inline preview.
 
 Decision rules:

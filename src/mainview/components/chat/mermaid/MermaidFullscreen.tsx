@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useMermaidStore } from "../../../stores/use-mermaid-store";
 import { MermaidBlock } from "./MermaidBlock";
-import { FullscreenOverlay } from "../../primitives";
+import { ContentSurface } from "../../primitives";
 
 export const MermaidFullscreen = memo(function MermaidFullscreen() {
   const { t } = useTranslation("chat");
@@ -12,7 +12,7 @@ export const MermaidFullscreen = memo(function MermaidFullscreen() {
   if (!code) return null;
 
   return (
-    <FullscreenOverlay
+    <ContentSurface
       title={t("mermaidChart")}
       onClose={closeFullscreen}
       closeLabel={t("closeEscTitle")}
@@ -22,6 +22,6 @@ export const MermaidFullscreen = memo(function MermaidFullscreen() {
       <div className="max-w-[90vw] mx-auto">
         <MermaidBlock code={code} inline={false} />
       </div>
-    </FullscreenOverlay>
+    </ContentSurface>
   );
 });

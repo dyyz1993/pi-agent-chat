@@ -6,7 +6,7 @@ import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
-import { FullscreenOverlay } from "../primitives";
+import { ContentSurface } from "../primitives";
 
 const log = createLogger("file");
 
@@ -284,7 +284,7 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
   );
 
   return (
-    <FullscreenOverlay
+    <ContentSurface
       title={title}
       onClose={onClose}
       closeLabel={t("close", { ns: "common" })}
@@ -295,6 +295,6 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
       bodyClassName="flex-1 min-h-0 flex flex-col"
     >
       {renderPreview()}
-    </FullscreenOverlay>
+    </ContentSurface>
   );
 }

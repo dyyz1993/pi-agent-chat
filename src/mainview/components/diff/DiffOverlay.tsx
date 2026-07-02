@@ -9,7 +9,7 @@ import { useLayoutStore } from "../../layouts/use-layout-store";
 import { formatFilePath } from "../../lib/format-path";
 import { getLanguage } from "../../utils/file-utils";
 import { createDiffStyles, DIFF_STYLE_PRESETS } from "./diff-style-factory";
-import { FullscreenOverlay } from "../primitives";
+import { ContentSurface } from "../primitives";
 import { registerShellPrismLanguage } from "../../lib/prism-languages";
 import { cx } from "../../lib/classes";
 
@@ -109,7 +109,7 @@ export function DiffOverlay() {
   );
 
   return (
-    <FullscreenOverlay
+    <ContentSurface
       title={title}
       onClose={clearDiff}
       closeLabel={t("closeDiff")}
@@ -136,6 +136,6 @@ export function DiffOverlay() {
           {...(effectiveSplitView && { leftTitle: t("diffBefore"), rightTitle: t("diffAfter") })}
         />
       ) : null}
-    </FullscreenOverlay>
+    </ContentSurface>
   );
 }
