@@ -9,6 +9,11 @@ import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useNotificationStore } from "./use-notification-store";
 import { clearAgentStarted, useSessionStore } from "./use-session-store";
+import {
+  useSessionQueueStore,
+  type FollowUpQueueItemRef,
+  type QueueItemRef,
+} from "./use-session-queue-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { isBashBackgroundProcessType } from "../components/chat/bash-background-process";
@@ -222,8 +227,7 @@ export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage
     const dedupeKey = getMemoryMessageDedupeKey(message);
     if (!dedupeKey) continue;
     const block = message.content[0];
-    const score =
-      block?.type === "custom" ? getMemoryEntryScore(block.customType, block.data) : 0;
+    const score = block?.type === "custom" ? getMemoryEntryScore(block.customType, block.data) : 0;
     const existing = chosenByKey.get(dedupeKey);
     if (!existing || score >= existing.score) {
       chosenByKey.set(dedupeKey, { message, score });
@@ -449,10 +453,16 @@ function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): Memor
 
     if (entry.customType === "memory_prefetch_result") {
       if (operationId) operationIdsWithFinalEntry.add(operationId);
-      bestResultByKey.set(dedupeKey, chooseBetterMemoryEntry(bestResultByKey.get(dedupeKey), entry));
+      bestResultByKey.set(
+        dedupeKey,
+        chooseBetterMemoryEntry(bestResultByKey.get(dedupeKey), entry),
+      );
     } else if (entry.customType === "memory_inject") {
       if (operationId) operationIdsWithFinalEntry.add(operationId);
-      bestInjectByKey.set(dedupeKey, chooseBetterMemoryEntry(bestInjectByKey.get(dedupeKey), entry));
+      bestInjectByKey.set(
+        dedupeKey,
+        chooseBetterMemoryEntry(bestInjectByKey.get(dedupeKey), entry),
+      );
       if (operationId) {
         bestInjectByOperationId.set(
           operationId,
@@ -604,6 +614,8 @@ interface ChatState {
   sendSteer: () => Promise<void>;
   sendFollowUp: () => Promise<void>;
   clearQueue: () => Promise<void>;
+  clearQueuedMessage: (item: QueueItemRef) => Promise<void>;
+  promoteQueuedFollowUp: (item: FollowUpQueueItemRef) => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (
     sessionId: string,
@@ -823,10 +835,50 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearQueue: async () => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
+    const queueBeforeClear = useSessionQueueStore.getState().queueBySession[sessionId];
+    const sessionStatus = useSessionStore.getState().sessionStatusMap[sessionId] ?? "idle";
+    const shouldAbortAfterClear =
+      Boolean(queueBeforeClear?.steering.length) &&
+      (sessionStatus === "streaming" || sessionStatus === "retrying");
     try {
       await apiClient.call("agent.clearQueue", { sessionId });
+      if (shouldAbortAfterClear) {
+        await apiClient.call("agent.abort", { sessionId });
+      }
     } catch (err) {
       log.warn("clearQueue failed", { error: String(err) });
+    }
+  },
+
+  clearQueuedMessage: async (item) => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    const queueStore = useSessionQueueStore.getState();
+    const previous = queueStore.queueBySession[sessionId];
+    queueStore.removeQueuedMessage(sessionId, item);
+    try {
+      await apiClient.call("agent.clearQueue", { sessionId, item });
+    } catch (err) {
+      if (previous) {
+        useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
+      }
+      log.warn("clearQueuedMessage failed", { error: String(err) });
+    }
+  },
+
+  promoteQueuedFollowUp: async (item) => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    const queueStore = useSessionQueueStore.getState();
+    const previous = queueStore.queueBySession[sessionId];
+    queueStore.promoteFollowUpToSteering(sessionId, item);
+    try {
+      await apiClient.call("agent.promoteQueuedFollowUp", { sessionId, item });
+    } catch (err) {
+      if (previous) {
+        useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
+      }
+      log.warn("promoteQueuedFollowUp failed", { error: String(err) });
     }
   },
 

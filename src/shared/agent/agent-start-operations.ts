@@ -18,6 +18,8 @@ export interface StartManagedClient {
   _activeSessionId: string;
   lastActiveAt: number;
   activeBackgroundTools: Set<string>;
+  /** Non-empty for delegated child sessions; LRU eviction skips these. */
+  delegateParentSessionId?: string;
 }
 
 interface CreateRpcClientTimings {
@@ -29,7 +31,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
   sessionId: string;
   projectPath: string;
   sessionPath: string;
-  startOptions?: { forceNewProcess?: boolean; userId?: string };
+  startOptions?: { forceNewProcess?: boolean; userId?: string; delegateParentSessionId?: string };
   clients: Map<string, TManaged>;
   processByCwd: Map<string, Set<TManaged>>;
   sessionPaths: Map<string, string>;
@@ -112,6 +114,9 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
       _activeSessionId: options.sessionId,
       lastActiveAt: now(),
       activeBackgroundTools: new Set<string>(),
+      ...(options.startOptions?.delegateParentSessionId
+        ? { delegateParentSessionId: options.startOptions.delegateParentSessionId }
+        : {}),
     } as unknown as TManaged;
 
     const bridge = (event: unknown): void => {
