@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "fs";
 
 import * as path from "path";
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { AgentEvent, AgentMessageForUI, ExtensionUIRequestEvent } from "../modules/agent";
+import type {
+  AgentEvent,
+  AgentMessageForUI,
+  ExtensionUIRequestEvent,
+  RemoteSshStatus,
+} from "../modules/agent";
 import type { AssistantMessage, AssistantMessageEvent, ImageContent } from "@dyyz1993/pi-ai";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
@@ -54,6 +59,7 @@ import {
   setActiveToolsOperation,
   getQueueOperation,
   clearQueueOperation,
+  promoteQueuedFollowUpOperation,
   getExtensionsOperation,
   getSkillsOperation,
   reloadOperation,
@@ -73,6 +79,7 @@ import { startAgentClientOperation } from "./agent-start-operations";
 import { stopAgentClientOperation } from "./agent-stop-operations";
 import { buildRemoteAgentChildRuntimeEnv, buildSshCommandRuntimeEnv } from "./runtime-resource-env";
 import {
+  type ActiveRuntimeSelection,
   buildRemoteChildSshArgs,
   resolveActiveRuntimeSelection,
   shouldCreateLocalRuntimeCwd,
@@ -1004,6 +1011,66 @@ export class AgentProcessManager {
     });
   }
 
+  private toRemoteSshStatus(
+    runtime: ActiveRuntimeSelection,
+    projectPath: string,
+    status: NonNullable<RemoteSshStatus["status"]>,
+    error?: string,
+  ): RemoteSshStatus | null {
+    if (runtime.kind === "local") return null;
+    if (runtime.kind === "ssh-command") {
+      return {
+        enabled: true,
+        configured: true,
+        status,
+        host: runtime.remoteProject.host,
+        remoteCwd: runtime.remoteProject.remotePath,
+        localCwd: projectPath,
+        sshArgs: runtime.remoteProject.sshArgs,
+        shell: runtime.remoteProject.shell,
+        error,
+      };
+    }
+    return {
+      enabled: true,
+      configured: true,
+      status,
+      host: runtime.target,
+      remoteCwd: runtime.remoteCwd,
+      localCwd: projectPath,
+      sshArgs: buildRemoteChildSshArgs(runtime),
+      shell: runtime.shell,
+      error,
+    };
+  }
+
+  private async resolveRemoteSshStatus(
+    projectPath: string,
+    status: NonNullable<RemoteSshStatus["status"]>,
+    error?: string,
+  ): Promise<RemoteSshStatus | null> {
+    const runtime = await resolveActiveRuntimeSelection(projectPath);
+    return this.toRemoteSshStatus(runtime, projectPath, status, error);
+  }
+
+  private broadcastRemoteSshConnection(
+    sessionId: string,
+    projectPath: string,
+    status: RemoteSshStatus | null,
+  ): void {
+    if (!status) return;
+    this.broadcastEvent(
+      "agent.ssh_connection_changed",
+      { sessionId, projectPath, status },
+      {},
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(agent.ssh_connection_changed) error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
   async start(
     sessionId: string,
     projectPath: string,
@@ -1015,6 +1082,19 @@ export class AgentProcessManager {
       log.info("[start] joining in-flight session start", { sessionId });
       return inFlightStart;
     }
+
+    const existing = this.clients.get(sessionId);
+    const connectingStatus =
+      existing?._activeSessionId === sessionId
+        ? null
+        : await this.resolveRemoteSshStatus(projectPath, "connecting").catch((err: unknown) => {
+            log.warn("resolve remote ssh status failed before start", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          });
+    this.broadcastRemoteSshConnection(sessionId, projectPath, connectingStatus);
 
     const startPromise = startAgentClientOperation({
       sessionId,
@@ -1041,7 +1121,22 @@ export class AgentProcessManager {
     });
     this._startPromises.set(sessionId, startPromise);
     try {
-      return await startPromise;
+      const result = await startPromise;
+      const connectedStatus = connectingStatus
+        ? { ...connectingStatus, status: "connected" as const, error: undefined }
+        : null;
+      this.broadcastRemoteSshConnection(sessionId, projectPath, connectedStatus);
+      return result;
+    } catch (err) {
+      const errorStatus = connectingStatus
+        ? {
+            ...connectingStatus,
+            status: "error" as const,
+            error: err instanceof Error ? err.message : String(err),
+          }
+        : null;
+      this.broadcastRemoteSshConnection(sessionId, projectPath, errorStatus);
+      throw err;
     } finally {
       if (this._startPromises.get(sessionId) === startPromise) {
         this._startPromises.delete(sessionId);
@@ -1359,6 +1454,11 @@ export class AgentProcessManager {
   async getSessionStats(sessionId: string): Promise<{
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
     cost: number;
+    toolCalls: number;
+    totalMessages: number;
+    userMessages?: number;
+    assistantMessages?: number;
+    toolResults?: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null> {
     const managed = this.getActiveManaged(sessionId);
@@ -1378,6 +1478,11 @@ export class AgentProcessManager {
           total: Number(tokens?.total ?? 0),
         },
         cost: Number(stats.cost ?? 0),
+        toolCalls: Number(stats.toolCalls ?? 0),
+        totalMessages: Number(stats.totalMessages ?? 0),
+        userMessages: Number(stats.userMessages ?? 0),
+        assistantMessages: Number(stats.assistantMessages ?? 0),
+        toolResults: Number(stats.toolResults ?? 0),
         contextUsage: cu
           ? {
               tokens: cu.tokens,
@@ -1573,9 +1678,24 @@ export class AgentProcessManager {
     });
   }
 
-  async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
+  async clearQueue(
+    sessionId: string,
+    item?: { type: "steering" | "followUp"; index: number; text: string },
+  ): Promise<{ steering: string[]; followUp: string[] }> {
     return clearQueueOperation({
       sessionId,
+      item,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
+  }
+
+  async promoteQueuedFollowUp(
+    sessionId: string,
+    item: { type: "followUp"; index: number; text: string },
+  ): Promise<{ steering: string[]; followUp: string[] }> {
+    return promoteQueuedFollowUpOperation({
+      sessionId,
+      item,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
@@ -1763,6 +1883,7 @@ export class AgentProcessManager {
     return getLatestAgentChangeOperation({
       sessionId,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
     });
   }
 

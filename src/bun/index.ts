@@ -5,6 +5,7 @@ import { ElectrobunTransport } from "../gateway/ipc-transport";
 import { registerAllHandlers } from "../shared/register-all-handlers";
 import { createLogger, setLogSink } from "../shared/lib/logger";
 import { configureLogDir, writeLogLine } from "../shared/lib/logger.node";
+import { resolveDesktopDevServerUrl } from "../shared/lib/desktop-dev-server-url";
 import { setOpenFolderFn } from "../shared/lib/native-dialog";
 import {
   setReadClipboardImageFn,
@@ -51,10 +52,10 @@ setReadClipboardImageFn(() => {
 configureLogDir("logs");
 setLogSink(writeLogLine);
 const log = createLogger("server");
+const DEV_SERVER_URL = resolveDesktopDevServerUrl();
 
 async function getMainViewUrl(): Promise<string> {
   const channel = await Updater.localInfo.channel();
-  const DEV_SERVER_URL = "http://localhost:5173";
   if (channel === "dev") {
     try {
       await fetch(DEV_SERVER_URL, { method: "HEAD" });

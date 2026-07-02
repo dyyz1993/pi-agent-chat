@@ -147,6 +147,8 @@ if [ -n "$ACTION" ] && [ -d "$ACTION" ]; then
   WORKTREE_PATH=$(cd "$ACTION" && pwd)
 elif [ -n "$ACTION" ] && [ -d "${PARENT_DIR}/${REPO_NAME}-$(wt_sanitize "$ACTION")" ]; then
   WORKTREE_PATH=$(cd "${PARENT_DIR}/${REPO_NAME}-$(wt_sanitize "$ACTION")" && pwd)
+elif [ -n "$ACTION" ] && [ -d "${PI_WORKTREE_ROOT}/${REPO_NAME}-$(wt_sanitize "$ACTION")" ]; then
+  WORKTREE_PATH=$(cd "${PI_WORKTREE_ROOT}/${REPO_NAME}-$(wt_sanitize "$ACTION")" && pwd)
 else
   header "Select Worktree"
   WORKTREES=()
@@ -157,6 +159,24 @@ else
       WORKTREES+=("$path|$branch")
     fi
   done < <(git -C "$REPO_ROOT" worktree list 2>/dev/null)
+
+  # Also scan PI_WORKTREE_ROOT for managed worktrees
+  if [ -d "$PI_WORKTREE_ROOT" ]; then
+    for dir in "$PI_WORKTREE_ROOT"/*/; do
+      [ -d "$dir/.git" ] || continue
+      path=$(cd "$dir" && pwd 2>/dev/null || true)
+      [ -n "$path" ] || continue
+      branch=$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+      # Avoid duplicates
+      dup=false
+      for wt in "${WORKTREES[@]}"; do
+        [[ "$wt" == "$path|"* ]] && dup=true && break
+      done
+      if ! $dup; then
+        WORKTREES+=("$path|$branch")
+      fi
+    done
+  fi
 
   [ ${#WORKTREES[@]} -gt 0 ] || err "No worktrees found. Create one with scripts/worktree-create.sh"
 

@@ -57,6 +57,16 @@ function resolveDelegateMetadataSessionId(
   return targetSessionId;
 }
 
+function hasKnownDelegateSendTarget<TManaged extends DelegateSendManaged>(
+  clients: Map<string, TManaged>,
+  sessionPaths: Map<string, string>,
+  targetSessionId: string,
+): boolean {
+  if (clients.has(targetSessionId)) return true;
+  const sessionPath = sessionPaths.get(targetSessionId) ?? "";
+  return Boolean(sessionPath && existsSync(sessionPath));
+}
+
 interface DelegateSyncParentManaged {
   info: {
     projectPath: string;
@@ -456,7 +466,10 @@ export async function handleCoordinatorDelegateSendOperation<
 }> {
   const { targetSessionId, message } = options.msg;
 
-  if (!canSendDelegateMessage(options.parentChildMap, options.sourceSessionId, targetSessionId)) {
+  if (
+    !canSendDelegateMessage(options.parentChildMap, options.sourceSessionId, targetSessionId) &&
+    !hasKnownDelegateSendTarget(options.clients, options.sessionPaths, targetSessionId)
+  ) {
     return {
       delivered: false,
       targetStatus: "not_found",

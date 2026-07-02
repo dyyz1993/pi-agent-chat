@@ -164,6 +164,8 @@ export type CoordinatorMethodCall =
       agent?: string;
       agentName?: string;
       model?: string;
+      projectPath?: string;
+      worktree?: { branch: string; sourceBranch?: string };
       invokeId?: string;
     }
   | {
@@ -246,6 +248,8 @@ export interface CoordinatorMethods {
     agent?: string;
     agentName?: string;
     model?: string;
+    projectPath?: string;
+    worktree?: { branch: string; sourceBranch?: string };
     invokeId?: string;
   }): Promise<DelegateCreateResult>;
 }

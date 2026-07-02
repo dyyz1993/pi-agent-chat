@@ -41,6 +41,30 @@ export interface SessionCacheHit extends SessionCacheData {
   needsIncremental: boolean;
 }
 
+function entryTimestamp(value: unknown): number {
+  return new Date((value as string | number | Date | undefined) ?? 0).getTime();
+}
+
+function createSystemEventData(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    eventType: parsed.eventType,
+    eventLabel: parsed.eventLabel,
+    data: parsed.data,
+    display: parsed.display === true,
+  };
+}
+
+function createSystemEventMessage(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    role: "custom",
+    customType: "system_event",
+    content: `System event: ${(parsed.eventLabel as string | undefined) ?? "System event"}`,
+    display: parsed.display === true,
+    details: createSystemEventData(parsed),
+    timestamp: entryTimestamp(parsed.timestamp),
+  };
+}
+
 export class SessionMessageCache {
   private cache = new Map<string, CachedSessionData>();
 
@@ -134,8 +158,19 @@ export class SessionMessageCache {
             id: entryId || `custom-${Date.now()}`,
             customType: (parsed.customType as string) ?? "unknown",
             data: parsed.data,
-            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+            timestamp: entryTimestamp(parsed.timestamp),
           });
+          newEntries++;
+        } else if (parsed.type === "system_event") {
+          customEntries.push({
+            id: entryId || `system-event-${Date.now()}`,
+            customType: "system_event",
+            data: createSystemEventData(parsed),
+            timestamp: entryTimestamp(parsed.timestamp),
+          });
+          if (parsed.display === true) {
+            messages.push({ entryId, message: createSystemEventMessage(parsed) });
+          }
           newEntries++;
         }
       } catch {
@@ -187,8 +222,19 @@ export class SessionMessageCache {
             id: entryId || `custom-${Date.now()}`,
             customType: (parsed.customType as string) ?? "unknown",
             data: parsed.data,
-            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+            timestamp: entryTimestamp(parsed.timestamp),
           });
+          newEntries++;
+        } else if (parsed.type === "system_event") {
+          customEntries.push({
+            id: entryId || `system-event-${Date.now()}`,
+            customType: "system_event",
+            data: createSystemEventData(parsed),
+            timestamp: entryTimestamp(parsed.timestamp),
+          });
+          if (parsed.display === true) {
+            messages.push({ entryId, message: createSystemEventMessage(parsed) });
+          }
           newEntries++;
         } else if (parsed.type === "compaction") {
           const compEntry = {

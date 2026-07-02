@@ -14,6 +14,7 @@ export interface DisplaySettings {
   collapseToolCards: boolean;
   showTimeline: boolean;
   showMemoryEntries: boolean;
+  showCacheDisplay: boolean;
 }
 
 export type ToggleSettingKey = {
@@ -50,6 +51,7 @@ const DEFAULTS: DisplaySettings = {
   collapseToolCards: false,
   showTimeline: true,
   showMemoryEntries: false,
+  showCacheDisplay: false,
 };
 
 const MONO_STACK = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace';

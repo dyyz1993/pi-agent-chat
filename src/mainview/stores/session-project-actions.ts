@@ -140,9 +140,9 @@ export function createCreateNewSessionAction({
       return;
     }
 
-    const targetPath = tab.path;
+    const targetPath = _projectPath || tab.path;
 
-    const existing = get().sessionsByProject[tab.path];
+    const existing = get().sessionsByProject[targetPath];
     const blankSession = existing?.find(
       (s) =>
         s.messageCount === 0 &&
@@ -179,12 +179,12 @@ export function createCreateNewSessionAction({
       };
 
       set((s) => {
-        const existing = s.sessionsByProject[tab.path] || [];
+        const existing = s.sessionsByProject[targetPath] || [];
         if (existing.some((sess) => sess.sessionId === result.sessionId)) return {};
         return {
           sessionsByProject: {
             ...s.sessionsByProject,
-            [tab.path]: insertAfterPinned(existing, newSession),
+            [targetPath]: insertAfterPinned(existing, newSession),
           },
         };
       });
