@@ -14,6 +14,7 @@
  * 10. 完整事件流：followUp 入队 → queue_update → message_start → 消息出现
  * 11. steer vs followUp 时序差异（概念性验证）
  * 12. 多条 followUp 排队
+ * 13. promoteQueuedFollowUp → 单条 followUp 立即提升为 steer
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { create } from "zustand";
@@ -473,6 +474,72 @@ describe("clearQueue — 行为验证", () => {
     useSessionStore.setState({ activeSessionId: null });
 
     await useChatStore.getState().clearQueue();
+
+    expect(apiClient.call).not.toHaveBeenCalled();
+  });
+
+  it("按 type/index/text 单独删除队列项并乐观更新本地队列", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A"],
+          followUp: ["稍后 A", "稍后 B"],
+        },
+      },
+    });
+
+    await useChatStore.getState().clearQueuedMessage({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.clearQueue", {
+      sessionId: SID,
+      item: { type: "followUp", index: 0, text: "稍后 A" },
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A"],
+      followUp: ["稍后 B"],
+    });
+  });
+});
+
+describe("promoteQueuedFollowUp — 行为验证", () => {
+  it("按 type/index/text 提升一条 followUp 到 steering 并乐观更新本地队列", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A"],
+          followUp: ["稍后 A", "稍后 B"],
+        },
+      },
+    });
+
+    await useChatStore.getState().promoteQueuedFollowUp({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.promoteQueuedFollowUp", {
+      sessionId: SID,
+      item: { type: "followUp", index: 0, text: "稍后 A" },
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A", "稍后 A"],
+      followUp: ["稍后 B"],
+    });
+  });
+
+  it("无 activeSessionId 不触发 promote RPC", async () => {
+    useSessionStore.setState({ activeSessionId: null });
+
+    await useChatStore.getState().promoteQueuedFollowUp({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
 
     expect(apiClient.call).not.toHaveBeenCalled();
   });
