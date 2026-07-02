@@ -50,7 +50,10 @@ vi.mock("../../../src/mainview/stores/use-explorer-store", () => ({
 import { useHooksStore } from "../../../src/mainview/stores/use-hooks-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { HooksPanel } from "../../../src/mainview/components/hooks-panel/HooksPanel";
-import type { HookLogEntry, HookConfigSnapshot } from "../../../src/mainview/stores/use-hooks-store";
+import type {
+  HookLogEntry,
+  HookConfigSnapshot,
+} from "../../../src/mainview/stores/use-hooks-store";
 
 const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
 
@@ -272,7 +275,9 @@ describe("HooksPanel", () => {
     expect(screen.getByText("/opt/pi-agent-permission-test.txt")).toBeInTheDocument();
     expect(screen.queryByTitle("Open /opt/pi-agent-permission-test.txt")).not.toBeInTheDocument();
 
-    const commandLink = await screen.findByTitle("Open /project/测试 demo/.pi/hooks/guard-write.sh");
+    const commandLink = await screen.findByTitle(
+      "Open /project/测试 demo/.pi/hooks/guard-write.sh",
+    );
     fireEvent.click(commandLink);
 
     expect(mockOpenFile).toHaveBeenCalledWith({
@@ -488,7 +493,9 @@ describe("HooksPanel", () => {
       type: "file",
     });
 
-    const projectSettingsLink = await screen.findByTitle("Open /project/测试 demo/.pi/settings.json");
+    const projectSettingsLink = await screen.findByTitle(
+      "Open /project/测试 demo/.pi/settings.json",
+    );
     fireEvent.click(projectSettingsLink);
     expect(mockOpenFile).toHaveBeenLastCalledWith({
       name: "settings.json",
@@ -499,13 +506,80 @@ describe("HooksPanel", () => {
     const globalHookLink = await screen.findByTitle(
       "Open /Users/tester/.claude/hooks/pre-tool-use.sh",
     );
-    expect(screen.queryByTitle("Open bash ~/.claude/hooks/pre-tool-use.sh")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle("Open bash ~/.claude/hooks/pre-tool-use.sh"),
+    ).not.toBeInTheDocument();
     fireEvent.click(globalHookLink);
     expect(mockOpenFile).toHaveBeenLastCalledWith({
       name: "pre-tool-use.sh",
       path: "/Users/tester/.claude/hooks/pre-tool-use.sh",
       type: "file",
     });
+  });
+
+  it("keeps long hook commands readable on narrow screens", async () => {
+    Object.assign(sessionState, {
+      activeSessionId: "sess-1",
+      activeProjectId: "project-1",
+      projectTabs: [{ id: "project-1", name: "Demo", path: "/project/mobile hooks" }],
+    });
+    render(<HooksPanel />);
+    await waitForInitialFetch();
+
+    fireEvent.click(screen.getByText("Rules"));
+
+    useHooksStore.setState({
+      activeTab: "rules",
+      bySession: {
+        "sess-1": {
+          entries: [],
+          ruleStats: [
+            {
+              matcher: "Bash|RN|RM|VeryLongHookMatcherForMobile",
+              event: "PreToolUse",
+              hookType: "command",
+              command: "bash .pi/hooks/mobile-readable-instructions-RN-renovate-RM-reinstall.sh",
+              source: "pi-project",
+              allowCount: 1,
+              blockCount: 1,
+              askCount: 1,
+            },
+          ],
+          totalExecutions: 3,
+          configSnapshot: {
+            ...mockConfigSnapshot,
+            events: [
+              {
+                name: "PreToolUse",
+                groups: [
+                  {
+                    matcher: "Bash|RN|RM|VeryLongHookMatcherForMobile",
+                    source: "pi-project",
+                    hooks: [
+                      {
+                        type: "command",
+                        command:
+                          "bash .pi/hooks/mobile-readable-instructions-RN-renovate-RM-reinstall.sh",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          loading: false,
+          expandedEntry: null,
+        },
+      },
+    });
+
+    const ruleCommand = await screen.findAllByTestId("hook-command-code");
+    expect(ruleCommand[0]).toHaveClass("whitespace-normal");
+    expect(ruleCommand[0]).toHaveClass("break-words");
+    expect(ruleCommand[0]).not.toHaveClass("truncate");
+    expect(
+      screen.getAllByText(/mobile-readable-instructions-RN-renovate-RM-reinstall/).length,
+    ).toBeGreaterThan(0);
   });
 
   it("refresh button calls fetchLog", async () => {

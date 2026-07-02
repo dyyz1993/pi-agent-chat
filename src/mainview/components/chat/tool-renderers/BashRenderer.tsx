@@ -231,7 +231,16 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   async function sendAction(action: "kill" | "background") {
     const sid = useSessionStore.getState().activeSessionId;
     if (!sid) return;
-    await apiClient.call("bash.command", { sessionId: sid, action, toolCallId: block.toolCallId });
+    try {
+      await apiClient.call("bash.command", { sessionId: sid, action, toolCallId: block.toolCallId });
+    } catch (err) {
+      logger.warn("bash action failed", {
+        sessionId: sid,
+        action,
+        toolCallId: block.toolCallId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   let borderBg: string;

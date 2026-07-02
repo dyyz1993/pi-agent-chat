@@ -82,6 +82,30 @@ function parseJsonlLine(line: string): {
   }
 }
 
+function entryTimestamp(value: unknown): number {
+  return new Date((value as string | number | Date | undefined) ?? 0).getTime();
+}
+
+function createSystemEventData(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    eventType: parsed.eventType,
+    eventLabel: parsed.eventLabel,
+    data: parsed.data,
+    display: parsed.display === true,
+  };
+}
+
+function createSystemEventMessage(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    role: "custom",
+    customType: "system_event",
+    content: `System event: ${(parsed.eventLabel as string | undefined) ?? "System event"}`,
+    display: parsed.display === true,
+    details: createSystemEventData(parsed),
+    timestamp: entryTimestamp(parsed.timestamp),
+  };
+}
+
 /**
  * Process a parsed JSONL entry and append to the appropriate arrays.
  * Handles message, custom, compaction, and leaf_pointer types.
@@ -109,8 +133,21 @@ function appendParsedEntry(
       id: entryId || `custom-${Date.now()}`,
       customType: (parsed.customType as string) ?? "unknown",
       data: parsed.data,
-      timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+      timestamp: entryTimestamp(parsed.timestamp),
     });
+    return "custom";
+  }
+
+  if (parsed.type === "system_event") {
+    customEntries.push({
+      id: entryId || `system-event-${Date.now()}`,
+      customType: "system_event",
+      data: createSystemEventData(parsed),
+      timestamp: entryTimestamp(parsed.timestamp),
+    });
+    if (parsed.display === true) {
+      messages.push({ entryId, message: createSystemEventMessage(parsed) });
+    }
     return "custom";
   }
 

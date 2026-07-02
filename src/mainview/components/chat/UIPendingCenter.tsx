@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   MessageCircleQuestion,
   ArrowRight,
@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   Clock,
   Terminal,
+  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -18,7 +19,7 @@ import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dia
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useStatusStore } from "../../stores/use-status-store";
-import { IconButton, ModalDialog } from "../primitives";
+import { IconButton } from "../primitives";
 import { PermissionActionButtons } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 import { jumpToSessionById } from "./primitives/useJumpToSession";
@@ -278,7 +279,45 @@ function ApprovalContextSummary({
   );
 }
 
-function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: string }) {
+function SourceContextHeader({
+  sessionName,
+  isSubtaskSource,
+}: {
+  sessionName?: string;
+  isSubtaskSource?: boolean;
+}) {
+  const { t } = useTranslation("chat");
+  if (!sessionName) return null;
+
+  return (
+    <div className="mb-1.5 flex items-center gap-1.5 rounded-md border border-border-secondary/35 bg-bg-primary/55 px-2 py-1.5 text-[10px] text-text-tertiary">
+      <span className="shrink-0 font-medium">{t("uiPending.fromSession")}</span>
+      <span
+        className="min-w-0 flex-1 truncate font-semibold text-text-secondary"
+        title={sessionName}
+      >
+        {sessionName}
+      </span>
+      {isSubtaskSource && (
+        <span className="shrink-0 rounded bg-semantic-agent/10 px-1.5 py-0.5 font-medium text-semantic-agent">
+          {t("uiPending.subtaskSource")}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PanelCard({
+  req,
+  sessionName,
+  showSourceContext = false,
+  isSubtaskSource = false,
+}: {
+  req: UIPendingRequest;
+  sessionName?: string;
+  showSourceContext?: boolean;
+  isSubtaskSource?: boolean;
+}) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
@@ -304,9 +343,18 @@ function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: 
   const isAskUserQuestion = req.method === "askUserQuestion";
   const options = req.options ?? [];
   const isMulti = !!req.multiple;
+  const withSourceContext = (content: ReactNode) =>
+    showSourceContext ? (
+      <div>
+        <SourceContextHeader sessionName={sessionName} isSubtaskSource={isSubtaskSource} />
+        {content}
+      </div>
+    ) : (
+      content
+    );
 
   if (isAskUserQuestion) {
-    return (
+    return withSourceContext(
       <AskUserQuestionCard
         block={{
           type: "uiInteraction",
@@ -319,7 +367,7 @@ function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: 
           sessionId: req.sessionId,
           timeout: req.timeout,
         }}
-      />
+      />,
     );
   }
 
@@ -703,7 +751,7 @@ function SessionGroup({
             className="max-w-[6rem] shrink-0 truncate rounded bg-semantic-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-semantic-agent"
             title={sessionName}
           >
-            ↳ 子任务
+            ↳ {t("uiPending.subtaskSource")}
           </span>
         )}
         <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-status-warning">
@@ -731,7 +779,12 @@ function SessionGroup({
                   <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
-              <PanelCard req={req} sessionName={sessionName} />
+              <PanelCard
+                req={req}
+                sessionName={sessionName}
+                showSourceContext
+                isSubtaskSource={isSubtaskSource}
+              />
             </div>
           ))}
         </div>
@@ -826,7 +879,7 @@ export function UIPendingCenter() {
   };
 
   return (
-    <>
+    <div className="relative inline-flex">
       <IconButton
         label={t("uiPending.pendingRequestsCount", { count: pendingCount })}
         size="sm"
@@ -845,43 +898,53 @@ export function UIPendingCenter() {
       </IconButton>
 
       {panelOpen && (
-        <ModalDialog
-          title={
-            <span className="flex items-center gap-2">
+        <div
+          role="dialog"
+          aria-modal="false"
+          data-testid="ui-pending-center-panel"
+          data-ui-pending-scope="chat"
+          className="absolute right-0 top-full z-[15] mt-2 w-[min(28rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border-secondary bg-surface-code shadow-2xl shadow-black/20 ring-1 ring-border-primary/30 dark:bg-surface-dim"
+        >
+          <div className="flex items-center gap-2 border-b border-border-secondary px-3 py-2">
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-text-primary">
               <span>{t("uiPending.pendingRequestsTitle")}</span>
               <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[11px] font-medium tabular-nums">
                 {pendingCount}
               </span>
             </span>
-          }
-          onClose={() => setPanelOpen(false)}
-          closeLabel={t("common:close")}
-          size="md"
-          className="max-w-lg bg-surface-code dark:bg-surface-dim max-h-[min(520px,80vh)]"
-          bodyClassName="overflow-y-auto px-3 pb-3 pt-2 space-y-2.5"
-        >
-          {pendingCount === 0 ? (
-            <div className="py-8 text-center text-[11px] text-text-tertiary">
-              {t("uiPending.noPendingRequests")}
-            </div>
-          ) : (
-            Array.from(grouped.entries()).map(([sessionId, requests]) => (
-              <SessionGroup
-                key={sessionId}
-                sessionId={sessionId}
-                sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
-                isSubtaskSource={
-                  subtaskSessionIds.has(sessionId) ||
-                  requests.some((request) => Boolean(request.parentSessionId))
-                }
-                requests={requests}
-                onGotoSession={handleGotoSession}
-              />
-            ))
-          )}
-        </ModalDialog>
+            <IconButton
+              label={t("common:close")}
+              size="sm"
+              onClick={() => setPanelOpen(false)}
+              className="h-7 w-7"
+            >
+              <X className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
+          <div className="max-h-[min(520px,70dvh)] space-y-2.5 overflow-y-auto px-3 pb-3 pt-2">
+            {pendingCount === 0 ? (
+              <div className="py-8 text-center text-[11px] text-text-tertiary">
+                {t("uiPending.noPendingRequests")}
+              </div>
+            ) : (
+              Array.from(grouped.entries()).map(([sessionId, requests]) => (
+                <SessionGroup
+                  key={sessionId}
+                  sessionId={sessionId}
+                  sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
+                  isSubtaskSource={
+                    subtaskSessionIds.has(sessionId) ||
+                    requests.some((request) => Boolean(request.parentSessionId))
+                  }
+                  requests={requests}
+                  onGotoSession={handleGotoSession}
+                />
+              ))
+            )}
+          </div>
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
