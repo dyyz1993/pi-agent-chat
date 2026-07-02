@@ -12,7 +12,9 @@ import { formatProjectStartError, getErrorMessage } from "./session-start-error"
 import {
   requestRulesSnapshot,
   setupSubscriptions,
+  cleanupSession,
   cleanupSessionLight,
+  clearSubscriptionState,
   type SubscriptionMaps,
 } from "./session-subscriptions";
 
@@ -29,7 +31,7 @@ interface ActiveSessionState extends SubscriptionMaps {
   currentModel: ModelInfo | null;
   modelBySession: Record<string, ModelInfo>;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
-  fetchInitialState: (sessionId: string) => void;
+  fetchInitialState: (sessionId: string, options?: { force?: boolean }) => void;
 }
 
 type SetState = StoreApi<ActiveSessionState>["setState"];
@@ -39,6 +41,32 @@ interface ActiveSessionLogger {
   info: (message: string, data?: Record<string, unknown>) => void;
   warn: (message: string, data?: Record<string, unknown>) => void;
   error: (message: string, data?: Record<string, unknown>) => void;
+}
+
+async function restoreRememberedPermissionProfile(
+  sessionId: string,
+  log: ActiveSessionLogger,
+): Promise<void> {
+  const rememberedPermissionProfile = useStatusStore
+    .getState()
+    .getRememberedPermissionProfile(sessionId);
+  if (!rememberedPermissionProfile) return;
+
+  try {
+    await apiClient.call("agent.setPermissionMode", {
+      sessionId,
+      mode: rememberedPermissionProfile,
+    });
+    useStatusStore
+      .getState()
+      .applyPermissionProfileSnapshot(rememberedPermissionProfile, sessionId);
+  } catch (err) {
+    log.warn("restore permission profile failed", {
+      sessionId,
+      profile: rememberedPermissionProfile,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 interface HotSwitchMessageLoadParams {
@@ -59,7 +87,15 @@ interface HotSwitchMessageLoadParams {
  * 保证 _backgroundRefreshMessages 只调用一次（#37）。
  */
 export async function runHotSwitchMessageLoad(params: HotSwitchMessageLoadParams): Promise<void> {
-  const { sessionId, sessionPath, hasCached, backgroundRefresh, loadSessionMessages, getContextUsage, updateSessionContext } = params;
+  const {
+    sessionId,
+    sessionPath,
+    hasCached,
+    backgroundRefresh,
+    loadSessionMessages,
+    getContextUsage,
+    updateSessionContext,
+  } = params;
 
   const loadPromise: Promise<void> = hasCached
     ? backgroundRefresh(sessionId, sessionPath)
@@ -95,7 +131,8 @@ interface ReconnectMessageLoadParams {
  * 保证 _backgroundRefreshMessages 不被额外调用（#37 root cause #2/#3）。
  */
 export async function runReconnectMessageLoad(params: ReconnectMessageLoadParams): Promise<void> {
-  const { sessionId, sessionPath, loadSessionMessages, getContextUsage, updateSessionContext } = params;
+  const { sessionId, sessionPath, loadSessionMessages, getContextUsage, updateSessionContext } =
+    params;
 
   // loadSessionMessages(force: true) 已经做了完整加载，不需要额外 _backgroundRefreshMessages (#37)
   await loadSessionMessages(sessionId, { force: true, sessionPath }).catch(() => {});
@@ -160,9 +197,11 @@ export function createSetActiveSessionAction({
       const t0 = performance.now();
       clearStatusWatchdog(prevId);
       useChatStore.getState().saveInputDraft(prevId);
+      cleanupSession(get(), prevId);
       cleanupSessionLight(prevId);
+      set((s) => clearSubscriptionState(s, prevId));
       useGitStore.getState().clearDiff();
-      perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
+      perfLog.info("[switch] step-1 cleanup old session subscriptions (keep cached data)", {
         prevId,
         ms: Math.round(performance.now() - t0),
       });
@@ -213,6 +252,11 @@ export function createSetActiveSessionAction({
     if (!tab) return;
 
     const ensureSession = async (): Promise<SessionMeta | null> => {
+      for (const sessions of Object.values(get().sessionsByProject)) {
+        const session = sessions.find((s) => s.sessionId === id);
+        if (session) return session;
+      }
+
       let sessions = get().sessionsByProject[tab.path];
       if (!sessions) {
         sessions = await get().loadSessionsForProject(tab.path);
@@ -264,6 +308,11 @@ export function createSetActiveSessionAction({
           });
 
           requestRulesSnapshot(id);
+          void restoreRememberedPermissionProfile(id, log).finally(() => {
+            if (isLatestStart()) {
+              get().fetchInitialState(id, { force: true });
+            }
+          });
 
           const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
           const hasCachedMsgs = cachedMsgs.some(
@@ -353,29 +402,10 @@ export function createSetActiveSessionAction({
               });
               markAgentStarted(id);
 
-              const rememberedPermissionProfile = useStatusStore
-                .getState()
-                .getRememberedPermissionProfile(id);
-              if (rememberedPermissionProfile) {
-                try {
-                  await apiClient.call("agent.setPermissionMode", {
-                    sessionId: id,
-                    mode: rememberedPermissionProfile,
-                  });
-                  useStatusStore
-                    .getState()
-                    .applyPermissionProfileSnapshot(rememberedPermissionProfile, id);
-                } catch (err) {
-                  log.warn("restore permission profile failed", {
-                    sessionId: id,
-                    profile: rememberedPermissionProfile,
-                    error: err instanceof Error ? err.message : String(err),
-                  });
-                }
-              }
+              await restoreRememberedPermissionProfile(id, log);
 
               requestRulesSnapshot(id);
-              get().fetchInitialState(id);
+              get().fetchInitialState(id, { force: true });
               trace?.mark("fetch-initial-state-started");
 
               if (isHot) {
@@ -427,9 +457,6 @@ export function createSetActiveSessionAction({
                     trace?.mark("cold-preload-msg-done", {
                       ms: Math.round(performance.now() - tLoad),
                     });
-                    return useChatStore
-                      .getState()
-                      ._backgroundRefreshMessages(id, session.sessionPath);
                   })
                   .then(() => {
                     return apiClient

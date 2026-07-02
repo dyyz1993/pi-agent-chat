@@ -44,6 +44,11 @@ describe("agent client state operations", () => {
       getSessionStats: vi.fn().mockResolvedValue({
         tokens: { input: "10", output: "2", cacheRead: "3", cacheWrite: "4", total: "19" },
         cost: "0.01",
+        toolCalls: "5",
+        totalMessages: "9",
+        userMessages: "4",
+        assistantMessages: "5",
+        toolResults: "1",
         contextUsage: { tokens: 19, contextWindow: "128000", percent: 1 },
       }),
     });
@@ -76,6 +81,11 @@ describe("agent client state operations", () => {
     ).resolves.toMatchObject({
       tokens: { input: 10, output: 2, cacheRead: 3, cacheWrite: 4, total: 19 },
       cost: 0.01,
+      toolCalls: 5,
+      totalMessages: 9,
+      userMessages: 4,
+      assistantMessages: 5,
+      toolResults: 1,
       contextUsage: { tokens: 19, contextWindow: 128000, percent: 1 },
     });
   });

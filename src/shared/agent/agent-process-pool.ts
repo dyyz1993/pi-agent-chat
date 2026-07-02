@@ -5,6 +5,8 @@ export interface ProcessPoolEntry {
   info: {
     status: string;
   };
+  /** Non-empty for delegated child sessions; LRU eviction skips these to avoid killing background tasks. */
+  delegateParentSessionId?: string;
 }
 
 export interface EvictionCandidate<T extends ProcessPoolEntry> {
@@ -64,6 +66,11 @@ export function selectLruEvictionCandidate<T extends ProcessPoolEntry>(
     for (const managed of pool) {
       if (managed.info.status === "streaming") continue;
       if (managed.activeBackgroundTools.size > 0) continue;
+      // Never evict delegated child sessions — they run background tasks and may
+      // be in the idle gap between session_start and the first agent_start event
+      // (e.g. waiting for the first LLM response). Evicting them causes
+      // empty_response errors on the parent side.
+      if (managed.delegateParentSessionId) continue;
 
       const isCurrentProject = poolKey === currentPoolKey;
       if (isCurrentProject && currentPoolSize <= 1) continue;

@@ -148,12 +148,13 @@ export async function getCurrentAgentOperation<TManaged extends ManagedClientLik
 export async function getLatestAgentChangeOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
   getActiveManaged: (sessionId: string) => TManaged | null;
+  ensureManagedClient: (sessionId: string) => Promise<TManaged | null>;
 }): Promise<{
   agentName: string;
   agentConfig?: Record<string, unknown>;
   timestamp: string;
 } | null> {
-  const managed = options.getActiveManaged(options.sessionId);
+  const managed = await resolveManagedClient(options);
   if (!managed) return null;
   try {
     const response = await asAgentCommandClient(managed.client).send({
