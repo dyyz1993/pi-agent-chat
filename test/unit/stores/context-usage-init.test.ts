@@ -117,6 +117,19 @@ function setupMock(contextUsageHandler: () => Promise<unknown>) {
     if (method === "agent.getDisabledSkills") return Promise.resolve({ disabledSkills: [] });
     if (method === "agent.getQueue") return Promise.resolve({ steering: [], followUp: [] });
     if (method === "agent.getContextUsage") return contextUsageHandler();
+    if (method === "agent.getSessionStats")
+      return Promise.resolve({
+        tokens: {
+          input: 1000,
+          output: 200,
+          cacheRead: 300,
+          cacheWrite: 100,
+          total: 1600,
+        },
+        cost: 0.0016,
+        toolCalls: 2,
+        totalMessages: 4,
+      });
     if (method === "agent.getTierModels") return Promise.resolve({ models: {} });
     if (method === "agent.getLatestAgentChange") return Promise.resolve(null);
     if (method === "agent.getAgents") return Promise.resolve([]);
@@ -161,6 +174,7 @@ beforeEach(() => {
     memorySubscriptions: {},
     sessionReady: {},
     sessionContextMap: {},
+    sessionStatsMap: {},
     sessionStatusMap: {},
     currentModel: null,
     currentThinkingLevel: "medium",
@@ -193,7 +207,7 @@ describe("fetchInitialState context usage retry", () => {
     expect(calls.filter(([method]) => method === "agent.getTierModels")).toHaveLength(1);
   });
 
-  it("calls agent.getContextUsage (not getSessionStats)", async () => {
+  it("calls agent.getContextUsage and agent.getSessionStats for startup usage snapshots", async () => {
     const sid = nextSid();
     setupMock(() => Promise.resolve({ tokens: 5000, contextWindow: 200000, percent: 0.025 }));
 
@@ -204,7 +218,19 @@ describe("fetchInitialState context usage retry", () => {
     const sessionStatsCalls = (apiClient.call as ReturnType<typeof vi.fn>).mock.calls.filter(
       (c: unknown[]) => (c as string[])[0] === "agent.getSessionStats",
     );
-    expect(sessionStatsCalls).toHaveLength(0);
+    expect(sessionStatsCalls).toHaveLength(1);
+    expect(useSessionStore.getState().sessionStatsMap[sid]).toMatchObject({
+      tokens: {
+        input: 1000,
+        output: 200,
+        cacheRead: 300,
+        cacheWrite: 100,
+        total: 1600,
+      },
+      cost: 0.0016,
+      toolCalls: 2,
+      totalMessages: 4,
+    });
   });
 
   it("succeeds immediately when first call returns valid tokens", async () => {
@@ -324,6 +350,13 @@ describe("fetchInitialState context usage retry", () => {
       if (method === "agent.getQueue") return Promise.resolve({ steering: [], followUp: [] });
       if (method === "agent.getContextUsage")
         return Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 });
+      if (method === "agent.getSessionStats")
+        return Promise.resolve({
+          tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          cost: 0,
+          toolCalls: 0,
+          totalMessages: 0,
+        });
       if (method === "agent.getTierModels") return Promise.resolve({ models: {} });
       if (method === "agent.getLatestAgentChange") return Promise.resolve(null);
       if (method === "agent.getAgents") return Promise.resolve([]);

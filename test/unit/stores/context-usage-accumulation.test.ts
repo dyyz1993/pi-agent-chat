@@ -68,6 +68,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     _projectVersion: number;
     updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
     updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
+    refreshSessionStats: ReturnType<typeof vi.fn>;
     restoreContextFromHistory: (sessionId: string) => void;
   }
   const useSessionStore = create<MockSessionState>(() => ({
@@ -103,6 +104,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
         };
       });
     },
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
     restoreContextFromHistory: () => {},
   }));
   return { useSessionStore, clearAgentStarted: () => {} };
@@ -244,6 +246,7 @@ beforeEach(() => {
     sessionStatusMap: {},
     sessionsByProject: {},
     sessionContextMap: {},
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
   });
   Object.keys(toolCallNameMap).forEach((k) => delete toolCallNameMap[k]);
 });
@@ -380,6 +383,7 @@ describe("message_end uses agent.getContextUsage as the single source", () => {
       (call: unknown[]) => (call as [string, unknown])[0] === "agent.getContextUsage",
     );
     expect(getContextCalls).toHaveLength(1);
+    expect(useSessionStore.getState().refreshSessionStats).toHaveBeenCalledWith(SID);
   });
 
   it("calls apiClient.call with agent.getContextUsage even without prior context", () => {

@@ -167,6 +167,11 @@ export async function getSessionStatsOperation<TManaged extends ManagedClientLik
 }): Promise<{
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
   cost: number;
+  toolCalls: number;
+  totalMessages: number;
+  userMessages?: number;
+  assistantMessages?: number;
+  toolResults?: number;
   contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
 } | null> {
   const managed = options.getActiveManaged(options.sessionId);
@@ -186,6 +191,11 @@ export async function getSessionStatsOperation<TManaged extends ManagedClientLik
         total: Number(tokens?.total ?? 0),
       },
       cost: Number(stats.cost ?? 0),
+      toolCalls: Number(stats.toolCalls ?? 0),
+      totalMessages: Number(stats.totalMessages ?? 0),
+      userMessages: Number(stats.userMessages ?? 0),
+      assistantMessages: Number(stats.assistantMessages ?? 0),
+      toolResults: Number(stats.toolResults ?? 0),
       contextUsage: cu
         ? {
             tokens: cu.tokens,
