@@ -2,10 +2,14 @@ import type {
   UsageDailyBucket,
   UsageDailyModelToken,
   UsageDataQuality,
+  UsageInefficientPattern,
+  UsageObservabilityStats,
   UsageRange,
   UsageRangePreset,
   UsageScope,
   UsageShareStats,
+  UsageToolDistributionItem,
+  UsageTopContextReference,
   UsageTopMcpTool,
   UsageTopModel,
   UsageTopSkill,
@@ -39,6 +43,37 @@ export interface UsageFact {
   model: UsageDailyModelToken | null;
   mcpTools: UsageTopMcpTool[];
   skills: UsageTopSkill[];
+  observability: UsageObservabilityFact | null;
+}
+
+export interface UsageObservabilityToolEvent {
+  sessionId: string;
+  timestamp: number;
+  name: string;
+  category: UsageToolDistributionItem["category"];
+  ref: string | null;
+}
+
+export interface UsageObservabilityContextRef {
+  ref: string;
+  tokens: number;
+}
+
+export interface UsageObservabilityFact {
+  contextTokens: number;
+  contextWindow: number;
+  contextPercent: number | null;
+  contextRefs: UsageObservabilityContextRef[];
+  toolEvents: UsageObservabilityToolEvent[];
+}
+
+export interface UsageObservabilityRollup {
+  contextSamples: number;
+  contextTokenTotal: number;
+  maxContextTokens: number;
+  maxContextPercent: number | null;
+  contextRefs: UsageObservabilityContextRef[];
+  toolEvents: UsageObservabilityToolEvent[];
 }
 
 export interface UsageDailyRollup {
@@ -53,6 +88,7 @@ export interface UsageDailyRollup {
   memoryFailures: number;
   mcpTools: UsageTopMcpTool[];
   skills: UsageTopSkill[];
+  observability: UsageObservabilityRollup;
 }
 
 export interface AggregateOptions {
@@ -80,6 +116,32 @@ const MEMORY_FAILURE_TYPES = new Set(["memory_failed", "memory_update_failed"]);
 const MEMORY_HIT_TYPES = new Set(["memory_prefetch_result", "memory_inject"]);
 
 const HOOK_BLOCK_TYPES = new Set(["hook_block", "hook_stop_block", "hooks_blocked"]);
+const CONTEXT_REF_CUSTOM_TYPES = new Set([
+  "context_usage",
+  "memory_prefetch_result",
+  "memory_inject",
+]);
+
+function emptyObservabilityFact(): UsageObservabilityFact {
+  return {
+    contextTokens: 0,
+    contextWindow: 0,
+    contextPercent: null,
+    contextRefs: [],
+    toolEvents: [],
+  };
+}
+
+function emptyObservabilityRollup(): UsageObservabilityRollup {
+  return {
+    contextSamples: 0,
+    contextTokenTotal: 0,
+    maxContextTokens: 0,
+    maxContextPercent: null,
+    contextRefs: [],
+    toolEvents: [],
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -239,6 +301,39 @@ function parseMcpToolName(name: string): { server: string; tool: string } | null
   return { server, tool: toolParts.join("__") };
 }
 
+function normalizeToolName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "_");
+}
+
+function toolCategory(name: string): UsageToolDistributionItem["category"] {
+  const normalized = normalizeToolName(name);
+  if (normalized.startsWith("mcp__")) return "mcp";
+  if (normalized === "read" || normalized === "file_read" || normalized === "read_file")
+    return "read";
+  if (
+    normalized === "edit" ||
+    normalized === "file_edit" ||
+    normalized === "write_file" ||
+    normalized === "multiedit" ||
+    normalized === "multi_edit" ||
+    normalized === "patch"
+  )
+    return normalized.includes("write") ? "write" : "edit";
+  if (normalized === "write" || normalized === "file_write") return "write";
+  if (normalized === "bash" || normalized === "shell") return "bash";
+  if (
+    normalized === "grep" ||
+    normalized === "glob" ||
+    normalized === "find" ||
+    normalized === "ls"
+  )
+    return "search";
+  return "other";
+}
+
 function toolNameFromBlock(block: unknown): string | null {
   if (!isRecord(block)) return null;
   if (typeof block.name === "string") return block.name;
@@ -251,7 +346,123 @@ function toolNameFromBlock(block: unknown): string | null {
 function isToolCallBlock(block: unknown): boolean {
   if (!isRecord(block)) return false;
   const type = typeof block.type === "string" ? block.type : "";
-  return type === "toolCall" || type === "tool_call" || Boolean(block.toolCall);
+  return (
+    type === "toolCall" ||
+    type === "tool_call" ||
+    type === "toolExecution" ||
+    type === "tool_execution" ||
+    Boolean(block.toolCall)
+  );
+}
+
+function readToolArgs(block: unknown): unknown {
+  if (!isRecord(block)) return null;
+  if (block.args !== undefined) return block.args;
+  if (block.input !== undefined) return block.input;
+  if (isRecord(block.toolCall) && block.toolCall.input !== undefined) return block.toolCall.input;
+  return null;
+}
+
+function tryParseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readPathLike(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function pathRefFromArgs(args: unknown): string | null {
+  if (isRecord(args)) {
+    return (
+      readPathLike(args.path) ??
+      readPathLike(args.filePath) ??
+      readPathLike(args.file) ??
+      readPathLike(args.glob) ??
+      readPathLike(args.pattern) ??
+      null
+    );
+  }
+  if (typeof args !== "string") return null;
+  const parsed = tryParseJsonObject(args);
+  if (parsed) return pathRefFromArgs(parsed);
+  const quotedPath = args.match(/["']((?:\/|~\/|\.\.?\/)[^"']+)["']/)?.[1];
+  if (quotedPath) return quotedPath;
+  const barePath = args.match(/\b((?:\/|~\/|\.\.?\/)[^\s,;]+)/)?.[1];
+  return barePath ?? null;
+}
+
+function pushContextRef(target: UsageObservabilityContextRef[], ref: unknown, tokens = 0): void {
+  const normalized = typeof ref === "string" ? ref.trim() : "";
+  if (!normalized) return;
+  target.push({ ref: normalized, tokens: Math.max(0, readNumber(tokens)) });
+}
+
+function contextRefsFromData(data: unknown): UsageObservabilityContextRef[] {
+  const refs: UsageObservabilityContextRef[] = [];
+  if (!isRecord(data)) return refs;
+
+  const selectedFiles = data.selectedFiles;
+  if (Array.isArray(selectedFiles)) {
+    for (const file of selectedFiles) pushContextRef(refs, file);
+  }
+
+  const files = data.files;
+  if (Array.isArray(files)) {
+    for (const file of files) {
+      if (typeof file === "string") {
+        pushContextRef(refs, file);
+      } else if (isRecord(file)) {
+        pushContextRef(refs, file.path ?? file.file ?? file.name, readNumber(file.tokens));
+      }
+    }
+  }
+
+  const breakdown = data.breakdown;
+  if (Array.isArray(breakdown)) {
+    for (const item of breakdown) {
+      if (!isRecord(item)) continue;
+      const details = item.details;
+      if (!Array.isArray(details)) continue;
+      for (const detail of details) {
+        if (!isRecord(detail)) continue;
+        pushContextRef(refs, detail.label, readNumber(detail.tokens));
+      }
+    }
+  }
+
+  return refs;
+}
+
+function contextUsageFromData(
+  data: unknown,
+): Pick<
+  UsageObservabilityFact,
+  "contextTokens" | "contextWindow" | "contextPercent" | "contextRefs"
+> {
+  if (!isRecord(data)) {
+    return { contextTokens: 0, contextWindow: 0, contextPercent: null, contextRefs: [] };
+  }
+  const tokens = readNumber(data.tokens);
+  const contextWindow = readNumber(data.contextWindow);
+  const percent = readNumber(data.percent);
+  return {
+    contextTokens: tokens,
+    contextWindow,
+    contextPercent:
+      percent > 1 && percent <= 100
+        ? percent
+        : contextWindow > 0 && tokens > 0
+          ? tokens / contextWindow
+          : null,
+    contextRefs: contextRefsFromData(data),
+  };
 }
 
 function textFromContent(content: unknown): string {
@@ -386,6 +597,178 @@ function patchSkillList(items: UsageTopSkill[], patch: UsageTopSkill): void {
   items.push({ ...patch });
 }
 
+function addObservabilityFactToRollup(
+  rollup: UsageObservabilityRollup,
+  fact: UsageObservabilityFact,
+): void {
+  if (fact.contextTokens > 0 || fact.contextWindow > 0 || fact.contextPercent !== null) {
+    rollup.contextSamples += 1;
+    rollup.contextTokenTotal += fact.contextTokens;
+    rollup.maxContextTokens = Math.max(rollup.maxContextTokens, fact.contextTokens);
+    if (fact.contextPercent !== null) {
+      rollup.maxContextPercent =
+        rollup.maxContextPercent === null
+          ? fact.contextPercent
+          : Math.max(rollup.maxContextPercent, fact.contextPercent);
+    }
+  }
+  rollup.contextRefs.push(...fact.contextRefs);
+  rollup.toolEvents.push(...fact.toolEvents);
+}
+
+function mergeObservabilityRollup(
+  target: UsageObservabilityRollup,
+  source?: Partial<UsageObservabilityRollup> | null,
+): void {
+  if (!source) return;
+  target.contextSamples += source.contextSamples ?? 0;
+  target.contextTokenTotal += source.contextTokenTotal ?? 0;
+  target.maxContextTokens = Math.max(target.maxContextTokens, source.maxContextTokens ?? 0);
+  if (source.maxContextPercent !== null && source.maxContextPercent !== undefined) {
+    target.maxContextPercent =
+      target.maxContextPercent === null
+        ? source.maxContextPercent
+        : Math.max(target.maxContextPercent, source.maxContextPercent);
+  }
+  if (Array.isArray(source.contextRefs)) target.contextRefs.push(...source.contextRefs);
+  if (Array.isArray(source.toolEvents)) target.toolEvents.push(...source.toolEvents);
+}
+
+function topDuplicateContextRefs(refs: UsageObservabilityContextRef[]): {
+  total: number;
+  duplicateCount: number;
+  top: UsageTopContextReference[];
+} {
+  const map = new Map<string, UsageTopContextReference>();
+  for (const ref of refs) {
+    const existing = map.get(ref.ref) ?? { ref: ref.ref, count: 0, tokens: 0 };
+    map.set(ref.ref, {
+      ...existing,
+      count: existing.count + 1,
+      tokens: existing.tokens + ref.tokens,
+    });
+  }
+  const duplicateCount = Array.from(map.values()).reduce(
+    (sum, item) => sum + Math.max(0, item.count - 1),
+    0,
+  );
+  const top = Array.from(map.values())
+    .filter((item) => item.count > 1)
+    .sort((a, b) => b.count - a.count || b.tokens - a.tokens)
+    .slice(0, 8);
+  return { total: refs.length, duplicateCount, top };
+}
+
+function toolDistribution(events: UsageObservabilityToolEvent[]): UsageToolDistributionItem[] {
+  const map = new Map<string, UsageToolDistributionItem>();
+  for (const event of events) {
+    const existing = map.get(event.name) ?? {
+      name: event.name,
+      category: event.category,
+      calls: 0,
+      share: 0,
+    };
+    map.set(event.name, { ...existing, calls: existing.calls + 1 });
+  }
+  const total = events.length;
+  return Array.from(map.values())
+    .map((item) => ({ ...item, share: total > 0 ? item.calls / total : 0 }))
+    .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name))
+    .slice(0, 12);
+}
+
+function detectRepeatedReads(
+  sessionId: string,
+  events: UsageObservabilityToolEvent[],
+): UsageInefficientPattern[] {
+  const byRef = new Map<string, UsageObservabilityToolEvent[]>();
+  for (const event of events) {
+    if (event.category !== "read" || !event.ref) continue;
+    const bucket = byRef.get(event.ref) ?? [];
+    bucket.push(event);
+    byRef.set(event.ref, bucket);
+  }
+  return Array.from(byRef.entries())
+    .filter(([, reads]) => reads.length > 1)
+    .map(([ref, reads]) => ({
+      type: "repeated_read" as const,
+      sessionId,
+      count: reads.length,
+      sequence: reads.map((event) => `${event.name}:${ref}`),
+      suggestion: `同一引用 ${ref} 被重复读取 ${reads.length} 次，可考虑扩大读取范围或复用前一次结果。`,
+    }));
+}
+
+function detectReadEditChurn(
+  sessionId: string,
+  events: UsageObservabilityToolEvent[],
+): UsageInefficientPattern[] {
+  const relevant = events.filter((event) => event.category === "read" || event.category === "edit");
+  if (relevant.length < 4) return [];
+
+  const patterns: UsageInefficientPattern[] = [];
+  for (let i = 0; i <= relevant.length - 4; i++) {
+    const window = relevant.slice(i, i + 4);
+    const alternating =
+      window[0]?.category === "read" &&
+      window[1]?.category === "edit" &&
+      window[2]?.category === "read" &&
+      window[3]?.category === "edit";
+    if (!alternating) continue;
+    patterns.push({
+      type: "read_edit_churn",
+      sessionId,
+      count: window.length,
+      sequence: window.map((event) => event.name),
+      suggestion: "检测到 read/edit 来回震荡，可考虑一次读全相关上下文后批量编辑。",
+    });
+    break;
+  }
+  return patterns;
+}
+
+function detectInefficientPatterns(
+  events: UsageObservabilityToolEvent[],
+): UsageInefficientPattern[] {
+  const bySession = new Map<string, UsageObservabilityToolEvent[]>();
+  for (const event of events) {
+    const bucket = bySession.get(event.sessionId) ?? [];
+    bucket.push(event);
+    bySession.set(event.sessionId, bucket);
+  }
+  const patterns: UsageInefficientPattern[] = [];
+  for (const [sessionId, sessionEvents] of bySession) {
+    const ordered = [...sessionEvents].sort((a, b) => a.timestamp - b.timestamp);
+    patterns.push(...detectReadEditChurn(sessionId, ordered));
+    patterns.push(...detectRepeatedReads(sessionId, ordered));
+  }
+  return patterns.sort((a, b) => b.count - a.count).slice(0, 12);
+}
+
+function buildObservabilityStats(rollups: UsageObservabilityRollup[]): UsageObservabilityStats {
+  const combined = emptyObservabilityRollup();
+  for (const rollup of rollups) {
+    mergeObservabilityRollup(combined, rollup);
+  }
+  const refStats = topDuplicateContextRefs(combined.contextRefs);
+  return {
+    contextSamples: combined.contextSamples,
+    maxContextTokens: combined.maxContextTokens,
+    avgContextTokens:
+      combined.contextSamples > 0
+        ? Math.round(combined.contextTokenTotal / combined.contextSamples)
+        : 0,
+    maxContextPercent: combined.maxContextPercent,
+    contextRefTotal: refStats.total,
+    contextRefDuplicateCount: refStats.duplicateCount,
+    contextRefDuplicateRatio: refStats.total > 0 ? refStats.duplicateCount / refStats.total : 0,
+    topDuplicateContextRefs: refStats.top,
+    toolCalls: combined.toolEvents.length,
+    toolDistribution: toolDistribution(combined.toolEvents),
+    inefficientPatterns: detectInefficientPatterns(combined.toolEvents),
+  };
+}
+
 function emptyFact(sessionId: string, timestamp: number): UsageFact {
   return {
     sessionId,
@@ -409,6 +792,7 @@ function emptyFact(sessionId: string, timestamp: number): UsageFact {
     model: null,
     mcpTools: [],
     skills: [],
+    observability: null,
   };
 }
 
@@ -452,11 +836,19 @@ export function usageFactFromEntry(item: UsageSourceEntry): UsageFact | null {
       };
     }
 
+    const observability = emptyObservabilityFact();
     for (const block of contentBlocks(message)) {
       if (!isToolCallBlock(block)) continue;
       const name = toolNameFromBlock(block);
       fact.toolCalls += 1;
       if (!name) continue;
+      observability.toolEvents.push({
+        sessionId: item.sessionId,
+        timestamp,
+        name: normalizeToolName(name),
+        category: toolCategory(name),
+        ref: pathRefFromArgs(readToolArgs(block)),
+      });
       const mcp = parseMcpToolName(name);
       if (mcp) {
         fact.mcpCalls += 1;
@@ -468,11 +860,29 @@ export function usageFactFromEntry(item: UsageSourceEntry): UsageFact | null {
       fact.skillHits += 1;
       fact.skills.push({ name: skillName, calls: 1, patchCount: 0 });
     }
+
+    if (observability.toolEvents.length > 0) {
+      fact.observability = observability;
+    }
   }
 
   if (entryType === "custom") {
     const customType = readCustomType(value);
     const data = isRecord(value.data) ? value.data : null;
+    if (customType && CONTEXT_REF_CUSTOM_TYPES.has(customType)) {
+      const observability = fact.observability ?? emptyObservabilityFact();
+      const context =
+        customType === "context_usage"
+          ? contextUsageFromData(data)
+          : { contextTokens: 0, contextWindow: 0, contextPercent: null, contextRefs: [] };
+      observability.contextTokens = context.contextTokens;
+      observability.contextWindow = context.contextWindow;
+      observability.contextPercent = context.contextPercent;
+      observability.contextRefs.push(
+        ...(customType === "context_usage" ? context.contextRefs : contextRefsFromData(data)),
+      );
+      fact.observability = observability;
+    }
     if (customType && MEMORY_WRITE_TYPES.has(customType)) {
       fact.memoryWrites = 1;
     }
@@ -531,6 +941,7 @@ export function createUsageDailyRollup(sessionId: string, timestamp: number): Us
     memoryFailures: 0,
     mcpTools: [],
     skills: [],
+    observability: emptyObservabilityRollup(),
   };
 }
 
@@ -569,6 +980,10 @@ export function addUsageFactToDailyRollup(rollup: UsageDailyRollup, fact: UsageF
   for (const skill of fact.skills) {
     patchSkillList(rollup.skills, skill);
   }
+
+  if (fact.observability) {
+    addObservabilityFactToRollup(rollup.observability, fact.observability);
+  }
 }
 
 export function aggregateUsageFacts(
@@ -589,6 +1004,7 @@ export function aggregateUsageFacts(
   const topModels = new Map<string, UsageTopModel>();
   const topMcpTools = new Map<string, UsageTopMcpTool>();
   const topSkills = new Map<string, UsageTopSkill>();
+  const observability = emptyObservabilityRollup();
 
   let parsedEntries = 0;
 
@@ -634,6 +1050,9 @@ export function aggregateUsageFacts(
     totals.memoryHits += fact.memoryHits;
     totals.skillHits += fact.skillHits;
     totals.hookBlocks += fact.hookBlocks;
+    if (fact.observability) {
+      addObservabilityFactToRollup(observability, fact.observability);
+    }
 
     addBucket(bucket, {
       tokens: fact.tokens,
@@ -711,7 +1130,7 @@ export function aggregateUsageFacts(
     scannedSessionFiles: options.scannedSessionFiles ?? 0,
     parsedEntries,
     skippedEntries: options.skippedEntries ?? 0,
-    estimatedFields: ["skillHits", "hookBlocks", "memoryHits"],
+    estimatedFields: ["skillHits", "hookBlocks", "memoryHits", "observability.contextRefs"],
     lastCacheWriteAt: options.lastCacheWriteAt ?? null,
   };
 
@@ -725,6 +1144,7 @@ export function aggregateUsageFacts(
     topModels: topValues(topModels, (item) => item.tokens, 6),
     topMcpTools: topValues(topMcpTools, (item) => item.calls, 8),
     topSkills: topValues(topSkills, (item) => item.calls + item.patchCount, 8),
+    observability: buildObservabilityStats([observability]),
     dataQuality,
   };
 }
@@ -747,6 +1167,7 @@ export function aggregateUsageDailyRollups(
   const topModels = new Map<string, UsageTopModel>();
   const topMcpTools = new Map<string, UsageTopMcpTool>();
   const topSkills = new Map<string, UsageTopSkill>();
+  const observability = emptyObservabilityRollup();
   let parsedEntries = 0;
 
   for (const rollup of rollups) {
@@ -810,6 +1231,7 @@ export function aggregateUsageDailyRollups(
         patchCount: skill.patchCount,
       });
     }
+    mergeObservabilityRollup(observability, rollup.observability);
 
     totals.messages += rollup.bucket.messages;
     totals.userMessages += rollup.userMessages;
@@ -850,7 +1272,7 @@ export function aggregateUsageDailyRollups(
     scannedSessionFiles: options.scannedSessionFiles ?? 0,
     parsedEntries,
     skippedEntries: options.skippedEntries ?? 0,
-    estimatedFields: ["skillHits", "hookBlocks", "memoryHits"],
+    estimatedFields: ["skillHits", "hookBlocks", "memoryHits", "observability.contextRefs"],
     lastCacheWriteAt: options.lastCacheWriteAt ?? null,
   };
 
@@ -864,6 +1286,7 @@ export function aggregateUsageDailyRollups(
     topModels: topValues(topModels, (item) => item.tokens, 6),
     topMcpTools: topValues(topMcpTools, (item) => item.calls, 8),
     topSkills: topValues(topSkills, (item) => item.calls + item.patchCount, 8),
+    observability: buildObservabilityStats([observability]),
     dataQuality,
   };
 }

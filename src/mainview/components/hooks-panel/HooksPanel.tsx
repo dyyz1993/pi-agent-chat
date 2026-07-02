@@ -145,18 +145,28 @@ function OpenableCode({
   className?: string;
 }) {
   if (!path) {
-    return <code className={className}>{label}</code>;
+    return (
+      <code
+        data-testid="hook-command-code"
+        className={`whitespace-normal break-words [overflow-wrap:anywhere] ${className}`.trim()}
+      >
+        {label}
+      </code>
+    );
   }
 
   return (
     <button
       type="button"
       onClick={() => onOpen(path)}
-      className={`inline-flex min-w-0 items-center gap-1 rounded px-0.5 text-left text-semantic-accent/80 hover:text-semantic-accent transition-colors ${className}`}
+      data-testid="hook-command-code"
+      className={`inline-flex min-w-0 max-w-full flex-wrap items-center gap-1 rounded px-0.5 text-left whitespace-normal break-words [overflow-wrap:anywhere] text-semantic-accent/80 hover:text-semantic-accent transition-colors ${className}`}
       title={`Open ${path}`}
     >
       <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-      <code className="truncate min-w-0">{label}</code>
+      <code className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+        {label}
+      </code>
     </button>
   );
 }
@@ -185,9 +195,11 @@ function HookCommandCode({
   }
 
   return (
-    <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
+    <span
+      className={`inline-flex min-w-0 max-w-full flex-wrap items-center gap-1 whitespace-normal break-words [overflow-wrap:anywhere] ${className}`}
+    >
       <code className="shrink-0 text-text-tertiary">{parts.prefix}</code>
-      <OpenableCode label={parts.script} path={path} onOpen={onOpen} className="min-w-0 truncate" />
+      <OpenableCode label={parts.script} path={path} onOpen={onOpen} className="min-w-0" />
     </span>
   );
 }
@@ -268,7 +280,7 @@ function EntryRow({
                   command={entry.command}
                   projectPath={projectPath}
                   onOpen={handleOpenPath}
-                  className="truncate min-w-0"
+                  className="min-w-0"
                 />
               </>
             )}
@@ -334,7 +346,7 @@ function RuleRow({
           projectPath={projectPath}
           homePath={homePath}
           onOpen={onOpenPath}
-          className="text-[9px] truncate min-w-0 flex-1"
+          className="text-[9px] min-w-0 flex-1"
         />
         <div className="flex items-center gap-1.5 text-[9px] shrink-0">
           {stat.allowCount > 0 && (
@@ -435,11 +447,13 @@ function ConfigEvents({
                       projectPath={projectPath}
                       homePath={homePath}
                       onOpen={onOpenPath}
-                      className="ml-1 text-[9px] truncate"
+                      className="ml-1 text-[9px]"
                     />
                   )}
                   {hook.url && (
-                    <code className="ml-1 text-status-info/70 truncate">{hook.url}</code>
+                    <code className="ml-1 text-status-info/70 whitespace-normal break-words [overflow-wrap:anywhere]">
+                      {hook.url}
+                    </code>
                   )}
                 </div>
               ))}

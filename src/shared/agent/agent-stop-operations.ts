@@ -59,12 +59,14 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   const endEvent = options.crashReason
     ? ({ type: "agent_end", reason: options.crashReason } as unknown as SanitizedEvent)
     : ({ type: "agent_end" } as SanitizedEvent);
-  options.emitAgentEvent(options.sessionId, endEvent).catch((err: unknown) => {
+  try {
+    await options.emitAgentEvent(options.sessionId, endEvent);
+  } catch (err: unknown) {
     log.warn("emitAgentEvent(agent_end) error", {
       sessionId: options.sessionId,
       err: err instanceof Error ? err.message : String(err),
     });
-  });
+  }
 
   const stopCleanup = cleanupStoppedDelegateSession({
     sessionId: options.sessionId,

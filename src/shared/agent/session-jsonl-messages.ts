@@ -70,6 +70,26 @@ function entryAllowed(activePathIds: Set<string> | null, id: unknown): boolean {
   return !activePathIds || (typeof id === "string" && activePathIds.has(id));
 }
 
+function createSystemEventData(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    eventType: parsed.eventType,
+    eventLabel: parsed.eventLabel,
+    data: parsed.data,
+    display: parsed.display === true,
+  };
+}
+
+function createSystemEventMessage(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    role: "custom",
+    customType: "system_event",
+    content: `System event: ${(parsed.eventLabel as string | undefined) ?? "System event"}`,
+    display: parsed.display === true,
+    details: createSystemEventData(parsed),
+    timestamp: entryTimestamp(parsed.timestamp),
+  };
+}
+
 export function appendUiJsonlEntry(options: {
   parsed: Record<string, unknown>;
   messages: unknown[];
@@ -86,6 +106,17 @@ export function appendUiJsonlEntry(options: {
       data: parsed.data,
       timestamp: entryTimestamp(parsed.timestamp),
     });
+  } else if (parsed.type === "system_event") {
+    if (!entryAllowed(activePathIds, parsed.id)) return;
+    customEntries.push({
+      id: (parsed.id as string) ?? `system-event-${Date.now()}`,
+      customType: "system_event",
+      data: createSystemEventData(parsed),
+      timestamp: entryTimestamp(parsed.timestamp),
+    });
+    if (includeMessages && parsed.display === true) {
+      messages.push(createSystemEventMessage(parsed));
+    }
   } else if (parsed.type === "compaction") {
     if (!entryAllowed(activePathIds, parsed.id)) return;
     messages.push({
@@ -128,6 +159,16 @@ export function appendFullJsonlEntry(
       data: parsed.data,
       timestamp: entryTimestamp(parsed.timestamp),
     });
+  } else if (parsed.type === "system_event") {
+    accumulator.allCustomEntries.push({
+      id: entryId || `system-event-${Date.now()}`,
+      customType: "system_event",
+      data: createSystemEventData(parsed),
+      timestamp: entryTimestamp(parsed.timestamp),
+    });
+    if (parsed.display === true) {
+      accumulator.allMessages.push({ entryId, message: createSystemEventMessage(parsed) });
+    }
   } else if (parsed.type === "message" && parsed.message) {
     accumulator.allMessages.push({ entryId, message: parsed.message });
   } else if (parsed.type === "compaction") {

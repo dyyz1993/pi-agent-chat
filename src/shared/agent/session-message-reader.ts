@@ -947,6 +947,7 @@ export class SessionMessageReader {
       "model_change",
       "thinking_level_change",
       "tier_models_change",
+      "system_event",
       "custom_message",
       "session_info",
       "segment_summary",

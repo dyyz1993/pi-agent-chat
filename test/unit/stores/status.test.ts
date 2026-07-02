@@ -111,6 +111,25 @@ describe("setPermissionProfile", () => {
       "readonly",
     );
   });
+
+  it("resets stale permission UI when a runtime snapshot has no permission mode", () => {
+    useStatusStore.setState({
+      permissionProfile: "yolo",
+      yoloEnabled: true,
+      permissionProfileLoading: true,
+      yoloLoading: true,
+    });
+
+    useStatusStore.getState().applyPermissionProfileSnapshot(undefined, "missing-mode-session");
+
+    expect(useStatusStore.getState().permissionProfile).toBe("normal");
+    expect(useStatusStore.getState().yoloEnabled).toBe(false);
+    expect(useStatusStore.getState().permissionProfileLoading).toBe(false);
+    expect(useStatusStore.getState().yoloLoading).toBe(false);
+    expect(useStatusStore.getState().getRememberedPermissionProfile("missing-mode-session")).toBe(
+      undefined,
+    );
+  });
 });
 
 describe("togglePlan", () => {

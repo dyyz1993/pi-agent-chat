@@ -14,6 +14,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { usageScopeKey, usageStatsKey, useUsageStore } from "../../stores/use-usage-store";
 import type {
   UsageDailyBucket,
+  UsageObservabilityStats,
   UsageRangePreset,
   UsageScope,
   UsageShareStats,
@@ -29,6 +30,19 @@ const RANGES: Array<{ id: UsageRangePreset; label: string }> = [
 
 const MODEL_COLORS = ["#4196f3", "#45c477", "#7c5ce6", "#ff6b6b", "#ff9f43", "#48d1cc"];
 const MIN_HEATMAP_COLUMNS = 53;
+const EMPTY_OBSERVABILITY: UsageObservabilityStats = {
+  contextSamples: 0,
+  maxContextTokens: 0,
+  avgContextTokens: 0,
+  maxContextPercent: null,
+  contextRefTotal: 0,
+  contextRefDuplicateCount: 0,
+  contextRefDuplicateRatio: 0,
+  topDuplicateContextRefs: [],
+  toolCalls: 0,
+  toolDistribution: [],
+  inefficientPatterns: [],
+};
 
 function compactNumber(value: number): string {
   if (!Number.isFinite(value)) return "0";
@@ -421,6 +435,81 @@ function RankedList({
   );
 }
 
+function ratioLabel(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0%";
+  if (value < 0.01) return "<1%";
+  return `${Math.round(value * 100)}%`;
+}
+
+function ObservabilityCard({ stats }: { stats: UsageObservabilityStats }) {
+  const hasData = stats.contextSamples > 0 || stats.toolCalls > 0 || stats.contextRefTotal > 0;
+  const toolItems = stats.toolDistribution.slice(0, 6).map((item) => ({
+    label: `${item.name} · ${item.category}`,
+    value: `${item.calls} 次 · ${ratioLabel(item.share)}`,
+  }));
+  const patternItems = stats.inefficientPatterns.slice(0, 5).map((item) => ({
+    label:
+      item.type === "read_edit_churn"
+        ? `${item.sessionId} · read/edit 震荡`
+        : `${item.sessionId} · 重复读取`,
+    value: `${item.count} 次`,
+  }));
+  const duplicateItems = stats.topDuplicateContextRefs.slice(0, 5).map((item) => ({
+    label: item.ref,
+    value: `${item.count} 次 · ${compactNumber(item.tokens)} tokens`,
+  }));
+
+  return (
+    <div className="rounded-md border border-border-secondary bg-bg-primary/55 p-2.5">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-text-secondary">
+        <Activity className="h-3 w-3" />
+        链路观测
+      </div>
+      {!hasData ? (
+        <div className="rounded border border-dashed border-border-secondary/70 px-3 py-4 text-center text-[10px] text-text-tertiary">
+          暂无 context_usage 或工具序列数据。刷新用量索引后，新会话会逐步沉淀。
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <StatCard
+              label="平均上下文"
+              value={compactNumber(stats.avgContextTokens)}
+              icon={BarChart3}
+            />
+            <StatCard
+              label="峰值上下文"
+              value={
+                stats.maxContextPercent === null
+                  ? compactNumber(stats.maxContextTokens)
+                  : `${compactNumber(stats.maxContextTokens)} · ${ratioLabel(
+                      stats.maxContextPercent > 1
+                        ? stats.maxContextPercent / 100
+                        : stats.maxContextPercent,
+                    )}`
+              }
+              icon={Flame}
+            />
+            <StatCard
+              label="重复引用率"
+              value={`${ratioLabel(stats.contextRefDuplicateRatio)} (${stats.contextRefDuplicateCount})`}
+              icon={Brain}
+            />
+            <StatCard
+              label="低效模式"
+              value={compactNumber(stats.inefficientPatterns.length)}
+              icon={Wrench}
+            />
+          </div>
+          <RankedList title="工具调用分布" items={toolItems} />
+          <RankedList title="重复上下文引用" items={duplicateItems} />
+          <RankedList title="可优化模式" items={patternItems} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShareCard({ stats }: { stats: UsageShareStats }) {
   const mcpItems = stats.topMcpTools.map((item) => ({
     label: `${item.server}/${item.tool}`,
@@ -467,6 +556,7 @@ function ShareCard({ stats }: { stats: UsageShareStats }) {
 
       <Heatmap daily={stats.daily} />
       <TrendBars daily={stats.daily} topModels={stats.topModels} />
+      <ObservabilityCard stats={stats.observability ?? EMPTY_OBSERVABILITY} />
 
       <div className="grid grid-cols-2 gap-2">
         <StatCard label="会话" value={compactNumber(stats.totals.sessions)} icon={Activity} />
