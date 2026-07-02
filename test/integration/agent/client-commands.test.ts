@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getAgentsOperation,
   getCurrentAgentOperation,
+  getLatestAgentChangeOperation,
   getTierModelsOperation,
   setTierModelsOperation,
   switchAgentOperation,
@@ -82,5 +83,30 @@ describe("agent client command operations", () => {
         ensureManagedClient: vi.fn().mockResolvedValue(null),
       }),
     ).resolves.toEqual({ agentName: null });
+  });
+
+  it("restores latest agent change after ensuring an inactive session client", async () => {
+    const send = vi.fn().mockResolvedValue({
+      data: {
+        agentName: "frontend-dev",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    });
+    const restored = makeManaged(send);
+    const ensureManagedClient = vi.fn().mockResolvedValue(restored);
+
+    await expect(
+      getLatestAgentChangeOperation({
+        sessionId: "sess-sub-1",
+        getActiveManaged: () => null,
+        ensureManagedClient,
+      }),
+    ).resolves.toEqual({
+      agentName: "frontend-dev",
+      timestamp: "2026-07-01T00:00:00.000Z",
+    });
+
+    expect(ensureManagedClient).toHaveBeenCalledWith("sess-sub-1");
+    expect(send).toHaveBeenCalledWith({ type: "get_latest_agent_change" });
   });
 });
