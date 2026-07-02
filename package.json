@@ -62,6 +62,7 @@
     "test:settings": "bash run-tests.sh run settings",
     "test:list": "bash run-tests.sh list",
     "verify:remote-child": "bun tools/verify-remote-child-runtime.ts",
+    "verify:remote-bootstrap": "vitest run --config vitest.config.ts test/unit/scripts/remote-bootstrap.test.ts",
     "verify:worktree-stack": "bun tools/verify-worktree-stack-orchestration.ts",
     "test:failed": "bash run-tests.sh failed"
   },

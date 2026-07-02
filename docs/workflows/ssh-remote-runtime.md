@@ -32,6 +32,55 @@ REMOTE_LOCAL_PI_WORKSPACE_PACKAGES_PATH=/Users/xuyingzhou/Project/temporary/pi-m
 
 `REMOTE_LOCAL_PI_WORKSPACE_PACKAGES_PATH` is optional, but recommended for local fork development because the yalc sibling packages can be lightweight stubs. The workspace path lets the SSH bootstrap upload the complete local `@dyyz1993/pi-ai`, `@dyyz1993/pi-agent-core`, and `@dyyz1993/pi-tui` packages.
 
+## Remote Machine Bootstrap
+
+Issue #138 is covered by `scripts/remote-bootstrap.sh`. It is an explicit
+operator command for preparing one SSH host and verifying the runtime before the
+host is used by the app:
+
+```bash
+bash scripts/remote-bootstrap.sh xyz-mac
+```
+
+The script performs the following contract:
+
+| Step | Check or action            | Acceptance                                                                                                    |
+| ---- | -------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 1    | SSH connectivity           | `ssh <host> echo ok` works, with hostname fallback if ping is unavailable.                                    |
+| 2    | Remote platform            | Linux/macOS on x64/arm64 is detected and mapped to a Node tarball architecture.                               |
+| 3    | Runtime detection          | Existing `node` and `pi` are reused; missing ones are marked as install work, not final failure.              |
+| 4    | Install missing components | Node installs into `~/.local/pi-node`; pi installs with `npm --prefix ~/.local`.                              |
+| 5    | Configuration sync         | `auth.json`, `models.json`, and `settings.json` are copied only during this explicit bootstrap command.       |
+| 6    | Local app registration     | The selected app `.env` receives a managed `REMOTE_CHILD_*` block for the host.                               |
+| 7    | Remote CLI verification    | `pi --version`, non-empty `pi --list-models`, and remote config files must pass.                              |
+| 8    | RPC verification           | The script starts `pi --mode rpc`, sends a real `get_state` JSON command, and requires a successful response. |
+
+Useful overrides:
+
+```bash
+PI_REMOTE_BOOTSTRAP_ENV_FILE=/path/to/pi-agent-chat/.env \
+PI_REMOTE_BOOTSTRAP_REMOTE_PROJECT_PATH=/remote/project \
+PI_REMOTE_BOOTSTRAP_REMOTE_RUNTIME_DIR=/remote/.pi/runtime-child \
+bash scripts/remote-bootstrap.sh xyz-mac
+```
+
+The script is covered by a fake-SSH harness so CI can validate the full control
+flow without requiring a real remote machine:
+
+```bash
+bun run verify:remote-bootstrap
+```
+
+The harness covers:
+
+- already-prepared remote host;
+- missing Node.js and missing pi install path;
+- hard failure when the RPC `get_state` verification fails.
+
+For real remote acceptance, run the script against a disposable SSH host and
+keep the terminal output showing all eight sections and the final ready line.
+Then use the remote-child verifier below for deeper runtime/resource checks.
+
 ## Verified Smoke
 
 ```bash
