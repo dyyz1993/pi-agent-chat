@@ -14,6 +14,7 @@
  * 10. 完整事件流：followUp 入队 → queue_update → message_start → 消息出现
  * 11. steer vs followUp 时序差异（概念性验证）
  * 12. 多条 followUp 排队
+ * 13. promoteQueuedFollowUp → 单条 followUp 立即提升为 steer
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { create } from "zustand";
@@ -140,6 +141,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     _projectVersion: number;
     updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
     updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
+    refreshSessionStats: (sessionId: string) => Promise<void>;
     restoreContextFromHistory: (sessionId: string) => void;
   }
   const useSessionStore = create<MockSessionState>(() => ({
@@ -175,6 +177,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
         },
       }));
     },
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
     restoreContextFromHistory: () => {},
   }));
   return { useSessionStore, clearAgentStarted: vi.fn() };
@@ -469,10 +472,99 @@ describe("clearQueue — 行为验证", () => {
     });
   });
 
+  it("有 steering 且会话正在运行时，清空队列后会 abort 当前轮以关闭已出队竞态窗口", async () => {
+    useSessionStore.setState({
+      sessionStatusMap: { [SID]: "streaming" },
+    });
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["请改方向"],
+          followUp: [],
+        },
+      },
+    });
+
+    await useChatStore.getState().clearQueue();
+
+    expect(apiClient.call).toHaveBeenNthCalledWith(1, "agent.clearQueue", {
+      sessionId: SID,
+    });
+    expect(apiClient.call).toHaveBeenNthCalledWith(2, "agent.abort", {
+      sessionId: SID,
+    });
+  });
+
   it("无 activeSessionId 不触发 RPC", async () => {
     useSessionStore.setState({ activeSessionId: null });
 
     await useChatStore.getState().clearQueue();
+
+    expect(apiClient.call).not.toHaveBeenCalled();
+  });
+
+  it("按 type/index/text 单独删除队列项并乐观更新本地队列", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A"],
+          followUp: ["稍后 A", "稍后 B"],
+        },
+      },
+    });
+
+    await useChatStore.getState().clearQueuedMessage({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.clearQueue", {
+      sessionId: SID,
+      item: { type: "followUp", index: 0, text: "稍后 A" },
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A"],
+      followUp: ["稍后 B"],
+    });
+  });
+});
+
+describe("promoteQueuedFollowUp — 行为验证", () => {
+  it("按 type/index/text 提升一条 followUp 到 steering 并乐观更新本地队列", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A"],
+          followUp: ["稍后 A", "稍后 B"],
+        },
+      },
+    });
+
+    await useChatStore.getState().promoteQueuedFollowUp({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.promoteQueuedFollowUp", {
+      sessionId: SID,
+      item: { type: "followUp", index: 0, text: "稍后 A" },
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A", "稍后 A"],
+      followUp: ["稍后 B"],
+    });
+  });
+
+  it("无 activeSessionId 不触发 promote RPC", async () => {
+    useSessionStore.setState({ activeSessionId: null });
+
+    await useChatStore.getState().promoteQueuedFollowUp({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
 
     expect(apiClient.call).not.toHaveBeenCalled();
   });

@@ -31,7 +31,7 @@ interface ActiveSessionState extends SubscriptionMaps {
   currentModel: ModelInfo | null;
   modelBySession: Record<string, ModelInfo>;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
-  fetchInitialState: (sessionId: string) => void;
+  fetchInitialState: (sessionId: string, options?: { force?: boolean }) => void;
 }
 
 type SetState = StoreApi<ActiveSessionState>["setState"];
@@ -41,6 +41,32 @@ interface ActiveSessionLogger {
   info: (message: string, data?: Record<string, unknown>) => void;
   warn: (message: string, data?: Record<string, unknown>) => void;
   error: (message: string, data?: Record<string, unknown>) => void;
+}
+
+async function restoreRememberedPermissionProfile(
+  sessionId: string,
+  log: ActiveSessionLogger,
+): Promise<void> {
+  const rememberedPermissionProfile = useStatusStore
+    .getState()
+    .getRememberedPermissionProfile(sessionId);
+  if (!rememberedPermissionProfile) return;
+
+  try {
+    await apiClient.call("agent.setPermissionMode", {
+      sessionId,
+      mode: rememberedPermissionProfile,
+    });
+    useStatusStore
+      .getState()
+      .applyPermissionProfileSnapshot(rememberedPermissionProfile, sessionId);
+  } catch (err) {
+    log.warn("restore permission profile failed", {
+      sessionId,
+      profile: rememberedPermissionProfile,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 interface HotSwitchMessageLoadParams {
@@ -226,6 +252,11 @@ export function createSetActiveSessionAction({
     if (!tab) return;
 
     const ensureSession = async (): Promise<SessionMeta | null> => {
+      for (const sessions of Object.values(get().sessionsByProject)) {
+        const session = sessions.find((s) => s.sessionId === id);
+        if (session) return session;
+      }
+
       let sessions = get().sessionsByProject[tab.path];
       if (!sessions) {
         sessions = await get().loadSessionsForProject(tab.path);
@@ -277,6 +308,11 @@ export function createSetActiveSessionAction({
           });
 
           requestRulesSnapshot(id);
+          void restoreRememberedPermissionProfile(id, log).finally(() => {
+            if (isLatestStart()) {
+              get().fetchInitialState(id, { force: true });
+            }
+          });
 
           const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
           const hasCachedMsgs = cachedMsgs.some(
@@ -366,29 +402,10 @@ export function createSetActiveSessionAction({
               });
               markAgentStarted(id);
 
-              const rememberedPermissionProfile = useStatusStore
-                .getState()
-                .getRememberedPermissionProfile(id);
-              if (rememberedPermissionProfile) {
-                try {
-                  await apiClient.call("agent.setPermissionMode", {
-                    sessionId: id,
-                    mode: rememberedPermissionProfile,
-                  });
-                  useStatusStore
-                    .getState()
-                    .applyPermissionProfileSnapshot(rememberedPermissionProfile, id);
-                } catch (err) {
-                  log.warn("restore permission profile failed", {
-                    sessionId: id,
-                    profile: rememberedPermissionProfile,
-                    error: err instanceof Error ? err.message : String(err),
-                  });
-                }
-              }
+              await restoreRememberedPermissionProfile(id, log);
 
               requestRulesSnapshot(id);
-              get().fetchInitialState(id);
+              get().fetchInitialState(id, { force: true });
               trace?.mark("fetch-initial-state-started");
 
               if (isHot) {
@@ -440,9 +457,6 @@ export function createSetActiveSessionAction({
                     trace?.mark("cold-preload-msg-done", {
                       ms: Math.round(performance.now() - tLoad),
                     });
-                    return useChatStore
-                      .getState()
-                      ._backgroundRefreshMessages(id, session.sessionPath);
                   })
                   .then(() => {
                     return apiClient

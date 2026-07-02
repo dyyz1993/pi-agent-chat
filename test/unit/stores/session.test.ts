@@ -1,5 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const chatStoreState = vi.hoisted(() => ({
+  loadSessionMessages: vi.fn().mockResolvedValue(undefined),
+  _backgroundRefreshMessages: vi.fn().mockResolvedValue(undefined),
+  clearSessionMessages: vi.fn(),
+  messagesBySession: {} as Record<string, unknown[]>,
+  saveInputDraft: vi.fn(),
+  restoreInputDraft: vi.fn(),
+  clearInputDraft: vi.fn(),
+}));
+
 vi.mock("zustand/middleware", async (importOriginal) => {
   const actual = await importOriginal<typeof import("zustand/middleware")>();
   return {
@@ -23,15 +33,7 @@ vi.mock("../../../src/mainview/stores/use-rpc-debug-store", () => ({
 
 vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
   useChatStore: {
-    getState: vi.fn(() => ({
-      loadSessionMessages: vi.fn().mockResolvedValue(undefined),
-      _backgroundRefreshMessages: vi.fn().mockResolvedValue(undefined),
-      clearSessionMessages: vi.fn(),
-      messagesBySession: {},
-      saveInputDraft: vi.fn(),
-      restoreInputDraft: vi.fn(),
-      clearInputDraft: vi.fn(),
-    })),
+    getState: vi.fn(() => chatStoreState),
     setState: vi.fn(),
   },
 }));
@@ -129,12 +131,17 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
   syncTabsToBackend: vi.fn(),
 }));
 
-import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import {
+  clearAgentStarted,
+  markAgentStarted,
+  useSessionStore,
+} from "../../../src/mainview/stores/use-session-store";
 import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useExplorerStore } from "../../../src/mainview/stores/use-explorer-store";
 import { useGitStore } from "../../../src/mainview/stores/use-git-store";
 import { setupSubscriptions } from "../../../src/mainview/stores/session-subscriptions";
+import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
@@ -161,6 +168,11 @@ function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chatStoreState.loadSessionMessages.mockResolvedValue(undefined);
+  chatStoreState._backgroundRefreshMessages.mockResolvedValue(undefined);
+  chatStoreState.messagesBySession = {};
+  clearAgentStarted("sess-1");
+  clearAgentStarted("sess-2");
   vi.mocked(useExplorerStore.getState).mockReturnValue({
     setCurrentPath: vi.fn(),
     listRootDir: vi.fn(),
@@ -366,6 +378,36 @@ describe("reorderProjectTabs", () => {
 });
 
 describe("setActiveProject", () => {
+  it("does not override a newly created active session when the same project reconnects", () => {
+    const oldSession = makeSession({
+      sessionId: "old-sess",
+      projectPath: TAB_A.path,
+      messageCount: 2,
+      firstMessage: "old",
+    });
+    const newSession = makeSession({
+      sessionId: "new-worktree-sess",
+      projectPath: "/worktree-a",
+      messageCount: 0,
+      firstMessage: "",
+    });
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: "new-worktree-sess",
+      sessionsByProject: {
+        [TAB_A.path]: [oldSession],
+        "/worktree-a": [newSession],
+      },
+      lastActiveSessionByProject: { [TAB_A.path]: "old-sess" },
+      newSessionCreatedAt: Date.now(),
+    });
+
+    useSessionStore.getState().setActiveProject(TAB_A.id);
+
+    expect(useSessionStore.getState().activeSessionId).toBe("new-worktree-sess");
+  });
+
   it("uses the remote workspace path for explorer and git operations", async () => {
     const localPath = "/Users/me/.pi-agent-chat/remote-projects/ssh-demo";
     const remotePath = "/Users/xyz/Projects/demo1";
@@ -413,6 +455,112 @@ describe("setActiveProject", () => {
 });
 
 describe("setActiveSession", () => {
+  it("cold-starts by preloading messages once without a second background refresh", async () => {
+    const session = makeSession({ sessionId: "sess-cold", projectPath: TAB_A.path });
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.start") {
+        return Promise.resolve({ agentId: "sess-cold", status: "started" });
+      }
+      if (method === "agent.getContextUsage") return Promise.resolve({ tokens: 123 });
+      if (method === "agent.getAvailableModels") return Promise.resolve({ models: [] });
+      if (method === "agent.getSettings") return Promise.resolve({});
+      if (method === "agent.getExtensions") return Promise.resolve({ extensions: [] });
+      if (method === "agent.getSkills") return Promise.resolve({ skills: [] });
+      if (method === "agent.getMcpServers") return Promise.resolve({ servers: [] });
+      if (method === "agent.getQueue") return Promise.resolve({ queue: [] });
+      if (method === "agent.getLatestAgentChange") return Promise.resolve({ change: null });
+      if (method === "agent.getAgents") return Promise.resolve({ agents: [] });
+      if (method === "agent.getCurrentAgent") return Promise.resolve({ agent: null });
+      if (method === "agent.getTierModels") return Promise.resolve({});
+      if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "session.loadTierConfig") return Promise.resolve(null);
+      return Promise.resolve({});
+    });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: null,
+      sessionsByProject: { [TAB_A.path]: [session] },
+      projectStartFailed: { [TAB_A.id]: false },
+      projectStartError: { [TAB_A.id]: "" },
+      sessionReady: {},
+      agentReady: {},
+    });
+
+    useSessionStore.getState().setActiveSession("sess-cold", true);
+
+    await vi.waitFor(() => {
+      expect(useSessionStore.getState().agentReady["sess-cold"]).toBe(true);
+      expect(mockedCall).toHaveBeenCalledWith("agent.getContextUsage", {
+        sessionId: "sess-cold",
+      });
+    });
+
+    expect(chatStoreState.loadSessionMessages).toHaveBeenCalledTimes(1);
+    expect(chatStoreState.loadSessionMessages).toHaveBeenCalledWith("sess-cold", {
+      force: true,
+      sessionPath: "/sessions/sess-cold",
+    });
+    expect(chatStoreState._backgroundRefreshMessages).not.toHaveBeenCalled();
+  });
+
+  it("refreshes permission state when switching to a known running session", async () => {
+    const applyPermissionProfileSnapshot = vi.fn();
+    vi.mocked(useStatusStore.getState).mockReturnValue({
+      setPlugins: vi.fn(),
+      setSkills: vi.fn(),
+      getRememberedPermissionProfile: vi.fn(() => "yolo"),
+      applyPermissionProfileSnapshot,
+    });
+
+    const session = makeSession({ sessionId: "sess-1", projectPath: TAB_A.path });
+    markAgentStarted("sess-1");
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getState") {
+        return Promise.resolve({
+          permissionMode: "yolo",
+          isStreaming: false,
+          isCompacting: false,
+          messageCount: 0,
+        });
+      }
+      if (method === "agent.getContextUsage")
+        return Promise.resolve({ tokens: null, contextWindow: 0 });
+      if (method === "agent.getAvailableModels") return Promise.resolve({ models: [] });
+      if (method === "agent.getSettings") return Promise.resolve({});
+      if (method === "agent.getExtensions") return Promise.resolve({ extensions: [] });
+      if (method === "agent.getSkills") return Promise.resolve({ skills: [] });
+      if (method === "agent.getDisabledSkills") return Promise.resolve({ disabledSkills: [] });
+      if (method === "agent.getDisabledPlugins") return Promise.resolve({ disabledPlugins: [] });
+      return Promise.resolve({});
+    });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: TAB_A.id,
+      activeSessionId: null,
+      sessionsByProject: { [TAB_A.path]: [session] },
+      projectStartFailed: { [TAB_A.id]: false },
+      projectStartError: { [TAB_A.id]: "" },
+      sessionReady: {},
+      agentReady: {},
+    });
+
+    useSessionStore.getState().setActiveSession("sess-1", true);
+
+    await vi.waitFor(() => {
+      expect(applyPermissionProfileSnapshot).toHaveBeenCalledWith("yolo", "sess-1");
+      expect(mockedCall).toHaveBeenCalledWith("agent.getState", { sessionId: "sess-1" });
+    });
+
+    expect(mockedCall).not.toHaveBeenCalledWith(
+      "agent.start",
+      expect.objectContaining({ sessionId: "sess-1" }),
+    );
+  });
+
   it("ignores stale agent.start timeout after a newer start succeeds", async () => {
     vi.useFakeTimers();
 
@@ -557,6 +705,39 @@ describe("createNewSession", () => {
     expect(sessions[0].sessionId).toBe("new-sess");
   });
 
+  it("creates a session under the explicit project path instead of the active tab path", async () => {
+    useSessionStore.getState().addProjectTab(TAB_A);
+    useSessionStore.setState({ activeProjectId: "tab-a" });
+
+    mockedCall.mockResolvedValueOnce({
+      sessionId: "new-worktree-sess",
+      sessionPath: "/sessions/new-worktree-sess",
+    });
+
+    await useSessionStore.getState().createNewSession("/worktree-a");
+
+    expect(mockedCall).toHaveBeenCalledWith("session.create", { projectPath: "/worktree-a" });
+    expect(useSessionStore.getState().sessionsByProject["/project-a"]).toBeUndefined();
+    expect(useSessionStore.getState().sessionsByProject["/worktree-a"]).toEqual([
+      expect.objectContaining({
+        sessionId: "new-worktree-sess",
+        projectPath: "/worktree-a",
+      }),
+    ]);
+    expect(useSessionStore.getState().activeSessionId).toBe("new-worktree-sess");
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockedCall).toHaveBeenCalledWith(
+      "agent.start",
+      expect.objectContaining({
+        sessionId: "new-worktree-sess",
+        projectPath: "/worktree-a",
+        sessionPath: "/sessions/new-worktree-sess",
+      }),
+    );
+  });
+
   it("handles API error gracefully", async () => {
     useSessionStore.getState().addProjectTab(TAB_A);
     useSessionStore.setState({ activeProjectId: "tab-a" });
@@ -689,12 +870,16 @@ describe("deleteSession", () => {
 
 describe("setSessionTodos", () => {
   it("sets todos for a session", () => {
-    useSessionTodoStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
+    useSessionTodoStore
+      .getState()
+      .setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
     expect(useSessionTodoStore.getState().todosBySession["sess-1"]).toHaveLength(1);
   });
 
   it("overwrites existing todos", () => {
-    useSessionTodoStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
+    useSessionTodoStore
+      .getState()
+      .setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
     useSessionTodoStore.getState().setSessionTodos("sess-1", [
       { id: 2, text: "Task 2", done: true },
       { id: 3, text: "Task 3", done: false },
