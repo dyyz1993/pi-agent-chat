@@ -448,9 +448,6 @@ export function createSetActiveSessionAction({
                     trace?.mark("cold-preload-msg-done", {
                       ms: Math.round(performance.now() - tLoad),
                     });
-                    return useChatStore
-                      .getState()
-                      ._backgroundRefreshMessages(id, session.sessionPath);
                   })
                   .then(() => {
                     return apiClient
