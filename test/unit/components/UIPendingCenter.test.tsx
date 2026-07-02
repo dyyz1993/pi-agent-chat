@@ -256,6 +256,21 @@ describe("UIPendingCenter", () => {
     expect(screen.getByText("Session B")).toBeInTheDocument();
   });
 
+  it("scopes the pending requests panel to chat instead of a full-screen modal", () => {
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [makeRequest({ requestId: "r1", sessionId: "sess-1" })];
+
+    render(<UIPendingCenter />);
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "false");
+    expect(dialog).toHaveAttribute("data-ui-pending-scope", "chat");
+    expect(dialog).toHaveClass("absolute");
+    expect(dialog).not.toHaveClass("fixed");
+    expect(dialog).not.toHaveClass("inset-0");
+  });
+
   it("shows correct count per session group", () => {
     setupProject();
     mockPanelOpen = true;
