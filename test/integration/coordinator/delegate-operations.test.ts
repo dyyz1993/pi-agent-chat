@@ -717,7 +717,7 @@ describe("coordinator delegate operations", () => {
     expect(delegateRepliedSessions.has("child")).toBe(true);
   });
 
-  it("rejects delegate sends to unrelated sessions", async () => {
+  it("allows delegate sends to known unrelated sessions", async () => {
     const clients = new Map([
       ["child", makeManaged("idle", "/tmp/child.jsonl")],
       ["other-parent", makeManaged("idle", "/tmp/other-parent.jsonl")],
@@ -732,6 +732,38 @@ describe("coordinator delegate operations", () => {
           __call: "session_delegate_send",
           targetSessionId: "other-parent",
           message: "should not cross session boundary",
+        },
+        clients,
+        sessionPaths: new Map(),
+        sessionProjectPaths: new Map(),
+        delegateReplyCount: new Map(),
+        delegateCreatedAt: new Map(),
+        parentChildMap,
+        start: vi.fn(),
+        send: vi.fn(),
+        steer,
+        followUp: vi.fn(),
+      }),
+    ).resolves.toEqual({ delivered: true, targetStatus: "active" });
+
+    expect(steer).toHaveBeenCalledWith(
+      "other-parent",
+      expect.stringContaining("should not cross session boundary"),
+    );
+  });
+
+  it("rejects delegate sends to unknown unrelated sessions", async () => {
+    const clients = new Map([["child", makeManaged("idle", "/tmp/child.jsonl")]]);
+    const parentChildMap = new Map([["parent", new Set(["child"])]]);
+    const steer = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateSendOperation({
+        sourceSessionId: "child",
+        msg: {
+          __call: "session_delegate_send",
+          targetSessionId: "unknown-session",
+          message: "should not send to arbitrary ids",
         },
         clients,
         sessionPaths: new Map(),
