@@ -12,7 +12,9 @@ import { formatProjectStartError, getErrorMessage } from "./session-start-error"
 import {
   requestRulesSnapshot,
   setupSubscriptions,
+  cleanupSession,
   cleanupSessionLight,
+  clearSubscriptionState,
   type SubscriptionMaps,
 } from "./session-subscriptions";
 
@@ -195,9 +197,11 @@ export function createSetActiveSessionAction({
       const t0 = performance.now();
       clearStatusWatchdog(prevId);
       useChatStore.getState().saveInputDraft(prevId);
+      cleanupSession(get(), prevId);
       cleanupSessionLight(prevId);
+      set((s) => clearSubscriptionState(s, prevId));
       useGitStore.getState().clearDiff();
-      perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
+      perfLog.info("[switch] step-1 cleanup old session subscriptions (keep cached data)", {
         prevId,
         ms: Math.round(performance.now() - t0),
       });

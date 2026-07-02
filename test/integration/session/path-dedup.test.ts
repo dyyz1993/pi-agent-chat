@@ -29,6 +29,8 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
     getState: vi.fn(() => ({
       loadSessionMessages: vi.fn().mockResolvedValue(undefined),
       clearSessionMessages: vi.fn(),
+      saveInputDraft: vi.fn(),
+      restoreInputDraft: vi.fn(),
       messagesBySession: {},
     })),
     setState: vi.fn(),
@@ -120,9 +122,15 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { insertAfterPinned } from "../../../src/mainview/stores/use-session-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
+import {
+  cleanupSession,
+  cleanupSessionLight,
+} from "../../../src/mainview/stores/session-subscriptions";
 import type { SessionMeta } from "../../../src/shared/modules/project";
 
 const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
+const mockedCleanupSession = cleanupSession as ReturnType<typeof vi.fn>;
+const mockedCleanupSessionLight = cleanupSessionLight as ReturnType<typeof vi.fn>;
 
 function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   return {
@@ -392,5 +400,44 @@ describe("coordinator.session_created handler — sessionPath deduplication", ()
     const stored = useSessionStore.getState().sessionsByProject[projectPath];
     expect(stored).toHaveLength(1);
     expect(stored[0].sessionPath).toBe("/sessions/old-path.jsonl");
+  });
+});
+
+describe("setActiveSession cleanup", () => {
+  it("unsubscribes the previous active session when switching sessions", () => {
+    const projectPath = "/project-a";
+    useSessionStore.setState({
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-old",
+      projectTabs: [{ id: "tab-a", name: "Project A", path: projectPath }],
+      sessionsByProject: {
+        [projectPath]: [
+          makeSession({
+            sessionId: "sess-old",
+            sessionPath: "/sessions/old.jsonl",
+            projectPath,
+          }),
+          makeSession({
+            sessionId: "sess-new",
+            sessionPath: "/sessions/new.jsonl",
+            projectPath,
+          }),
+        ],
+      },
+      agentSubscriptions: { "sess-old": "agent-sub-old" },
+      bashSubscriptions: { "sess-old": "bash-sub-old" },
+      memorySubscriptions: { "sess-old": ["memory-sub-old"] },
+      sessionReady: { "sess-old": true },
+    });
+
+    useSessionStore.getState().setActiveSession("sess-new");
+
+    expect(mockedCleanupSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activeSessionId: "sess-old",
+      }),
+      "sess-old",
+    );
+    expect(mockedCleanupSessionLight).toHaveBeenCalledWith("sess-old");
   });
 });
