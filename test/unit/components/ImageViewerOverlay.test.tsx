@@ -179,7 +179,12 @@ describe("ImageViewerOverlay — layout & accessibility", () => {
   it("root has dark backdrop background", () => {
     render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
     const root = screen.getByTestId("image-viewer-overlay");
-    expect(root.className).toContain("bg-black/85");
+    expect(root.className).toContain("bg-bg-elevated");
+  });
+
+  it("renders a visible shared surface title", () => {
+    render(<ImageViewerOverlay src="https://example.com/a.png" onClose={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "Image preview" })).toBeInTheDocument();
   });
 
   it("img is constrained to viewport", () => {

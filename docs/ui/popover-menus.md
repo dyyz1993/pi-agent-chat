@@ -59,14 +59,15 @@ Avoid these patterns:
 
 ## Current Component Map
 
-| Surface                     | Component                            | Pattern           | Notes                                                                                 |
-| --------------------------- | ------------------------------------ | ----------------- | ------------------------------------------------------------------------------------- |
-| Git branch selector         | `GitPanel` + `GitBranchSelector`     | `AnchoredPopover` | Portal anchored to branch button.                                                     |
-| Model picker                | `ModelPickerButton`                  | `AnchoredPopover` | Shared by sidebar, settings, tier config.                                             |
-| Explorer/Git context menus  | `ContextMenu`                        | fixed by pointer  | Pointer menus are not anchor-triggered, but must clamp to viewport if expanded later. |
-| Left sidebar bottom menus   | `SidebarBottomControls`, `ThemeMenu` | local absolute    | Acceptable while bounded by the bottom control group.                                 |
-| Notification center         | `NotificationCenter`                 | local absolute    | Header-scoped; consider `AnchoredPopover` if it appears in clipped panels.            |
-| Command/quick action popups | `CommandPopup`, `QuickActionToolbar` | local absolute    | Input-area scoped and intentionally bounded.                                          |
+| Surface                     | Component                            | Pattern           | Notes                                                                                  |
+| --------------------------- | ------------------------------------ | ----------------- | -------------------------------------------------------------------------------------- |
+| Git branch selector         | `GitPanel` + `GitBranchSelector`     | `AnchoredPopover` | Portal anchored to branch button.                                                      |
+| Model picker                | `ModelPickerButton`                  | `AnchoredPopover` | Shared by sidebar, settings, tier config.                                              |
+| Explorer/Git context menus  | `ContextMenu`                        | fixed by pointer  | Pointer menus are not anchor-triggered, but must clamp to viewport if expanded later.  |
+| Left sidebar bottom menus   | `SidebarBottomControls`, `ThemeMenu` | local absolute    | Acceptable while bounded by the bottom control group.                                  |
+| Notification center         | `NotificationCenter`                 | local absolute    | Header-scoped; consider `AnchoredPopover` if it appears in clipped panels.             |
+| Command/quick action popups | `CommandPopup`, `QuickActionToolbar` | local absolute    | Input-area scoped and intentionally bounded.                                           |
+| Pending request center      | `UIPendingCenter`                    | local absolute    | Chat-scoped panel; must stay below sidebars/drawers and avoid full-window modal cover. |
 
 ## Checklist for UI Changes
 

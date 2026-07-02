@@ -48,6 +48,17 @@ export function getProjectPathPermissionsPath(projectPath: string): string {
   return join(getProjectUserStateDir(projectPath), "path-permissions.json");
 }
 
+export function getWorktreesRoot(): string {
+  const envRoot = process.env.PI_WORKTREE_ROOT;
+  return resolve(envRoot ? expandTildePath(envRoot) : join(homedir(), ".pi", "worktrees"));
+}
+
+export function getWorktreePath(repoPath: string, branch: string): string {
+  const repoName = basename(normalizeProjectPath(repoPath));
+  const safeBranch = branch.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return join(getWorktreesRoot(), `${repoName}-${safeBranch}`);
+}
+
 export function getProjectExecutionSandboxPath(projectPath: string): string {
   return join(getProjectUserStateDir(projectPath), "execution-sandbox.json");
 }

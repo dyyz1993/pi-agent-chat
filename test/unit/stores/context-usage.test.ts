@@ -69,6 +69,7 @@ const { mockSessionStore } = vi.hoisted(() => {
     _projectVersion: number;
     updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
     updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
+    refreshSessionStats: ReturnType<typeof vi.fn>;
     restoreContextFromHistory: (sessionId: string) => void;
   }
 
@@ -91,6 +92,7 @@ const { mockSessionStore } = vi.hoisted(() => {
     _projectVersion: 0,
     updateSessionStatus: () => {},
     updateSessionContext: () => {},
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
     restoreContextFromHistory: () => {},
   };
 
@@ -198,6 +200,7 @@ beforeEach(() => {
     sessionStatusMap: {},
     sessionContextMap: {},
     sessionsByProject: {},
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
   });
   (mockedCall as ReturnType<typeof vi.fn>).mockReset();
   (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -219,6 +222,7 @@ describe("context usage tracking", () => {
       expect(ctx!.tokens).toBe(12345);
       expect(ctx!.contextWindow).toBe(200000);
       expect(mockedCall).toHaveBeenCalledWith("agent.getContextUsage", { sessionId: SID });
+      expect(useSessionStore.getState().refreshSessionStats).toHaveBeenCalledWith(SID);
     });
 
     it("message_end without usage still uses authoritative context usage", async () => {

@@ -33,6 +33,7 @@ import {
   GitFork,
   Send,
   OctagonPause,
+  RefreshCw,
   Trash2,
   Eraser,
   type LucideIcon,
@@ -155,6 +156,11 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
     icon: CircleCheckBig,
     color: "text-status-success",
     label: "Goal Complete",
+  },
+  supervisor_continue: {
+    icon: RefreshCw,
+    color: "text-status-info",
+    label: "Supervisor Continue",
   },
 };
 

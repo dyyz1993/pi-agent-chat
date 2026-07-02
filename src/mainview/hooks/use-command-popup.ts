@@ -3,24 +3,47 @@ import { useChatStore } from "../stores/use-chat-store";
 import { useSessionStore } from "../stores/use-session-store";
 import { useExplorerStore } from "../stores/use-explorer-store";
 import { useMemoryStore } from "../stores/use-memory-store";
+import { useComposerPlaceholderStore } from "../stores/use-composer-placeholder-store";
 import { apiClient } from "../lib/api-client";
 import type { TreeNode } from "../types";
 import { createLogger } from "../../shared/lib/logger";
+import {
+  buildSessionMentionItems,
+  type SessionMentionScope,
+} from "../lib/session-mention-items";
+import { jumpToSessionById } from "../components/chat/primitives/useJumpToSession";
 
 const log = createLogger("chat");
 
 export type PopupMode = "at" | "slash" | null;
-export type AtTab = "agents" | "files" | "memory";
+export type AtTab =
+  | "recentSessions"
+  | "currentSessions"
+  | "globalSessions"
+  | "agents"
+  | "files"
+  | "memory";
 
 export interface PopupItem {
   id: string;
   label: string;
   description?: string;
-  icon: "tool" | "file" | "folder" | "sparkles" | "puzzle" | "filetext" | "brain" | "book";
+  icon:
+    | "tool"
+    | "file"
+    | "folder"
+    | "sparkles"
+    | "puzzle"
+    | "filetext"
+    | "brain"
+    | "book"
+    | "session";
   accentColor: string;
   insertText: string;
   isFolder?: boolean;
   folderPath?: string;
+  sessionId?: string;
+  sessionAction?: "reference" | "jump";
 }
 
 export interface FileBreadcrumb {
@@ -96,12 +119,45 @@ export function useCommandPopup(): CommandPopupState {
 
   const closePopup = useCallback(() => {
     setPopupMode(null);
-    setAtTabState("agents");
+    setAtTabState("recentSessions");
     setFileBreadcrumbs([]);
     setCurrentDir(null);
     setCachedItems([]);
     setItems([]);
   }, []);
+
+  const buildSessionItems = useCallback(
+    (scope: SessionMentionScope, action: "reference" | "jump"): PopupItem[] => {
+      const sessionState = useSessionStore.getState();
+      return buildSessionMentionItems({
+        sessionsByProject: sessionState.sessionsByProject,
+        projectTabs: sessionState.projectTabs,
+        activeProjectId: sessionState.activeProjectId,
+        scope,
+        action,
+      }).map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: item.description,
+        icon: "session",
+        accentColor: action === "jump" ? "text-cyan-400" : "text-blue-400",
+        insertText: item.insertText,
+        sessionId: item.sessionId,
+        sessionAction: item.action,
+      }));
+    },
+    [],
+  );
+
+  const fetchAtSessions = useCallback(
+    (tab: AtTab) => {
+      const scope: SessionMentionScope =
+        tab === "currentSessions" ? "current" : tab === "globalSessions" ? "global" : "recent";
+      setCachedItems(buildSessionItems(scope, "reference"));
+      setLoading(false);
+    },
+    [buildSessionItems],
+  );
 
   const fetchAtAgents = useCallback(async () => {
     if (!activeSessionId) return;
@@ -237,6 +293,7 @@ export function useCommandPopup(): CommandPopupState {
       const cmdRes = (await apiClient.call("agent.getCommands", {
         sessionId: activeSessionId,
       })) as CommandInfo[];
+      result.push(...buildSessionItems("recent", "jump"));
       for (const cmd of cmdRes) {
         result.push({
           id: `cmd-${cmd.name}-${cmd.source}`,
@@ -276,18 +333,33 @@ export function useCommandPopup(): CommandPopupState {
       setLoading(false);
     }
     setCachedItems(result);
-  }, [activeSessionId]);
+  }, [activeSessionId, buildSessionItems]);
 
   useEffect(() => {
     if (!popupMode) return;
     if (popupMode === "at") {
-      if (atTab === "files") fetchAtFiles(currentDir);
+      if (
+        atTab === "recentSessions" ||
+        atTab === "currentSessions" ||
+        atTab === "globalSessions"
+      ) {
+        fetchAtSessions(atTab);
+      } else if (atTab === "files") fetchAtFiles(currentDir);
       else if (atTab === "memory") fetchAtMemory();
       else fetchAtAgents();
     } else {
       fetchSlashAll();
     }
-  }, [popupMode, atTab, currentDir, fetchAtAgents, fetchAtFiles, fetchAtMemory, fetchSlashAll]);
+  }, [
+    popupMode,
+    atTab,
+    currentDir,
+    fetchAtAgents,
+    fetchAtFiles,
+    fetchAtMemory,
+    fetchAtSessions,
+    fetchSlashAll,
+  ]);
 
   useEffect(() => {
     if (!popupMode || cachedItems.length === 0) {
@@ -310,7 +382,7 @@ export function useCommandPopup(): CommandPopupState {
     (mode: "at" | "slash") => {
       setPopupMode(mode);
       if (mode === "at") {
-        setAtTabState("agents");
+        setAtTabState("recentSessions");
         setFileBreadcrumbs([]);
         setCurrentDir(null);
       }
@@ -334,6 +406,32 @@ export function useCommandPopup(): CommandPopupState {
         return;
       }
 
+      if (item.sessionAction === "jump" && item.sessionId) {
+        const trigger = popupMode === "at" ? "@" : "/";
+        const triggerIdx = inputText.lastIndexOf(trigger);
+        if (triggerIdx >= 0) {
+          setInputText(inputText.slice(0, triggerIdx));
+        }
+        closePopup();
+        void jumpToSessionById(item.sessionId, { returnSourceSessionId: activeSessionId });
+        return;
+      }
+
+      if (item.sessionAction === "reference" && item.sessionId) {
+        const trigger = popupMode === "at" ? "@" : "/";
+        const triggerIdx = inputText.lastIndexOf(trigger);
+        if (triggerIdx >= 0) {
+          setInputText(inputText.slice(0, triggerIdx));
+        }
+        useComposerPlaceholderStore.getState().addSessionReference({
+          sessionId: item.sessionId,
+          title: item.label,
+          description: item.description,
+        });
+        closePopup();
+        return;
+      }
+
       const trigger = popupMode === "at" ? "@" : "/";
       const triggerIdx = inputText.lastIndexOf(trigger);
       let newText: string;
@@ -345,7 +443,7 @@ export function useCommandPopup(): CommandPopupState {
       setInputText(newText);
       closePopup();
     },
-    [inputText, setInputText, popupMode, atTab, closePopup],
+    [activeSessionId, inputText, setInputText, popupMode, atTab, closePopup],
   );
 
   const handleBreadcrumb = useCallback(

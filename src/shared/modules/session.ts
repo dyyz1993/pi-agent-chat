@@ -69,6 +69,7 @@ export interface SessionEntry {
     | "message"
     | "model_change"
     | "thinking_level_change"
+    | "system_event"
     | "session_info"
     | "compaction"
     | "custom"
