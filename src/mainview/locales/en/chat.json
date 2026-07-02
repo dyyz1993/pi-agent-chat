@@ -388,6 +388,8 @@
   "uiPending.editor": "Edit",
   "uiPending.handleRequest": "Handle",
   "uiPending.moreRequests": "{{count}} more pending requests",
+  "uiPending.fromSession": "From",
+  "uiPending.subtaskSource": "Subtask",
 
   "hookPermission.allow": "Allow",
   "hookPermission.deny": "Deny",

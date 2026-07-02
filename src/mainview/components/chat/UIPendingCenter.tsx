@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   MessageCircleQuestion,
   ArrowRight,
@@ -279,7 +279,45 @@ function ApprovalContextSummary({
   );
 }
 
-function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: string }) {
+function SourceContextHeader({
+  sessionName,
+  isSubtaskSource,
+}: {
+  sessionName?: string;
+  isSubtaskSource?: boolean;
+}) {
+  const { t } = useTranslation("chat");
+  if (!sessionName) return null;
+
+  return (
+    <div className="mb-1.5 flex items-center gap-1.5 rounded-md border border-border-secondary/35 bg-bg-primary/55 px-2 py-1.5 text-[10px] text-text-tertiary">
+      <span className="shrink-0 font-medium">{t("uiPending.fromSession")}</span>
+      <span
+        className="min-w-0 flex-1 truncate font-semibold text-text-secondary"
+        title={sessionName}
+      >
+        {sessionName}
+      </span>
+      {isSubtaskSource && (
+        <span className="shrink-0 rounded bg-semantic-agent/10 px-1.5 py-0.5 font-medium text-semantic-agent">
+          {t("uiPending.subtaskSource")}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PanelCard({
+  req,
+  sessionName,
+  showSourceContext = false,
+  isSubtaskSource = false,
+}: {
+  req: UIPendingRequest;
+  sessionName?: string;
+  showSourceContext?: boolean;
+  isSubtaskSource?: boolean;
+}) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
@@ -305,9 +343,18 @@ function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: 
   const isAskUserQuestion = req.method === "askUserQuestion";
   const options = req.options ?? [];
   const isMulti = !!req.multiple;
+  const withSourceContext = (content: ReactNode) =>
+    showSourceContext ? (
+      <div>
+        <SourceContextHeader sessionName={sessionName} isSubtaskSource={isSubtaskSource} />
+        {content}
+      </div>
+    ) : (
+      content
+    );
 
   if (isAskUserQuestion) {
-    return (
+    return withSourceContext(
       <AskUserQuestionCard
         block={{
           type: "uiInteraction",
@@ -320,7 +367,7 @@ function PanelCard({ req, sessionName }: { req: UIPendingRequest; sessionName?: 
           sessionId: req.sessionId,
           timeout: req.timeout,
         }}
-      />
+      />,
     );
   }
 
@@ -704,7 +751,7 @@ function SessionGroup({
             className="max-w-[6rem] shrink-0 truncate rounded bg-semantic-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-semantic-agent"
             title={sessionName}
           >
-            ↳ 子任务
+            ↳ {t("uiPending.subtaskSource")}
           </span>
         )}
         <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-status-warning">
@@ -732,7 +779,12 @@ function SessionGroup({
                   <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
-              <PanelCard req={req} sessionName={sessionName} />
+              <PanelCard
+                req={req}
+                sessionName={sessionName}
+                showSourceContext
+                isSubtaskSource={isSubtaskSource}
+              />
             </div>
           ))}
         </div>
