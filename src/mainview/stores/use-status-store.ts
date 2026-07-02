@@ -231,11 +231,13 @@ export const useStatusStore = create<StatusState>((set) => ({
       });
   },
   applyPermissionProfileSnapshot: (profile, sessionId) => {
-    const normalized = normalizePermissionProfileName(profile);
-    if (!normalized) return;
-    if (sessionId) rememberPermissionProfileForSession(sessionId, normalized);
-    if (sessionId && getEffectiveSessionId() !== sessionId) {
-      return;
+    const normalized = normalizePermissionProfileName(profile) ?? "normal";
+    if (profile !== undefined) {
+      if (sessionId) rememberPermissionProfileForSession(sessionId, normalized);
+      const activeSessionId = getEffectiveSessionId();
+      if (sessionId && activeSessionId && activeSessionId !== sessionId) {
+        return;
+      }
     }
     set({
       permissionProfile: normalized,

@@ -119,12 +119,26 @@ function findBashProcess(event: BashChannelEvent): BashProcess | undefined {
 function bashProcessToToolStatus(proc: BashProcess): ToolExecBlock["status"] {
   if (proc.status === "done") return "done";
   if (proc.status === "error" || proc.status === "terminated") return "error";
+  if (proc.status === "background") return "background";
   return "running";
 }
 
 function buildBashToolDetails(proc: BashProcess, previous: unknown): unknown {
   const base =
     previous && typeof previous === "object" ? (previous as Record<string, unknown>) : {};
+  if (proc.status === "background") {
+    return {
+      ...base,
+      background: {
+        pid: proc.pid,
+        command: proc.command,
+        startedAt: proc.startedAt,
+        durationMs: Date.now() - proc.startedAt,
+        output: proc.output,
+        detached: true,
+      },
+    };
+  }
   if (proc.status !== "terminated") return base;
   return {
     ...base,
@@ -191,6 +205,7 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   // Handle output events for real-time streaming + terminal events for final status
   if (
     event.type !== "output" &&
+    event.type !== "background" &&
     event.type !== "end" &&
     event.type !== "error" &&
     event.type !== "terminated"
@@ -204,8 +219,8 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   const match = findBashToolBlockByProcess(messages, proc);
   if (!match) return;
 
-  const isOutput = event.type === "output";
-  const status = isOutput ? "running" : bashProcessToToolStatus(proc);
+  const isLiveUpdate = event.type === "output";
+  const status = isLiveUpdate ? "running" : bashProcessToToolStatus(proc);
   const output = proc.output.length > 0 ? proc.output : (proc.error ?? match.block.output);
   const nextBlock: ToolExecBlock = {
     ...match.block,
@@ -214,9 +229,12 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
     args: match.block.args || proc.command,
     status,
     output,
-    details: isOutput ? match.block.details : buildBashToolDetails(proc, match.block.details),
+    details: isLiveUpdate ? match.block.details : buildBashToolDetails(proc, match.block.details),
     startedAt: match.block.startedAt ?? proc.startedAt,
-    endedAt: isOutput ? match.block.endedAt : (proc.endedAt ?? Date.now()),
+    endedAt:
+      event.type === "output" || event.type === "background"
+        ? match.block.endedAt
+        : (proc.endedAt ?? Date.now()),
   };
 
   if (

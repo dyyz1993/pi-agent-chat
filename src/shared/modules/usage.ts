@@ -55,6 +55,41 @@ export interface UsageTopSkill {
   patchCount: number;
 }
 
+export interface UsageToolDistributionItem {
+  name: string;
+  category: "read" | "edit" | "write" | "bash" | "search" | "mcp" | "other";
+  calls: number;
+  share: number;
+}
+
+export interface UsageTopContextReference {
+  ref: string;
+  count: number;
+  tokens: number;
+}
+
+export interface UsageInefficientPattern {
+  type: "read_edit_churn" | "repeated_read";
+  sessionId: string;
+  count: number;
+  sequence: string[];
+  suggestion: string;
+}
+
+export interface UsageObservabilityStats {
+  contextSamples: number;
+  maxContextTokens: number;
+  avgContextTokens: number;
+  maxContextPercent: number | null;
+  contextRefTotal: number;
+  contextRefDuplicateCount: number;
+  contextRefDuplicateRatio: number;
+  topDuplicateContextRefs: UsageTopContextReference[];
+  toolCalls: number;
+  toolDistribution: UsageToolDistributionItem[];
+  inefficientPatterns: UsageInefficientPattern[];
+}
+
 export interface UsageTotals {
   tokens: number;
   input: number;
@@ -101,6 +136,7 @@ export interface UsageShareStats {
   topModels: UsageTopModel[];
   topMcpTools: UsageTopMcpTool[];
   topSkills: UsageTopSkill[];
+  observability: UsageObservabilityStats;
   dataQuality: UsageDataQuality;
 }
 

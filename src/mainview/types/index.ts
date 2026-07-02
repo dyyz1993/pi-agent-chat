@@ -208,6 +208,23 @@ export type ContextUsage = {
   providerRequest?: ProviderRequestContextUsage;
 };
 
+export type SessionUsageStats = {
+  tokens: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+  };
+  cost: number;
+  toolCalls: number;
+  totalMessages: number;
+  userMessages?: number;
+  assistantMessages?: number;
+  toolResults?: number;
+  contextUsage?: ContextUsage;
+};
+
 export type ProviderRequestContextUsage = {
   version: 1;
   provider: string;
