@@ -44,13 +44,14 @@ Do not create a new issue after every merge by default. Create a follow-up issue
 
 ## Agents
 
-| Agent             | Scope    | Responsibility                                                                                    |
-| ----------------- | -------- | ------------------------------------------------------------------------------------------------- |
-| `pi-issue-leader` | Project  | Intake issues, split work, allocate stacks/ports, delegate, track, review, plan merge and cleanup |
-| `pi-worktree-dev` | Project  | Implement one issue/slice in an isolated app/fork worktree stack and report back                  |
-| `pi-expert`       | Global   | Framework/config/runtime expert; consulted for Pi internals and cross-repo architecture           |
-| `explore`         | Built-in | Read-only investigation                                                                           |
-| `plan`            | Built-in | Planning-only analysis                                                                            |
+| Agent             | Scope    | Responsibility                                                                                      |
+| ----------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `issue-manager`   | Project  | Intake user feedback, delegate validation, file GitHub issues, and maintain an issue tracking table |
+| `pi-issue-leader` | Project  | Intake issues, split work, allocate stacks/ports, delegate, track, review, plan merge and cleanup   |
+| `pi-worktree-dev` | Project  | Implement one issue/slice in an isolated app/fork worktree stack and report back                    |
+| `pi-expert`       | Global   | Framework/config/runtime expert; consulted for Pi internals and cross-repo architecture             |
+| `explore`         | Built-in | Read-only investigation                                                                             |
+| `plan`            | Built-in | Planning-only analysis                                                                              |
 
 ## High-Level Flow
 
@@ -75,6 +76,33 @@ flowchart TD
 ```
 
 ## Detailed Workflow
+
+### 0. Feedback Intake And Issue Filing
+
+`issue-manager` is the lightweight front door for unstructured user feedback,
+screenshots, validation failures, and suspected regressions.
+
+It is intentionally narrower than `pi-issue-leader`:
+
+- it does not inspect source code or logs in its own main session,
+- it does not implement fixes,
+- it delegates validation to a child/delegated session,
+- it records the validation session id and result,
+- it creates a GitHub Issue only after validation confirms the problem or the user explicitly asks to track an unverified report.
+
+Use `issue-manager` when the task is "turn this feedback into a clean issue".
+Use `pi-issue-leader` when the task is "plan and execute fixes for existing
+issues".
+
+The required tracking shape is:
+
+| Feedback    | Validation session | Status                             | Issue     | Notes            |
+| ----------- | ------------------ | ---------------------------------- | --------- | ---------------- |
+| short title | session id         | verifying / filed / not-reproduced | issue URL | evidence summary |
+
+Created issues should include the observed behavior, reproduction steps, actual
+and expected results, validation evidence, suspected cause when proven, related
+files/sessions/PRs, and suggested acceptance cases.
 
 ### 1. Intake
 

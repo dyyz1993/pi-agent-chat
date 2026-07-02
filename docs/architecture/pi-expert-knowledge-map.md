@@ -222,10 +222,11 @@ Do not use the deprecated OpenCode-style `permission: "*": allow` map for Pi age
 
 `pi-agent-chat` currently defines project-scoped agents in `.pi/agents/`:
 
-| Agent             | Role                          | Key boundary                                                                                                   |
-| ----------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `pi-issue-leader` | Issue orchestration lead      | Splits issues, delegates to project agents, tracks Review/merge/cleanup; no direct edit/write/bash.            |
-| `pi-worktree-dev` | Worktree development executor | Handles one issue in an isolated worktree/paired fork stack and reports branch/tests/risks back to the leader. |
+| Agent             | Role                          | Key boundary                                                                                                                         |
+| ----------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `issue-manager`   | Issue intake manager          | Delegates validation, records validation session ids, files GitHub issues after evidence; no direct code/log investigation or fixes. |
+| `pi-issue-leader` | Issue orchestration lead      | Splits issues, delegates to project agents, tracks Review/merge/cleanup; no direct edit/write/bash.                                  |
+| `pi-worktree-dev` | Worktree development executor | Handles one issue in an isolated worktree/paired fork stack and reports branch/tests/risks back to the leader.                       |
 
 Workflow details live in `docs/workflows/project-issue-orchestration.md`.
 
