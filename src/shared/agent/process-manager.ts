@@ -1789,6 +1789,7 @@ export class AgentProcessManager {
     return getLatestAgentChangeOperation({
       sessionId,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
     });
   }
 
