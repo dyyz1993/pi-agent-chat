@@ -91,4 +91,21 @@ describe("CachedReactMarkdown clickable file paths", () => {
       false,
     );
   });
+
+  it("turns absolute file paths into clickable file preview entries", () => {
+    const openFile = vi.fn();
+    useExplorerStore.setState({ openFile });
+
+    render(<CachedReactMarkdown>{"Open /tmp/pi-e2e-click-path.md please"}</CachedReactMarkdown>);
+
+    fireEvent.click(screen.getByRole("button", { name: "/tmp/pi-e2e-click-path.md" }));
+    expect(openFile).toHaveBeenCalledWith(
+      {
+        name: "pi-e2e-click-path.md",
+        path: "/tmp/pi-e2e-click-path.md",
+        type: "file",
+      },
+      false,
+    );
+  });
 });
