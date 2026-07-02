@@ -256,6 +256,21 @@ describe("UIPendingCenter", () => {
     expect(screen.getByText("Session B")).toBeInTheDocument();
   });
 
+  it("scopes the pending requests panel to chat instead of a full-screen modal", () => {
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [makeRequest({ requestId: "r1", sessionId: "sess-1" })];
+
+    render(<UIPendingCenter />);
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "false");
+    expect(dialog).toHaveAttribute("data-ui-pending-scope", "chat");
+    expect(dialog).toHaveClass("absolute");
+    expect(dialog).not.toHaveClass("fixed");
+    expect(dialog).not.toHaveClass("inset-0");
+  });
+
   it("shows correct count per session group", () => {
     setupProject();
     mockPanelOpen = true;
@@ -1378,12 +1393,12 @@ describe("UIPendingCenter nested subtask requests", () => {
 
     render(<UIPendingCenter />);
 
-    expect(screen.getByText("Grandchild Task")).toBeInTheDocument();
+    expect(screen.getAllByText("Grandchild Task").length).toBeGreaterThan(0);
     expect(screen.getByText("Child Task")).toBeInTheDocument();
     expect(screen.getAllByText("Grandchild asks").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Child hook approval").length).toBeGreaterThan(0);
 
-    const grandchildGroup = screen.getByText("Grandchild Task").closest(".border");
+    const grandchildGroup = screen.getAllByText("Grandchild Task")[0]?.closest(".border");
     expect(grandchildGroup).not.toBeNull();
     fireEvent.click(within(grandchildGroup as HTMLElement).getByText("uiPending.gotoSession"));
 
@@ -1429,8 +1444,17 @@ describe("UIPendingCenter subagent request recovery", () => {
       makeRequest({
         requestId: "subagent-approval",
         sessionId: "sess_sub_001",
+        method: "askUserQuestion",
         title: "Child approval",
         message: "Allow child write?",
+        questions: [
+          {
+            id: "approval",
+            header: "Approval",
+            question: "Allow child write?",
+            options: [{ label: "Allow", description: "Continue child task" }],
+          },
+        ],
       }),
     ];
 
@@ -1440,7 +1464,9 @@ describe("UIPendingCenter subagent request recovery", () => {
     render(<UIPendingCenter />);
     expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toHaveTextContent("1");
     expect(screen.getAllByText("Child approval").length).toBeGreaterThan(0);
-    expect(screen.getByText("↳ 子任务")).toBeInTheDocument();
+    expect(screen.getByText("uiPending.fromSession")).toBeInTheDocument();
+    expect(screen.getAllByText("uiPending.subtaskSource").length).toBeGreaterThan(0);
+    expect(screen.getByText("↳ uiPending.subtaskSource")).toBeInTheDocument();
   });
 
   it("keeps project pending visible for live child requests before subagent list is restored", () => {

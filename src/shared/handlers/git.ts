@@ -1,10 +1,11 @@
-import { dirname, basename, join, posix, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { GitFileChange } from "../modules/git";
 import { createLogger } from "../lib/logger";
+import { getWorktreePath } from "../lib/pi-agent-paths";
 import type { RemoteProjectRecord } from "../modules/project";
 import { listRemoteProjects } from "../lib/project-config";
 
@@ -472,12 +473,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const target = await resolveGitTarget(params.repoPath);
     if (!isGitRepo(target)) throw new Error("Not a git repository");
     const repoRoot = getRepoRoot(target);
-    const repoDir = target.kind === "ssh" ? posix.dirname(repoRoot) : dirname(repoRoot);
-    const repoName = target.kind === "ssh" ? posix.basename(repoRoot) : basename(repoRoot);
     const newDir =
       target.kind === "ssh"
-        ? posix.join(repoDir, `${repoName}-${params.branch}`)
-        : join(repoDir, `${repoName}-${params.branch}`);
+        ? posix.join(posix.dirname(repoRoot), `${posix.basename(repoRoot)}-${params.branch}`)
+        : getWorktreePath(repoRoot, params.branch);
     const args = ["worktree", "add", newDir, "-b", params.branch];
     if (params.sourceBranch) {
       args.push(params.sourceBranch);

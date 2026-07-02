@@ -15,14 +15,29 @@ import {
   extractHookInterventionSegments,
   type HookIntervention,
 } from "./HookInterventionCard";
-
 const StreamingMarkdownContent = lazy(() => import("./StreamingMarkdownContent"));
+import { getRegisteredTags, getRenderer, type SpecialBlock } from "./special-block-registry";
+import { hasSpecialBlocks, parseSpecialBlocks } from "./special-block-parser";
+import "./special-block-renderers";
 
 /** A flattened text/hook/references segment used for rendering. */
 type RenderSegment =
   | { type: "text"; text: string }
   | { type: "references"; references: ContextReference[] }
-  | { type: "hook"; intervention: HookIntervention };
+  | { type: "hook"; intervention: HookIntervention }
+  | { type: "special-block"; block: SpecialBlock };
+
+function extractSpecialBlockSegments(
+  text: string,
+): Array<{ type: "text"; text: string } | { type: "special-block"; block: SpecialBlock }> | null {
+  const tags = getRegisteredTags();
+  if (!hasSpecialBlocks(text, tags)) return null;
+  return parseSpecialBlocks(text, tags).map((segment) =>
+    segment.type === "special-block"
+      ? { type: "special-block", block: segment }
+      : { type: "text", text: segment.text },
+  );
+}
 
 function buildRenderSegments(text: string): RenderSegment[] {
   const refSegments = extractContextReferenceSegments(text);
@@ -35,6 +50,11 @@ function buildRenderSegments(text: string): RenderSegment[] {
     const sub = extractHookInterventionSegments(seg.text);
     if (sub) {
       for (const s of sub) result.push(s);
+      continue;
+    }
+    const special = extractSpecialBlockSegments(seg.text);
+    if (special) {
+      for (const s of special) result.push(s);
     } else {
       result.push({ type: "text", text: seg.text });
     }
@@ -94,6 +114,13 @@ export const TextContentCard = memo(function TextContentCard({
                 <ContextReferenceCard key={`ref-${index}`} references={segment.references} />
               ) : segment.type === "hook" ? (
                 <HookInterventionCard key={`hook-${index}`} intervention={segment.intervention} />
+              ) : segment.type === "special-block" ? (
+                (() => {
+                  const Renderer = getRenderer(segment.block.tag);
+                  return Renderer ? (
+                    <Renderer key={`special-${index}`} block={segment.block} />
+                  ) : null;
+                })()
               ) : (
                 <span key={`text-${index}`}>{segment.text}</span>
               ),
@@ -133,6 +160,11 @@ export const TextContentCard = memo(function TextContentCard({
           <ContextReferenceCard key={`ref-${index}`} references={segment.references} />
         ) : segment.type === "hook" ? (
           <HookInterventionCard key={`hook-${index}`} intervention={segment.intervention} />
+        ) : segment.type === "special-block" ? (
+          (() => {
+            const Renderer = getRenderer(segment.block.tag);
+            return Renderer ? <Renderer key={`special-${index}`} block={segment.block} /> : null;
+          })()
         ) : (
           <CachedReactMarkdown key={`text-${index}`}>{segment.text}</CachedReactMarkdown>
         ),

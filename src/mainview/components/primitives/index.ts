@@ -1,6 +1,8 @@
 export { AnchoredPopover } from "./AnchoredPopover";
 export type { AnchoredPopoverProps } from "./AnchoredPopover";
 export { Button } from "./Button";
+export { ContentSurface } from "./ContentSurface";
+export type { ContentSurfaceProps } from "./ContentSurface";
 export { CopyAction } from "./CopyAction";
 export { DropdownSelect } from "./DropdownSelect";
 export type { DropdownSelectOption } from "./DropdownSelect";
@@ -13,6 +15,8 @@ export { PanelHeader } from "./PanelHeader";
 export type { PanelHeaderProps } from "./PanelHeader";
 export { SectionHeader } from "./SectionHeader";
 export type { SectionHeaderProps } from "./SectionHeader";
+export { SurfaceHeader } from "./SurfaceHeader";
+export type { SurfaceHeaderProps } from "./SurfaceHeader";
 export { ToastViewport } from "./ToastViewport";
 export { Tooltip } from "./Tooltip";
 export { useCopyFeedback } from "./use-copy-feedback";
