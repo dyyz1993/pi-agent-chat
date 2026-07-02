@@ -12,6 +12,7 @@ import {
   Brain,
   BookOpen,
   Search,
+  MessageSquare,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { PopupItem, FileBreadcrumb, PopupMode, AtTab } from "../../hooks/use-command-popup";
@@ -33,6 +34,9 @@ interface CommandPopupProps {
 }
 
 const AT_TABS: { key: AtTab; labelKey: string }[] = [
+  { key: "recentSessions", labelKey: "quickAction.recentSessions" },
+  { key: "currentSessions", labelKey: "quickAction.currentSessions" },
+  { key: "globalSessions", labelKey: "quickAction.globalSessions" },
   { key: "agents", labelKey: "quickAction.agents" },
   { key: "files", labelKey: "quickAction.files" },
   { key: "memory", labelKey: "quickAction.memory" },
@@ -56,6 +60,8 @@ function renderIcon(icon: PopupItem["icon"]) {
       return <Brain className="w-4 h-4" />;
     case "book":
       return <BookOpen className="w-4 h-4" />;
+    case "session":
+      return <MessageSquare className="w-4 h-4" />;
   }
 }
 

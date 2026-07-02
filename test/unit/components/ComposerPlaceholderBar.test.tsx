@@ -9,6 +9,7 @@ vi.mock("react-i18next", () => ({
     t: (key: string) =>
       ({
         composerQuote: "引用",
+        composerSession: "会话",
         composerQuoteExpand: "展开引用",
         composerQuoteCollapse: "收起引用",
         composerQuoteRemove: "删除引用",
@@ -38,6 +39,22 @@ describe("ComposerPlaceholderBar", () => {
     expect(screen.getByTestId("composer-placeholder-bar")).toBeTruthy();
     expect(screen.getByText("引用")).toBeTruthy();
     expect(screen.getByText(/可以继续做/)).toBeTruthy();
+    expect(useChatStore.getState().inputText).toBe("");
+  });
+
+  it("renders a session reference as a docked placeholder without mutating the textarea draft", () => {
+    useComposerPlaceholderStore.getState().addSessionReference({
+      sessionId: "sess-cn",
+      title: "中文验证会话",
+      description: "项目 A · Session · sess-cn",
+    });
+
+    render(<ComposerPlaceholderBar />);
+
+    expect(screen.getByTestId("composer-placeholder-bar")).toBeTruthy();
+    expect(screen.getByText("会话")).toBeTruthy();
+    expect(screen.getByText("中文验证会话")).toBeTruthy();
+    expect(screen.getByText("项目 A · Session · sess-cn")).toBeTruthy();
     expect(useChatStore.getState().inputText).toBe("");
   });
 

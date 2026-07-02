@@ -4,6 +4,8 @@ interface ComposerPlaceholderBase {
   id: string;
   text: string;
   title: string;
+  description?: string;
+  sessionId?: string;
   createdAt: number;
   expanded: boolean;
 }
@@ -19,12 +21,22 @@ export interface LongContentPlaceholder extends ComposerPlaceholderBase {
   path: string;
 }
 
-export type ComposerPlaceholder = TextQuotePlaceholder | LongContentPlaceholder;
+export interface SessionRefPlaceholder extends ComposerPlaceholderBase {
+  type: "sessionRef";
+  sessionId: string;
+}
+
+export type ComposerPlaceholder = TextQuotePlaceholder | LongContentPlaceholder | SessionRefPlaceholder;
 export type ComposerPlaceholderType = ComposerPlaceholder["type"];
 
 interface ComposerPlaceholderState {
   placeholders: ComposerPlaceholder[];
   addTextQuote: (text: string) => string | null;
+  addSessionReference: (session: {
+    sessionId: string;
+    title: string;
+    description?: string;
+  }) => string | null;
   addLongContentPaste: (text: string) => string | null;
   removePlaceholder: (id: string) => void;
   togglePlaceholder: (id: string) => void;
@@ -133,6 +145,11 @@ function serializeLongContent(placeholder: LongContentPlaceholder): string {
 export function serializeComposerPlaceholders(placeholders: ComposerPlaceholder[]): string {
   return placeholders
     .map((placeholder, index) => {
+      if (placeholder.type === "sessionRef") {
+        const sessionId = placeholder.sessionId.trim();
+        if (!sessionId) return null;
+        return `引用会话 ${index + 1}: ${placeholder.title}\n@session:${sessionId}`;
+      }
       if (placeholder.type === "longContent") return serializeLongContent(placeholder);
       if (placeholder.type === "textQuote") {
         const text = placeholder.text.trim();
@@ -180,6 +197,27 @@ export const useComposerPlaceholderStore = create<ComposerPlaceholderState>((set
           type: "textQuote",
           text,
           title: compactTitle(text),
+          createdAt: Date.now(),
+          expanded: false,
+        },
+      ],
+    }));
+    return id;
+  },
+  addSessionReference: ({ sessionId, title, description }) => {
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId) return null;
+    const id = createId();
+    set((state) => ({
+      placeholders: [
+        ...state.placeholders,
+        {
+          id,
+          type: "sessionRef",
+          text: `@session:${normalizedSessionId}`,
+          title: compactTitle(title || normalizedSessionId),
+          description,
+          sessionId: normalizedSessionId,
           createdAt: Date.now(),
           expanded: false,
         },

@@ -56,6 +56,27 @@ describe("composer placeholder store", () => {
     );
   });
 
+  it("serializes session references as @session context blocks at send time", () => {
+    const id = useComposerPlaceholderStore.getState().addSessionReference({
+      sessionId: "sess-cn",
+      title: "中文验证会话",
+      description: "项目 A · Session · sess-cn",
+    });
+
+    const placeholder = useComposerPlaceholderStore.getState().placeholders[0];
+    expect(id).toBe(placeholder.id);
+    expect(placeholder).toMatchObject({
+      type: "sessionRef",
+      text: "@session:sess-cn",
+      title: "中文验证会话",
+      sessionId: "sess-cn",
+      expanded: false,
+    });
+    expect(serializeComposerPlaceholders([placeholder])).toBe(
+      "引用会话 1: 中文验证会话\n@session:sess-cn",
+    );
+  });
+
   it("uses a longer fence when quoted text contains backticks", () => {
     expect(serializeComposerPlaceholders([quotePlaceholder("before\n```js\nx\n```\nafter")])).toBe(
       "引用 1: snippet\n````text\nbefore\n```js\nx\n```\nafter\n````",
