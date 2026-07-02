@@ -57,6 +57,16 @@ function resolveDelegateMetadataSessionId(
   return targetSessionId;
 }
 
+function hasKnownDelegateSendTarget<TManaged extends DelegateSendManaged>(
+  clients: Map<string, TManaged>,
+  sessionPaths: Map<string, string>,
+  targetSessionId: string,
+): boolean {
+  if (clients.has(targetSessionId)) return true;
+  const sessionPath = sessionPaths.get(targetSessionId) ?? "";
+  return Boolean(sessionPath && existsSync(sessionPath));
+}
+
 interface DelegateSyncParentManaged {
   info: {
     projectPath: string;
@@ -160,7 +170,7 @@ interface CreateAndStartDelegateSessionOptions<TManaged extends DelegateParentMa
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    options: { forceNewProcess: true },
+    options: { forceNewProcess: true; delegateParentSessionId: string },
   ) => Promise<unknown>;
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   parentChildMap: DelegateChildMap;
@@ -217,6 +227,7 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
 
   const startResult = await options.start(newSessionId, projectPath, sessionPath, {
     forceNewProcess: true,
+    delegateParentSessionId: options.parentSessionId,
   });
   await inheritDelegatePermissionMode({
     sessionId: newSessionId,
@@ -277,7 +288,7 @@ export async function handleCoordinatorDelegateOperation<
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    options: { forceNewProcess: true },
+    options: { forceNewProcess: true; delegateParentSessionId: string },
   ) => Promise<{ status: "started" | "already_running" }>;
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
@@ -455,7 +466,10 @@ export async function handleCoordinatorDelegateSendOperation<
 }> {
   const { targetSessionId, message } = options.msg;
 
-  if (!canSendDelegateMessage(options.parentChildMap, options.sourceSessionId, targetSessionId)) {
+  if (
+    !canSendDelegateMessage(options.parentChildMap, options.sourceSessionId, targetSessionId) &&
+    !hasKnownDelegateSendTarget(options.clients, options.sessionPaths, targetSessionId)
+  ) {
     return {
       delivered: false,
       targetStatus: "not_found",
@@ -568,7 +582,7 @@ export async function handleCoordinatorDelegateSyncOperation<
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    options: { forceNewProcess: true },
+    options: { forceNewProcess: true; delegateParentSessionId: string },
   ) => Promise<unknown>;
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
@@ -796,7 +810,7 @@ export async function handleCoordinatorDelegateForkOperation<
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    options: { forceNewProcess: true },
+    options: { forceNewProcess: true; delegateParentSessionId: string },
   ) => Promise<{ status: "started" | "already_running" }>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
@@ -836,6 +850,7 @@ export async function handleCoordinatorDelegateForkOperation<
 
   const result = await options.start(forkedSessionId, projectPath, forkedPath, {
     forceNewProcess: true,
+    delegateParentSessionId: options.parentSessionId,
   });
 
   registerDelegateChild(options.parentChildMap, options.parentSessionId, forkedSessionId);

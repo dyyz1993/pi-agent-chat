@@ -67,6 +67,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     _projectVersion: number;
     updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
     updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
+    refreshSessionStats: (sessionId: string) => Promise<void>;
     restoreContextFromHistory: (sessionId: string) => void;
     scheduleWorkspaceResourceRefresh: (sessionId: string) => void;
   }
@@ -104,6 +105,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
         },
       }));
     },
+    refreshSessionStats: vi.fn(() => Promise.resolve()),
     restoreContextFromHistory: () => {},
     scheduleWorkspaceResourceRefresh,
   }));

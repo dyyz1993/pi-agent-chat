@@ -28,6 +28,8 @@
   "showTimelineDesc": "在消息区域展示活动时间线",
   "showMemoryEntries": "显示记忆卡片",
   "showMemoryEntriesDesc": "在聊天中展示记忆搜索、保存、整理等内部流程（调试用）",
+  "showCacheDisplay": "显示缓存",
+  "showCacheDisplayDesc": "在聊天中展示缓存命中/使用相关指示器",
   "reset": "恢复默认设置",
   "retryTitle": "自动重试",
   "retryEnabled": "启用自动重试",

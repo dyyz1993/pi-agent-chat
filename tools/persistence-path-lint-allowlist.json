@@ -1,0 +1,166 @@
+{
+  "entries": [
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/server-config.ts",
+      "excerptIncludes": "join(homedir(), \".pi\", \"agent\", \"extensions\")",
+      "reason": "Legacy server config path. Migrate to getPiAgentDir() in a focused runtime config cleanup."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/server-config.ts",
+      "excerptIncludes": "remoteAgentDir: process.env.REMOTE_AGENT_DIR ?? \"~/.pi/agent/remote-runtime\"",
+      "reason": "Documented SSH remote runtime default. Keep until remote path helper contract is introduced."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/server-config.ts",
+      "excerptIncludes": "process.env.REMOTE_AGENT_DIR ?? \"~/.pi/agent/remote-runtime\"",
+      "reason": "Documented SSH remote runtime child path. Keep until remote path helper contract is introduced."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/gateway/path-guard.ts",
+      "excerptIncludes": "resolve(process.env.HOME ?? \"\", \".pi\", \"agent\", \"settings.json\")",
+      "reason": "Existing read-only compatibility root. Replace with getPiAgentDir() derived path in path-guard cleanup."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/gateway/path-guard.ts",
+      "excerptIncludes": "resolve(process.env.HOME ?? \"\", \".pi\", \"agent\", \"hooks\")",
+      "reason": "Existing read-only compatibility root. Replace with getPiAgentDir() derived path in path-guard cleanup."
+    },
+    {
+      "ruleId": "hardcoded-agents-dir",
+      "file": "src/gateway/path-guard.ts",
+      "excerptIncludes": "resolve(process.env.HOME ?? \"\", \".agents\")",
+      "reason": "Legacy global agents compatibility root. Register or replace with a resource helper before expanding."
+    },
+    {
+      "ruleId": "hardcoded-project-pi-dir",
+      "file": "src/shared/lib/linked-projects-config.ts",
+      "excerptIncludes": "return join(projectRoot, \".pi\")",
+      "reason": "Existing project-shared config path. Replace with a <PROJECT_SHARED_DIR> helper in linked-project cleanup."
+    },
+    {
+      "ruleId": "hardcoded-agents-dir",
+      "file": "src/mainview/stores/use-status-store.ts",
+      "excerptIncludes": "`${home}/.agents`",
+      "reason": "Existing status panel display path. Register global agents resource paths before tightening UI display."
+    },
+    {
+      "ruleId": "hardcoded-agents-dir",
+      "file": "src/mainview/stores/use-status-store.ts",
+      "excerptIncludes": "`${home}/.agents/skills`",
+      "reason": "Existing status panel display path. Register global skills resource paths before tightening UI display."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/mainview/stores/use-status-store.ts",
+      "excerptIncludes": "`${home}/.pi/agent/skills`",
+      "reason": "Existing status panel display path. Replace with getPiAgentDir() metadata source in status cleanup."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "mkdir -p /root/.pi/agent",
+      "reason": "Sandbox container internal runtime path. Needs explicit sandbox path contract before migration."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "/root/.pi/agent/models.json",
+      "reason": "Sandbox container internal runtime path. Needs explicit sandbox path contract before migration."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "/root/.pi/agent/settings.json",
+      "reason": "Sandbox container internal runtime path. Needs explicit sandbox path contract before migration."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "/root/.pi/agent/extensions",
+      "reason": "Sandbox container internal runtime path. Needs explicit sandbox path contract before migration."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "/root/.pi/agent/memory",
+      "reason": "Sandbox container internal memory sync path. Needs explicit sandbox memory policy before migration."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "tar cf - -C /root/.pi/agent memory",
+      "reason": "Sandbox container internal memory backup path. Needs explicit sandbox memory policy before migration."
+    },
+    {
+      "ruleId": "hardcoded-pi-agent-root",
+      "file": "src/sandbox/providers/sandbox-box.ts",
+      "excerptIncludes": "tar xf - -C /root/.pi/agent",
+      "reason": "Sandbox container internal memory restore path. Needs explicit sandbox memory policy before migration."
+    },
+    {
+      "ruleId": "hardcoded-agents-dir",
+      "file": "src/sandbox/remote-resource-sync.ts",
+      "excerptIncludes": "join(homedir(), \".agents\", \"skills\")",
+      "reason": "Standard SSH resource sync legacy source. Register global agents/skills roots before tightening."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/lib/linked-projects-config.ts",
+      "excerptIncludes": "linked-projects.json",
+      "reason": "Existing project-shared linked project config. Add to registry or move to a documented helper."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/handlers/learning.ts",
+      "excerptIncludes": "latest.json",
+      "reason": "Existing learning snapshot file. Learning storage registry should be documented separately."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/handlers/learning.ts",
+      "excerptIncludes": ".usage.json",
+      "reason": "Existing learning skill usage file. Learning storage registry should be documented separately."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/handlers/project.ts",
+      "excerptIncludes": "tier-config.json",
+      "reason": "Existing project user state file. Add to write registry when tier config persistence is documented."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/lib/pi-agent-paths.ts",
+      "excerptIncludes": "execution-sandbox.json",
+      "reason": "Existing project user state file. Add to write registry when execution sandbox persistence is documented."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/lib/usage-index.ts",
+      "excerptIncludes": "index.json",
+      "reason": "Existing usage index file. Add usage storage to registry in a dedicated cleanup."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/lib/usage-index.ts",
+      "excerptIncludes": "latest-share-stats",
+      "reason": "Existing usage share stats file. Add usage storage to registry in a dedicated cleanup."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/sandbox/remote-resource-sync.ts",
+      "excerptIncludes": "manifest.json",
+      "reason": "Remote resource sync manifest is documented in SSH sync contract; scanner should keep it visible."
+    },
+    {
+      "ruleId": "undocumented-json-path",
+      "file": "src/shared/lib/worktree-stack-manifest.ts",
+      "excerptIncludes": "manifest.json",
+      "reason": "Existing local worktree stack manifest. Worktree state registry should be documented separately."
+    }
+  ]
+}

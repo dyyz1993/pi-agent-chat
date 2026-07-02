@@ -62,6 +62,7 @@ const TOGGLE_ITEMS: {
   { key: "collapseToolCards", labelKey: "collapseToolCards", descKey: "collapseToolCardsDesc" },
   { key: "showTimeline", labelKey: "showTimeline", descKey: "showTimelineDesc" },
   { key: "showMemoryEntries", labelKey: "showMemoryEntries", descKey: "showMemoryEntriesDesc" },
+  { key: "showCacheDisplay", labelKey: "showCacheDisplay", descKey: "showCacheDisplayDesc" },
 ];
 
 const RETRY_OPTIONS = [

@@ -41,6 +41,22 @@ const log = createLogger("event-handler");
 export const toolCallNameMap: Record<string, string> = {};
 export const toolCallArgsMap: Record<string, string> = {};
 
+const INACTIVE_SESSION_RENDER_EVENT_TYPES = new Set<string>([
+  "message_start",
+  "message_update",
+  "message_end",
+  "tool_execution_start",
+  "tool_execution_update",
+  "tool_execution_end",
+  "custom_entry",
+]);
+
+function shouldDropInactiveSessionRenderEvent(sessionId: string, event: AgentEvent): boolean {
+  const activeSessionId = useSessionStore.getState().activeSessionId;
+  if (!activeSessionId || activeSessionId === sessionId) return false;
+  return INACTIVE_SESSION_RENDER_EVENT_TYPES.has(event.type);
+}
+
 // Track sessions where compaction_end was deferred due to active streaming.
 // When agent_end fires for these sessions, a force reload is triggered to sync
 // messages with the compacted JSONL data.
@@ -98,6 +114,17 @@ function refreshAuthoritativeContextUsage(sessionId: string): void {
         err: err instanceof Error ? err.message : String(err),
       });
     });
+}
+
+function refreshAuthoritativeSessionStats(sessionId: string): void {
+  const refreshSessionStats = useSessionStore.getState().refreshSessionStats;
+  if (typeof refreshSessionStats !== "function") return;
+  refreshSessionStats(sessionId).catch((err) => {
+    log.warn("refreshAuthoritativeSessionStats failed", {
+      sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  });
 }
 
 function setToolActive(sessionId: string, toolCallId: string, active: boolean): void {
@@ -619,6 +646,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     return;
   }
 
+  if (shouldDropInactiveSessionRenderEvent(sessionId, event)) {
+    return;
+  }
+
   if (event.type === "agent_start") {
     storeGet().updateSessionStatus(sessionId, "streaming");
     // Bump updatedAt so the session bubbles to the top of the sidebar list
@@ -644,6 +675,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     useUIDialogStore.getState().clearPendingBySession(sessionId);
     useChangeReviewStore.getState().fetchPending();
     useSessionQueueStore.getState().clearSessionQueue(sessionId);
+    refreshAuthoritativeSessionStats(sessionId);
     const allSessions = storeGet().sessionsByProject;
     for (const sessList of Object.values(allSessions)) {
       const session = sessList.find((s) => s.sessionId === sessionId);
@@ -739,6 +771,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "compaction_end") {
     log.info("compaction_end → force reload", { sessionId });
     refreshAuthoritativeContextUsage(sessionId);
+    refreshAuthoritativeSessionStats(sessionId);
 
     finishCompactionAfterMinimumVisibility(sessionId, () => {
       if (event.aborted || (event.reason && event.reason !== "success")) {
@@ -1188,6 +1221,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const assistantMsg = message as AssistantMessage;
 
     refreshAuthoritativeContextUsage(sessionId);
+    refreshAuthoritativeSessionStats(sessionId);
 
     const hasContent = hasRenderableContent(lastMsg);
 

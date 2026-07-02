@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { SessionMeta, ProjectTab, ContextUsage, SessionStatus } from "../types";
+import type {
+  SessionMeta,
+  ProjectTab,
+  ContextUsage,
+  SessionStatus,
+  SessionUsageStats,
+} from "../types";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
 import { useNotificationStore } from "./use-notification-store";
@@ -45,6 +51,7 @@ const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
 const _resourceRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const _modelStatePromises = new Map<string, Promise<void>>();
 const STATUS_STUCK_TIMEOUT_MS = 30 * 60 * 1000;
+const RECENT_SESSION_CREATE_GUARD_MS = 5_000;
 
 export function clearStatusWatchdog(sessionId: string) {
   const watchdog = _statusWatchdogs.get(sessionId);
@@ -213,6 +220,7 @@ interface SessionState {
   sessionReady: Record<string, boolean>;
   agentReady: Record<string, boolean>;
   sessionContextMap: Record<string, ContextUsage>;
+  sessionStatsMap: Record<string, SessionUsageStats>;
   sessionStatusMap: Record<string, SessionStatus>;
   currentModel: ModelInfo | null;
   modelBySession: Record<string, ModelInfo>;
@@ -247,9 +255,11 @@ interface SessionState {
   restoreFromPersisted: () => Promise<boolean>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
   refreshSessionContext: (sessionId: string) => Promise<void>;
+  updateSessionStats: (sessionId: string, stats: SessionUsageStats) => void;
+  refreshSessionStats: (sessionId: string) => Promise<void>;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   restoreContextFromHistory: (sessionId: string) => void;
-  fetchInitialState: (sessionId: string) => void;
+  fetchInitialState: (sessionId: string, options?: { force?: boolean }) => void;
   fetchModelState: (
     sessionId: string,
     options?: { force?: boolean; includeFavorites?: boolean },
@@ -302,6 +312,7 @@ export const useSessionStore = create<SessionState>()(
       sessionReady: {},
       agentReady: {},
       sessionContextMap: {},
+      sessionStatsMap: {},
       sessionStatusMap: {},
       currentModel: null,
       modelBySession: {},
@@ -381,6 +392,13 @@ export const useSessionStore = create<SessionState>()(
         const prevProjectId = get().activeProjectId;
         const prevSessionId = get().activeSessionId;
         const skipAutoSession = options?.skipAutoSession ?? false;
+        const shouldPreserveRecentSession =
+          !skipAutoSession &&
+          prevProjectId === id &&
+          !!prevSessionId &&
+          get().newSessionCreatedAt > 0 &&
+          Date.now() - get().newSessionCreatedAt <= RECENT_SESSION_CREATE_GUARD_MS &&
+          !!findSessionProjectPath(get(), prevSessionId);
 
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
           clearStatusWatchdog(prevSessionId);
@@ -392,7 +410,11 @@ export const useSessionStore = create<SessionState>()(
         }
 
         const version = get()._projectVersion + 1;
-        set({ activeProjectId: id, activeSessionId: null, _projectVersion: version });
+        set({
+          activeProjectId: id,
+          activeSessionId: shouldPreserveRecentSession ? prevSessionId : null,
+          _projectVersion: version,
+        });
         const tabs = get().projectTabs;
         syncTabsToBackend(tabs, id);
         const tab = tabs.find((t) => t.id === id);
@@ -411,7 +433,7 @@ export const useSessionStore = create<SessionState>()(
           gitStore.fetchBranches(workspacePath);
         });
 
-        if (!skipAutoSession) {
+        if (!skipAutoSession && !shouldPreserveRecentSession) {
           const cached = get().sessionsByProject[tab.path];
 
           if (cached && cached.length > 0) {
@@ -470,6 +492,9 @@ export const useSessionStore = create<SessionState>()(
                 }
               });
           }
+        } else if (shouldPreserveRecentSession) {
+          get().refreshSessionsInBackground(tab.path);
+          get().fetchProjectSessionStatuses(tab.path);
         }
       },
 
@@ -521,12 +546,14 @@ export const useSessionStore = create<SessionState>()(
           const subClean = clearSubscriptionState(s, sessionId);
           const { [sessionId]: _ar, ...restAgentReady } = s.agentReady;
           const { [sessionId]: _sc, ...restContext } = s.sessionContextMap;
+          const { [sessionId]: _stats, ...restStats } = s.sessionStatsMap;
           const { [sessionId]: _ss, ...restStatus } = s.sessionStatusMap;
           const { [sessionId]: _ms, ...restModel } = s.modelBySession;
           return {
             ...subClean,
             agentReady: restAgentReady,
             sessionContextMap: restContext,
+            sessionStatsMap: restStats,
             sessionStatusMap: restStatus,
             modelBySession: restModel,
           };
@@ -673,6 +700,22 @@ export const useSessionStore = create<SessionState>()(
         const usage = await apiClient.call("agent.getContextUsage", { sessionId });
         if (usage) {
           get().updateSessionContext(sessionId, usage);
+        }
+      },
+
+      updateSessionStats: (sessionId, stats) => {
+        set((s) => ({
+          sessionStatsMap: { ...s.sessionStatsMap, [sessionId]: stats },
+        }));
+      },
+
+      refreshSessionStats: async (sessionId) => {
+        const stats = await apiClient.call("agent.getSessionStats", { sessionId });
+        if (stats) {
+          get().updateSessionStats(sessionId, stats);
+          if (stats.contextUsage) {
+            get().updateSessionContext(sessionId, stats.contextUsage);
+          }
         }
       },
 
@@ -1120,8 +1163,7 @@ apiClient.onReconnect(() => {
                 useChatStore.getState().loadSessionMessages(sid, opts),
               backgroundRefresh: (sid, sPath) =>
                 useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
-              getContextUsage: (sid) =>
-                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              getContextUsage: (sid) => apiClient.call("agent.getContextUsage", { sessionId: sid }),
               updateSessionContext: (sid, usage) =>
                 useSessionStore.getState().updateSessionContext(sid, usage),
             }).catch((err) => {
@@ -1138,8 +1180,7 @@ apiClient.onReconnect(() => {
                 useChatStore.getState().loadSessionMessages(sid, opts),
               backgroundRefresh: (sid, sPath) =>
                 useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
-              getContextUsage: (sid) =>
-                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              getContextUsage: (sid) => apiClient.call("agent.getContextUsage", { sessionId: sid }),
               updateSessionContext: (sid, usage) =>
                 useSessionStore.getState().updateSessionContext(sid, usage),
             }).catch((err) => {

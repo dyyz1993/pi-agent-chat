@@ -16,7 +16,7 @@ import { useLearningStore } from "./use-learning-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSupervisorStore } from "./use-supervisor-store";
-import { useStatusStore } from "./use-status-store";
+import { useStatusStore, type RemoteRuntimeState } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
 import { clearSessionFetchInitCache } from "./session-initial-state";
 import { clearRetrySession } from "./use-retry-store";
@@ -87,7 +87,9 @@ function statusFromCoordinatorChildEvent(event: unknown): SessionStatus | null {
   }
 }
 
-function shouldForwardCoordinatorChildEvent(event: unknown): event is Parameters<typeof handleAgentEvent>[1] {
+function shouldForwardCoordinatorChildEvent(
+  event: unknown,
+): event is Parameters<typeof handleAgentEvent>[1] {
   if (!event || typeof event !== "object") return false;
   const type = (event as Record<string, unknown>).type;
   return type === "extension_ui_request" || type === "extension_ui_resolved";
@@ -117,12 +119,26 @@ function findBashProcess(event: BashChannelEvent): BashProcess | undefined {
 function bashProcessToToolStatus(proc: BashProcess): ToolExecBlock["status"] {
   if (proc.status === "done") return "done";
   if (proc.status === "error" || proc.status === "terminated") return "error";
+  if (proc.status === "background") return "background";
   return "running";
 }
 
 function buildBashToolDetails(proc: BashProcess, previous: unknown): unknown {
   const base =
     previous && typeof previous === "object" ? (previous as Record<string, unknown>) : {};
+  if (proc.status === "background") {
+    return {
+      ...base,
+      background: {
+        pid: proc.pid,
+        command: proc.command,
+        startedAt: proc.startedAt,
+        durationMs: Date.now() - proc.startedAt,
+        output: proc.output,
+        detached: true,
+      },
+    };
+  }
   if (proc.status !== "terminated") return base;
   return {
     ...base,
@@ -189,6 +205,7 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   // Handle output events for real-time streaming + terminal events for final status
   if (
     event.type !== "output" &&
+    event.type !== "background" &&
     event.type !== "end" &&
     event.type !== "error" &&
     event.type !== "terminated"
@@ -202,8 +219,8 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   const match = findBashToolBlockByProcess(messages, proc);
   if (!match) return;
 
-  const isOutput = event.type === "output";
-  const status = isOutput ? "running" : bashProcessToToolStatus(proc);
+  const isLiveUpdate = event.type === "output";
+  const status = isLiveUpdate ? "running" : bashProcessToToolStatus(proc);
   const output = proc.output.length > 0 ? proc.output : (proc.error ?? match.block.output);
   const nextBlock: ToolExecBlock = {
     ...match.block,
@@ -212,9 +229,12 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
     args: match.block.args || proc.command,
     status,
     output,
-    details: isOutput ? match.block.details : buildBashToolDetails(proc, match.block.details),
+    details: isLiveUpdate ? match.block.details : buildBashToolDetails(proc, match.block.details),
     startedAt: match.block.startedAt ?? proc.startedAt,
-    endedAt: isOutput ? match.block.endedAt : (proc.endedAt ?? Date.now()),
+    endedAt:
+      event.type === "output" || event.type === "background"
+        ? match.block.endedAt
+        : (proc.endedAt ?? Date.now()),
   };
 
   if (
@@ -1069,8 +1089,10 @@ export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null
 }
 
 let projectStatusSubId: string | null = null;
+let sshConnectionSubId: string | null = null;
 let sessionRenamedSubId: string | null = null;
 let projectStatusSubPending = false;
+let sshConnectionSubPending = false;
 let sessionRenamedSubPending = false;
 
 export function setupSessionRenamedSubscription(): void {
@@ -1105,6 +1127,26 @@ export function setupSessionRenamedSubscription(): void {
 }
 
 export function setupProjectStatusSubscription(): void {
+  if (!sshConnectionSubId && !sshConnectionSubPending) {
+    sshConnectionSubPending = true;
+    apiClient
+      .subscribe(
+        "agent.ssh_connection_changed",
+        (payload: { sessionId: string; projectPath: string; status: RemoteRuntimeState }) => {
+          useStatusStore.getState().setRemoteRuntimeStatus(payload.sessionId, payload.status);
+        },
+        {},
+      )
+      .then((subId) => {
+        sshConnectionSubId = subId;
+        sshConnectionSubPending = false;
+      })
+      .catch((err) => {
+        sshConnectionSubPending = false;
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
+  }
+
   if (projectStatusSubId || projectStatusSubPending) return;
   projectStatusSubPending = true;
 

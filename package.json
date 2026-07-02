@@ -33,6 +33,7 @@
     "build:desktop": "vite build && electrobun build",
     "build:desktop:native": "PI_ELECTROBUN_RENDERER=native vite build && PI_ELECTROBUN_RENDERER=native electrobun build",
     "lint": "eslint .",
+    "lint:persistence": "bun scripts/lint-persistence-paths.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\"",
@@ -113,6 +114,7 @@
     "happy-dom": "^20.9.0",
     "husky": "^9.1.0",
     "lint-staged": "^16.4.0",
+    "patch-package": "^8.0.0",
     "postcss": "^8.4.49",
     "prettier": "^3.8.3",
     "sharp": "^0.34.5",
@@ -134,6 +136,7 @@
     ]
   },
   "overrides": {
-    "@dyyz1993/pi-agent-core": "0.78.3"
+    "@dyyz1993/pi-agent-core": "0.78.3",
+    "@dyyz1993/pi-tui": "file:.yalc/@dyyz1993/pi-tui"
   }
 }
