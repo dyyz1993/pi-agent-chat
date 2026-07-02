@@ -7,6 +7,7 @@ const delegateActivityHandleEventMock = vi.hoisted(() => vi.fn());
 const updateSessionStatusMock = vi.hoisted(() => vi.fn());
 const upsertLiveSubagentMock = vi.hoisted(() => vi.fn());
 const setSubMessagesMock = vi.hoisted(() => vi.fn());
+const setRemoteRuntimeStatusMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -114,7 +115,7 @@ vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
-  useStatusStore: { getState: () => ({}) },
+  useStatusStore: { getState: () => ({ setRemoteRuntimeStatus: setRemoteRuntimeStatusMock }) },
 }));
 
 vi.mock("../../../src/mainview/stores/use-change-review-store", () => ({
@@ -162,7 +163,11 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 }));
 
 import { apiClient } from "../../../src/mainview/lib/api-client";
-import { setupSubscriptions, type SubscriptionMaps } from "../../../src/mainview/stores/session-subscriptions";
+import {
+  setupProjectStatusSubscription,
+  setupSubscriptions,
+  type SubscriptionMaps,
+} from "../../../src/mainview/stores/session-subscriptions";
 
 function makeState(): SubscriptionMaps & { projectTabs: []; activeProjectId: null } {
   return {
@@ -227,6 +232,52 @@ describe("coordinator.session_event UI request forwarding", () => {
     callback({ parentSessionId: "parent-1", childSessionId: "child-1", event: resolvedEvent });
 
     expect(handleAgentEventMock).toHaveBeenCalledWith("child-1", resolvedEvent);
+  });
+});
+
+describe("project status subscriptions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("routes SSH connection changes into the status store", () => {
+    setupProjectStatusSubscription();
+
+    const subscribeCalls = vi.mocked(apiClient.subscribe).mock.calls;
+    const sshSub = subscribeCalls.find((call) => call[0] === "agent.ssh_connection_changed");
+    expect(sshSub).toBeTruthy();
+
+    const callback = sshSub![1] as (payload: {
+      sessionId: string;
+      projectPath: string;
+      status: {
+        enabled: boolean;
+        configured: boolean;
+        status: "connecting" | "connected" | "disconnected" | "error";
+        host?: string;
+        remoteCwd?: string;
+      };
+    }) => void;
+
+    callback({
+      sessionId: "sess-ssh",
+      projectPath: "/remote-shadow",
+      status: {
+        enabled: true,
+        configured: true,
+        status: "connecting",
+        host: "devbox",
+        remoteCwd: "/srv/project",
+      },
+    });
+
+    expect(setRemoteRuntimeStatusMock).toHaveBeenCalledWith("sess-ssh", {
+      enabled: true,
+      configured: true,
+      status: "connecting",
+      host: "devbox",
+      remoteCwd: "/srv/project",
+    });
   });
 });
 

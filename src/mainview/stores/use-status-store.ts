@@ -40,8 +40,13 @@ export interface ExecutionSandboxState {
 export interface RemoteRuntimeState {
   enabled: boolean;
   configured: boolean;
+  status?: "connecting" | "connected" | "disconnected" | "error";
   host?: string;
   remoteCwd?: string;
+  localCwd?: string;
+  sshArgs?: string[];
+  shell?: string;
+  error?: string;
 }
 
 export interface PluginInfo {
@@ -263,7 +268,11 @@ export const useStatusStore = create<StatusState>((set) => ({
     set((s) => {
       const remoteRuntimeBySession = { ...s.remoteRuntimeBySession };
       if (status) {
-        remoteRuntimeBySession[sessionId] = status;
+        remoteRuntimeBySession[sessionId] = {
+          ...status,
+          status:
+            status.status ?? (status.enabled && status.configured ? "connected" : "disconnected"),
+        };
       } else {
         delete remoteRuntimeBySession[sessionId];
       }

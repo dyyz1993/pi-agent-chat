@@ -649,11 +649,13 @@ export interface AgentMethods {
 export interface RemoteSshStatus {
   enabled: boolean;
   configured: boolean;
+  status?: "connecting" | "connected" | "disconnected" | "error";
   host?: string;
   remoteCwd?: string;
   localCwd?: string;
   sshArgs?: string[];
   shell?: string;
+  error?: string;
 }
 
 export interface AgentMessageForUI {
@@ -678,6 +680,11 @@ export interface AgentEvents {
   "agent.event": AgentEventPayload;
   "agent.notify": { sessionId: string; message: string; notifyType: "info" | "warning" | "error" };
   "agent.session_status_changed": { sessionId: string; projectPath: string; status: string };
+  "agent.ssh_connection_changed": {
+    sessionId: string;
+    projectPath: string;
+    status: RemoteSshStatus;
+  };
   "agent.session_renamed": { sessionId: string; projectPath: string; newName: string };
 }
 
