@@ -11,6 +11,17 @@ function formatTokens(tokens: number | null | undefined): string {
   return `${tokens}`;
 }
 
+function formatStatTokens(tokens: number | null | undefined): string {
+  if (tokens == null || tokens <= 0) return "0";
+  return formatTokens(tokens);
+}
+
+function formatCost(cost: number | null | undefined): string {
+  if (!cost || cost <= 0) return "$0";
+  if (cost < 0.001) return `$${cost.toFixed(4)}`;
+  return `$${cost.toFixed(3)}`;
+}
+
 const GRID_CELL_COUNT = 100;
 
 const BREAKDOWN_META: Record<
@@ -267,8 +278,11 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
     activeSubId ? s.subagentStatusMap[activeSubId] : undefined,
   );
 
+  const effectiveSessionId = activeSubId ?? sessionId;
   const contextUsage: ContextUsage | undefined = activeSubId ? subContext : parentContext;
   const sessionStatus: SessionStatus | undefined = activeSubId ? subStatus : parentStatus;
+  const sessionStats = useSessionStore((s) => s.sessionStatsMap[effectiveSessionId]);
+  const refreshSessionStats = useSessionStore((s) => s.refreshSessionStats);
 
   const config = statusConfig(sessionStatus);
   const used = formatTokens(contextUsage?.tokens);
@@ -333,14 +347,14 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
     setDetailsOpen(nextOpen);
     if (nextOpen && !isRefreshing) {
       setIsRefreshing(true);
-      refreshSessionContext(sessionId)
+      Promise.all([refreshSessionContext(effectiveSessionId), refreshSessionStats(effectiveSessionId)])
         .catch(() => {})
         .finally(() => setIsRefreshing(false));
     }
   };
 
   return (
-    <div className="relative flex items-center gap-1.5">
+    <div className="relative flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       <ContextRing
         percent={percent}
         strokeClass={config.strokeClass}
@@ -356,6 +370,39 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
             {t("tokenStatus.available")} {available}
           </span>
         </>
+      ) : null}
+      {sessionStats ? (
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-text-tertiary">
+          <span className="text-text-secondary">·</span>
+          <span>{t("tokenStatus.cumulative")}</span>
+          <span>
+            {t("tokenStatus.sessionInput")}{" "}
+            <span className="font-medium text-text-secondary">
+              {formatStatTokens(sessionStats.tokens.input)}
+            </span>
+          </span>
+          <span>
+            {t("tokenStatus.sessionOutput")}{" "}
+            <span className="font-medium text-text-secondary">
+              {formatStatTokens(sessionStats.tokens.output)}
+            </span>
+          </span>
+          <span>
+            {t("tokenStatus.sessionCache")}{" "}
+            <span className="font-medium text-text-secondary">
+              {formatStatTokens(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite)}
+            </span>
+          </span>
+          <span className="font-medium text-text-secondary">{formatCost(sessionStats.cost)}</span>
+          <span>
+            {t("tokenStatus.sessionTools")}{" "}
+            <span className="font-medium text-text-secondary">{sessionStats.toolCalls}</span>
+          </span>
+          <span>
+            {t("tokenStatus.sessionMessages")}{" "}
+            <span className="font-medium text-text-secondary">{sessionStats.totalMessages}</span>
+          </span>
+        </span>
       ) : null}
       {contextUsage ? (
         <>

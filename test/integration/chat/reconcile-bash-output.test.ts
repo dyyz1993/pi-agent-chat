@@ -80,6 +80,15 @@ function endEvent(proc: BashProcess): BashChannelEvent {
   };
 }
 
+function backgroundEvent(proc: BashProcess): BashChannelEvent {
+  return {
+    type: "background",
+    toolCallId: proc.toolCallId,
+    processes: [proc],
+    timestamp: Date.now(),
+  };
+}
+
 function toolBlocks(): ToolExecBlock[] {
   return (useChatStore.getState().messagesBySession[SID] ?? []).flatMap((msg) =>
     msg.content.filter(
@@ -216,6 +225,36 @@ describe("reconcileChatToolFromBashEvent — output streaming", () => {
     const blocks = toolBlocks();
     expect(blocks[0].status).toBe("running");
     expect(blocks[0].endedAt).toBeUndefined();
+  });
+
+  it("marks the chat block as background when a bash background event arrives", () => {
+    useChatStore.getState().setMessagesForSession(SID, [
+      assistant("msg-1", [bashBlock({ startedAt: 1000, output: "tick-1\n" })]),
+    ]);
+
+    reconcileChatToolFromBashEvent(
+      SID,
+      backgroundEvent(
+        runningProcess({
+          status: "background",
+          output: "tick-1\ntick-2\n",
+          startedAt: 1000,
+        }),
+      ),
+    );
+
+    const blocks = toolBlocks();
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].status).toBe("background");
+    expect(blocks[0].output).toBe("tick-1\ntick-2\n");
+    expect(blocks[0].endedAt).toBeUndefined();
+    expect(blocks[0].details).toMatchObject({
+      background: {
+        command: "echo test",
+        startedAt: 1000,
+        output: "tick-1\ntick-2\n",
+      },
+    });
   });
 });
 

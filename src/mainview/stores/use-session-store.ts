@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { SessionMeta, ProjectTab, ContextUsage, SessionStatus } from "../types";
+import type {
+  SessionMeta,
+  ProjectTab,
+  ContextUsage,
+  SessionStatus,
+  SessionUsageStats,
+} from "../types";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
 import { useNotificationStore } from "./use-notification-store";
@@ -214,6 +220,7 @@ interface SessionState {
   sessionReady: Record<string, boolean>;
   agentReady: Record<string, boolean>;
   sessionContextMap: Record<string, ContextUsage>;
+  sessionStatsMap: Record<string, SessionUsageStats>;
   sessionStatusMap: Record<string, SessionStatus>;
   currentModel: ModelInfo | null;
   modelBySession: Record<string, ModelInfo>;
@@ -248,9 +255,11 @@ interface SessionState {
   restoreFromPersisted: () => Promise<boolean>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
   refreshSessionContext: (sessionId: string) => Promise<void>;
+  updateSessionStats: (sessionId: string, stats: SessionUsageStats) => void;
+  refreshSessionStats: (sessionId: string) => Promise<void>;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   restoreContextFromHistory: (sessionId: string) => void;
-  fetchInitialState: (sessionId: string) => void;
+  fetchInitialState: (sessionId: string, options?: { force?: boolean }) => void;
   fetchModelState: (
     sessionId: string,
     options?: { force?: boolean; includeFavorites?: boolean },
@@ -303,6 +312,7 @@ export const useSessionStore = create<SessionState>()(
       sessionReady: {},
       agentReady: {},
       sessionContextMap: {},
+      sessionStatsMap: {},
       sessionStatusMap: {},
       currentModel: null,
       modelBySession: {},
@@ -536,12 +546,14 @@ export const useSessionStore = create<SessionState>()(
           const subClean = clearSubscriptionState(s, sessionId);
           const { [sessionId]: _ar, ...restAgentReady } = s.agentReady;
           const { [sessionId]: _sc, ...restContext } = s.sessionContextMap;
+          const { [sessionId]: _stats, ...restStats } = s.sessionStatsMap;
           const { [sessionId]: _ss, ...restStatus } = s.sessionStatusMap;
           const { [sessionId]: _ms, ...restModel } = s.modelBySession;
           return {
             ...subClean,
             agentReady: restAgentReady,
             sessionContextMap: restContext,
+            sessionStatsMap: restStats,
             sessionStatusMap: restStatus,
             modelBySession: restModel,
           };
@@ -688,6 +700,22 @@ export const useSessionStore = create<SessionState>()(
         const usage = await apiClient.call("agent.getContextUsage", { sessionId });
         if (usage) {
           get().updateSessionContext(sessionId, usage);
+        }
+      },
+
+      updateSessionStats: (sessionId, stats) => {
+        set((s) => ({
+          sessionStatsMap: { ...s.sessionStatsMap, [sessionId]: stats },
+        }));
+      },
+
+      refreshSessionStats: async (sessionId) => {
+        const stats = await apiClient.call("agent.getSessionStats", { sessionId });
+        if (stats) {
+          get().updateSessionStats(sessionId, stats);
+          if (stats.contextUsage) {
+            get().updateSessionContext(sessionId, stats.contextUsage);
+          }
         }
       },
 
@@ -1135,8 +1163,7 @@ apiClient.onReconnect(() => {
                 useChatStore.getState().loadSessionMessages(sid, opts),
               backgroundRefresh: (sid, sPath) =>
                 useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
-              getContextUsage: (sid) =>
-                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              getContextUsage: (sid) => apiClient.call("agent.getContextUsage", { sessionId: sid }),
               updateSessionContext: (sid, usage) =>
                 useSessionStore.getState().updateSessionContext(sid, usage),
             }).catch((err) => {
@@ -1153,8 +1180,7 @@ apiClient.onReconnect(() => {
                 useChatStore.getState().loadSessionMessages(sid, opts),
               backgroundRefresh: (sid, sPath) =>
                 useChatStore.getState()._backgroundRefreshMessages(sid, sPath),
-              getContextUsage: (sid) =>
-                apiClient.call("agent.getContextUsage", { sessionId: sid }),
+              getContextUsage: (sid) => apiClient.call("agent.getContextUsage", { sessionId: sid }),
               updateSessionContext: (sid, usage) =>
                 useSessionStore.getState().updateSessionContext(sid, usage),
             }).catch((err) => {
