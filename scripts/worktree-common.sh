@@ -1,11 +1,18 @@
 #!/bin/bash
 # Shared helpers for pi-agent-chat worktree development.
+#
+# IMPORTANT: The worktree root directory (~/.pi/worktrees by default) should be
+# excluded from CleanMyMac, Time Machine, and similar cleanup tools to prevent
+# active worktrees from being deleted. Run:
+#   tmutil addexclusion ~/.pi/worktrees/   # Time Machine
+# And add ~/.pi/worktrees/ to CleanMyMac > Settings > Exclusions.
 
 PI_HOME="${PI_HOME:-${HOME}/.pi}"
 PI_CHAT_HOME="${PI_CHAT_HOME:-${PI_HOME}/chat}"
 PI_WORKTREE_STATE_DIR="${PI_WORKTREE_STATE_DIR:-${PI_CHAT_HOME}/worktrees}"
 WORKTREE_REGISTRY_ROOT="${PI_WORKTREE_REGISTRY_DIR:-${PI_WORKTREE_STATE_DIR}/registry}"
 DEFAULT_AGENT_SOURCE_ROOT="${PI_MOMO_FORK_ROOT:-/Users/xuyingzhou/Project/temporary/pi-momo-fork}"
+PI_WORKTREE_ROOT="${PI_WORKTREE_ROOT:-${HOME}/.pi/worktrees}"
 
 wt_now() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -436,18 +443,11 @@ wt_default_agent_worktree_path() {
   local app_path="$1"
   local branch="$2"
   local source_root="$3"
-  local app_parent app_name source_parent source_name branch_slug
-  app_parent=$(dirname "$app_path")
-  app_name=$(basename "$app_path")
-  source_parent=$(dirname "$source_root")
+  local source_name branch_slug
   source_name=$(basename "$source_root")
   branch_slug=$(wt_sanitize "$branch")
 
-  if [ "$app_name" = "pi-agent-chat" ]; then
-    printf "%s/pi-momo-fork" "$app_parent"
-  else
-    printf "%s/%s-%s" "$source_parent" "$source_name" "$branch_slug"
-  fi
+  printf "%s/%s-%s" "$PI_WORKTREE_ROOT" "$source_name" "$branch_slug"
 }
 
 wt_prepare_agent_deps() {

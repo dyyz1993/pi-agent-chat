@@ -7,6 +7,7 @@ import {
   X,
   Settings,
   MessageCircleQuestion,
+  Loader2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -40,6 +41,26 @@ const logger = createLogger("session");
 
 function isRemoteProjectLocalPath(projectPath: string): boolean {
   return /\/(?:\.pi-agent-chat|\.pi\/chat)\/remote-projects\/ssh-[^/]+$/.test(projectPath);
+}
+
+type RemoteConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
+
+function remoteConnectionDotClass(status: RemoteConnectionStatus | undefined): string | null {
+  if (status === "connecting") return "bg-text-tertiary/40 animate-pulse";
+  if (status === "disconnected" || status === "error") return "bg-status-error";
+  return null;
+}
+
+function remoteConnectionClass(status: RemoteConnectionStatus | undefined, kind: string): string {
+  if (status === "connecting") {
+    return "border-text-tertiary/30 bg-text-tertiary/10 text-text-tertiary";
+  }
+  if (status === "disconnected" || status === "error") {
+    return "border-status-error/30 bg-status-error/10 text-status-error";
+  }
+  return kind === "ssh-command"
+    ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
+    : "border-status-info/30 bg-status-info/10 text-status-info";
 }
 
 function sessionIdentityClass(identity: SessionIdentity): string {
@@ -347,7 +368,6 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           const knowledge: "unknown" | "loaded" =
             sessionsForTab === undefined ? "unknown" : "loaded";
           const sessions = sessionsForTab ?? [];
-          const dotClass = resolveDotClass(knowledge, sessions, sessionStatusMap);
           const isActive = activeProjectId === tab.id;
           const visibleSessionId =
             (isActive ? activeSessionId : undefined) ??
@@ -360,6 +380,10 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           const remoteRuntime = visibleSessionId
             ? remoteRuntimeBySession[visibleSessionId]
             : undefined;
+          const remoteConnectionStatus = remoteRuntime?.status;
+          const dotClass =
+            remoteConnectionDotClass(remoteConnectionStatus) ??
+            resolveDotClass(knowledge, sessions, sessionStatusMap);
           const remoteHost =
             typeof remoteRuntime?.host === "string" ? remoteRuntime.host : (tab.remote?.host ?? "");
           const remotePath =
@@ -376,19 +400,25 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             (remoteRuntime?.enabled ? "ssh-command" : "remote-agent-child");
           const RemoteRuntimeIcon = remoteRuntimeKind === "ssh-command" ? Cable : CloudCog;
           const remoteRuntimeTitle =
-            remoteHost || remotePath
-              ? t(
-                  remoteRuntimeKind === "ssh-command"
-                    ? "remoteRuntimeActiveQuick"
-                    : "remoteRuntimeActiveStandard",
-                  {
-                    host: remoteHost,
-                    path: remotePath,
-                  },
-                )
-              : remoteRuntimeKind === "ssh-command"
-                ? t("remoteRuntimeQuick")
-                : t("remoteRuntimeStandard");
+            remoteConnectionStatus === "connecting"
+              ? t("remoteRuntimeConnecting")
+              : remoteConnectionStatus === "disconnected"
+                ? t("remoteRuntimeDisconnected")
+                : remoteConnectionStatus === "error"
+                  ? t("remoteRuntimeError")
+                  : remoteHost || remotePath
+                    ? t(
+                        remoteRuntimeKind === "ssh-command"
+                          ? "remoteRuntimeActiveQuick"
+                          : "remoteRuntimeActiveStandard",
+                        {
+                          host: remoteHost,
+                          path: remotePath,
+                        },
+                      )
+                    : remoteRuntimeKind === "ssh-command"
+                      ? t("remoteRuntimeQuick")
+                      : t("remoteRuntimeStandard");
           const isDragSource = dragIndex === index;
           const isPressing = pressingIndex === index;
           const displayName = formatTabName(tab.name);
@@ -458,15 +488,16 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <span
                   data-testid="tab-remote-runtime-indicator"
                   data-runtime-kind={remoteRuntimeKind}
-                  className={`inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded border px-1 ${
-                    remoteRuntimeKind === "ssh-command"
-                      ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
-                      : "border-status-info/30 bg-status-info/10 text-status-info"
-                  }`}
+                  data-connection-status={remoteConnectionStatus ?? "connected"}
+                  className={`inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded border px-1 ${remoteConnectionClass(remoteConnectionStatus, remoteRuntimeKind)}`}
                   title={remoteRuntimeTitle}
                   aria-label={remoteRuntimeTitle}
                 >
-                  <RemoteRuntimeIcon className="h-3.5 w-3.5" />
+                  {remoteConnectionStatus === "connecting" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RemoteRuntimeIcon className="h-3.5 w-3.5" />
+                  )}
                 </span>
               )}
               {sessionIdentity && (

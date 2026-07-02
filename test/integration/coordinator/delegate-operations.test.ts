@@ -75,9 +75,15 @@ describe("coordinator delegate operations", () => {
     ).resolves.toEqual({ sessionId: "child-delegate", status: "started" });
 
     const childSessionPath = join(dir, "child-delegate.jsonl");
-    expect(start).toHaveBeenCalledWith("child-delegate", "/project", childSessionPath, {
-      forceNewProcess: true,
-    });
+    expect(start).toHaveBeenCalledWith(
+      "child-delegate",
+      "/project",
+      childSessionPath,
+      expect.objectContaining({
+        delegateParentSessionId: "parent",
+        forceNewProcess: true,
+      }),
+    );
     expect(setSessionName).toHaveBeenCalledWith("child-delegate", "指派: Inspect");
     expect(send).toHaveBeenCalledWith("child-delegate", expect.stringContaining("inspect repo"));
     expect(send).toHaveBeenCalledWith(
@@ -254,9 +260,15 @@ describe("coordinator delegate operations", () => {
         }),
       ).resolves.toEqual({ sessionId: "child-cross", status: "started" });
 
-      expect(start).toHaveBeenCalledWith("child-cross", targetProjectPath, childSessionPath, {
-        forceNewProcess: true,
-      });
+      expect(start).toHaveBeenCalledWith(
+        "child-cross",
+        targetProjectPath,
+        childSessionPath,
+        expect.objectContaining({
+          delegateParentSessionId: "parent",
+          forceNewProcess: true,
+        }),
+      );
       expect(setSessionName).toHaveBeenCalledWith("child-cross", "指派: Inspect Target");
       expect(send).toHaveBeenCalledWith(
         "child-cross",
@@ -356,9 +368,15 @@ describe("coordinator delegate operations", () => {
     });
 
     const childSessionPath = join(dir, "child-remote.jsonl");
-    expect(start).toHaveBeenCalledWith("child-remote", localShadowPath, childSessionPath, {
-      forceNewProcess: true,
-    });
+    expect(start).toHaveBeenCalledWith(
+      "child-remote",
+      localShadowPath,
+      childSessionPath,
+      expect.objectContaining({
+        delegateParentSessionId: "parent",
+        forceNewProcess: true,
+      }),
+    );
     expect(send).toHaveBeenCalledWith(
       "child-remote",
       expect.stringContaining(`- 项目路径: ${localShadowPath}`),
@@ -443,9 +461,15 @@ describe("coordinator delegate operations", () => {
     ).resolves.toEqual({ sessionId: "forked-child", status: "started" });
 
     const forkedPath = join(dir, "forked-child.jsonl");
-    expect(start).toHaveBeenCalledWith("forked-child", "/project", forkedPath, {
-      forceNewProcess: true,
-    });
+    expect(start).toHaveBeenCalledWith(
+      "forked-child",
+      "/project",
+      forkedPath,
+      expect.objectContaining({
+        delegateParentSessionId: "parent",
+        forceNewProcess: true,
+      }),
+    );
     expect(setSessionName).toHaveBeenCalledWith("forked-child", "Forked Task");
     expect(send).toHaveBeenCalledWith("forked-child", "continue from here");
     expect(parentChildMap.get("parent")?.has("forked-child")).toBe(true);
@@ -693,7 +717,7 @@ describe("coordinator delegate operations", () => {
     expect(delegateRepliedSessions.has("child")).toBe(true);
   });
 
-  it("rejects delegate sends to unrelated sessions", async () => {
+  it("allows delegate sends to known unrelated sessions", async () => {
     const clients = new Map([
       ["child", makeManaged("idle", "/tmp/child.jsonl")],
       ["other-parent", makeManaged("idle", "/tmp/other-parent.jsonl")],
@@ -708,6 +732,38 @@ describe("coordinator delegate operations", () => {
           __call: "session_delegate_send",
           targetSessionId: "other-parent",
           message: "should not cross session boundary",
+        },
+        clients,
+        sessionPaths: new Map(),
+        sessionProjectPaths: new Map(),
+        delegateReplyCount: new Map(),
+        delegateCreatedAt: new Map(),
+        parentChildMap,
+        start: vi.fn(),
+        send: vi.fn(),
+        steer,
+        followUp: vi.fn(),
+      }),
+    ).resolves.toEqual({ delivered: true, targetStatus: "active" });
+
+    expect(steer).toHaveBeenCalledWith(
+      "other-parent",
+      expect.stringContaining("should not cross session boundary"),
+    );
+  });
+
+  it("rejects delegate sends to unknown unrelated sessions", async () => {
+    const clients = new Map([["child", makeManaged("idle", "/tmp/child.jsonl")]]);
+    const parentChildMap = new Map([["parent", new Set(["child"])]]);
+    const steer = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateSendOperation({
+        sourceSessionId: "child",
+        msg: {
+          __call: "session_delegate_send",
+          targetSessionId: "unknown-session",
+          message: "should not send to arbitrary ids",
         },
         clients,
         sessionPaths: new Map(),
@@ -877,7 +933,11 @@ describe("coordinator delegate operations", () => {
     const clients = new Map([["child", makeManaged("idle", "/tmp/child.jsonl")]]);
 
     expect(
-      handleCoordinatorDelegateListOperation({ parentSessionId: "parent", parentChildMap, clients }),
+      handleCoordinatorDelegateListOperation({
+        parentSessionId: "parent",
+        parentChildMap,
+        clients,
+      }),
     ).toEqual({
       sessions: [{ sessionId: "child", status: "idle", projectPath: "/project" }],
     });

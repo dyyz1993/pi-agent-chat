@@ -28,6 +28,8 @@
   "showTimelineDesc": "Display activity timeline in the message area",
   "showMemoryEntries": "Show Memory Cards",
   "showMemoryEntriesDesc": "Display memory search, save, and organize processes in chat (for debugging)",
+  "showCacheDisplay": "Show Cache",
+  "showCacheDisplayDesc": "Display cache-related indicators (prompt cache, context cache)",
   "reset": "Reset to Defaults",
   "retryTitle": "Auto Retry",
   "retryEnabled": "Enable Auto Retry",
