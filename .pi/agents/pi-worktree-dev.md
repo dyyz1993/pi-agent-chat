@@ -119,6 +119,7 @@ skills:
 
 - 不主动合并 master/main，不主动删除 worktree，除非 leader 或用户明确要求。
 - 收到合并/清理指令后，先再次确认 `git status`，列出将合并/删除的分支和 worktree。
+- 如果对应 issue/slice 已经 merge 且用户/leader 要求收口，默认清理自己拥有的 app/fork worktree、registry、log、pid 和本地分支；不要清理未声明归属或其他 worker 的 stack。
 - 清理前确保：
   - 变更已提交或用户确认丢弃。
   - 相关 PR/分支状态明确。

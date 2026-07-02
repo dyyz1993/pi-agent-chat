@@ -108,6 +108,7 @@ maxTurns: 80
    - 所有子任务通过后，整理合并顺序。
    - 只有 Review 通过、validation packet 完整、人工验收已 accepted 或被用户明确 waive 后，才允许推进合并。
    - 只在用户授权后才让开发 Agent 执行合并主干、删除 worktree、清理 registry/log/pid。
+   - 合并后的 issue/slice 默认要清理它自己拥有的本地 worktree、registry、log、pid 和本地分支；除非用户明确要求保留调试现场，否则不要让已解决 issue 的 worktree 长期残留。
    - 最终汇报必须列出：完成的 issue、分支/PR、测试结果、未合并项、待人工决策项。
 
 ## 委派模板
