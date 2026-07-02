@@ -6,6 +6,9 @@ const log = createLogger("agent");
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
+export type QueueItemRef = { type: "steering" | "followUp"; index: number; text: string };
+export type FollowUpQueueItemRef = { type: "followUp"; index: number; text: string };
+
 interface ManagedClientLike {
   client: Pick<
     RpcClientAPI,
@@ -19,7 +22,6 @@ interface ManagedClientLike {
     | "getActiveTools"
     | "setActiveTools"
     | "getQueue"
-    | "clearQueue"
     | "getExtensions"
     | "getSkills"
     | "reload"
@@ -28,7 +30,19 @@ interface ManagedClientLike {
     | "toggleMcpServer"
     | "restartMcpServer"
     | "getContextUsage"
-  >;
+  > & {
+    clearQueue(item?: QueueItemRef): Promise<{ steering: string[]; followUp: string[] }>;
+    promoteQueuedFollowUp?(
+      item: FollowUpQueueItemRef,
+    ): Promise<{ steering: string[]; followUp: string[] }>;
+  };
+  info?: {
+    projectPath?: string;
+    sessionPath?: string;
+    status?: string;
+    activeToolExecutions?: unknown;
+    permissionMode?: string;
+  };
 }
 
 interface ManagedClientAccess<TManaged extends ManagedClientLike> {
@@ -158,13 +172,16 @@ export async function setPermissionModeOperation<TManaged extends ManagedClientL
 }): Promise<{ mode: string }> {
   const managed = await resolveManagedClient(options);
   if (!managed) throw new Error("Client not found");
-  return withTimeout(
+  const result = await withTimeout(
     managed.client.setPermissionMode(
       options.mode as Parameters<RpcClientAPI["setPermissionMode"]>[0],
     ),
     15_000,
     "setPermissionMode",
   );
+  managed.info ??= {};
+  managed.info.permissionMode = result.mode;
+  return result;
 }
 
 export async function getActiveToolsOperation<TManaged extends ManagedClientLike>(options: {
@@ -217,12 +234,32 @@ export async function getQueueOperation<TManaged extends ManagedClientLike>(opti
 
 export async function clearQueueOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
+  item?: QueueItemRef;
   getActiveManaged: (sessionId: string) => TManaged | null;
 }): Promise<{ steering: string[]; followUp: string[] }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) return { steering: [], followUp: [] };
-  return managed.client.clearQueue().catch((err: unknown) => {
+  return managed.client.clearQueue(options.item).catch((err: unknown) => {
     log.warn("clearQueue error", {
+      sessionId: options.sessionId,
+      err: errorMessage(err),
+    });
+    return { steering: [], followUp: [] };
+  });
+}
+
+export async function promoteQueuedFollowUpOperation<TManaged extends ManagedClientLike>(options: {
+  sessionId: string;
+  item: FollowUpQueueItemRef;
+  getActiveManaged: (sessionId: string) => TManaged | null;
+}): Promise<{ steering: string[]; followUp: string[] }> {
+  const managed = options.getActiveManaged(options.sessionId);
+  if (!managed) return { steering: [], followUp: [] };
+  if (!managed.client.promoteQueuedFollowUp) {
+    throw new Error("promoteQueuedFollowUp RPC is not available in the active agent runtime");
+  }
+  return managed.client.promoteQueuedFollowUp(options.item).catch((err: unknown) => {
+    log.warn("promoteQueuedFollowUp error", {
       sessionId: options.sessionId,
       err: errorMessage(err),
     });
