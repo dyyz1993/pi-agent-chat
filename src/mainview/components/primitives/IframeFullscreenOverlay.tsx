@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { FullscreenOverlay } from "./FullscreenOverlay";
+import { ContentSurface } from "./ContentSurface";
 
 interface IframeFullscreenOverlayProps {
   icon: ReactNode;
@@ -24,12 +24,13 @@ export const IframeFullscreenOverlay = memo(function IframeFullscreenOverlay({
   sandbox,
 }: IframeFullscreenOverlayProps) {
   return createPortal(
-    <FullscreenOverlay
+    <ContentSurface
       title={title}
       onClose={onClose}
       closeLabel={closeLabel}
       icon={icon}
       actions={actions}
+      position="fixed"
       bodyClassName="overflow-hidden"
     >
       <iframe
@@ -39,7 +40,7 @@ export const IframeFullscreenOverlay = memo(function IframeFullscreenOverlay({
         sandbox={sandbox}
         title={title}
       />
-    </FullscreenOverlay>,
+    </ContentSurface>,
     document.body,
   );
 });

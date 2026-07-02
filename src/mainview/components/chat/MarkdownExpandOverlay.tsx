@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { useClipboard } from "./preview/use-clipboard";
-import { FullscreenOverlay, IconButton } from "../primitives";
+import { ContentSurface, IconButton } from "../primitives";
 
 export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   const { t } = useTranslation("chat");
@@ -32,7 +32,7 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   if (!expandedContent) return null;
 
   return (
-    <FullscreenOverlay
+    <ContentSurface
       title={expandedTitle}
       onClose={closeExpand}
       closeLabel={t("markdownOverlay.closeEsc")}
@@ -57,6 +57,6 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
       <div className="max-w-4xl mx-auto px-6 py-6 prose dark:prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:bg-surface-dim/80 dark:prose-pre:bg-surface-code/80 prose-pre:border prose-pre:border-border-secondary dark:prose-pre:border-border-secondary prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-a:text-semantic-accent">
         <CachedReactMarkdown>{expandedContent}</CachedReactMarkdown>
       </div>
-    </FullscreenOverlay>
+    </ContentSurface>
   );
 });
