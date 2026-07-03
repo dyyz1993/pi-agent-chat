@@ -132,6 +132,7 @@ export function shouldStartTopLoad({
   hasMoreMessages,
   isLoadingMore,
   isViewingSubagent,
+  initialScrollComplete,
   lockedSessionId,
 }: {
   activeSessionId: string | null | undefined;
@@ -139,6 +140,7 @@ export function shouldStartTopLoad({
   hasMoreMessages: boolean;
   isLoadingMore: boolean;
   isViewingSubagent: boolean;
+  initialScrollComplete: boolean;
   lockedSessionId: string | null;
 }): boolean {
   return (
@@ -147,7 +149,24 @@ export function shouldStartTopLoad({
     hasMoreMessages &&
     !isLoadingMore &&
     !isViewingSubagent &&
+    initialScrollComplete &&
     lockedSessionId !== activeSessionId
+  );
+}
+
+export function shouldHideMessageSurfaceUntilInitialBottom({
+  effectiveSessionId,
+  messageCount,
+  initialScrollCompleteSessionId,
+}: {
+  effectiveSessionId: string | null | undefined;
+  messageCount: number;
+  initialScrollCompleteSessionId: string | null;
+}): boolean {
+  return (
+    !!effectiveSessionId &&
+    messageCount > 0 &&
+    initialScrollCompleteSessionId !== effectiveSessionId
   );
 }
 
@@ -249,6 +268,7 @@ export function ChatPanel() {
     });
   });
   const isViewingSubagent = !!activeSubId;
+  const effectiveScrollSessionId = isViewingSubagent ? activeSubId : activeSessionId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
   const attachmentCount = useAttachmentStore((s) => s.attachments.length);
   const composerPlaceholders = useComposerPlaceholderStore((s) => s.placeholders);
@@ -342,6 +362,9 @@ export function ChatPanel() {
   const topLoadScrollAnchorRef = useRef<TopLoadScrollAnchor | null>(null);
   const topLoadLockedSessionRef = useRef<string | null>(null);
   const topLoadRestoreRafRef = useRef<number | null>(null);
+  const [initialScrollCompleteSessionId, setInitialScrollCompleteSessionId] = useState<
+    string | null
+  >(null);
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
@@ -460,6 +483,11 @@ export function ChatPanel() {
     !activeSessionId ||
     messageHydration === "ready" ||
     messageHydration === "error";
+  const hideMessageSurfaceUntilInitialBottom = shouldHideMessageSurfaceUntilInitialBottom({
+    effectiveSessionId: effectiveScrollSessionId,
+    messageCount: messageIds.length,
+    initialScrollCompleteSessionId,
+  });
 
   const agentColor = useAgentStore(
     useCallback(
@@ -482,6 +510,15 @@ export function ChatPanel() {
     if (!activeSessionPath) return;
     void useSubagentStore.getState().loadSubsessions(activeSessionPath);
   }, [activeSessionPath]);
+
+  useEffect(() => {
+    setInitialScrollCompleteSessionId(null);
+    topLoadScrollAnchorRef.current = null;
+    if (topLoadRestoreRafRef.current != null) {
+      cancelAnimationFrame(topLoadRestoreRafRef.current);
+      topLoadRestoreRafRef.current = null;
+    }
+  }, [effectiveScrollSessionId]);
 
   useEffect(() => {
     if (!isStreaming && isAborting) {
@@ -565,6 +602,10 @@ export function ChatPanel() {
     releaseSideNavScrollLock();
   }, [activeSessionId, activeSubId, releaseSideNavScrollLock]);
 
+  const handleInitialScrollComplete = useCallback(() => {
+    setInitialScrollCompleteSessionId(effectiveScrollSessionId ?? null);
+  }, [effectiveScrollSessionId]);
+
   const {
     handleScroll,
     handleScrollEnd,
@@ -591,6 +632,7 @@ export function ChatPanel() {
     streamVersion,
     historyLoadVersion,
     initialScrollReady,
+    onInitComplete: handleInitialScrollComplete,
   });
 
   const wrappedHandleScrollEnd = useCallback(() => {
@@ -925,6 +967,7 @@ export function ChatPanel() {
         hasMoreMessages,
         isLoadingMore,
         isViewingSubagent,
+        initialScrollComplete: initialScrollCompleteSessionId === activeSessionId,
         lockedSessionId: topLoadLockedSessionRef.current,
       })
     ) {
@@ -940,6 +983,7 @@ export function ChatPanel() {
     captureTopLoadScrollAnchor,
     isAtTop,
     hasMoreMessages,
+    initialScrollCompleteSessionId,
     isLoadingMore,
     isViewingSubagent,
     loadMoreMessages,
@@ -988,7 +1032,12 @@ export function ChatPanel() {
 
       <RetryNotification />
 
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      <div
+        className={`flex-1 min-h-0 flex overflow-hidden ${
+          hideMessageSurfaceUntilInitialBottom ? "pointer-events-none opacity-0" : ""
+        }`}
+        aria-busy={hideMessageSurfaceUntilInitialBottom ? "true" : undefined}
+      >
         <div className="flex-1 min-h-0 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 min-w-0 relative overflow-hidden">
             {projectFailed && !isViewingSubagent ? (

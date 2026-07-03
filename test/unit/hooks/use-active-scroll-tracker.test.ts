@@ -186,6 +186,34 @@ describe("useActiveScrollTracker — initialization", () => {
     expect(onInitComplete).toHaveBeenCalled();
   });
 
+  it("calls onInitComplete after retrying when the virtualizer handle is unavailable", () => {
+    const onInitComplete = vi.fn();
+    const setActive = vi.fn();
+
+    renderHook(
+      () => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef<MockHandle | null>(null);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          sessionId: "test-session",
+          setActive,
+          streamVersion: 0,
+          initialScrollReady: true,
+          onInitComplete,
+        });
+      },
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(onInitComplete).toHaveBeenCalled();
+  });
+
   it("sets activeId to last message after init", () => {
     const setActive = vi.fn();
     const mockHandle = createMockHandle({
