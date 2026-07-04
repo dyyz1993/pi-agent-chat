@@ -105,8 +105,8 @@ export function groupSessions(
         const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
         if (isWorkingSession(sess)) return 0;
         if (sess.pinned) return 1;
-        if (isEmpty) return 2; // 空会话放在 pinned 之后
-        return 3;
+        if (isEmpty) return 3; // 空占位会话不应压过最近聊过的普通会话
+        return 2;
       };
       const priorityA = getPriority(a);
       const priorityB = getPriority(b);
