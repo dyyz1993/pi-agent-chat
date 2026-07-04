@@ -142,6 +142,7 @@ import { useExplorerStore } from "../../../src/mainview/stores/use-explorer-stor
 import { useGitStore } from "../../../src/mainview/stores/use-git-store";
 import { setupSubscriptions } from "../../../src/mainview/stores/session-subscriptions";
 import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
+import { useTierStore } from "../../../src/mainview/stores/use-tier-store";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
@@ -703,6 +704,25 @@ describe("createNewSession", () => {
     const sessions = state.sessionsByProject["/project-a"];
     expect(sessions).toHaveLength(1);
     expect(sessions[0].sessionId).toBe("new-sess");
+  });
+
+  it("does not switch tier before the new session agent process is started", async () => {
+    useSessionStore.getState().addProjectTab(TAB_A);
+    useSessionStore.setState({ activeProjectId: "tab-a" });
+    useTierStore.getState().setProjectCurrentTier("/project-a", "fast");
+
+    mockedCall.mockResolvedValueOnce({
+      sessionId: "new-sess",
+      sessionPath: "/sessions/new-sess",
+    });
+
+    await useSessionStore.getState().createNewSession();
+
+    expect(mockedCall).toHaveBeenCalledWith("session.create", { projectPath: "/project-a" });
+    expect(mockedCall).not.toHaveBeenCalledWith(
+      "agent.switchTier",
+      expect.objectContaining({ sessionId: "new-sess", tier: "fast" }),
+    );
   });
 
   it("creates a session under the explicit project path instead of the active tab path", async () => {

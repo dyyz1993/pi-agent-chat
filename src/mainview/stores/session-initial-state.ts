@@ -659,8 +659,11 @@ export function createFetchInitialStateAction({
         Promise.all([statePromise, tierPromise])
           .then(([rawState]) => {
             const stateResult = rawState as AgentStateResult;
+            const projectPath = currentSessionMeta?.projectPath;
+            const configuredProjectTier = projectPath
+              ? useTierStore.getState().getCurrentTier(projectPath)
+              : null;
             if (stateResult?.model) {
-              const projectPath = currentSessionMeta?.projectPath;
               if (projectPath) {
                 useTierStore
                   .getState()
@@ -671,6 +674,22 @@ export function createFetchInitialStateAction({
                   );
               }
             }
+            const isBlankSession =
+              currentSessionMeta &&
+              (currentSessionMeta.messageCount ?? 0) === 0 &&
+              !currentSessionMeta.firstMessage;
+            if (!projectPath || !isBlankSession) return;
+            if (!configuredProjectTier) return;
+            void useTierStore
+              .getState()
+              .switchToTier(configuredProjectTier, sessionId)
+              .catch((err) => {
+                log.warn("delayed tier switch failed after initial state", {
+                  sessionId,
+                  tier: configuredProjectTier,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
           })
           .catch(() => {});
 

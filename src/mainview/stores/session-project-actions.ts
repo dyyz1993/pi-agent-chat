@@ -2,7 +2,6 @@ import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
 import type { ProjectTab, SessionMeta, SessionStatus } from "../types";
 import { useAppStore } from "./use-app-store";
-import { useTierStore } from "./use-tier-store";
 
 interface ProjectSessionState {
   activeProjectId: string | null;
@@ -11,7 +10,6 @@ interface ProjectSessionState {
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
   sessionStatusMap: Record<string, SessionStatus>;
-  currentModel: { provider: string; id: string; name?: string } | null;
   newSessionCreatedAt: number;
   setActiveSession: (
     id: string | null,
@@ -192,19 +190,6 @@ export function createCreateNewSessionAction({
       get().setActiveSession(result.sessionId);
       set({ newSessionCreatedAt: Date.now() });
 
-      // 从项目级 tier 配置读取，同一项目下所有 session 共享
-      const projectTier = useTierStore.getState().getCurrentTier(targetPath);
-      const prevModel = get().currentModel;
-
-      if (projectTier) {
-        await useTierStore.getState().switchToTier(projectTier, result.sessionId);
-      } else if (prevModel) {
-        await apiClient.call("agent.setModel", {
-          sessionId: result.sessionId,
-          provider: prevModel.provider,
-          modelId: prevModel.id,
-        });
-      }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       log.error("Failed to create session", { error: errMsg });
