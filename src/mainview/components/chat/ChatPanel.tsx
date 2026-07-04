@@ -47,7 +47,7 @@ import type { VirtualizerHandle } from "virtua";
 import { SideNav, buildFlatItems, type SideNavPagination, type SideNavTarget } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
-import { buildProcessedMessages, MessageListView } from "./MessageListView";
+import { getProcessedMessagesForSession, MessageListView } from "./MessageListView";
 import { MessageSelectionBar } from "./MessageSelectionBar";
 import { QuickActionToolbar } from "./QuickActionToolbar";
 import { CommandPopup } from "./CommandPopup";
@@ -341,7 +341,6 @@ export function ChatPanel() {
   const inputBarRef = useRef<InputBarHandle>(null);
   const topLoadScrollAnchorRef = useRef<TopLoadScrollAnchor | null>(null);
   const topLoadLockedSessionRef = useRef<string | null>(null);
-  const topLoadRestoreRafRef = useRef<number | null>(null);
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
@@ -355,10 +354,17 @@ export function ChatPanel() {
   const shouldRenderSideNav = messages.length > 0;
   const renderedMessages = useMemo(
     () =>
-      buildProcessedMessages(messages, showMemoryEntries)
+      getProcessedMessagesForSession({
+        activeSessionId: isViewingSubagent
+          ? (activeSubId ?? undefined)
+          : (activeSessionId ?? undefined),
+        visibleMessages: messages,
+        showMemoryEntries,
+        sessionStatus: effectiveStatus,
+      })
         .filter((item) => !item.hide)
         .map((item) => item.msg),
-    [messages, showMemoryEntries],
+    [activeSessionId, activeSubId, effectiveStatus, isViewingSubagent, messages, showMemoryEntries],
   );
   const messageIds = useMemo(() => {
     if (!activeSessionId) return renderedMessages.map((m) => m.id);
@@ -616,27 +622,9 @@ export function ChatPanel() {
     const el = messagesScrollRef.current;
     if (!el) return;
 
-    if (topLoadRestoreRafRef.current != null) {
-      cancelAnimationFrame(topLoadRestoreRafRef.current);
-    }
-
-    topLoadRestoreRafRef.current = requestAnimationFrame(() => {
-      topLoadRestoreRafRef.current = requestAnimationFrame(() => {
-        topLoadRestoreRafRef.current = null;
-        const currentAnchor = topLoadScrollAnchorRef.current;
-        if (!currentAnchor || currentAnchor.sessionId !== activeSessionId) return;
-        const scrollTop = computeTopLoadRestoredScrollTop(currentAnchor, el.scrollHeight);
-        el.scrollTop = scrollTop;
-        topLoadScrollAnchorRef.current = null;
-      });
-    });
-
-    return () => {
-      if (topLoadRestoreRafRef.current != null) {
-        cancelAnimationFrame(topLoadRestoreRafRef.current);
-        topLoadRestoreRafRef.current = null;
-      }
-    };
+    const scrollTop = computeTopLoadRestoredScrollTop(anchor, el.scrollHeight);
+    el.scrollTop = scrollTop;
+    topLoadScrollAnchorRef.current = null;
   }, [activeSessionId, historyLoadVersion, isLoadingMore, isViewingSubagent]);
 
   const handleScrollToEdge = useCallback(

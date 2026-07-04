@@ -591,11 +591,10 @@ export function useActiveScrollTracker({
     }
     prevCountRef.current = messageIds.length;
 
-    if (messageIds.length > 0) {
-      setActive(getLastActiveTargetKey());
-    }
-
     if (!userScrolledUpRef.current) {
+      if (messageIds.length > 0) {
+        setActive(getLastActiveTargetKey());
+      }
       scheduleScrollToBottom();
     }
   }, [

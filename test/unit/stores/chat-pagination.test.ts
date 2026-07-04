@@ -367,6 +367,37 @@ describe("chat pagination", () => {
     expect(afterLoadMore[PAGE_SIZE].id).toBe(`msg-${PAGE_SIZE}`);
   });
 
+  it("loadMoreMessages keeps message references stable when the loaded page is unchanged", async () => {
+    const currentMessages = makeRpcResult(3);
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: currentMessages.messages,
+      customEntries: [],
+      hasMore: true,
+      nextCursor: "entry-0",
+    });
+
+    await useChatStore.getState().loadSessionMessages("test-session");
+
+    const beforeMessages = useChatStore.getState().messagesBySession["test-session"]!;
+    const beforeHistoryVersion =
+      useChatStore.getState().historyLoadVersionBySession["test-session"];
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: currentMessages.messages,
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadMoreMessages!("test-session");
+
+    const state = useChatStore.getState();
+    expect(state.messagesBySession["test-session"]).toBe(beforeMessages);
+    expect(state.historyLoadVersionBySession["test-session"]).toBe(beforeHistoryVersion);
+    expect(state.hasMoreMessagesBySession["test-session"]).toBe(false);
+    expect(state.nextCursorBySession["test-session"]).toBeNull();
+  });
+
   it("loadMoreMessages should not turn older orphan tool calls into running cards", async () => {
     const currentMessage = makeRawMessage(10, "assistant");
     useChatStore.setState({

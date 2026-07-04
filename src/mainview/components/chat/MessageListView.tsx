@@ -117,7 +117,7 @@ function useStableMessages(source: "main" | "sub"): ChatMessage[] {
   return useChatStore(selector);
 }
 
-interface ProcessedMessage {
+export interface ProcessedMessage {
   msg: ChatMessage;
   mergedResultData?: unknown;
   hide?: boolean;
@@ -291,6 +291,42 @@ export function buildProcessedMessages(
   );
 }
 
+export function getProcessedMessagesForSession({
+  activeSessionId,
+  visibleMessages,
+  showMemoryEntries,
+  hideLeadingOrphanMemoryEntries = false,
+  sessionStatus,
+  messagesRevision,
+}: {
+  activeSessionId?: string;
+  visibleMessages: ChatMessage[];
+  showMemoryEntries: boolean;
+  hideLeadingOrphanMemoryEntries?: boolean;
+  sessionStatus?: string;
+  messagesRevision?: string;
+}): ProcessedMessage[] {
+  if (!activeSessionId) {
+    return buildProcessedMessages(visibleMessages, showMemoryEntries, {
+      hideLeadingOrphanMemoryEntries,
+    });
+  }
+
+  const revisionBase = messagesRevision ?? computeMessagesRevision(visibleMessages);
+  const revision = `${revisionBase}:v:${MESSAGE_LIST_PROCESSING_VERSION}:memory:${showMemoryEntries ? "1" : "0"}:hide-orphan-memory:${hideLeadingOrphanMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
+  const cached = _processedMessagesCache.get(activeSessionId);
+  if (cached && cached.revision === revision) {
+    return cached.result;
+  }
+
+  const result = buildProcessedMessages(visibleMessages, showMemoryEntries, {
+    hideLeadingOrphanMemoryEntries,
+  });
+  _processedMessagesCache.set(activeSessionId, { revision, result });
+  evictIfNeeded(_processedMessagesCache);
+  return result;
+}
+
 function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | undefined {
   const hasCustom = msg.content.some((b) => b.type === "custom");
   if (hasCustom) {
@@ -431,22 +467,15 @@ export const MessageListView = memo(function MessageListView({
   const processedMessages = useMemo(() => {
     const hideLeadingOrphanMemoryEntries =
       source === "main" && [isLoadingMore, hasMoreMessages].some((value) => value === true);
-    if (!activeSessionId) {
-      return buildProcessedMessages(visibleMessages, showMemoryEntries, {
-        hideLeadingOrphanMemoryEntries,
-      });
-    }
-    const revision = `${messagesRevision}:v:${MESSAGE_LIST_PROCESSING_VERSION}:memory:${showMemoryEntries ? "1" : "0"}:hide-orphan-memory:${hideLeadingOrphanMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
-    const cached = _processedMessagesCache.get(activeSessionId);
-    if (cached && cached.revision === revision) {
-      return cached.result;
-    }
-    const result = buildProcessedMessages(visibleMessages, showMemoryEntries, {
+
+    return getProcessedMessagesForSession({
+      activeSessionId,
+      visibleMessages,
+      showMemoryEntries,
       hideLeadingOrphanMemoryEntries,
+      sessionStatus,
+      messagesRevision,
     });
-    _processedMessagesCache.set(activeSessionId, { revision, result });
-    evictIfNeeded(_processedMessagesCache);
-    return result;
   }, [
     activeSessionId,
     hasMoreMessages,
