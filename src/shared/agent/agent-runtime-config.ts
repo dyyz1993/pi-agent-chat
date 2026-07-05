@@ -9,18 +9,40 @@ const log = createLogger("agent");
 export const TIER_KEYS = ["fast", "pro", "max"] as const;
 export type TierKey = (typeof TIER_KEYS)[number];
 
+function isTruthyEnv(value: string | undefined): boolean {
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+export const BUILTIN_INTERNAL_EXTENSION_NAMES = new Set(
+  isTruthyEnv(process.env.PI_DISABLE_MULTI_COMPACTION) ? [] : ["_multi-compaction"],
+);
+
+interface ScanExtensionDirOptions {
+  allowPrivateEntries?: ReadonlySet<string>;
+}
+
 /**
  * Scan an extensions directory and collect each loadable extension entry.
  *
  * Layout: each subdirectory with an index.ts/js, or each .ts/.js file,
  * is treated as an extension. Symlinks are resolved.
  */
-export function scanExtensionDir(dir: string, extensionPaths: string[]): void {
+export function scanExtensionDir(
+  dir: string,
+  extensionPaths: string[],
+  options: ScanExtensionDirOptions = {},
+): void {
   if (!existsSync(dir)) return;
 
   try {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__tests__")
+      const isPrivateEntry = entry.name.startsWith("_");
+      if (
+        entry.name.startsWith(".") ||
+        (isPrivateEntry && !options.allowPrivateEntries?.has(entry.name)) ||
+        entry.name === "node_modules" ||
+        entry.name === "__tests__"
+      )
         continue;
 
       let isDir = entry.isDirectory();
@@ -100,7 +122,9 @@ export function discoverExtensionArgs(options?: { includeUser?: boolean }): stri
 
   const builtinExtDir = getBuiltinExtensionsDir();
   if (existsSync(builtinExtDir)) {
-    scanExtensionDir(builtinExtDir, extensionPaths);
+    scanExtensionDir(builtinExtDir, extensionPaths, {
+      allowPrivateEntries: BUILTIN_INTERNAL_EXTENSION_NAMES,
+    });
   }
 
   log.info("Discovered extensions", {

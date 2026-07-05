@@ -59,6 +59,8 @@ describe("agent runtime config", () => {
     touch(path.join(root, "module-b", "index.js"));
     touch(path.join(root, "module-c", "other.ts"));
     touch(path.join(root, ".hidden.ts"));
+    touch(path.join(root, "_disabled.ts"));
+    touch(path.join(root, "_auto-memory", "index.ts"));
     touch(path.join(root, "__tests__", "index.ts"));
     touch(path.join(root, "node_modules", "dep.ts"));
     touch(path.join(root, "notes.md"));
@@ -86,6 +88,40 @@ describe("agent runtime config", () => {
     scanExtensionDir(root, found);
 
     expect(found).toEqual([path.join(root, "linked-extension", "index.ts")]);
+  });
+
+  it("allows selected built-in private extension entries", () => {
+    const root = makeTempDir();
+    touch(path.join(root, "_auto-memory", "index.ts"));
+    touch(path.join(root, "_multi-compaction", "index.ts"));
+    touch(path.join(root, "learning", "index.ts"));
+
+    const found: string[] = [];
+    scanExtensionDir(root, found, { allowPrivateEntries: new Set(["_multi-compaction"]) });
+
+    expect(found.sort()).toEqual(
+      [
+        path.join(root, "_multi-compaction", "index.ts"),
+        path.join(root, "learning", "index.ts"),
+      ].sort(),
+    );
+  });
+
+  it("can disable the internal multi-compaction extension for validation", async () => {
+    vi.stubEnv("PI_DISABLE_MULTI_COMPACTION", "1");
+    vi.resetModules();
+    const { BUILTIN_INTERNAL_EXTENSION_NAMES } = await import(
+      "../../../src/shared/agent/agent-runtime-config"
+    );
+
+    const root = makeTempDir();
+    touch(path.join(root, "_multi-compaction", "index.ts"));
+    touch(path.join(root, "learning", "index.ts"));
+
+    const found: string[] = [];
+    scanExtensionDir(root, found, { allowPrivateEntries: BUILTIN_INTERNAL_EXTENSION_NAMES });
+
+    expect(found).toEqual([path.join(root, "learning", "index.ts")]);
   });
 
   it("resolves builtin extensions from a yalc/node_modules package cli path", () => {
