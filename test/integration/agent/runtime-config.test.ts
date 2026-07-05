@@ -107,23 +107,6 @@ describe("agent runtime config", () => {
     );
   });
 
-  it("can disable the internal multi-compaction extension for validation", async () => {
-    vi.stubEnv("PI_DISABLE_MULTI_COMPACTION", "1");
-    vi.resetModules();
-    const { BUILTIN_INTERNAL_EXTENSION_NAMES } = await import(
-      "../../../src/shared/agent/agent-runtime-config"
-    );
-
-    const root = makeTempDir();
-    touch(path.join(root, "_multi-compaction", "index.ts"));
-    touch(path.join(root, "learning", "index.ts"));
-
-    const found: string[] = [];
-    scanExtensionDir(root, found, { allowPrivateEntries: BUILTIN_INTERNAL_EXTENSION_NAMES });
-
-    expect(found).toEqual([path.join(root, "learning", "index.ts")]);
-  });
-
   it("resolves builtin extensions from a yalc/node_modules package cli path", () => {
     const root = makeTempDir();
     const packageRoot = path.join(root, "node_modules", "@dyyz1993", "pi-coding-agent");

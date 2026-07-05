@@ -9,13 +9,7 @@ const log = createLogger("agent");
 export const TIER_KEYS = ["fast", "pro", "max"] as const;
 export type TierKey = (typeof TIER_KEYS)[number];
 
-function isTruthyEnv(value: string | undefined): boolean {
-  return value === "1" || value === "true" || value === "yes" || value === "on";
-}
-
-export const BUILTIN_INTERNAL_EXTENSION_NAMES = new Set(
-  isTruthyEnv(process.env.PI_DISABLE_MULTI_COMPACTION) ? [] : ["_multi-compaction"],
-);
+export const BUILTIN_INTERNAL_EXTENSION_NAMES = new Set(["_multi-compaction"]);
 
 interface ScanExtensionDirOptions {
   allowPrivateEntries?: ReadonlySet<string>;
