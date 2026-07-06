@@ -134,6 +134,12 @@ function nextMsgId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function getAssistantErrorMessage(message: AssistantMessage): string | undefined {
+  const raw = message as unknown as Record<string, unknown>;
+  const errorMessage = raw.errorMessage;
+  return typeof errorMessage === "string" && errorMessage.trim() ? errorMessage : undefined;
+}
+
 export function messageToChatMessage(
   message: Message,
   id?: string,
@@ -218,7 +224,28 @@ export function messageToChatMessage(
 
   const asstMsg = message as AssistantMessage;
   const content = extractContent(asstMsg);
-  if (content.length === 0) return null;
+  if (content.length === 0) {
+    if (asstMsg.stopReason === "error") {
+      const errorMessage = getAssistantErrorMessage(asstMsg) ?? "LLM 返回了错误响应";
+      const msg: ChatMessage = {
+        id: msgId,
+        role: "error",
+        content: [{ type: "text", text: `LLM 响应失败\n${errorMessage}` }],
+        timestamp: extractTimestamp(message),
+        stopReason: "error",
+        ...(entryId ? { entryId } : {}),
+      };
+
+      if (asstMsg.provider) msg.provider = asstMsg.provider;
+      if (asstMsg.model) msg.model = asstMsg.model;
+
+      const usage = extractTokenUsage(asstMsg.usage);
+      if (usage) msg.tokenUsage = usage;
+
+      return msg;
+    }
+    return null;
+  }
 
   const msg: ChatMessage = {
     id: msgId,

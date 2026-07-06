@@ -151,6 +151,33 @@ describe("messageToChatMessage", () => {
     expect(messageToChatMessage(msg, "asst-4")).toBeNull();
   });
 
+  it("converts empty assistant provider errors into visible error messages", () => {
+    const msg = {
+      role: "assistant",
+      content: [],
+      timestamp: 7100,
+      provider: "opencode-go",
+      model: "deepseek-v4-flash",
+      stopReason: "error",
+      errorMessage: "400 Error from provider (Console Go): Upstream request failed",
+    } as unknown as AssistantMessage;
+
+    expect(messageToChatMessage(msg, "asst-error")).toEqual({
+      id: "asst-error",
+      role: "error",
+      content: [
+        {
+          type: "text",
+          text: "LLM 响应失败\n400 Error from provider (Console Go): Upstream request failed",
+        },
+      ],
+      timestamp: 7100,
+      provider: "opencode-go",
+      model: "deepseek-v4-flash",
+      stopReason: "error",
+    });
+  });
+
   it("extracts tokenUsage from assistant with usage", () => {
     const msg: AssistantMessage = {
       role: "assistant",
