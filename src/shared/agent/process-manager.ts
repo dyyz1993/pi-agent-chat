@@ -1219,7 +1219,9 @@ export class AgentProcessManager {
   }
 
   async stop(sessionId: string, crashReason?: string): Promise<boolean> {
-    return stopAgentClientOperation({
+    const managed = this.getActiveManaged(sessionId);
+    const projectPath = managed?.info.projectPath ?? this.sessionProjectPaths.get(sessionId);
+    const stopped = await stopAgentClientOperation({
       sessionId,
       crashReason,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
@@ -1240,6 +1242,23 @@ export class AgentProcessManager {
       deleteLspState: (sid) => this.lastLspState.delete(sid),
       clearSessionCache: (sid) => this.clearSessionCache(sid),
     });
+
+    if (stopped && projectPath) {
+      const remoteStatus = await this.resolveRemoteSshStatus(
+        projectPath,
+        crashReason ? "error" : "disconnected",
+        crashReason,
+      ).catch((err: unknown) => {
+        log.warn("resolve remote ssh status failed after stop", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      });
+      this.broadcastRemoteSshConnection(sessionId, projectPath, remoteStatus);
+    }
+
+    return stopped;
   }
 
   getStatus(sessionId: string): { status: "idle" | "streaming" | "stopped"; pid?: number } {

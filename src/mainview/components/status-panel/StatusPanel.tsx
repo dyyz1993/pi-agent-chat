@@ -39,6 +39,7 @@ import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RemoteProjectRef } from "../../../shared/modules/project";
+import type { RemoteSshStatus } from "../../../shared/modules/agent";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
@@ -139,12 +140,7 @@ export function StatusPanel() {
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
   const [showPermissionAdvanced, setShowPermissionAdvanced] = useState(false);
-  const [remoteStatus, setRemoteStatus] = useState<{
-    enabled: boolean;
-    configured: boolean;
-    host?: string;
-    remoteCwd?: string;
-  } | null>(null);
+  const [remoteStatus, setRemoteStatus] = useState<RemoteSshStatus | null>(null);
   const [recoveredRemoteRef, setRecoveredRemoteRef] = useState<RemoteProjectRef | null>(null);
   const activeRemoteRef = activeProjectTab?.remote ?? recoveredRemoteRef;
   const activeSshRuntimeKind =
@@ -216,22 +212,43 @@ export function StatusPanel() {
       setRemoteStatus(null);
       return;
     }
+    const recheckRemoteConnection = async () => {
+      if (!activeRemoteRef?.host || !activeRemoteRef?.remotePath) return false;
+      const refreshed = await apiClient.call("agent.remoteSshTestConnection", {
+        sessionId: activeSessionId,
+        host: activeRemoteRef.host,
+        remoteCwd: activeRemoteRef.remotePath,
+      });
+      if (cancelled) return true;
+      setRemoteStatus(refreshed.status);
+      setRemoteRuntimeStatus(activeSessionId, refreshed.status);
+      return true;
+    };
     apiClient
       .call("agent.remoteSshGetStatus", { sessionId: activeSessionId })
-      .then((status) => {
+      .then(async (status) => {
         if (cancelled) return;
         setRemoteStatus(status);
         setRemoteRuntimeStatus(activeSessionId, status);
+
+        if (
+          (status?.status === "disconnected" || status?.status === "error") &&
+          activeRemoteRef?.host &&
+          activeRemoteRef?.remotePath
+        ) {
+          await recheckRemoteConnection();
+        }
       })
-      .catch(() => {
+      .catch(async () => {
         if (cancelled) return;
+        if (await recheckRemoteConnection()) return;
         setRemoteStatus(null);
         setRemoteRuntimeStatus(activeSessionId, null);
       });
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, setRemoteRuntimeStatus]);
+  }, [activeRemoteRef, activeSessionId, setRemoteRuntimeStatus]);
 
   useEffect(() => {
     let cancelled = false;
