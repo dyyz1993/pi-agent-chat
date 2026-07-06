@@ -345,6 +345,69 @@ function buildEmptyTurnErrorMessage(afterMessage?: ChatMessage): ChatMessage {
   };
 }
 
+function buildLlmProviderErrorMessage(
+  errorDetail: string,
+  source?: string,
+  afterMessage?: ChatMessage,
+): ChatMessage {
+  const sourceLine = source ? `来源: ${source}\n` : "";
+  return {
+    id: `error_llm_${Date.now()}`,
+    role: "error",
+    content: [
+      {
+        type: "text",
+        text: `LLM 服务异常\n${sourceLine}${errorDetail}`,
+      },
+    ],
+    timestamp: Math.max(Date.now(), (afterMessage?.timestamp ?? 0) + 1),
+    stopReason: "llm_error",
+    isStreaming: false,
+  };
+}
+
+function appendVisibleLlmProviderErrorMessage(
+  sessionId: string,
+  errorDetail: string,
+  source?: string,
+): void {
+  const chat = useChatStore.getState();
+  const existing = chat.messagesBySession[sessionId] || [];
+  const last = existing[existing.length - 1];
+  const errorMessage = buildLlmProviderErrorMessage(errorDetail, source, last);
+  const errorText = errorMessage.content[0]?.type === "text" ? errorMessage.content[0].text : "";
+  const lastText =
+    last?.content.find((block): block is Extract<ContentBlock, { type: "text" }> =>
+      block.type === "text",
+    )?.text ?? "";
+
+  if (last?.role === "error" && lastText === errorText) {
+    return;
+  }
+
+  const closedExisting =
+    last?.role === "assistant" && last.isStreaming
+      ? [
+          ...existing.slice(0, -1),
+          {
+            ...last,
+            content: closeRunningToolExecutions(last.content, "error"),
+            stopReason: last.stopReason ?? "error",
+            isStreaming: false,
+          },
+        ]
+      : existing;
+
+  chat.setMessagesForSession(sessionId, [...closedExisting, errorMessage], {
+    bumpStreamVersion: true,
+  });
+
+  const currentStatus = useSessionStore.getState().sessionStatusMap[sessionId];
+  if (currentStatus === "streaming") {
+    useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+  }
+}
+
 function hasAssistantContentSinceLastUser(messages: ChatMessage[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -848,6 +911,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "extension_llm_error") {
     const errMsg = event.error || "Unknown error";
+    appendVisibleLlmProviderErrorMessage(sessionId, errMsg, event.source);
     notificationGateway.emit({
       type: "extension_llm_error",
       sessionId,
