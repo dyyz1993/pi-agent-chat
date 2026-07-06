@@ -1561,6 +1561,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         activeToolCallIds: get().activeToolCallIdsBySession[sid],
       });
 
+      if (hasSameMessageSnapshots(current, preparedMsgs)) {
+        set((s) => ({
+          hasMoreMessagesBySession: {
+            ...s.hasMoreMessagesBySession,
+            [sid]: hasMore,
+          },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
+        }));
+        return;
+      }
+
       set((s) => ({
         messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, preparedMsgs),
         ...bumpHistoryLoadVersion(s, sid),
