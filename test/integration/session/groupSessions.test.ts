@@ -213,6 +213,30 @@ describe("groupSessions: filter modes", () => {
 });
 
 describe("groupSessions: working session ordering", () => {
+  it("keeps blank placeholder sessions below sessions with real messages", () => {
+    const active = makeSession({
+      sessionId: "active-session",
+      firstMessage: "recently used",
+      messageCount: 3,
+      createdAt: 1000,
+      updatedAt: 2000,
+    });
+    const blank = makeSession({
+      sessionId: "blank-placeholder",
+      firstMessage: "",
+      messageCount: 0,
+      createdAt: 3000,
+      updatedAt: 9000,
+    });
+
+    const result = groupSessions([blank, active], "", "all");
+
+    expect(result.rootSessions.map((s) => s.sessionId)).toEqual([
+      "active-session",
+      "blank-placeholder",
+    ]);
+  });
+
   it("uses sessionStatusMap as the source of truth for working priority", () => {
     const idle = makeSession({
       sessionId: "idle",

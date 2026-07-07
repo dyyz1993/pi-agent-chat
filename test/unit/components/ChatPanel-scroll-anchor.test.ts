@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   computeTopLoadRestoredScrollTop,
@@ -5,6 +7,12 @@ import {
   shouldHideMessageSurfaceUntilInitialBottom,
   shouldStartTopLoad,
 } from "../../../src/mainview/components/chat/ChatPanel";
+
+const root = process.cwd();
+
+function readSource(path: string) {
+  return readFileSync(join(root, path), "utf-8");
+}
 
 describe("ChatPanel top-load scroll anchor", () => {
   it("keeps the viewport anchored after older messages are prepended", () => {
@@ -23,6 +31,17 @@ describe("ChatPanel top-load scroll anchor", () => {
         980,
       ),
     ).toBe(40);
+  });
+
+  it("restores top-load scroll position synchronously without a double rAF frame", () => {
+    const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
+    const restoreEffectSection = source.slice(
+      source.indexOf("useLayoutEffect(() => {"),
+      source.indexOf("const handleScrollToEdge"),
+    );
+
+    expect(restoreEffectSection).toContain("computeTopLoadRestoredScrollTop");
+    expect(restoreEffectSection).not.toContain("requestAnimationFrame");
   });
 });
 

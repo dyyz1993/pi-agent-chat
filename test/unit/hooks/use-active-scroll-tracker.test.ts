@@ -650,6 +650,45 @@ describe("useActiveScrollTracker — streaming follow (A/B)", () => {
     // Should NOT scroll to bottom
     expect(mockHandle.scrollToIndex).not.toHaveBeenCalled();
   });
+
+  it("does not reset active target on history load while the user is reading older messages", () => {
+    const setActive = vi.fn();
+    const mockHandle = createMockHandle({
+      scrollSize: 5000,
+      scrollOffset: 1000,
+      viewportSize: 500,
+    });
+    mockHandleRef.current = mockHandle;
+
+    const { result, rerender } = renderHook(
+      (props: { historyLoadVersion: number }) => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef(mockHandle);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          sessionId: "test-session",
+          setActive,
+          streamVersion: 0,
+          historyLoadVersion: props.historyLoadVersion,
+          initialScrollReady: true,
+        });
+      },
+      { initialProps: { historyLoadVersion: 0 } },
+    );
+
+    act(() => vi.advanceTimersByTime(200));
+    act(() => {
+      result.current.suspendAutoScroll();
+    });
+    setActive.mockClear();
+
+    rerender({ historyLoadVersion: 1 });
+    act(() => vi.advanceTimersByTime(100));
+
+    expect(setActive).not.toHaveBeenCalled();
+  });
 });
 
 describe("useActiveScrollTracker — auto-scroll recovery (C)", () => {

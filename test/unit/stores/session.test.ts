@@ -830,6 +830,37 @@ describe("createNewSession", () => {
     });
   });
 
+  it("does not switch tier before the new session agent process is started", async () => {
+    useSessionStore.getState().addProjectTab(TAB_A);
+    useSessionStore.setState({
+      activeProjectId: "tab-a",
+      activeSessionId: "source-sess",
+      sessionsByProject: {
+        "/project-a": [
+          makeSession({
+            sessionId: "source-sess",
+            messageCount: 1,
+            firstMessage: "configured task",
+          }),
+        ],
+      },
+    });
+    useTierStore.getState().setSessionCurrentTier("source-sess", "/project-a", "fast");
+
+    mockedCall.mockResolvedValueOnce({
+      sessionId: "new-sess",
+      sessionPath: "/sessions/new-sess",
+    });
+
+    await useSessionStore.getState().createNewSession();
+
+    expect(mockedCall).toHaveBeenCalledWith("session.create", { projectPath: "/project-a" });
+    expect(mockedCall).not.toHaveBeenCalledWith(
+      "agent.switchTier",
+      expect.objectContaining({ sessionId: "new-sess", tier: "fast" }),
+    );
+  });
+
   it("creates a session under the explicit project path instead of the active tab path", async () => {
     useSessionStore.getState().addProjectTab(TAB_A);
     useSessionStore.setState({ activeProjectId: "tab-a" });

@@ -395,6 +395,142 @@ describe("StatusPanel remote section", () => {
     expect(container.textContent).not.toContain("remoteStatusError");
     expect(container.textContent).not.toContain("old-remote");
   });
+
+  it("actively rechecks SSH connectivity when the stored remote status is disconnected", async () => {
+    const remote: RemoteProjectRef = {
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-1",
+      host: "xyz-mac",
+      remotePath: "/Users/xyz/Projects/44444",
+      localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-xyz",
+    };
+    mockProjectTabs = [
+      {
+        id: "remote-tab",
+        name: "44444",
+        path: remote.localPath,
+        runtime: "ssh",
+        remote,
+      },
+    ];
+    mockActiveProjectId = "remote-tab";
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "agent.remoteSshGetStatus") {
+        return Promise.resolve({
+          enabled: true,
+          configured: true,
+          status: "error",
+          host: "xyz-mac",
+          remoteCwd: "/Users/xyz/Projects/44444",
+          localCwd: remote.localPath,
+          error: "Agent process crashed",
+        });
+      }
+      if (method === "agent.remoteSshTestConnection") {
+        return Promise.resolve({
+          ok: true,
+          exitCode: 0,
+          stdout: "connected",
+          stderr: "",
+          status: {
+            enabled: true,
+            configured: true,
+            status: "connected",
+            host: "xyz-mac",
+            remoteCwd: "/Users/xyz/Projects/44444",
+            localCwd: remote.localPath,
+          },
+        });
+      }
+      if (method === "project.listRecent") {
+        return Promise.resolve({ projects: [] });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    render(<StatusPanel />);
+
+    await waitFor(() => {
+      expect(mockApiCall).toHaveBeenCalledWith("agent.remoteSshTestConnection", {
+        sessionId: "test-session",
+        host: "xyz-mac",
+        remoteCwd: "/Users/xyz/Projects/44444",
+      });
+    });
+    expect(mockSetRemoteRuntimeStatus).toHaveBeenLastCalledWith("test-session", {
+      enabled: true,
+      configured: true,
+      status: "connected",
+      host: "xyz-mac",
+      remoteCwd: "/Users/xyz/Projects/44444",
+      localCwd: remote.localPath,
+    });
+  });
+
+  it("falls back to SSH testConnection when remote status lookup fails", async () => {
+    const remote: RemoteProjectRef = {
+      runtime: "ssh",
+      sshRuntimeKind: "remote-agent-child",
+      profileId: "profile-1",
+      host: "xyz-mac",
+      remotePath: "/Users/xyz/Projects/44444",
+      localPath: "/Users/me/.pi-agent-chat/remote-projects/ssh-xyz",
+    };
+    mockProjectTabs = [
+      {
+        id: "remote-tab",
+        name: "44444",
+        path: remote.localPath,
+        runtime: "ssh",
+        remote,
+      },
+    ];
+    mockActiveProjectId = "remote-tab";
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "agent.remoteSshGetStatus") {
+        return Promise.reject(new Error("Channel remote-ssh not found"));
+      }
+      if (method === "agent.remoteSshTestConnection") {
+        return Promise.resolve({
+          ok: true,
+          exitCode: 0,
+          stdout: "connected",
+          stderr: "",
+          status: {
+            enabled: true,
+            configured: true,
+            status: "connected",
+            host: "xyz-mac",
+            remoteCwd: "/Users/xyz/Projects/44444",
+            localCwd: remote.localPath,
+          },
+        });
+      }
+      if (method === "project.listRecent") {
+        return Promise.resolve({ projects: [] });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    render(<StatusPanel />);
+
+    await waitFor(() => {
+      expect(mockApiCall).toHaveBeenCalledWith("agent.remoteSshTestConnection", {
+        sessionId: "test-session",
+        host: "xyz-mac",
+        remoteCwd: "/Users/xyz/Projects/44444",
+      });
+    });
+    expect(mockSetRemoteRuntimeStatus).toHaveBeenLastCalledWith("test-session", {
+      enabled: true,
+      configured: true,
+      status: "connected",
+      host: "xyz-mac",
+      remoteCwd: "/Users/xyz/Projects/44444",
+      localCwd: remote.localPath,
+    });
+  });
 });
 
 describe("StatusPanel permission section", () => {

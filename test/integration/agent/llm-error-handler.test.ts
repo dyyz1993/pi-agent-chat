@@ -172,11 +172,16 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
 
 import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 import { notificationGateway } from "../../../src/mainview/lib/notification-gateway";
+import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 
 const SID = "test-session-llm-error";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useChatStore.setState({
+    messagesBySession: {},
+    streamContentVersion: 0,
+  });
 });
 
 describe("extension_llm_error", () => {
@@ -235,5 +240,33 @@ describe("extension_llm_error", () => {
 
     const call = (notificationGateway.emit as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.level).toBe("warning");
+  });
+
+  it("adds a visible chat error message with the raw provider error", () => {
+    useChatStore.getState().setMessagesForSession(SID, [
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "please respond" }],
+        timestamp: 1000,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "extension_llm_error",
+      error: "401 Invalid API key",
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = useChatStore.getState().messagesBySession[SID];
+    expect(messages).toHaveLength(2);
+    expect(messages[1].role).toBe("error");
+    expect(messages[1].isStreaming).toBe(false);
+    expect(messages[1].content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("401 Invalid API key"),
+    });
+    expect(messages[1].content[0]).toMatchObject({
+      text: expect.stringContaining("LLM"),
+    });
   });
 });

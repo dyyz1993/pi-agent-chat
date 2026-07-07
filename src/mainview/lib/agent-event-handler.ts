@@ -542,6 +542,49 @@ function emitLlmErrorNotification(sessionId: string, errorDetail: string): void 
   });
 }
 
+function appendVisibleLlmProviderErrorMessage(
+  sessionId: string,
+  errorDetail: string,
+  source?: string,
+): void {
+  const chat = useChatStore.getState();
+  const existing = chat.messagesBySession[sessionId] || [];
+  const last = existing[existing.length - 1];
+  const sourceLine = source ? `来源: ${source}\n` : "";
+  const errorMessage = buildAgentEndErrorMessage(`${sourceLine}${errorDetail}`, last);
+  const errorText = errorMessage.content[0]?.type === "text" ? errorMessage.content[0].text : "";
+  const lastText =
+    last?.content.find((block): block is Extract<ContentBlock, { type: "text" }> =>
+      block.type === "text",
+    )?.text ?? "";
+
+  if (last?.role === "error" && lastText === errorText) {
+    return;
+  }
+
+  const closedExisting =
+    last?.role === "assistant" && last.isStreaming
+      ? [
+          ...existing.slice(0, -1),
+          {
+            ...last,
+            content: closeRunningToolExecutions(last.content, "error"),
+            stopReason: last.stopReason ?? "error",
+            isStreaming: false,
+          },
+        ]
+      : existing;
+
+  chat.setMessagesForSession(sessionId, [...closedExisting, errorMessage], {
+    bumpStreamVersion: true,
+  });
+
+  const currentStatus = useSessionStore.getState().sessionStatusMap[sessionId];
+  if (currentStatus === "streaming") {
+    useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+  }
+}
+
 function hasAssistantContentSinceLastUser(messages: ChatMessage[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -1076,6 +1119,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "extension_llm_error") {
     const errMsg = event.error || "Unknown error";
+    appendVisibleLlmProviderErrorMessage(sessionId, errMsg, event.source);
     notificationGateway.emit({
       type: "extension_llm_error",
       sessionId,
