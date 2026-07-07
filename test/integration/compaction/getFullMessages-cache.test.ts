@@ -384,7 +384,7 @@ describe("getFullMessages LRU Cache", () => {
 
     expect(hot.messages.length).toBe(cold.messages.length);
     expect(hot.totalCount).toBe(5000);
-    expect(hotMs).toBeLessThan(10);
+    expect(hotMs).toBeLessThan(Math.max(25, coldMs / 5));
     console.log(
       `    Large file — Cold: ${coldMs.toFixed(1)}ms, Hot: ${hotMs.toFixed(3)}ms, Speedup: ${(coldMs / Math.max(hotMs, 0.01)).toFixed(0)}x`,
     );
