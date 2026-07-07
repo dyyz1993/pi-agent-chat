@@ -11,6 +11,12 @@ interface PromptClientLike {
 
 interface SteeringClientLike {
   steer(content: string, images?: ImageContent[]): Promise<void>;
+  steer(options: {
+    text?: string;
+    images?: ImageContent[];
+    promote?: number;
+    immediate?: boolean;
+  }): Promise<void>;
 }
 
 interface FollowUpClientLike {
@@ -49,6 +55,15 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
+    ),
+  ]);
+}
+
 export async function sendPromptOperation<TManaged extends ManagedPromptLike>(options: {
   sessionId: string;
   content: string;
@@ -57,7 +72,7 @@ export async function sendPromptOperation<TManaged extends ManagedPromptLike>(op
   ensureManagedClient: (sessionId: string) => Promise<TManaged | null>;
   isClientAlive: (sessionId: string, managed: TManaged) => Promise<boolean>;
   cleanupDeadClient: (sessionId: string, reason: string) => void;
-  emitAgentEnd: (sessionId: string) => Promise<void>;
+  emitAgentEnd: (sessionId: string, reason?: string) => Promise<void>;
   now?: () => number;
 }): Promise<boolean> {
   let managed = options.getActiveManaged(options.sessionId);
@@ -88,7 +103,7 @@ export async function sendPromptOperation<TManaged extends ManagedPromptLike>(op
       options.cleanupDeadClient(options.sessionId, `prompt failed: ${msg}`);
       throw err;
     }
-    await options.emitAgentEnd(options.sessionId).catch((emitErr: unknown) => {
+    await options.emitAgentEnd(options.sessionId, msg).catch((emitErr: unknown) => {
       log.warn("emitAgentEvent(agent_end) after prompt error", {
         err: errorMessage(emitErr),
       });
@@ -100,13 +115,24 @@ export async function sendPromptOperation<TManaged extends ManagedPromptLike>(op
 
 export function steerOperation<TManaged extends ManagedSteeringLike>(options: {
   sessionId: string;
-  content: string;
+  content?: string;
   images?: ImageContent[];
+  promote?: number;
+  immediate?: boolean;
   getActiveManaged: (sessionId: string) => TManaged | null;
 }): boolean {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) return false;
-  managed.client.steer(options.content, options.images).catch((err: unknown) => {
+  const steerPromise =
+    options.promote !== undefined || options.immediate
+      ? managed.client.steer({
+          text: options.content,
+          images: options.images,
+          promote: options.promote,
+          immediate: options.immediate,
+        })
+      : managed.client.steer(options.content ?? "", options.images);
+  steerPromise.catch((err: unknown) => {
     log.warn("steer error", { sessionId: options.sessionId, err: errorMessage(err) });
   });
   return true;
@@ -134,6 +160,8 @@ export async function abortOperation<TManaged extends ManagedAbortLike>(options:
   getActiveManaged: (sessionId: string) => TManaged | null;
   broadcastIdle: (sessionId: string) => void;
   emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>;
+  abortTimeoutMs?: number;
+  emitAgentEndTimeoutMs?: number;
   now?: () => number;
 }): Promise<boolean> {
   const managed = options.getActiveManaged(options.sessionId);
@@ -142,12 +170,29 @@ export async function abortOperation<TManaged extends ManagedAbortLike>(options:
     return false;
   }
 
-  await managed.client.abort().catch((err: unknown) => {
+  const abortPromise = managed.client.abort().catch((err: unknown) => {
     log.warn("abort error", { sessionId: options.sessionId, err: errorMessage(err) });
   });
+  await withTimeout(abortPromise, options.abortTimeoutMs ?? 1_500, "abort").catch(
+    (err: unknown) => {
+      log.warn("abort timed out; forcing local idle", {
+        sessionId: options.sessionId,
+        err: errorMessage(err),
+      });
+    },
+  );
   managed.info.status = "idle";
   managed.lastActiveAt = (options.now ?? Date.now)();
   options.broadcastIdle(options.sessionId);
-  await options.emitAgentEvent(options.sessionId, { type: "agent_end" } as SanitizedEvent);
+  await withTimeout(
+    options.emitAgentEvent(options.sessionId, { type: "agent_end" } as SanitizedEvent),
+    options.emitAgentEndTimeoutMs ?? 1_500,
+    "abort agent_end",
+  ).catch((err: unknown) => {
+    log.warn("emitAgentEvent(agent_end) after abort timed out", {
+      sessionId: options.sessionId,
+      err: errorMessage(err),
+    });
+  });
   return true;
 }

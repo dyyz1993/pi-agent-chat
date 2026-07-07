@@ -1,0 +1,78 @@
+{
+  "designSource": {
+    "libraryIdentity": {
+      "name": "pi-agent-chat-design",
+      "id": null,
+      "version": null,
+      "scope": "workspace",
+      "path": "/Users/xuyingzhou/Project/temporary/pi-agent-chat/.design_library/pi-agent-chat",
+      "versionSource": null
+    }
+  },
+  "project": {
+    "deviceType": "desktop",
+    "operatingMode": "library-bound"
+  },
+  "designDecisionSummary": {
+    "primaryColor": "#246df3",
+    "darkPrimaryColor": "#746cff",
+    "fontFamily": "Inter",
+    "monoFont": "JetBrains Mono",
+    "radiusScale": "4/6/8/10px",
+    "density": "compact",
+    "tone": "professional developer tool, dark-first, high information density"
+  },
+  "pages": [
+    {
+      "id": "page-main-chat",
+      "title": "Main Chat",
+      "slug": "main-chat",
+      "pageIndex": 1,
+      "group": "group-main",
+      "pageType": "information-dense",
+      "componentPlan": [
+        {
+          "slug": "sidebar",
+          "contractFile": ".design_library/pi-agent-chat/components/sidebar.json"
+        },
+        { "slug": "card", "contractFile": ".design_library/pi-agent-chat/components/card.json" },
+        { "slug": "input", "contractFile": ".design_library/pi-agent-chat/components/input.json" },
+        {
+          "slug": "button",
+          "contractFile": ".design_library/pi-agent-chat/components/button.json"
+        },
+        { "slug": "tag", "contractFile": ".design_library/pi-agent-chat/components/tag.json" }
+      ],
+      "designRead": "desktop-app / developer / professional / information-dense / generic-safe"
+    },
+    {
+      "id": "page-settings-modal",
+      "title": "Settings Modal",
+      "slug": "settings-modal",
+      "pageIndex": 2,
+      "group": "group-main",
+      "stateGroupId": "sg-settings",
+      "stateRole": "derived",
+      "baseStatePageId": "page-main-chat",
+      "derivedFromHtmlSrc": "pages/main-chat.html",
+      "pageType": "information-dense",
+      "componentPlan": [
+        { "slug": "modal", "contractFile": ".design_library/pi-agent-chat/components/modal.json" },
+        {
+          "slug": "button",
+          "contractFile": ".design_library/pi-agent-chat/components/button.json"
+        },
+        { "slug": "tag", "contractFile": ".design_library/pi-agent-chat/components/tag.json" }
+      ],
+      "designRead": "desktop-app / developer / professional / information-dense / generic-safe",
+      "mutableRegions": ["settings-modal-overlay"]
+    }
+  ],
+  "sharedProjectShellContract": {
+    "layoutModel": "three-column-desktop: icon-rail + chat-main + optional-right-panel",
+    "colorMode": "dark-primary",
+    "radiusScale": "4/6/8/10px",
+    "density": "compact",
+    "surfaceDepthModel": "border-first, shadow-quiet"
+  }
+}

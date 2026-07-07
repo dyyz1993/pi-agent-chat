@@ -1,0 +1,31 @@
+{
+  "slug": "supervisor-continue-card",
+  "schemaVersion": 2,
+  "name": "SupervisorContinueCard",
+  "category": "agent",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "status", "evidence": "Supervisor agent continuation prompt" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Continue",
+      "traits": {
+        "message": "Supervisor agent requesting continuation",
+        "steps": ["Step 1 complete", "Step 2 pending"]
+      },
+      "whySelected": "Supervisor continuation",
+      "childrenDigest": "Agent icon + message + step list + continue button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["agent-icon", "message", "step-list", "continue-button"],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 28, "context": "Multi-agent supervisor continuation flow" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Agent-purple accent, step progress list, prominent continue action button"
+}

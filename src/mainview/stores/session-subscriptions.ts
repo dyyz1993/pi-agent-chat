@@ -95,7 +95,125 @@ function shouldForwardCoordinatorChildEvent(
   return type === "extension_ui_request" || type === "extension_ui_resolved";
 }
 
+type CoordinatorSessionCreatedPayload = { parentSessionId: string; session: SessionMeta };
+
+type CoordinatorSessionCreatedState = {
+  sessionsByProject: Record<string, SessionMeta[]>;
+  projectTabs: ProjectTab[];
+  activeProjectId: string | null;
+};
+
+export function resolveCoordinatorSessionCreatedProjectPath(
+  sessionsByProject: Record<string, SessionMeta[]>,
+  payload: CoordinatorSessionCreatedPayload,
+): string {
+  for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
+    if (sessions.some((session) => session.sessionId === payload.parentSessionId)) {
+      return projectPath;
+    }
+  }
+  return payload.session.projectPath;
+}
+
+export function buildCoordinatorSessionCreatedUpdates(
+  state: CoordinatorSessionCreatedState,
+  payload: CoordinatorSessionCreatedPayload,
+  createTabId: () => string = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+): {
+  updates: Partial<CoordinatorSessionCreatedState>;
+  tabsToSync: ProjectTab[] | null;
+  activeProjectIdToSync: string | null;
+} | null {
+  const projectPath = resolveCoordinatorSessionCreatedProjectPath(state.sessionsByProject, payload);
+  const sessions = state.sessionsByProject[projectPath] || [];
+  if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
+    return null;
+  }
+  if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
+    return null;
+  }
+
+  const nextSessionsByProject: Record<string, SessionMeta[]> = { ...state.sessionsByProject };
+  for (const [existingProjectPath, existingSessions] of Object.entries(state.sessionsByProject)) {
+    if (existingProjectPath === projectPath) continue;
+    const filtered = existingSessions.filter(
+      (sess) =>
+        sess.sessionId !== payload.session.sessionId &&
+        sess.sessionPath !== payload.session.sessionPath,
+    );
+    if (filtered.length !== existingSessions.length) {
+      nextSessionsByProject[existingProjectPath] = filtered;
+    }
+  }
+  nextSessionsByProject[projectPath] = insertAfterPinned(sessions, payload.session);
+
+  const updates: Partial<CoordinatorSessionCreatedState> = {
+    sessionsByProject: nextSessionsByProject,
+  };
+  let tabsToSync: ProjectTab[] | null = null;
+
+  const tabExists = state.projectTabs.find((tab) => tab.path === projectPath);
+  if (!tabExists) {
+    const projectName = projectPath.split("/").pop() ?? projectPath;
+    const newTab: ProjectTab = {
+      id: createTabId(),
+      name: projectName,
+      path: projectPath,
+    };
+    tabsToSync = [...state.projectTabs, newTab];
+    updates.projectTabs = tabsToSync;
+  }
+
+  return { updates, tabsToSync, activeProjectIdToSync: state.activeProjectId };
+}
+
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+type RemoteRuntimeConnectionStatus = RemoteRuntimeState["status"];
+
+export function deriveProjectTabConnectedFromRemoteStatus(
+  status: RemoteRuntimeConnectionStatus | undefined,
+): boolean | undefined {
+  if (status === "connected") return true;
+  if (status === "disconnected" || status === "error") return false;
+  return undefined;
+}
+
+export function doesProjectTabMatchRemoteRuntime(
+  tab: ProjectTab,
+  projectPath: string,
+  status: RemoteRuntimeState,
+): boolean {
+  return (
+    tab.path === projectPath ||
+    tab.path === status.localCwd ||
+    tab.path === status.remoteCwd ||
+    tab.remote?.localPath === projectPath ||
+    tab.remote?.localPath === status.localCwd ||
+    tab.remote?.remotePath === projectPath ||
+    tab.remote?.remotePath === status.remoteCwd
+  );
+}
+
+function syncProjectTabConnectionFromRemoteRuntime(
+  projectPath: string,
+  status: RemoteRuntimeState,
+): void {
+  const connected = deriveProjectTabConnectedFromRemoteStatus(status.status);
+  if (connected === undefined) return;
+
+  const sessionState = useSessionStore.getState();
+  let changed = false;
+  const projectTabs = sessionState.projectTabs.map((tab) => {
+    if (!doesProjectTabMatchRemoteRuntime(tab, projectPath, status)) return tab;
+    if (tab.connected === connected) return tab;
+    changed = true;
+    return { ...tab, connected };
+  });
+
+  if (!changed) return;
+  useSessionStore.setState({ projectTabs });
+}
 
 function normalizeBashCommand(args: string | undefined): string {
   if (!args) return "";
@@ -867,38 +985,15 @@ export function setupSubscriptions(
       (payload: { parentSessionId: string; session: SessionMeta }) => {
         if (payload.parentSessionId !== id) return;
 
-        const projectPath = payload.session.projectPath;
-
         useSessionStore.setState((s) => {
-          const sessions = s.sessionsByProject[projectPath] || [];
-          if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
-            return {};
-          }
-          if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
-            return {};
-          }
+          const result = buildCoordinatorSessionCreatedUpdates(s, payload);
+          if (!result) return {};
 
-          const updates: Record<string, unknown> = {
-            sessionsByProject: {
-              ...s.sessionsByProject,
-              [projectPath]: insertAfterPinned(sessions, payload.session),
-            },
-          };
-
-          const tabExists = s.projectTabs.find((t) => t.path === projectPath);
-          if (!tabExists) {
-            const projectName = projectPath.split("/").pop() ?? projectPath;
-            const newTab: ProjectTab = {
-              id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              name: projectName,
-              path: projectPath,
-            };
-            const nextTabs = [...s.projectTabs, newTab];
-            syncTabsToBackend(nextTabs, s.activeProjectId);
-            updates.projectTabs = nextTabs;
+          if (result.tabsToSync) {
+            syncTabsToBackend(result.tabsToSync, result.activeProjectIdToSync);
           }
 
-          return updates;
+          return result.updates;
         });
       },
       { parentSessionId: id },
@@ -1134,6 +1229,7 @@ export function setupProjectStatusSubscription(): void {
         "agent.ssh_connection_changed",
         (payload: { sessionId: string; projectPath: string; status: RemoteRuntimeState }) => {
           useStatusStore.getState().setRemoteRuntimeStatus(payload.sessionId, payload.status);
+          syncProjectTabConnectionFromRemoteRuntime(payload.projectPath, payload.status);
         },
         {},
       )

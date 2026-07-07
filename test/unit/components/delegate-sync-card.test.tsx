@@ -30,6 +30,7 @@ vi.mock("react-i18next", () => ({
         "coordinator.running": "Running",
         "coordinator.error": "Failed",
         "coordinator.timeout": "Timed out",
+        "coordinator.recovery": "Recovery",
         "coordinator.aborted": "Aborted",
         "coordinator.syncTask": "Subtask",
         "coordinator.idle": "Idle",
@@ -53,9 +54,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
     vi.fn((selector: (s: unknown) => unknown) =>
       selector({
         activeSessionId: "sess_parent_001",
-        sessionStatusMap: hoisted.sessionStatus
-          ? { sess_sub_test_001: hoisted.sessionStatus }
-          : {},
+        sessionStatusMap: hoisted.sessionStatus ? { sess_sub_test_001: hoisted.sessionStatus } : {},
         sessionsByProject: {
           "/fake/project": [
             {
@@ -100,16 +99,28 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   useTierStore: Object.assign(
     vi.fn((selector: (s: unknown) => unknown) =>
       selector({
-        dataByProject: {
-          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        dataBySession: {
+          parent_session: {
+            projectPath: "/fake/project",
+            tierModels: {},
+            currentTier: hoisted.currentTier,
+          },
         },
+        getCurrentTierForSession: () => hoisted.currentTier,
+        getTierModelsForSession: () => ({}),
       }),
     ),
     {
       getState: vi.fn(() => ({
-        dataByProject: {
-          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        dataBySession: {
+          parent_session: {
+            projectPath: "/fake/project",
+            tierModels: {},
+            currentTier: hoisted.currentTier,
+          },
         },
+        getCurrentTierForSession: () => hoisted.currentTier,
+        getTierModelsForSession: () => ({}),
       })),
       subscribe: vi.fn(),
     },
@@ -120,7 +131,8 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
   useChatStore: Object.assign(
     vi.fn((selector: (s: unknown) => unknown) =>
       selector({
-        messagesBySession: hoisted.messages.length > 0 ? { sess_sub_test_001: hoisted.messages } : {},
+        messagesBySession:
+          hoisted.messages.length > 0 ? { sess_sub_test_001: hoisted.messages } : {},
       }),
     ),
     {
@@ -133,10 +145,13 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
-  useSettingsStore: Object.assign(vi.fn(() => true), {
-    getState: vi.fn(() => ({ collapseToolCards: true })),
-    subscribe: vi.fn(),
-  }),
+  useSettingsStore: Object.assign(
+    vi.fn(() => true),
+    {
+      getState: vi.fn(() => ({ collapseToolCards: true })),
+      subscribe: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("../../../src/mainview/stores/use-agent-store", () => ({
@@ -333,6 +348,38 @@ describe("DelegateSyncCard", () => {
 
     expect(screen.queryByText("等待子任务继续响应...")).toBeNull();
     expect(screen.getByRole("heading", { name: "最终总结" })).toBeInTheDocument();
+  });
+
+  it("renders sync timeout as a recoverable timeout instead of a failed task", () => {
+    render(
+      <DelegateSyncCard
+        block={makeSyncBlock({
+          status: "done",
+          output: JSON.stringify({
+            sessionId: "sess_sub_test_001",
+            status: "timeout",
+            exitCode: 1,
+            finalText:
+              "子任务等待超时（10 分钟），但子会话没有被终止，可以恢复继续。\n\n- 子会话 ID: `sess_sub_test_001`",
+          }),
+          details: {
+            sessionId: "sess_sub_test_001",
+            status: "timeout",
+            exitCode: 1,
+            finalText:
+              "子任务等待超时（10 分钟），但子会话没有被终止，可以恢复继续。\n\n- 子会话 ID: `sess_sub_test_001`",
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Timed out")).toBeInTheDocument();
+    expect(screen.queryByText("Failed")).toBeNull();
+
+    fireEvent.click(screen.getByText("Read-only smoke test"));
+
+    expect(screen.getByText("Recovery")).toBeInTheDocument();
+    expect(screen.getAllByText(/可以恢复继续/).length).toBeGreaterThan(0);
   });
 
   it("uses the shared dark-mode markdown styling for final output", () => {

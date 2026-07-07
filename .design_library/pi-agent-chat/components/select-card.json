@@ -1,0 +1,43 @@
+{
+  "slug": "select-card",
+  "schemaVersion": 2,
+  "name": "SelectCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "interaction", "evidence": "Selection picker with single or multi-select options" }
+  ],
+  "variantDimensions": [{ "name": "mode", "values": ["single", "multi"] }],
+  "representativeVariants": [
+    {
+      "name": "Single Select",
+      "traits": {
+        "mode": "single",
+        "label": "Pick a color scheme",
+        "options": ["Dark", "Light", "Auto"]
+      },
+      "whySelected": "Radio-style single selection",
+      "childrenDigest": "Label + option list with radio indicators"
+    },
+    {
+      "name": "Multi Select",
+      "traits": {
+        "mode": "multi",
+        "label": "Select features",
+        "options": ["Auth", "Database", "API", "UI"],
+        "maxSelect": 3
+      },
+      "whySelected": "Checkbox-style multi selection",
+      "childrenDigest": "Label + option list with checkboxes + count indicator"
+    }
+  ],
+  "anatomy": {
+    "parts": ["label", "options-list", "option-item", "selection-indicator", "count"],
+    "structurePatterns": ["stacked-header-list-actions"]
+  },
+  "usageHints": { "priorityHint": 34, "context": "Structured selection prompts from agent" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Card-style select (not dropdown), option items with accent border when selected, count badge for multi"
+}

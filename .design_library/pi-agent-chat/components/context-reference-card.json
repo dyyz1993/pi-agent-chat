@@ -1,0 +1,41 @@
+{
+  "slug": "context-reference-card",
+  "schemaVersion": 2,
+  "name": "ContextReferenceCard",
+  "category": "context",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    {
+      "type": "reference",
+      "evidence": "Referenced context item (file, conversation, external source)"
+    }
+  ],
+  "variantDimensions": [{ "name": "source", "values": ["file", "conversation", "external"] }],
+  "representativeVariants": [
+    {
+      "name": "File Reference",
+      "traits": { "source": "file", "path": "src/utils.ts", "lineRange": "42-58" },
+      "whySelected": "Code reference",
+      "childrenDigest": "File icon + path + line range + preview"
+    },
+    {
+      "name": "Conversation Reference",
+      "traits": {
+        "source": "conversation",
+        "sessionId": "sess-1",
+        "excerpt": "Earlier discussion about auth..."
+      },
+      "whySelected": "Previous conversation reference",
+      "childrenDigest": "Message icon + excerpt + jump link"
+    }
+  ],
+  "anatomy": {
+    "parts": ["source-icon", "path-or-excerpt", "line-range", "preview", "jump-link"],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 42, "context": "Referenced context display in agent responses" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Subtle muted style, clickable to jump to source, line range for code references"
+}

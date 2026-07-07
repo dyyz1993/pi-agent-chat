@@ -1,0 +1,43 @@
+{
+  "slug": "session-task-card",
+  "schemaVersion": 2,
+  "name": "SessionTaskCard",
+  "category": "tool-execution",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "tool", "evidence": "Session-level task or sub-session execution" }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["running", "done", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Running Task",
+      "traits": {
+        "status": "running",
+        "taskId": "task-1",
+        "description": "Analyze codebase structure"
+      },
+      "whySelected": "Active sub-session task",
+      "childrenDigest": "Task icon + description + spinner"
+    },
+    {
+      "name": "Completed Task",
+      "traits": {
+        "status": "done",
+        "taskId": "task-1",
+        "description": "Analyze codebase structure",
+        "result": "Found 12 components"
+      },
+      "whySelected": "Finished sub-session",
+      "childrenDigest": "Check icon + description + result summary"
+    }
+  ],
+  "anatomy": {
+    "parts": ["task-icon", "description", "result", "status-indicator"],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 25, "context": "Sub-session or task execution display" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Similar to tool-execution but for session-level tasks, with result summary on completion"
+}

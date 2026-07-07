@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cursor 风格设计系统</title>
+    <link rel="stylesheet" href="../../colors_and_type.css" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family: var(--font-body);
+        font-size: var(--font-size-body);
+        line-height: var(--line-height-body);
+        color: var(--text-primary);
+        background: var(--bg-base);
+        overflow: hidden;
+      }
+
+      /* ===== Layout ===== */
+      .app {
+        display: flex;
+        height: 100vh;
+      }
+
+      /* Left sidebar */
+      .sidebar {
+        width: 200px;
+        min-width: 200px;
+        background: var(--bg-sidebar);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-header {
+        padding: var(--space-3) var(--space-3);
+        font-size: var(--font-size-lead);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+      }
+      .sidebar-header .new-btn {
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        border-radius: var(--radius-sm);
+      }
+      .sidebar-header .new-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+      .sidebar-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-1) 0;
+      }
+      .sidebar-item {
+        padding: 6px var(--space-3);
+        font-size: var(--font-size-body);
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-left: 3px solid transparent;
+        transition: background var(--transition-fast);
+      }
+      .sidebar-item:hover {
+        background: var(--bg-hover);
+      }
+      .sidebar-item.active {
+        background: var(--bg-active);
+        color: var(--text-primary);
+        border-left-color: var(--accent);
+      }
+
+      /* Center chat area */
+      .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-base);
+        min-width: 0;
+      }
+      .chat-header {
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--border);
+        font-size: var(--font-size-h2);
+        font-weight: var(--font-weight-semibold);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .chat-header .badge {
+        font-size: var(--font-size-xs);
+        padding: 1px 6px;
+        background: var(--accent-muted);
+        color: var(--accent);
+        border-radius: var(--radius-sm);
+        font-weight: var(--font-weight-medium);
+      }
+      .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-3) 0;
+      }
+
+      /* ===== Message row ===== */
+      .msg-row {
+        padding: var(--space-2) 0;
+      }
+      .msg-user {
+        display: flex;
+        gap: var(--space-3);
+        padding: var(--space-2) var(--space-5);
+      }
+      .msg-user .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-full);
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: #fff;
+        flex-shrink: 0;
+      }
+      .msg-user .bubble {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: var(--space-2) var(--space-3);
+        max-width: 680px;
+        font-size: var(--font-size-body);
+      }
+      .msg-agent {
+        padding: var(--space-1) var(--space-5);
+      }
+
+      /* ===== Cursor-style Tool Cards ===== */
+      .cursor-card {
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
+        margin: 2px 0;
+      }
+      .cursor-card-header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: 6px var(--space-3);
+        border-left: 3px solid var(--border);
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-secondary);
+      }
+      .cursor-card-header svg {
+        flex-shrink: 0;
+      }
+      .cursor-card-header .header-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cursor-card-header .header-badge {
+        font-size: var(--font-size-xs);
+        padding: 1px 6px;
+        border-radius: var(--radius-sm);
+        font-weight: var(--font-weight-medium);
+      }
+      .cursor-card-body {
+        padding: var(--space-2) var(--space-3);
+        padding-left: calc(var(--space-3) + 3px);
+        font-size: var(--font-size-body);
+      }
+
+      /* Stripe colors */
+      .stripe-tool {
+        border-left-color: var(--tool);
+      }
+      .stripe-agent {
+        border-left-color: var(--agent);
+      }
+      .stripe-memory {
+        border-left-color: var(--memory);
+      }
+      .stripe-success {
+        border-left-color: var(--success);
+      }
+      .stripe-warning {
+        border-left-color: var(--warning);
+      }
+      .stripe-error {
+        border-left-color: var(--error);
+      }
+      .stripe-accent {
+        border-left-color: var(--accent);
+      }
+      .stripe-primary {
+        border-left-color: var(--primary);
+      }
+
+      /* Badge colors */
+      .badge-success {
+        background: var(--success-muted);
+        color: var(--success);
+      }
+      .badge-warning {
+        background: var(--warning-muted);
+        color: var(--warning);
+      }
+      .badge-error {
+        background: var(--error-muted);
+        color: var(--error);
+      }
+      .badge-info {
+        background: var(--info-muted);
+        color: var(--info);
+      }
+      .badge-tool {
+        background: var(--tool-muted);
+        color: var(--tool);
+      }
+      .badge-accent {
+        background: var(--accent-muted);
+        color: var(--accent);
+      }
+
+      /* Code blocks */
+      .code-block {
+        background: var(--bg-input);
+        border: 1px solid var(--border-muted);
+        border-radius: var(--radius-md);
+        padding: var(--space-2) var(--space-3);
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        line-height: var(--line-height-mono);
+        color: var(--text-secondary);
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .code-block .cmd-prompt {
+        color: var(--accent);
+      }
+      .code-block .cmd-path {
+        color: var(--text-tertiary);
+      }
+
+      /* Thinking card — no card border */
+      .thinking-inline {
+        padding: var(--space-1) calc(var(--space-3) + 3px);
+        font-size: var(--font-size-caption);
+        color: var(--agent);
+        font-style: italic;
+        line-height: 1.6;
+      }
+      .thinking-inline .think-label {
+        font-weight: var(--font-weight-medium);
+        font-style: normal;
+        margin-right: var(--space-1);
+      }
+
+      /* Terminal output */
+      .term-output {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        color: var(--text-tertiary);
+        background: var(--bg-input);
+        border: 1px solid var(--border-muted);
+        border-radius: var(--radius-md);
+        padding: var(--space-2) var(--space-3);
+        margin-top: var(--space-2);
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .term-output .exit-code {
+        color: var(--success);
+      }
+
+      /* File path label */
+      .file-path {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        color: var(--text-link);
+      }
+
+      /* Error message */
+      .error-text {
+        color: var(--error);
+        font-size: var(--font-size-body);
+      }
+      .error-detail {
+        color: var(--text-tertiary);
+        font-size: var(--font-size-caption);
+        margin-top: var(--space-1);
+      }
+
+      /* Confirm buttons */
+      .confirm-actions {
+        display: flex;
+        gap: var(--space-2);
+        margin-top: var(--space-3);
+      }
+      .btn {
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--font-size-body);
+        font-family: var(--font-body);
+        font-weight: var(--font-weight-medium);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        cursor: pointer;
+        transition:
+          background var(--transition-fast),
+          border-color var(--transition-fast);
+      }
+      .btn-default {
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+      }
+      .btn-default:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+      }
+      .btn-danger {
+        background: var(--error-muted);
+        color: var(--error);
+        border-color: transparent;
+      }
+      .btn-danger:hover {
+        background: rgba(248, 113, 113, 0.2);
+      }
+
+      /* Memory key-value */
+      .memory-kv {
+        display: flex;
+        gap: var(--space-3);
+      }
+      .memory-kv .key {
+        color: var(--text-tertiary);
+        min-width: 80px;
+        font-size: var(--font-size-caption);
+      }
+      .memory-kv .val {
+        color: var(--text-secondary);
+        font-size: var(--font-size-body);
+      }
+
+      /* Ask options */
+      .ask-options {
+        list-style: none;
+        margin-top: var(--space-2);
+      }
+      .ask-options li {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-body);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--space-1);
+        cursor: pointer;
+        transition:
+          background var(--transition-fast),
+          border-color var(--transition-fast);
+      }
+      .ask-options li:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent);
+        color: var(--text-primary);
+      }
+      .ask-options li .opt-key {
+        color: var(--accent);
+        font-weight: var(--font-weight-medium);
+        margin-right: var(--space-2);
+      }
+
+      /* ===== Input bar ===== */
+      .chat-input-bar {
+        padding: var(--space-3) var(--space-5);
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: var(--space-2);
+        align-items: flex-end;
+      }
+      .chat-input-wrap {
+        flex: 1;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--bg-input);
+        padding: var(--space-2) var(--space-3);
+        display: flex;
+        align-items: center;
+      }
+      .chat-input-wrap:focus-within {
+        border-color: var(--border-focus);
+      }
+      .chat-input {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        color: var(--text-primary);
+        font-family: var(--font-body);
+        font-size: var(--font-size-body);
+        resize: none;
+      }
+      .chat-input::placeholder {
+        color: var(--text-muted);
+      }
+      .send-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-md);
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .send-btn:hover {
+        background: var(--accent-hover);
+      }
+
+      /* ===== Right panel ===== */
+      .right-panel {
+        width: 300px;
+        min-width: 300px;
+        background: var(--bg-sidebar);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+      .right-panel-header {
+        padding: var(--space-3);
+        font-size: var(--font-size-lead);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .right-panel-header .close-btn {
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        border-radius: var(--radius-sm);
+      }
+      .right-panel-header .close-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+      .right-panel-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-3);
+      }
+
+      .right-section {
+        margin-bottom: var(--space-4);
+      }
+      .right-section-title {
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: var(--space-2);
+      }
+      .context-file {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-3);
+        background: var(--bg-elevated);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--space-1);
+        font-size: var(--font-size-caption);
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .context-file:hover {
+        background: var(--bg-hover);
+      }
+      .context-file .cf-icon {
+        color: var(--primary);
+        flex-shrink: 0;
+      }
+      .context-file .cf-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .context-file .cf-lines {
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+      }
+
+      .token-bar {
+        height: 3px;
+        background: var(--bg-elevated);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+        margin-top: var(--space-2);
+      }
+      .token-bar-fill {
+        height: 100%;
+        width: 38%;
+        background: var(--accent);
+        border-radius: var(--radius-full);
+      }
+
+      /* ===== Scrollbar ===== */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--border-hover);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- ====== Left Sidebar ====== -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <span>Chat History</span>
+          <button class="new-btn" title="New Chat">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+        </div>
+        <div class="sidebar-list">
+          <div class="sidebar-item">API auth refactoring</div>
+          <div class="sidebar-item active">Fix database migration</div>
+          <div class="sidebar-item">Add unit tests for utils</div>
+          <div class="sidebar-item">Update README</div>
+          <div class="sidebar-item">Docker setup</div>
+          <div class="sidebar-item">CI/CD pipeline</div>
+        </div>
+      </aside>
+
+      <!-- ====== Center Chat ====== -->
+      <main class="chat-main">
+        <div class="chat-header">
+          <span>Cursor 风格设计系统</span>
+          <span class="badge">Preview</span>
+        </div>
+
+        <div class="chat-messages">
+          <!-- User message -->
+          <div class="msg-row msg-user">
+            <div class="avatar">U</div>
+            <div class="bubble">
+              Help me fix the database migration issue. The users table needs a new column and the
+              foreign key constraint is failing.
+            </div>
+          </div>
+
+          <!-- Agent response block -->
+
+          <!-- 1. ThinkingCard — inline, no card border -->
+          <div class="msg-row msg-agent">
+            <div class="thinking-inline">
+              <span class="think-label">thinking</span>
+              Analyzing the migration error. The users table uses UUID primary keys and the profile
+              table references it. Need to add created_at column first, then update the constraint.
+              Checking schema files...
+            </div>
+          </div>
+
+          <!-- 2. BashExecutionCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-tool">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--tool)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+                <span class="header-label">RunCommand</span>
+                <span class="header-badge badge-tool">exit 0</span>
+              </div>
+              <div class="cursor-card-body">
+                <div class="code-block">
+                  <span class="cmd-prompt">$</span> <span class="cmd-path">~/project</span> npx
+                  prisma migrate status
+                </div>
+                <div class="term-output">
+                  Database schema is up to date!
+                  <span class="exit-code">✔ 3 migrations applied</span>
+                  No pending migrations.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. ReadFileCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-primary">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--primary)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                <span class="header-label">ReadFile</span>
+              </div>
+              <div class="cursor-card-body">
+                <div class="file-path">prisma/migrations/20260705_add_created_at.sql</div>
+                <div class="code-block" style="margin-top: var(--space-2)">
+                  -- AlterTable ALTER TABLE "users" ADD COLUMN "created_at" TIMESTAMP(3) NOT NULL
+                  DEFAULT CURRENT_TIMESTAMP; -- CreateIndex CREATE INDEX "users_created_at_idx" ON
+                  "users"("created_at");
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. WriteFileCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-success">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--success)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span class="header-label">WriteFile</span>
+                <span class="header-badge badge-success">Created</span>
+              </div>
+              <div class="cursor-card-body">
+                <div class="file-path">prisma/schema.prisma</div>
+                <div class="code-block" style="margin-top: var(--space-2)">
+                  model User { id String @id @default(uuid()) email String @unique name String?
+                  createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime
+                  @updatedAt @map("updated_at") profile Profile? posts Post[] @@map("users") }
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. ErrorMessageCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-error">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--error)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+                <span class="header-label">Error</span>
+                <span class="header-badge badge-error">migration failed</span>
+              </div>
+              <div class="cursor-card-body">
+                <div class="error-text">
+                  Foreign key constraint "profile_user_id_fkey" violates dependency.
+                </div>
+                <div class="error-detail">
+                  The "profile" table depends on "users" column ordering. Drop and recreate
+                  constraints after altering the table.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. ConfirmCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-warning">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--warning)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                  />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <span class="header-label">Confirm</span>
+                <span class="header-badge badge-warning">requires approval</span>
+              </div>
+              <div class="cursor-card-body">
+                <div style="color: var(--text-secondary)">
+                  Drop the foreign key constraint
+                  <code
+                    style="
+                      color: var(--text-link);
+                      font-family: var(--font-mono);
+                      font-size: var(--font-size-caption);
+                    "
+                    >profile_user_id_fkey</code
+                  >
+                  and recreate it after the migration. This is a destructive operation.
+                </div>
+                <div class="confirm-actions">
+                  <button class="btn btn-default">Cancel</button>
+                  <button class="btn btn-danger">Delete Constraint</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. MemoryCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-memory">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--memory)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+                  />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+                <span class="header-label">Memory</span>
+              </div>
+              <div class="cursor-card-body">
+                <div class="memory-kv">
+                  <span class="key">db_type</span>
+                  <span class="val">PostgreSQL 15</span>
+                </div>
+                <div class="memory-kv" style="margin-top: var(--space-1)">
+                  <span class="key">orm</span>
+                  <span class="val">Prisma</span>
+                </div>
+                <div class="memory-kv" style="margin-top: var(--space-1)">
+                  <span class="key">migration</span>
+                  <span class="val">3 applied, 0 pending</span>
+                </div>
+                <div class="memory-kv" style="margin-top: var(--space-1)">
+                  <span class="key">pk_type</span>
+                  <span class="val">UUID (auto-generated)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. AskUserQuestionCard -->
+          <div class="msg-row msg-agent">
+            <div class="cursor-card">
+              <div class="cursor-card-header stripe-accent">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--accent)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span class="header-label">Question</span>
+              </div>
+              <div class="cursor-card-body">
+                <div style="color: var(--text-secondary); margin-bottom: var(--space-2)">
+                  How should the migration handle existing user records that have no created_at
+                  value?
+                </div>
+                <ul class="ask-options">
+                  <li>
+                    <span class="opt-key">A</span>Backfill with CURRENT_TIMESTAMP for all existing
+                    rows
+                  </li>
+                  <li>
+                    <span class="opt-key">B</span>Set to NULL (nullable column) and migrate later
+                  </li>
+                  <li><span class="opt-key">C</span>Drop and recreate the table (destructive)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Agent text response -->
+          <div class="msg-row msg-agent" style="padding: var(--space-3) var(--space-5)">
+            <div style="color: var(--text-secondary); max-width: 680px; line-height: 1.7">
+              The migration is ready. I have:
+              <br />1. Read the current migration file and confirmed the schema change <br />2.
+              Identified the foreign key constraint blocking the alter <br />3. Prepared a new
+              migration script with the correct column order <br /><br />
+              Please review the changes and approve when ready.
+            </div>
+          </div>
+        </div>
+
+        <!-- Input bar -->
+        <div class="chat-input-bar">
+          <div class="chat-input-wrap">
+            <textarea
+              class="chat-input"
+              rows="1"
+              placeholder="Type a message... (Enter to send)"
+            ></textarea>
+          </div>
+          <button class="send-btn" title="Send">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
+      </main>
+
+      <!-- ====== Right Panel ====== -->
+      <aside class="right-panel">
+        <div class="right-panel-header">
+          <span>Context</span>
+          <button class="close-btn" title="Close panel">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <div class="right-panel-content">
+          <div class="right-section">
+            <div class="right-section-title">Attached Files</div>
+            <div class="context-file">
+              <svg
+                class="cf-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                <polyline points="13 2 13 9 20 9" />
+              </svg>
+              <span class="cf-name">schema.prisma</span>
+              <span class="cf-lines">142</span>
+            </div>
+            <div class="context-file">
+              <svg
+                class="cf-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                <polyline points="13 2 13 9 20 9" />
+              </svg>
+              <span class="cf-name">migration.sql</span>
+              <span class="cf-lines">38</span>
+            </div>
+            <div class="context-file">
+              <svg
+                class="cf-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                <polyline points="13 2 13 9 20 9" />
+              </svg>
+              <span class="cf-name">.env</span>
+              <span class="cf-lines">12</span>
+            </div>
+          </div>
+
+          <div class="right-section">
+            <div class="right-section-title">Model</div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: var(--space-2);
+                font-size: var(--font-size-caption);
+                color: var(--text-secondary);
+              "
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+              Claude Sonnet 4
+            </div>
+            <div style="margin-top: var(--space-2)">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  font-size: var(--font-size-xs);
+                  color: var(--text-muted);
+                "
+              >
+                <span>Context usage</span>
+                <span>38,240 / 100,000</span>
+              </div>
+              <div class="token-bar">
+                <div class="token-bar-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="right-section">
+            <div class="right-section-title">Settings</div>
+            <div
+              style="
+                font-size: var(--font-size-caption);
+                color: var(--text-secondary);
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-2);
+              "
+            >
+              <label
+                style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer"
+              >
+                <input type="checkbox" checked style="accent-color: var(--accent)" /> Auto-approve
+                reads
+              </label>
+              <label
+                style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer"
+              >
+                <input type="checkbox" style="accent-color: var(--accent)" /> Auto-approve writes
+              </label>
+              <label
+                style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer"
+              >
+                <input type="checkbox" checked style="accent-color: var(--accent)" /> Show thinking
+              </label>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </body>
+</html>

@@ -23,6 +23,7 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 }));
 
 import {
+  filterDisabledExtensionPaths,
   getBuiltinExtensionsDirForCliPath,
   parseTierModel,
   scanExtensionDir,
@@ -105,6 +106,30 @@ describe("agent runtime config", () => {
         path.join(root, "learning", "index.ts"),
       ].sort(),
     );
+  });
+
+  it("filters CLI-discovered extension paths using disabled settings entries", () => {
+    const root = makeTempDir();
+    const enabledPath = path.join(root, "learning", "index.ts");
+    const disabledPath = path.join(root, "_multi-compaction", "index.ts");
+    touch(enabledPath);
+    touch(disabledPath);
+
+    expect(filterDisabledExtensionPaths([enabledPath, disabledPath], [`-${disabledPath}`])).toEqual(
+      [enabledPath],
+    );
+  });
+
+  it("filters disabled extension paths through symlink realpaths", () => {
+    const root = makeTempDir();
+    const target = makeTempDir();
+    const targetIndex = path.join(target, "index.ts");
+    touch(targetIndex);
+    const linkDir = path.join(root, "_multi-compaction");
+    symlinkSync(target, linkDir, "dir");
+    const linkedIndex = path.join(linkDir, "index.ts");
+
+    expect(filterDisabledExtensionPaths([linkedIndex], [`-${targetIndex}`])).toEqual([]);
   });
 
   it("resolves builtin extensions from a yalc/node_modules package cli path", () => {

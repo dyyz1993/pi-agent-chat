@@ -1,0 +1,38 @@
+{
+  "slug": "notify-card",
+  "schemaVersion": 2,
+  "name": "NotifyCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "notification", "evidence": "Agent notification/info card (non-interactive)" }
+  ],
+  "variantDimensions": [{ "name": "level", "values": ["info", "success", "warning", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Info Notify",
+      "traits": {
+        "level": "info",
+        "title": "Build complete",
+        "message": "Project built successfully in 12s"
+      },
+      "whySelected": "Informational notification",
+      "childrenDigest": "Info icon + title + message + dismiss button"
+    },
+    {
+      "name": "Success Notify",
+      "traits": { "level": "success", "title": "Tests passed", "message": "All 24 tests passing" },
+      "whySelected": "Success notification",
+      "childrenDigest": "Check icon + title + message + green accent"
+    }
+  ],
+  "anatomy": {
+    "parts": ["level-icon", "title", "message", "dismiss-button"],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 37, "context": "Agent notifications to user in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Compact notification with level-colored icon, auto-dismiss or manual dismiss, rounded-lg"
+}

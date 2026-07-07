@@ -1,0 +1,31 @@
+{
+  "slug": "tooltip",
+  "schemaVersion": 2,
+  "name": "Tooltip",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "tooltip", "evidence": "Hover tooltip with directional placement" }
+  ],
+  "variantDimensions": [{ "name": "side", "values": ["top", "bottom", "left", "right"] }],
+  "representativeVariants": [
+    {
+      "name": "Top Tooltip",
+      "traits": { "side": "top", "label": "Copy to clipboard" },
+      "whySelected": "Standard top tooltip",
+      "childrenDigest": "Arrow + label text"
+    },
+    {
+      "name": "Right Tooltip",
+      "traits": { "side": "right", "label": "Settings" },
+      "whySelected": "Right-side tooltip",
+      "childrenDigest": "Arrow + label text"
+    }
+  ],
+  "anatomy": { "parts": ["arrow", "label-text"], "structurePatterns": ["hover-overlay"] },
+  "usageHints": { "priorityHint": 64, "context": "UI element tooltips on hover/focus" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "z-tooltip, max-w-64, 11px font, shadow-1, rounded-md, border, opacity-0→1 transition, group-hover pattern"
+}

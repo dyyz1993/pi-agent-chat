@@ -1,0 +1,1479 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>卡片类型颜色对比审计 — pi-agent-chat</title>
+    <style id="theme-vars">
+      /* ========================================
+   Design Tokens — pi-agent-chat Dark Mode
+   ======================================== */
+      :root {
+        /* Background */
+        --bg-page: #0b111a;
+        --bg-card: #121b28;
+        --bg-elevated: #142033;
+        --bg-input: #0d1520;
+
+        /* Text */
+        --text-primary: #f2f6fb;
+        --text-secondary: #c1cad6;
+        --text-tertiary: #8a96a8;
+
+        /* Border */
+        --border-primary: #334155;
+        --border-secondary: #475569;
+        --border-focus: #746cff;
+
+        /* Accent */
+        --accent: #746cff;
+        --accent-hover: #8d88ff;
+        --accent-muted: rgba(116, 108, 255, 0.18);
+        --accent-text: #a8b0ff;
+        --accent-brand: #2db6e8;
+
+        /* Status */
+        --success: #46dd89;
+        --warning: #eab308;
+        --error: #f87171;
+        --info: #2db6e8;
+
+        /* Semantic */
+        --semantic-agent: #ae7aff;
+        --semantic-tool: #2dd4e8;
+        --semantic-memory: #2dd4bf;
+        --semantic-notify: #fb923c;
+
+        /* System font stack */
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
+          "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+        /* Wrong colors (used only on the "Current Wrong" side) */
+        --wrong-pink: #f472b6;
+        --wrong-orange: #fdba74;
+        --wrong-teal: #5eead4;
+        --wrong-violet: #a78bfa;
+        --wrong-cyan: #67e8f9;
+        --wrong-amber: #fcd34d;
+        --wrong-slate: #94a3b8;
+        --wrong-blue: #2db6e8;
+        --wrong-blue-model-a: #4196f3;
+        --wrong-green: #45c477;
+        --wrong-purple: #7c5ce6;
+        --wrong-red: #ff6b6b;
+        --wrong-orange-model-e: #ff9f43;
+        --wrong-teal-model-f: #48d1cc;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <style type="text/tailwindcss">
+      @theme inline {
+        --color-bg-primary: var(--bg-page);
+        --color-bg-secondary: #111827;
+        --color-bg-tertiary: var(--bg-elevated);
+        --color-bg-elevated: var(--bg-card);
+        --color-text-primary: var(--text-primary);
+        --color-text-secondary: var(--text-secondary);
+        --color-text-tertiary: var(--text-tertiary);
+        --color-accent: var(--accent);
+        --color-accent-hover: var(--accent-hover);
+        --color-border-primary: var(--border-primary);
+        --color-border-secondary: var(--border-secondary);
+      }
+      @layer base {
+        *,
+        *::before,
+        *::after {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+        body {
+          font-family: var(--font-sans);
+          background: var(--bg-page);
+          color: var(--text-primary);
+          line-height: 1.6;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+      }
+    </style>
+    <style>
+      /* ========================================
+   Typography
+   ======================================== */
+      .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+      }
+      .page-subtitle {
+        font-size: 14px;
+        color: var(--text-tertiary);
+        margin-bottom: 40px;
+      }
+
+      .section {
+        margin-bottom: 48px;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .section-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: var(--accent-muted);
+        color: var(--accent-text);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .section-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        line-height: 1.4;
+      }
+      .badge-pass {
+        background: rgba(70, 221, 137, 0.15);
+        color: var(--success);
+      }
+      .badge-fail {
+        background: rgba(248, 113, 113, 0.15);
+        color: var(--error);
+      }
+      .badge-warn {
+        background: rgba(234, 179, 8, 0.15);
+        color: var(--warning);
+      }
+
+      /* ========================================
+   Cards & Containers
+   ======================================== */
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-primary);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .card-elevated {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-secondary);
+        border-radius: 8px;
+        padding: 16px;
+      }
+
+      /* ========================================
+   Comparison Layout
+   ======================================== */
+      .comparison {
+        display: grid;
+        grid-template-columns: 1fr 48px 1fr;
+        gap: 0;
+        align-items: stretch;
+      }
+      .compare-side {
+        border-radius: 10px;
+        padding: 20px;
+      }
+      .compare-left {
+        background: var(--bg-card);
+        border: 1px solid var(--border-primary);
+      }
+      .compare-right {
+        background: var(--bg-card);
+        border: 1px solid var(--accent);
+        box-shadow:
+          0 0 0 1px var(--accent-muted),
+          0 4px 24px rgba(116, 108, 255, 0.08);
+      }
+      .compare-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .compare-arrow::after {
+        content: "";
+        display: block;
+        width: 0;
+        height: 0;
+        border-top: 8px solid transparent;
+        border-bottom: 8px solid transparent;
+        border-left: 10px solid var(--text-tertiary);
+      }
+      .compare-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .label-wrong {
+        color: var(--error);
+      }
+      .label-correct {
+        color: var(--success);
+      }
+      .label-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .label-dot-wrong {
+        background: var(--error);
+      }
+      .label-dot-correct {
+        background: var(--success);
+      }
+
+      /* ========================================
+   Color Swatches
+   ======================================== */
+      .swatch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .swatch-box {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        flex-shrink: 0;
+      }
+      .swatch-hex {
+        font-size: 12px;
+        font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+        color: var(--text-secondary);
+      }
+      .swatch-label {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
+
+      /* Swatch grid row */
+      .swatch-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+      }
+      .swatch-row:last-child {
+        border-bottom: none;
+      }
+      .swatch-row .swatch-box {
+        width: 36px;
+        height: 36px;
+      }
+      .swatch-row .arrow-icon {
+        color: var(--text-tertiary);
+        font-size: 16px;
+        flex-shrink: 0;
+      }
+      .swatch-row .row-label {
+        min-width: 120px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      .swatch-row .row-token {
+        font-size: 11px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        color: var(--text-tertiary);
+        background: rgba(51, 65, 85, 0.5);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .swatch-row .row-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* ========================================
+   Section 1 — Welcome (Pass)
+   ======================================== */
+      .pass-summary {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 20px;
+        background: rgba(70, 221, 137, 0.06);
+        border: 1px solid rgba(70, 221, 137, 0.2);
+        border-radius: 10px;
+      }
+      .pass-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(70, 221, 137, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        color: var(--success);
+        flex-shrink: 0;
+      }
+      .pass-text {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--success);
+      }
+      .pass-detail {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
+      .welcome-swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .welcome-swatch-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-primary);
+        border-radius: 6px;
+        padding: 6px 10px;
+      }
+      .welcome-swatch-item .swatch-box {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+      }
+      .welcome-swatch-item .swatch-meta {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+      .welcome-swatch-item .swatch-meta span {
+        display: block;
+        font-family: "SF Mono", "Fira Code", monospace;
+        font-size: 10px;
+        color: var(--text-tertiary);
+      }
+
+      /* ========================================
+   Section 2 — SSH Popup
+   ======================================== */
+      .mock-card {
+        background: var(--bg-elevated);
+        border-radius: 8px;
+        padding: 14px 16px;
+        border-width: 2px;
+        border-style: solid;
+        width: 100%;
+      }
+      .mock-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+      }
+      .mock-card-desc {
+        font-size: 11px;
+        color: var(--text-tertiary);
+      }
+      .mock-card-wrong {
+        border-color: var(--wrong-blue);
+      }
+      .mock-card-correct {
+        border-color: var(--border-focus);
+      }
+      .border-label {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 11px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .border-label-wrong {
+        background: rgba(248, 113, 113, 0.1);
+        color: var(--error);
+      }
+      .border-label-correct {
+        background: rgba(70, 221, 137, 0.1);
+        color: var(--success);
+      }
+
+      /* ========================================
+   Section 3 — Token Context
+   ======================================== */
+      .token-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .token-grid-header {
+        display: grid;
+        grid-template-columns: 130px 1fr 32px 1fr 1fr;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-secondary);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-tertiary);
+      }
+      .token-grid-row {
+        display: grid;
+        grid-template-columns: 130px 1fr 32px 1fr 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+      }
+      .token-grid-row:last-child {
+        border-bottom: none;
+      }
+      .token-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+      .token-swatch {
+        width: 36px;
+        height: 24px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .token-arrow {
+        text-align: center;
+        color: var(--text-tertiary);
+        font-size: 14px;
+      }
+      .token-hex {
+        font-size: 11px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        color: var(--text-tertiary);
+      }
+
+      /* ========================================
+   Section 4 — Settings Panel
+   ======================================== */
+      .settings-compare {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .settings-row {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      .settings-row-label {
+        min-width: 140px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+
+      /* Mock tab */
+      .mock-tabs {
+        display: flex;
+        gap: 0;
+        background: var(--bg-page);
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border-primary);
+      }
+      .mock-tab {
+        padding: 6px 16px;
+        font-size: 12px;
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        color: var(--text-tertiary);
+      }
+      .mock-tab-active-wrong {
+        color: var(--wrong-blue);
+        background: rgba(45, 182, 232, 0.1);
+        border-bottom-color: var(--accent);
+      }
+      .mock-tab-active-correct {
+        color: var(--accent-text);
+        background: var(--accent-muted);
+        border-bottom-color: var(--accent);
+      }
+
+      /* Mock segmented button */
+      .mock-segmented {
+        display: flex;
+        gap: 0;
+        background: var(--bg-page);
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid var(--border-primary);
+      }
+      .mock-seg-btn {
+        padding: 5px 14px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-tertiary);
+      }
+      .mock-seg-active-wrong {
+        background: var(--wrong-blue);
+        color: #fff;
+      }
+      .mock-seg-active-correct {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      /* Mock toggle */
+      .mock-toggle {
+        width: 36px;
+        height: 20px;
+        border-radius: 10px;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .mock-toggle::after {
+        content: "";
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+        top: 3px;
+      }
+      .mock-toggle-on {
+        background: var(--accent);
+      }
+      .mock-toggle-on::after {
+        right: 3px;
+      }
+      .mock-toggle-off {
+        background: var(--border-secondary);
+      }
+      .mock-toggle-off::after {
+        left: 3px;
+      }
+
+      /* Mock button */
+      .mock-btn {
+        padding: 6px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #fff;
+        border: none;
+      }
+      .mock-btn-primary {
+        background: var(--accent);
+      }
+      .mock-btn-note {
+        font-size: 11px;
+        color: var(--success);
+        margin-left: 8px;
+      }
+
+      /* ========================================
+   Section 5 — Usage Panel Bar Chart
+   ======================================== */
+      .bar-chart-area {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .bar-chart-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      .bar-label {
+        min-width: 60px;
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-align: right;
+      }
+      .bar-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .bar {
+        height: 14px;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        padding-left: 6px;
+        font-size: 9px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .bar-hardcoded {
+        opacity: 0.6;
+      }
+      .bar-correct {
+        opacity: 1;
+      }
+      .bar-hex-label {
+        font-size: 10px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        color: var(--text-tertiary);
+      }
+
+      /* ========================================
+   Section 6 — Summary Dashboard
+   ======================================== */
+      .summary-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-primary);
+        border-radius: 12px;
+        padding: 24px;
+      }
+      .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .stat-item {
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .stat-value-total {
+        color: var(--text-primary);
+      }
+      .stat-value-pass {
+        color: var(--success);
+      }
+      .stat-value-fail {
+        color: var(--error);
+      }
+      .stat-value-partial {
+        color: var(--warning);
+      }
+      .stat-label {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+      }
+      .stat-percent {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 1px;
+      }
+      .progress-bar {
+        display: flex;
+        height: 12px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg-page);
+        border: 1px solid var(--border-primary);
+      }
+      .progress-segment {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .progress-pass {
+        background: var(--success);
+      }
+      .progress-fail {
+        background: var(--error);
+      }
+      .progress-partial {
+        background: var(--warning);
+      }
+
+      /* ========================================
+   Section 7 — Palette Reference
+   ======================================== */
+      .palette-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .palette-column-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-tertiary);
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-primary);
+      }
+      .palette-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      .palette-swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        flex-shrink: 0;
+      }
+      .palette-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        min-width: 110px;
+      }
+      .palette-hex {
+        font-size: 11px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        color: var(--text-tertiary);
+      }
+
+      /* ========================================
+   Utility
+   ======================================== */
+      .mt-8 {
+        margin-top: 8px;
+      }
+      .mt-12 {
+        margin-top: 12px;
+      }
+      .mt-16 {
+        margin-top: 16px;
+      }
+      .mb-12 {
+        margin-bottom: 12px;
+      }
+      .mb-16 {
+        margin-bottom: 16px;
+      }
+      .gap-16 {
+        gap: 16px;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .mono {
+        font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+      }
+      .divider {
+        height: 1px;
+        background: var(--border-primary);
+        margin: 40px 0;
+      }
+
+      /* Comparison sub-columns within settings */
+      .compare-sub {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+    </style>
+    <div class="page">
+      <!-- Page Header -->
+      <h1 class="page-title">卡片类型颜色对比审计</h1>
+      <p class="page-subtitle">
+        pi-agent-chat Dark Mode — 当前实现 vs 正确设计规范 &nbsp;|&nbsp; 2026-07-07
+      </p>
+
+      <!-- ====================================================
+       Section 1: 欢迎页 (Welcome) — PASS
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-1">
+        <div class="section-header">
+          <span class="section-number">1</span>
+          <h2 class="section-title">欢迎页 (Welcome Page)</h2>
+          <span class="section-badge badge-pass">PASS</span>
+        </div>
+
+        <div class="pass-summary">
+          <div class="pass-icon">&#10003;</div>
+          <div>
+            <div class="pass-text">18/18 项检查通过</div>
+            <div class="pass-detail">欢迎页颜色全部符合设计规范，无需修改</div>
+          </div>
+        </div>
+
+        <div class="welcome-swatches">
+          <div class="welcome-swatch-item">
+            <div class="swatch-box" style="background: #0b111a"></div>
+            <div class="swatch-meta">
+              Background
+              <span>#0b111a</span>
+            </div>
+          </div>
+          <div class="welcome-swatch-item">
+            <div class="swatch-box" style="background: #121b28"></div>
+            <div class="swatch-meta">
+              Card
+              <span>#121b28</span>
+            </div>
+          </div>
+          <div class="welcome-swatch-item">
+            <div class="swatch-box" style="background: #2db6e8"></div>
+            <div class="swatch-meta">
+              Icon / Brand
+              <span>#2db6e8</span>
+            </div>
+          </div>
+          <div class="welcome-swatch-item">
+            <div class="swatch-box" style="background: #f2f6fb"></div>
+            <div class="swatch-meta">
+              Text Primary
+              <span>#f2f6fb</span>
+            </div>
+          </div>
+          <div class="welcome-swatch-item">
+            <div class="swatch-box" style="background: #c1cad6"></div>
+            <div class="swatch-meta">
+              Text Secondary
+              <span>#c1cad6</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ====================================================
+       Section 2: SSH 选择方式弹窗
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-2">
+        <div class="section-header">
+          <span class="section-number">2</span>
+          <h2 class="section-title">SSH 选择方式弹窗</h2>
+          <span class="section-badge badge-fail">1 error</span>
+        </div>
+
+        <div class="comparison">
+          <!-- LEFT — Wrong -->
+          <div class="compare-side compare-left">
+            <div class="compare-label label-wrong">
+              <span class="label-dot label-dot-wrong"></span>
+              当前（错误）
+            </div>
+            <div class="mock-card mock-card-wrong">
+              <div class="mock-card-title">SSH 密钥认证</div>
+              <div class="mock-card-desc">使用已配置的 SSH 密钥进行连接</div>
+            </div>
+            <div class="border-label border-label-wrong">border: 2px solid #2db6e8</div>
+          </div>
+
+          <!-- Arrow -->
+          <div class="compare-arrow"></div>
+
+          <!-- RIGHT — Correct -->
+          <div class="compare-side compare-right">
+            <div class="compare-label label-correct">
+              <span class="label-dot label-dot-correct"></span>
+              应改为（正确）
+            </div>
+            <div class="mock-card mock-card-correct">
+              <div class="mock-card-title">SSH 密钥认证</div>
+              <div class="mock-card-desc">使用已配置的 SSH 密钥进行连接</div>
+            </div>
+            <div class="border-label border-label-correct">
+              border: 2px solid var(--border-focus) → #746cff
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ====================================================
+       Section 3: Token 上下文容量 — 7 errors
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-3">
+        <div class="section-header">
+          <span class="section-number">3</span>
+          <h2 class="section-title">Token 上下文容量 (Context Status Bar)</h2>
+          <span class="section-badge badge-fail">7 errors</span>
+        </div>
+
+        <div class="card">
+          <div class="token-grid">
+            <!-- Header -->
+            <div class="token-grid-header">
+              <span>分类</span>
+              <span>当前（错误）</span>
+              <span></span>
+              <span>应改为（正确）</span>
+              <span>CSS Token</span>
+            </div>
+
+            <!-- Row 1: thinking -->
+            <div class="token-grid-row">
+              <span class="token-name">thinking</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #f472b6"></div>
+                <span class="token-hex">#f472b6</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #ae7aff"></div>
+                <span class="token-hex">#ae7aff</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-semantic-agent</span
+              >
+            </div>
+
+            <!-- Row 2: tool_inputs -->
+            <div class="token-grid-row">
+              <span class="token-name">tool_inputs</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #fdba74"></div>
+                <span class="token-hex">#fdba74</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #fb923c"></div>
+                <span class="token-hex">#fb923c</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-semantic-notify</span
+              >
+            </div>
+
+            <!-- Row 3: tool_outputs -->
+            <div class="token-grid-row">
+              <span class="token-name">tool_outputs</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #5eead4"></div>
+                <span class="token-hex">#5eead4</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #2dd4bf"></div>
+                <span class="token-hex">#2dd4bf</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-semantic-memory</span
+              >
+            </div>
+
+            <!-- Row 4: provider_system -->
+            <div class="token-grid-row">
+              <span class="token-name">provider_system</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #a78bfa"></div>
+                <span class="token-hex">#a78bfa</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #ae7aff"></div>
+                <span class="token-hex">#ae7aff</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-semantic-agent</span
+              >
+            </div>
+
+            <!-- Row 5: provider_messages -->
+            <div class="token-grid-row">
+              <span class="token-name">provider_messages</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #67e8f9"></div>
+                <span class="token-hex">#67e8f9</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #2dd4e8"></div>
+                <span class="token-hex">#2dd4e8</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-semantic-tool</span
+              >
+            </div>
+
+            <!-- Row 6: provider_tools -->
+            <div class="token-grid-row">
+              <span class="token-name">provider_tools</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #fcd34d"></div>
+                <span class="token-hex">#fcd34d</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #eab308"></div>
+                <span class="token-hex">#eab308</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-status-warning</span
+              >
+            </div>
+
+            <!-- Row 7: provider_options -->
+            <div class="token-grid-row">
+              <span class="token-name">provider_options</span>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #94a3b8"></div>
+                <span class="token-hex">#94a3b8</span>
+              </div>
+              <div class="token-arrow">&#8594;</div>
+              <div class="swatch">
+                <div class="token-swatch" style="background: #c1cad6"></div>
+                <span class="token-hex">#c1cad6</span>
+              </div>
+              <span
+                class="token-hex"
+                style="background: rgba(51, 65, 85, 0.5); padding: 2px 6px; border-radius: 4px"
+                >bg-text-secondary</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ====================================================
+       Section 4: 设置面板 — 选中态颜色冲突
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-4">
+        <div class="section-header">
+          <span class="section-number">4</span>
+          <h2 class="section-title">设置面板 — 选中态颜色冲突</h2>
+          <span class="section-badge badge-warn">partial</span>
+        </div>
+
+        <div class="comparison">
+          <!-- LEFT — Wrong -->
+          <div class="compare-side compare-left">
+            <div class="compare-label label-wrong">
+              <span class="label-dot label-dot-wrong"></span>
+              当前（错误）
+            </div>
+
+            <div class="compare-sub">
+              <!-- Tab selected -->
+              <div class="settings-row">
+                <span class="settings-row-label">Tab 选中态</span>
+                <div class="mock-tabs">
+                  <div class="mock-tab">通用</div>
+                  <div class="mock-tab mock-tab-active-wrong">模型</div>
+                  <div class="mock-tab">高级</div>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--error); padding-left: 160px">
+                bg: rgba(45,182,232,0.1) &nbsp; text: #2db6e8
+              </div>
+
+              <!-- Segmented button -->
+              <div class="settings-row mt-8">
+                <span class="settings-row-label">分段按钮选中</span>
+                <div class="mock-segmented">
+                  <div class="mock-seg-btn mock-seg-active-wrong">选项 A</div>
+                  <div class="mock-seg-btn">选项 B</div>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--error); padding-left: 160px">
+                fill: #2db6e8 (cyan-blue)
+              </div>
+            </div>
+          </div>
+
+          <!-- Arrow -->
+          <div class="compare-arrow"></div>
+
+          <!-- RIGHT — Correct -->
+          <div class="compare-side compare-right">
+            <div class="compare-label label-correct">
+              <span class="label-dot label-dot-correct"></span>
+              应改为（正确）
+            </div>
+
+            <div class="compare-sub">
+              <!-- Tab selected -->
+              <div class="settings-row">
+                <span class="settings-row-label">Tab 选中态</span>
+                <div class="mock-tabs">
+                  <div class="mock-tab">通用</div>
+                  <div class="mock-tab mock-tab-active-correct">模型</div>
+                  <div class="mock-tab">高级</div>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--success); padding-left: 160px">
+                bg: rgba(116,108,255,0.1) &nbsp; text: #a8b0ff
+              </div>
+
+              <!-- Segmented button -->
+              <div class="settings-row mt-8">
+                <span class="settings-row-label">分段按钮选中</span>
+                <div class="mock-segmented">
+                  <div class="mock-seg-btn mock-seg-active-correct">选项 A</div>
+                  <div class="mock-seg-btn">选项 B</div>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--success); padding-left: 160px">
+                fill: #746cff (purple)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Already-correct items note -->
+        <div class="card-elevated mt-16" style="border-left: 3px solid var(--success)">
+          <div style="font-size: 13px; font-weight: 600; color: var(--success); margin-bottom: 8px">
+            以下控件已正确，无需修改
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label" style="min-width: 120px">Tab 左边框</span>
+            <div style="font-size: 12px; color: var(--text-secondary)">
+              border-bottom: 2px solid
+              <span class="mono" style="color: var(--accent)">#746cff</span> &nbsp;&mdash;&nbsp;
+              已正确
+            </div>
+          </div>
+          <div class="settings-row mt-8">
+            <span class="settings-row-label" style="min-width: 120px">Toggle ON</span>
+            <div class="mock-toggle mock-toggle-on"></div>
+            <span style="font-size: 12px; color: var(--success); margin-left: 8px"
+              >&#10003; #746cff</span
+            >
+          </div>
+          <div class="settings-row mt-8">
+            <span class="settings-row-label" style="min-width: 120px">Primary 按钮</span>
+            <button class="mock-btn mock-btn-primary">保存</button>
+            <span class="mock-btn-note">&#10003; 正确</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ====================================================
+       Section 5: Usage Panel MODEL_COLORS 硬编码
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-5">
+        <div class="section-header">
+          <span class="section-number">5</span>
+          <h2 class="section-title">Usage Panel MODEL_COLORS 硬编码</h2>
+          <span class="section-badge badge-fail">6 hardcoded</span>
+        </div>
+
+        <div class="comparison">
+          <!-- LEFT — Hardcoded -->
+          <div class="compare-side compare-left">
+            <div class="compare-label label-wrong">
+              <span class="label-dot label-dot-wrong"></span>
+              当前（硬编码）
+            </div>
+            <div class="bar-chart-area">
+              <div class="bar-chart-row">
+                <span class="bar-label">Model A</span>
+                <div class="bar-container">
+                  <div class="bar bar-hardcoded" style="background: #4196f3; width: 85%">
+                    #4196f3
+                  </div>
+                </div>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model B</span>
+                <div class="bar-container">
+                  <div class="bar bar-hardcoded" style="background: #45c477; width: 70%">
+                    #45c477
+                  </div>
+                </div>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model C</span>
+                <div class="bar-container">
+                  <div class="bar bar-hardcoded" style="background: #7c5ce6; width: 75%">
+                    #7c5ce6
+                  </div>
+                </div>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model D</span>
+                <div class="bar-container">
+                  <div class="bar bar-hardcoded" style="background: #ff6b6b; width: 65%">
+                    #ff6b6b
+                  </div>
+                </div>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model E</span>
+                <div class="bar-container">
+                  <div class="bar bar-hardcoded" style="background: #ff9f43; width: 72%">
+                    #ff9f43
+                  </div>
+                </div>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model F</span>
+                <div class="bar-container">
+                  <div class="bar bar-hardcoded" style="background: #48d1cc; width: 68%">
+                    #48d1cc
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Arrow -->
+          <div class="compare-arrow"></div>
+
+          <!-- RIGHT — Semantic -->
+          <div class="compare-side compare-right">
+            <div class="compare-label label-correct">
+              <span class="label-dot label-dot-correct"></span>
+              应改为（语义色）
+            </div>
+            <div class="bar-chart-area">
+              <div class="bar-chart-row">
+                <span class="bar-label">Model A</span>
+                <div class="bar-container">
+                  <div class="bar bar-correct" style="background: #2db6e8; width: 85%">#2db6e8</div>
+                </div>
+                <span class="bar-hex-label">info</span>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model B</span>
+                <div class="bar-container">
+                  <div class="bar bar-correct" style="background: #46dd89; width: 70%">#46dd89</div>
+                </div>
+                <span class="bar-hex-label">success</span>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model C</span>
+                <div class="bar-container">
+                  <div class="bar bar-correct" style="background: #ae7aff; width: 75%">#ae7aff</div>
+                </div>
+                <span class="bar-hex-label">agent</span>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model D</span>
+                <div class="bar-container">
+                  <div class="bar bar-correct" style="background: #f87171; width: 65%">#f87171</div>
+                </div>
+                <span class="bar-hex-label">error</span>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model E</span>
+                <div class="bar-container">
+                  <div class="bar bar-correct" style="background: #fb923c; width: 72%">#fb923c</div>
+                </div>
+                <span class="bar-hex-label">notify</span>
+              </div>
+              <div class="bar-chart-row">
+                <span class="bar-label">Model F</span>
+                <div class="bar-container">
+                  <div class="bar bar-correct" style="background: #2dd4e8; width: 68%">#2dd4e8</div>
+                </div>
+                <span class="bar-hex-label">tool</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ====================================================
+       Section 6: 问题统计汇总
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-6">
+        <div class="section-header">
+          <span class="section-number">6</span>
+          <h2 class="section-title">问题统计汇总</h2>
+        </div>
+
+        <div class="summary-card">
+          <div class="summary-stats">
+            <div class="stat-item">
+              <div class="stat-value stat-value-total">103</div>
+              <div class="stat-label">检查总数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value stat-value-pass">77</div>
+              <div class="stat-label">正确</div>
+              <div class="stat-percent">75%</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value stat-value-fail">11</div>
+              <div class="stat-label">错误</div>
+              <div class="stat-percent">11%</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value stat-value-partial">15</div>
+              <div class="stat-label">部分正确</div>
+              <div class="stat-percent">14%</div>
+            </div>
+          </div>
+
+          <div class="progress-bar">
+            <div class="progress-segment progress-pass" style="width: 75%">75%</div>
+            <div class="progress-segment progress-fail" style="width: 11%">11%</div>
+            <div class="progress-segment progress-partial" style="width: 14%">14%</div>
+          </div>
+
+          <div style="display: flex; gap: 20px; margin-top: 14px; justify-content: center">
+            <span
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                color: var(--text-tertiary);
+              "
+            >
+              <span
+                style="width: 8px; height: 8px; border-radius: 2px; background: var(--success)"
+              ></span>
+              正确
+            </span>
+            <span
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                color: var(--text-tertiary);
+              "
+            >
+              <span
+                style="width: 8px; height: 8px; border-radius: 2px; background: var(--error)"
+              ></span>
+              错误
+            </span>
+            <span
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                color: var(--text-tertiary);
+              "
+            >
+              <span
+                style="width: 8px; height: 8px; border-radius: 2px; background: var(--warning)"
+              ></span>
+              部分正确
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ====================================================
+       Section 7: 正确色板速查
+       ==================================================== -->
+      <section class="section" data-dom-id="audit-section-7">
+        <div class="section-header">
+          <span class="section-number">7</span>
+          <h2 class="section-title">正确色板速查</h2>
+        </div>
+
+        <div class="card">
+          <div class="palette-grid">
+            <!-- Column 1: Accent & Status -->
+            <div>
+              <div class="palette-column-title">Accent &amp; Status</div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #746cff"></div>
+                <span class="palette-name">accent</span>
+                <span class="palette-hex">#746cff</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #8d88ff"></div>
+                <span class="palette-name">accent-hover</span>
+                <span class="palette-hex">#8d88ff</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #46dd89"></div>
+                <span class="palette-name">success</span>
+                <span class="palette-hex">#46dd89</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #eab308"></div>
+                <span class="palette-name">warning</span>
+                <span class="palette-hex">#eab308</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #f87171"></div>
+                <span class="palette-name">error</span>
+                <span class="palette-hex">#f87171</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #2db6e8"></div>
+                <span class="palette-name">info</span>
+                <span class="palette-hex">#2db6e8</span>
+              </div>
+            </div>
+
+            <!-- Column 2: Semantic -->
+            <div>
+              <div class="palette-column-title">Semantic</div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #ae7aff"></div>
+                <span class="palette-name">agent</span>
+                <span class="palette-hex">#ae7aff</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #2dd4e8"></div>
+                <span class="palette-name">tool</span>
+                <span class="palette-hex">#2dd4e8</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #2dd4bf"></div>
+                <span class="palette-name">memory</span>
+                <span class="palette-hex">#2dd4bf</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #fb923c"></div>
+                <span class="palette-name">notify</span>
+                <span class="palette-hex">#fb923c</span>
+              </div>
+              <div class="palette-row">
+                <div class="palette-swatch" style="background: #2db6e8"></div>
+                <span class="palette-name">accent (brand)</span>
+                <span class="palette-hex">#2db6e8</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

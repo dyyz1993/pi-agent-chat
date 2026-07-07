@@ -236,6 +236,64 @@ describe("setMessagesForSession", () => {
     expect(messages.map((message) => message.id)).toEqual(["save-memory", "inject-2"]);
   });
 
+  it("deduplicates duplicate LLM error cards within the same user turn", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "继续继续" }],
+        timestamp: 1,
+      },
+      {
+        id: "memory-search",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_prefetch", data: {} }],
+        timestamp: 2,
+      },
+      {
+        id: "error-without-diagnostics",
+        role: "error",
+        content: [
+          {
+            type: "text",
+            text: "LLM 响应失败\n400 Error from provider (Console Go): Upstream request failed",
+          },
+        ],
+        timestamp: 3,
+        stopReason: "error",
+      },
+      {
+        id: "error-with-diagnostics",
+        role: "error",
+        content: [
+          {
+            type: "text",
+            text: "LLM 响应失败\n400 Error from provider (Console Go): Upstream request failed",
+          },
+        ],
+        timestamp: 4,
+        stopReason: "error",
+        providerRequest: {
+          version: 1,
+          provider: "opencode-go",
+          modelId: "deepseek-v4-flash",
+          api: "openai-completions",
+          timestamp: new Date().toISOString(),
+          payloadChars: 2_000_000,
+          payloadTokens: 557_000,
+          topLevelKeys: ["messages", "tools"],
+          sections: [],
+        },
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    const errors = messages.filter((message) => message.role === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].id).toBe("error-without-diagnostics");
+    expect(errors[0].providerRequest).toEqual(expect.objectContaining({ payloadTokens: 557000 }));
+  });
+
   it("prefers auto-memory cards over duplicated learning cards for the same query", () => {
     useChatStore.getState().setMessagesForSession("sess-1", [
       {
@@ -308,10 +366,7 @@ describe("setMessagesForSession", () => {
     ]);
 
     const messages = useChatStore.getState().messagesBySession["sess-1"];
-    expect(messages.map((message) => message.id)).toEqual([
-      "auto-prefetch-result",
-      "auto-reuse",
-    ]);
+    expect(messages.map((message) => message.id)).toEqual(["auto-prefetch-result", "auto-reuse"]);
   });
 
   it("collapses duplicate same-query auto-memory operations and drops the redundant linked inject card", () => {
@@ -426,9 +481,7 @@ describe("setMessagesForSession", () => {
       {
         id: "tool-result",
         role: "toolResult",
-        content: [
-          { type: "toolResult", toolCallId: "tc-1", toolName: "bash", content: "ok" },
-        ],
+        content: [{ type: "toolResult", toolCallId: "tc-1", toolName: "bash", content: "ok" }],
         timestamp: 2,
       },
     ]);
@@ -1254,9 +1307,13 @@ describe("streamVersionBySession (per-session isolation)", () => {
   });
 
   it("bumpStreamVersion increments only the target session's per-session version", () => {
-    useChatStore.getState().setMessagesForSession("sess-A", [
-      { id: "m1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
-    ], { bumpStreamVersion: true });
+    useChatStore
+      .getState()
+      .setMessagesForSession(
+        "sess-A",
+        [{ id: "m1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 }],
+        { bumpStreamVersion: true },
+      );
 
     const state = useChatStore.getState();
     expect(state.streamVersionBySession["sess-A"]).toBe(1);
@@ -1265,20 +1322,32 @@ describe("streamVersionBySession (per-session isolation)", () => {
 
   it("updating sess-A does not change sess-B's per-session version", () => {
     // Prime both sessions
-    useChatStore.getState().setMessagesForSession("sess-A", [
-      { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
-    ], { bumpStreamVersion: true });
-    useChatStore.getState().setMessagesForSession("sess-B", [
-      { id: "b1", role: "user", content: [{ type: "text", text: "B" }], timestamp: 2 },
-    ], { bumpStreamVersion: true });
+    useChatStore
+      .getState()
+      .setMessagesForSession(
+        "sess-A",
+        [{ id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 }],
+        { bumpStreamVersion: true },
+      );
+    useChatStore
+      .getState()
+      .setMessagesForSession(
+        "sess-B",
+        [{ id: "b1", role: "user", content: [{ type: "text", text: "B" }], timestamp: 2 }],
+        { bumpStreamVersion: true },
+      );
 
     expect(useChatStore.getState().streamVersionBySession["sess-A"]).toBe(1);
     expect(useChatStore.getState().streamVersionBySession["sess-B"]).toBe(1);
 
     // Update only sess-A again
-    useChatStore.getState().setMessagesForSession("sess-A", [
-      { id: "a2", role: "user", content: [{ type: "text", text: "A2" }], timestamp: 3 },
-    ], { bumpStreamVersion: true });
+    useChatStore
+      .getState()
+      .setMessagesForSession(
+        "sess-A",
+        [{ id: "a2", role: "user", content: [{ type: "text", text: "A2" }], timestamp: 3 }],
+        { bumpStreamVersion: true },
+      );
 
     const map = useChatStore.getState().streamVersionBySession;
     expect(map["sess-A"]).toBe(2);
@@ -1286,18 +1355,55 @@ describe("streamVersionBySession (per-session isolation)", () => {
   });
 
   it("setMessagesForSession without bumpStreamVersion does not touch per-session version", () => {
-    useChatStore.getState().setMessagesForSession("sess-A", [
-      { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
-    ]);
+    useChatStore
+      .getState()
+      .setMessagesForSession("sess-A", [
+        { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
+      ]);
     expect(useChatStore.getState().streamVersionBySession["sess-A"]).toBeUndefined();
   });
 
   it("global streamContentVersion still increments for backward compat", () => {
     const v0 = useChatStore.getState().streamContentVersion;
-    useChatStore.getState().setMessagesForSession("sess-A", [
-      { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
-    ], { bumpStreamVersion: true });
+    useChatStore
+      .getState()
+      .setMessagesForSession(
+        "sess-A",
+        [{ id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 }],
+        { bumpStreamVersion: true },
+      );
     expect(useChatStore.getState().streamContentVersion).toBe(v0 + 1);
+  });
+});
+
+describe("deleteMessagesForSession", () => {
+  it("removes selected messages from tail and focus windows", () => {
+    const messages: ChatMessage[] = [
+      { id: "m1", role: "user", content: [{ type: "text", text: "one" }], timestamp: 1 },
+      { id: "m2", role: "assistant", content: [{ type: "text", text: "two" }], timestamp: 2 },
+      { id: "m3", role: "user", content: [{ type: "text", text: "three" }], timestamp: 3 },
+    ];
+    useChatStore.getState().setMessagesForSession("sess-1", messages);
+    useChatStore.setState({
+      focusMessagesBySession: {
+        "sess-1": messages,
+      },
+      historyLoadVersionBySession: {},
+      streamVersionBySession: {},
+    });
+
+    useChatStore.getState().deleteMessagesForSession("sess-1", ["m2"]);
+
+    expect(useChatStore.getState().messagesBySession["sess-1"].map((m) => m.id)).toEqual([
+      "m1",
+      "m3",
+    ]);
+    expect(useChatStore.getState().focusMessagesBySession["sess-1"].map((m) => m.id)).toEqual([
+      "m1",
+      "m3",
+    ]);
+    expect(useChatStore.getState().streamVersionBySession["sess-1"]).toBe(1);
+    expect(useChatStore.getState().historyLoadVersionBySession["sess-1"]).toBe(1);
   });
 });
 
@@ -1546,7 +1652,6 @@ describe("normalizeToolBlocks", () => {
     expect(exec.toolName).toBe("bash");
     expect(exec.output).toBe("real output");
   });
-
 });
 
 describe("session isolation", () => {

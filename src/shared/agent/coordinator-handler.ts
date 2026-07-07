@@ -22,6 +22,7 @@ import {
   handleCoordinatorDelegateStopOperation,
   handleCoordinatorDelegateForkOperation,
   type DelegateSendNotFoundReason,
+  type CoordinatorSetModelFromName,
 } from "./coordinator-delegate-operations";
 import type { DelegateReplyMetadata, DelegateReplyMode } from "./coordinator-delegate-utils";
 import { createLogger } from "../lib/logger";
@@ -72,7 +73,9 @@ export interface CoordinatorHandlerDeps {
   broadcastEvent: (method: string, payload: unknown, metadata?: unknown) => Promise<void>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
+  setActiveTools: (sessionId: string, toolNames: string[]) => Promise<unknown>;
   setModel: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setModelFromName?: CoordinatorSetModelFromName;
   setPermissionMode: (sessionId: string, mode: string) => Promise<unknown>;
   getState: (
     sessionId: string,
@@ -291,7 +294,8 @@ export class CoordinatorHandler {
         this.deps.start(id, projectPath, sessionPath, { forceNewProcess: true }),
       setPermissionMode: (id, mode) => this.deps.setPermissionMode(id, mode),
       switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
-      setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
+      setActiveTools: (id, toolNames) => this.deps.setActiveTools(id, toolNames),
+      setModelFromName: this.deps.setModelFromName,
       stop: (id) => this.deps.stop(id),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
       send: (id, content) => this.deps.send(id, content),
@@ -324,7 +328,7 @@ export class CoordinatorHandler {
         this.deps.start(id, projectPath, sessionPath, startOptions),
       setPermissionMode: (id, mode) => this.deps.setPermissionMode(id, mode),
       switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
-      setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
+      setModelFromName: this.deps.setModelFromName,
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
       send: (id, content) => this.deps.send(id, content),
       steer: (id, content) => this.deps.steer(id, content),
@@ -419,7 +423,7 @@ export class CoordinatorHandler {
       start: (id, projectPath, sessionPath, startOptions) =>
         this.deps.start(id, projectPath, sessionPath, startOptions),
       switchAgent: (id, agentName) => this.deps.switchAgent(id, agentName),
-      setModel: (id, provider, modelId) => this.deps.setModel(id, provider, modelId),
+      setModelFromName: this.deps.setModelFromName,
       stop: (id) => this.deps.stop(id),
       setSessionName: (id, name) => this.deps.setSessionName(id, name),
       send: (id, content) => this.deps.send(id, content),
@@ -504,7 +508,10 @@ export class CoordinatorHandler {
     this.delegateTimeoutAt.delete(sessionId);
   }
 
-  private async stopOverdueDelegate(parentSessionId: string, childSessionId: string): Promise<void> {
+  private async stopOverdueDelegate(
+    parentSessionId: string,
+    childSessionId: string,
+  ): Promise<void> {
     const timeoutAt = this.delegateTimeoutAt.get(childSessionId);
     if (!timeoutAt || Date.now() < timeoutAt) return;
     await this.stopDelegateForTimeout(parentSessionId, childSessionId);

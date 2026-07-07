@@ -30,6 +30,7 @@ import {
   type SessionTaskModelInfo,
 } from "./SessionTaskModelBadges";
 import { useSessionTaskModelFallback } from "./useSessionTaskModelFallback";
+import { SessionTaskWorktreeBadge } from "./SessionTaskWorktreeBadge";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
@@ -105,11 +106,6 @@ function outputContainsOnlySerializedDetails(output: string | undefined): boolea
 
 function useTargetSessionStatus(sessionId: string | undefined): SessionStatus | undefined {
   return useSessionStore((s) => (sessionId ? s.sessionStatusMap[sessionId] : undefined));
-}
-
-function basename(path: string | undefined): string | undefined {
-  if (!path) return undefined;
-  return path.split("/").filter(Boolean).pop() ?? path;
 }
 
 function normalizeText(value: string | undefined): string {
@@ -252,9 +248,8 @@ function renderBadge(
   statusLabel: string | undefined,
   isRunning: boolean,
   sessionStatus: SessionStatus | undefined,
-  canJump: boolean,
-  handleJump: () => void,
-  projectName?: string,
+  projectPath?: string,
+  sessionId?: string,
 ): ReactNode {
   return (
     <>
@@ -265,11 +260,7 @@ function renderBadge(
         provider={modelInfo.provider}
         thinkingLevel={modelInfo.thinkingLevel}
       />
-      {projectName && (
-        <span className="shrink-0 max-w-24 truncate px-1.5 py-0.5 rounded text-[10px] bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
-          {projectName}
-        </span>
-      )}
+      <SessionTaskWorktreeBadge projectPath={projectPath} sessionId={sessionId} />
       {statusLabel && (
         <span
           className={`shrink-0 text-[10px] ${
@@ -283,7 +274,6 @@ function renderBadge(
           {statusLabel}
         </span>
       )}
-      {canJump && <SessionJumpButton onJump={handleJump} />}
     </>
   );
 }
@@ -376,10 +366,10 @@ export const DelegateCard = memo(function DelegateCard({
         statusLabel,
         isRunning,
         sessionStatus,
-        canJump,
-        handleJump,
-        basename(targetProjectPath),
+        targetProjectPath,
+        targetSessionId,
       )}
+      action={canJump ? <SessionJumpButton onJump={handleJump} /> : undefined}
       input={taskText ? { label: "Input", text: taskText.slice(0, 500) } : undefined}
       activity={{
         title: t("coordinator.activity"),
@@ -466,9 +456,10 @@ export const ForkCard = memo(function ForkCard({
           statusLabel,
           isRunning,
           sessionStatus,
-          canJump,
-          handleJump,
+          undefined,
+          sessionId,
         )}
+        action={canJump ? <SessionJumpButton onJump={handleJump} /> : undefined}
       />
     </div>
   );
@@ -536,9 +527,9 @@ export const DelegateSendCard = memo(function DelegateSendCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
+        action={canJump ? <SessionJumpButton onJump={handleJump} /> : undefined}
       />
       {!collapsed && !isRunning && message && (
         <div className="px-3 pb-2 border-t border-border-secondary/20">
@@ -626,6 +617,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     details.status === "timeout" ||
     details.status === "error" ||
     details.status === "aborted";
+  const isTimeout = details.status === "timeout";
   const isTerminal =
     hasTerminalDetailStatus || hasCompletedSubagent || hasErroredSubagent || hasFinalText;
   const isRunning = block.status === "running" && !isTerminal;
@@ -633,15 +625,14 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     !isRunning &&
     (block.status === "error" ||
       details.status === "error" ||
-      details.status === "timeout" ||
       details.status === "aborted" ||
       hasErroredSubagent);
   const isDone = !isRunning && !isError;
 
   const statusLabel = useMemo(() => {
     if (isRunning) return t("coordinator.running");
-    if (isError) return t("coordinator.error");
     if (details.status === "timeout") return t("coordinator.timeout");
+    if (isError) return t("coordinator.error");
     if (details.status === "aborted") return t("coordinator.aborted");
     if (isTerminal) return t("coordinator.completed");
     return sessionStatusLabel(sessionStatus, t) || t("coordinator.completed");
@@ -649,7 +640,9 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
 
   let badgeColor = "text-text-tertiary";
   if (isRunning) badgeColor = "text-status-info animate-pulse";
-  else if (isError) {
+  else if (isTimeout) {
+    badgeColor = "text-status-warning";
+  } else if (isError) {
     badgeColor = "text-status-error";
   } else if (isDone) {
     badgeColor = "text-status-success";
@@ -685,7 +678,7 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
     <SessionTaskCard
       blockId={blockId}
       toolName="session_delegate_sync"
-      status={isRunning ? "running" : isError ? "error" : "done"}
+      status={isRunning ? "running" : isTimeout ? "background" : isError ? "error" : "done"}
       title={displayTitle}
       startedAt={block.startedAt}
       endedAt={block.endedAt}
@@ -698,10 +691,13 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
             provider={modelInfo.provider}
             thinkingLevel={modelInfo.thinkingLevel}
           />
+          <SessionTaskWorktreeBadge sessionId={targetSessionId} />
           <span className={`shrink-0 text-[10px] ${badgeColor}`}>{statusLabel}</span>
-          {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
           <CopyButton text={fullExecutionText} size="xs" />
         </>
+      }
+      action={
+        canJump ? <SessionJumpButton onJump={handleJump} title={t("subagent.view")} /> : undefined
       }
       meta={sessionMeta}
       input={taskText ? { label: "Input", text: taskText, copyText: taskText } : undefined}
@@ -711,7 +707,15 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
         live: !isTerminal && (isRunning || (!finalText && isLiveSessionStatus(sessionStatus))),
         labels: activityRoundLabels,
       }}
-      result={finalText ? { label: "Result", text: finalText, copyText: finalText } : undefined}
+      result={
+        finalText
+          ? {
+              label: isTimeout ? t("coordinator.recovery") : "Result",
+              text: finalText,
+              copyText: finalText,
+            }
+          : undefined
+      }
       error={errorText ? { label: "Error", text: errorText } : undefined}
       details={
         block.details !== undefined
@@ -786,9 +790,9 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
+        action={canJump ? <SessionJumpButton onJump={handleJump} /> : undefined}
       />
       {!collapsed && !isRunning && hasStatusContent && (
         <div className="px-3 pb-2 border-t border-border-secondary/20">
@@ -899,9 +903,9 @@ export const DelegateStopCard = memo(function DelegateStopCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
+        action={canJump ? <SessionJumpButton onJump={handleJump} /> : undefined}
       />
       {!collapsed && !isRunning && block.output && (
         <div className="px-3 pb-2 border-t border-border-secondary/20">
@@ -976,9 +980,9 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
         badge={
           <>
             {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
-            {canJump && <SessionJumpButton onJump={handleJump} />}
           </>
         }
+        action={canJump ? <SessionJumpButton onJump={handleJump} /> : undefined}
       />
       {!collapsed && !isRunning && block.output && (
         <div className="px-3 pb-2 border-t border-border-secondary/20">

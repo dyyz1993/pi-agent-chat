@@ -247,6 +247,32 @@ describe("TabBar permission icon badge", () => {
     expect(indicator).toHaveAttribute("title", "remoteRuntimeError");
   });
 
+  it("does not show remote runtime indicator for local project with stale remote status", () => {
+    setupStore({
+      tabs: [{ id: "local-1", name: "Local Project", path: "/Users/me/local-project" }],
+      sessionsByProject: {
+        "/Users/me/local-project": [{ sessionId: "sess-local", name: "Local Session" }],
+      },
+      activeProjectId: "local-1",
+      activeSessionId: "sess-local",
+      statusMap: { "sess-local": "idle" },
+    });
+    useStatusStore.getState().setRemoteRuntimeStatus("sess-local", {
+      enabled: true,
+      configured: true,
+      status: "error",
+      host: "stale-devbox",
+      remoteCwd: "/srv/stale",
+      error: "stale remote state",
+    });
+
+    render(<TabBar onAddProject={vi.fn()} />);
+
+    expect(screen.queryByTestId("tab-remote-runtime-indicator")).toBeNull();
+    const dot = screen.getByRole("tab", { name: "Local Project" }).querySelector("span.w-2");
+    expect(dot).not.toHaveClass("bg-status-error");
+  });
+
   it("shows permission icon only on the tab with permission sessions", () => {
     setupStore({
       tabs: [

@@ -1,0 +1,45 @@
+{
+  "slug": "error-message-card",
+  "schemaVersion": 2,
+  "name": "ErrorMessageCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "error", "evidence": "Error display with red accent and expandable details" }
+  ],
+  "variantDimensions": [{ "name": "severity", "values": ["fatal", "recoverable"] }],
+  "representativeVariants": [
+    {
+      "name": "Fatal Error",
+      "traits": {
+        "severity": "fatal",
+        "title": "Build Failed",
+        "message": "TypeScript compilation error"
+      },
+      "whySelected": "Critical error blocking progress",
+      "childrenDigest": "Error icon + title + message + stack trace (collapsible)"
+    },
+    {
+      "name": "Recoverable Error",
+      "traits": {
+        "severity": "recoverable",
+        "title": "Warning",
+        "message": "Deprecated API usage"
+      },
+      "whySelected": "Non-blocking error with retry option",
+      "childrenDigest": "Warning icon + title + message + retry button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["error-icon", "title", "message", "details-toggle", "stack-trace", "actions"],
+    "structurePatterns": ["stacked-header-content-footer"]
+  },
+  "usageHints": {
+    "priorityHint": 12,
+    "context": "Error and warning states in tool execution or system messages"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Red-tinted background with left border stripe, collapsible stack trace, rounded-lg corners"
+}

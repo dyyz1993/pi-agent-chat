@@ -134,7 +134,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 200)),
   statusWidth: clampStatus(readNum(STATUS_WIDTH_KEY, 300)),
-  activePanelTab: "changeReview",
+  activePanelTab: "status",
   sessionCollapsed: readBool(SESSION_COLLAPSED_KEY, false),
 
   setContentWidth: (w) => set({ contentWidth: w }),

@@ -1,0 +1,45 @@
+{
+  "slug": "confirm-dialog",
+  "schemaVersion": 2,
+  "name": "ConfirmDialog",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "dialog", "evidence": "Small confirmation modal dialog wrapping ModalDialog" }
+  ],
+  "variantDimensions": [{ "name": "variant", "values": ["danger", "default"] }],
+  "representativeVariants": [
+    {
+      "name": "Danger Confirm",
+      "traits": {
+        "variant": "danger",
+        "title": "Delete Project?",
+        "message": "This action cannot be undone."
+      },
+      "whySelected": "Destructive confirmation",
+      "childrenDigest": "ModalDialog sm + message + Cancel + Delete(danger) buttons"
+    },
+    {
+      "name": "Default Confirm",
+      "traits": {
+        "variant": "default",
+        "title": "Save Changes?",
+        "message": "Unsaved changes will be lost."
+      },
+      "whySelected": "Standard confirmation",
+      "childrenDigest": "ModalDialog sm + message + Cancel + Confirm buttons"
+    }
+  ],
+  "anatomy": {
+    "parts": ["modal-backdrop", "dialog", "title", "message", "cancel-button", "confirm-button"],
+    "structurePatterns": ["modal-wrapper"]
+  },
+  "usageHints": {
+    "priorityHint": 67,
+    "context": "Destructive action confirmations, unsaved changes warnings"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Wraps ModalDialog size=sm, no close button, Cancel + primary/danger action buttons"
+}

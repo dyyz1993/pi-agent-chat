@@ -17,6 +17,7 @@ interface JsonlHeader {
   timestamp: string;
   cwd: string;
   delegateParentSessionId?: string;
+  agent?: string;
 }
 
 async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
@@ -65,6 +66,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
   effectiveCwd: string | null;
   delegateParentSessionId: string | null;
   delegateType: string | null;
+  agent: string | null;
   tierConfig: { tierModels: Record<string, string>; currentTier: string | null } | undefined;
 } | null> {
   try {
@@ -78,6 +80,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let effectiveCwd: string | null = null;
     let delegateParentSessionId: string | null = null;
     let delegateType: string | null = null;
+    let agent: string | null = null;
     let tierConfig: { tierModels: Record<string, string>; currentTier: string | null } | undefined;
     let lineCount = 0;
     const MAX_LINES = 50;
@@ -96,6 +99,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
           effectiveCwd,
           delegateParentSessionId,
           delegateType,
+          agent,
           tierConfig,
         });
       };
@@ -141,6 +145,9 @@ async function parseJsonlMeta(filePath: string): Promise<{
           if (entry.type === "delegate_info" && entry.delegateParentSessionId) {
             delegateParentSessionId = entry.delegateParentSessionId as string;
             if (entry.delegateType) delegateType = entry.delegateType as string;
+            if (typeof entry.agent === "string" && entry.agent.trim()) {
+              agent = entry.agent;
+            }
             if (entry.parentSessionPath && !parentSessionPath) {
               parentSessionPath = entry.parentSessionPath as string;
             }
@@ -240,6 +247,7 @@ export async function scanSessionDir(
             delegateParentSessionId:
               header.delegateParentSessionId ?? meta?.delegateParentSessionId ?? null,
             delegateType: meta?.delegateType ?? null,
+            agent: header.agent ?? meta?.agent ?? undefined,
             messageCount: meta?.messageCount ?? 0,
             firstMessage: meta?.firstMessage ?? "",
             createdAt: new Date(header.timestamp).getTime(),
@@ -316,6 +324,7 @@ export async function findSessionById(
       delegateParentSessionId:
         header.delegateParentSessionId ?? meta?.delegateParentSessionId ?? null,
       delegateType: meta?.delegateType ?? null,
+      agent: header.agent ?? meta?.agent ?? undefined,
       messageCount: meta?.messageCount ?? 0,
       firstMessage: meta?.firstMessage ?? "",
       createdAt: new Date(header.timestamp).getTime(),

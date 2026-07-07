@@ -26,8 +26,12 @@ function makeAccumulator(): FullMessageAccumulator {
 describe("session JSONL message helpers", () => {
   it("appends UI custom, compaction, and optional message entries with branch filtering", () => {
     const messages: unknown[] = [];
-    const customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> =
-      [];
+    const customEntries: Array<{
+      id: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    }> = [];
     const activePathIds = new Set(["custom-1", "compact-1", "message-1"]);
 
     appendUiJsonlEntry({
@@ -89,10 +93,7 @@ describe("session JSONL message helpers", () => {
       },
       accumulator,
     );
-    appendFullJsonlEntry(
-      { type: "leaf_pointer", leafId: "c1" },
-      accumulator,
-    );
+    appendFullJsonlEntry({ type: "leaf_pointer", leafId: "c1" }, accumulator);
 
     expect(accumulator.allMessages).toEqual([
       { entryId: "m1", message: { role: "user", text: "A" } },
@@ -158,6 +159,15 @@ describe("session JSONL message helpers", () => {
     });
 
     expect(paginateEntryMessages({ filteredMessages, limit: 2, afterEntryId: "m3" })).toEqual({
+      slicedMessages: [
+        { role: "user", entryId: "m1" },
+        { role: "assistant", entryId: "m2" },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    expect(paginateEntryMessages({ filteredMessages, limit: 2, fromStart: true })).toEqual({
       slicedMessages: [
         { role: "user", entryId: "m1" },
         { role: "assistant", entryId: "m2" },
@@ -255,7 +265,10 @@ describe("session JSONL message helpers", () => {
     // which backward-expands to the assistant message. The assistant message
     // must then forward-expand to include the other 3 toolResults.
     const filteredMessages = [
-      { entryId: "u1", message: { role: "user", content: [{ type: "text", text: "run 4 commands" }] } },
+      {
+        entryId: "u1",
+        message: { role: "user", content: [{ type: "text", text: "run 4 commands" }] },
+      },
       {
         entryId: "a1",
         message: {
@@ -273,7 +286,10 @@ describe("session JSONL message helpers", () => {
       { entryId: "r2", message: { role: "toolResult", toolCallId: "tool-2" } },
       { entryId: "r3", message: { role: "toolResult", toolCallId: "tool-3" } },
       { entryId: "r4", message: { role: "toolResult", toolCallId: "tool-4" } },
-      { entryId: "a2", message: { role: "assistant", content: [{ type: "text", text: "All done" }] } },
+      {
+        entryId: "a2",
+        message: { role: "assistant", content: [{ type: "text", text: "All done" }] },
+      },
     ];
 
     // limit: 1 → window = [6, 7) = only a2 (index 6)
@@ -289,7 +305,9 @@ describe("session JSONL message helpers", () => {
     expect(result.slicedMessages).toHaveLength(6); // a1 + r1 + r2 + r3 + r4 + a2
 
     // Verify all toolResults are present
-    const resultIds = result.slicedMessages.map((m: { toolCallId?: string }) => m.toolCallId).filter(Boolean);
+    const resultIds = result.slicedMessages
+      .map((m: { toolCallId?: string }) => m.toolCallId)
+      .filter(Boolean);
     expect(resultIds).toContain("tool-1");
     expect(resultIds).toContain("tool-2");
     expect(resultIds).toContain("tool-3");

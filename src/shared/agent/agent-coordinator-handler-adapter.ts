@@ -15,6 +15,7 @@ import {
   handleCoordinatorDelegateSyncOperation,
   handleCoordinatorDelegateStatusOperation,
   handleCoordinatorDelegateStopOperation,
+  type CoordinatorSetModelFromName,
   type DelegateSendNotFoundReason,
   type DelegateSyncResult,
 } from "./coordinator-delegate-operations";
@@ -92,7 +93,9 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
     options?: { forceNewProcess?: boolean; userId?: string },
   ) => Promise<{ status: "started" | "already_running" }>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
+  setActiveTools?: (sessionId: string, toolNames: string[]) => Promise<unknown>;
   setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setModelFromName?: CoordinatorSetModelFromName;
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
@@ -176,7 +179,8 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         start: (id, projectPath, sessionPath) =>
           deps.start(id, projectPath, sessionPath, { forceNewProcess: true }),
         switchAgent: deps.switchAgent,
-        setModel: deps.setModel,
+        setActiveTools: deps.setActiveTools,
+        setModelFromName: deps.setModelFromName,
         setPermissionMode: deps.setPermissionMode,
         stop: deps.stop,
         setSessionName: deps.setSessionName,
@@ -197,7 +201,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         start: (id, projectPath, sessionPath, startOptions) =>
           deps.start(id, projectPath, sessionPath, startOptions),
         switchAgent: deps.switchAgent,
-        setModel: deps.setModel,
+        setModelFromName: deps.setModelFromName,
         setPermissionMode: deps.setPermissionMode,
         setSessionName: deps.setSessionName,
         send: deps.send,
@@ -268,7 +272,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         start: (id, projectPath, sessionPath, startOptions) =>
           deps.start(id, projectPath, sessionPath, startOptions),
         switchAgent: deps.switchAgent,
-        setModel: deps.setModel,
+        setModelFromName: deps.setModelFromName,
         stop: deps.stop,
         setSessionName: deps.setSessionName,
         send: deps.send,

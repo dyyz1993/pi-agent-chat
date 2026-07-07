@@ -27,6 +27,7 @@ import { DropdownSelect, useCopyFeedback } from "../primitives";
 import { agentColorStyle } from "../../utils/agent-color";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { jumpToSessionById } from "../chat/primitives/useJumpToSession";
+import { ChatReloadButton } from "../chat/SessionReloadButton";
 
 const EMPTY: never[] = [];
 
@@ -34,7 +35,7 @@ export type SessionSidebarFilterType = "main" | "delegate" | "subagent";
 type GroupSessionFilterType = SessionSidebarFilterType | "all" | "normal";
 
 function isDelegateSession(session: SessionMeta): boolean {
-  return session.sessionId.startsWith("sess_coord_");
+  return session.delegateType === "coordinator" || session.sessionId.startsWith("sess_coord_");
 }
 
 function isSubagentSession(session: SessionMeta): boolean {
@@ -45,6 +46,44 @@ function isMainSession(session: SessionMeta): boolean {
   return (
     !session.delegateParentSessionId && !isDelegateSession(session) && !isSubagentSession(session)
   );
+}
+
+export function getSidebarFocusForActiveSelection({
+  activeSessionId,
+  activeSubsessionId,
+  sessions,
+}: {
+  activeSessionId: string | null | undefined;
+  activeSubsessionId: string | null | undefined;
+  sessions: SessionMeta[];
+}): { filterType: SessionSidebarFilterType; expandSessionId?: string } | null {
+  if (activeSubsessionId) {
+    return {
+      filterType: "subagent",
+      expandSessionId: activeSessionId ?? undefined,
+    };
+  }
+
+  const activeSession = activeSessionId
+    ? sessions.find((session) => session.sessionId === activeSessionId)
+    : null;
+  if (!activeSession) return null;
+
+  if (isSubagentSession(activeSession)) {
+    return {
+      filterType: "subagent",
+      expandSessionId: activeSession.delegateParentSessionId ?? undefined,
+    };
+  }
+
+  if (isDelegateSession(activeSession)) {
+    return { filterType: "delegate" };
+  }
+
+  return {
+    filterType: "main",
+    expandSessionId: activeSession.sessionId,
+  };
 }
 
 export function groupSessions(
@@ -219,7 +258,9 @@ export function getStandaloneSubagentItems(
   );
 }
 
-function getSubagentSidebarSortPriority(status: ReturnType<typeof getSubagentSidebarStatus>): number {
+function getSubagentSidebarSortPriority(
+  status: ReturnType<typeof getSubagentSidebarStatus>,
+): number {
   switch (status) {
     case "permission":
       return 0;
@@ -293,14 +334,55 @@ export function SessionSidebar(_props: SessionSidebarProps) {
 
   const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const projectTabs = useSessionStore((s) => s.projectTabs);
+  const activeProjectSessions = useSessionStore((s) => {
+    const tab = s.projectTabs.find((t) => t.id === s.activeProjectId);
+    if (!tab) return EMPTY;
+    return s.sessionsByProject[tab.path] || EMPTY;
+  });
   const fetchProjectSessionStatuses = useSessionStore((s) => s.fetchProjectSessionStatuses);
+  const activeSubsessionId = useSubagentStore((s) => s.activeSubsessionId);
+  const subagentStatusMap = useSubagentStore((s) => s.subagentStatusMap);
+  const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
+  const lastAutoFocusKeyRef = useRef("");
+  const reloadSessionId = activeSubsessionId ?? activeSessionId;
+  const reloadStatus = activeSubsessionId
+    ? (subagentStatusMap[activeSubsessionId] ?? sessionStatusMap[activeSubsessionId])
+    : activeSessionId
+      ? sessionStatusMap[activeSessionId]
+      : undefined;
 
   useEffect(() => {
     if (newSessionCreatedAt > 0) {
       setExpandedIds(new Set());
     }
   }, [newSessionCreatedAt]);
+
+  useEffect(() => {
+    const focus = getSidebarFocusForActiveSelection({
+      activeSessionId,
+      activeSubsessionId,
+      sessions: activeProjectSessions,
+    });
+    if (!focus) return;
+
+    const focusKey = `${activeProjectId ?? ""}:${activeSessionId ?? ""}:${activeSubsessionId ?? ""}`;
+    if (lastAutoFocusKeyRef.current === focusKey) return;
+    lastAutoFocusKeyRef.current = focusKey;
+
+    setFilterType(focus.filterType);
+    setSearchQuery("");
+    setFilterAgent(null);
+    if (focus.expandSessionId) {
+      setExpandedIds((prev) => {
+        if (prev.has(focus.expandSessionId!)) return prev;
+        const next = new Set(prev);
+        next.add(focus.expandSessionId!);
+        return next;
+      });
+    }
+  }, [activeProjectId, activeProjectSessions, activeSessionId, activeSubsessionId]);
 
   // Lazy fetch: only when sidebar is visible, fetch current project's session statuses
   const fetchedRef = useRef(false);
@@ -336,7 +418,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
         </div>
       </div>
 
-      <div className="px-2 py-0.5 flex items-center gap-1">
+      <div className="px-2 py-0.5 flex min-w-0 items-center gap-1">
         {(["main", "delegate", "subagent"] as const).map((type) => (
           <button
             key={type}
@@ -354,7 +436,10 @@ export function SessionSidebar(_props: SessionSidebarProps) {
                 : t("sidebar:filterSubagent", "子任务")}
           </button>
         ))}
-        <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <ChatReloadButton sessionId={reloadSessionId} status={reloadStatus} />
+          <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
+        </div>
       </div>
 
       <SessionList
@@ -388,11 +473,13 @@ function SessionList({
     return s.sessionsByProject[tab.path] || EMPTY;
   });
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const loading = useSessionStore((s) => s.loading);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
   const agentBySession = useAgentStore((s) => s.currentAgentBySession);
   const subagentStatusMap = useSubagentStore((s) => s.subagentStatusMap);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const activeSessionPath = useMemo(() => {
     const sess = rawSessions.find((s) => s.sessionId === activeSessionId);
@@ -439,7 +526,35 @@ function SessionList({
     sessionStatusMap,
   ]);
 
+  const rootBadgeStatusBySession = useMemo(() => {
+    const childStatusCache = new Map<string, Array<SessionStatus | undefined>>();
+    const next: Record<string, SidebarBadgeStatus> = {};
+    for (const session of rootSessions) {
+      const childStatuses = collectChildSidebarStatuses(
+        session.sessionPath,
+        subsessionsByParent,
+        subagentStatusMap,
+        sessionStatusMap,
+        childStatusCache,
+      );
+      next[session.sessionId] = getSessionSidebarStatus(
+        session,
+        sessionStatusMap[session.sessionId],
+        childStatuses,
+      );
+    }
+    return next;
+  }, [rootSessions, subsessionsByParent, subagentStatusMap, sessionStatusMap]);
+
   const hasVisibleItems = rootSessions.length > 0 || standaloneSubagents.length > 0;
+
+  useEffect(() => {
+    if (!activeSessionId || newSessionCreatedAt <= 0) return;
+    const activeNode = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>("[data-session-id]") ?? [],
+    ).find((node) => node.dataset.sessionId === activeSessionId);
+    activeNode?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeSessionId, newSessionCreatedAt, rootSessions, standaloneSubagents]);
 
   if (loading) {
     return (
@@ -459,7 +574,7 @@ function SessionList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 space-y-1">
+    <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 space-y-1">
       {rootSessions.map((sess) => (
         <SessionItem
           key={sess.sessionId}
@@ -468,6 +583,7 @@ function SessionList({
           children={childMap[sess.sessionPath]}
           isExpanded={expandedIds.has(sess.sessionId)}
           onToggleExpand={() => onToggleExpand(sess.sessionId)}
+          badgeStatus={rootBadgeStatusBySession[sess.sessionId] ?? "idle"}
         />
       ))}
       {standaloneSubagents.map(({ sub, parentSessionId }) => (
@@ -481,7 +597,7 @@ export function getSessionSidebarStatus(
   session: Pick<SessionMeta, "status" | "sessionStatus">,
   runtimeStatus?: SessionStatus,
   childStatuses: Array<SessionStatus | undefined> = [],
-): "working" | "permission" | "retrying" | "idle" {
+): SidebarBadgeStatus {
   if (runtimeStatus === "permission") return "permission";
   if (childStatuses.includes("permission")) return "permission";
   if (runtimeStatus === "retrying") return "retrying";
@@ -501,55 +617,57 @@ export function getSessionSidebarStatus(
   return "idle";
 }
 
+type SidebarBadgeStatus = "working" | "permission" | "retrying" | "idle";
+
 function collectChildSidebarStatuses(
   parentSessionPath: string,
   subsessionsByParent: Record<string, SubagentSessionInfo[]>,
   subagentStatusMap: Record<string, SessionStatus | undefined>,
   sessionStatusMap: Record<string, SessionStatus | undefined>,
+  cache = new Map<string, Array<SessionStatus | undefined>>(),
+  visiting = new Set<string>(),
 ): Array<SessionStatus | undefined> {
+  const cached = cache.get(parentSessionPath);
+  if (cached) return cached;
+
   const result: Array<SessionStatus | undefined> = [];
-  const pendingParentPaths = [parentSessionPath];
-  const visitedParentPaths = new Set<string>();
+  if (visiting.has(parentSessionPath)) return result;
+  visiting.add(parentSessionPath);
 
-  while (pendingParentPaths.length > 0) {
-    const parentPath = pendingParentPaths.shift();
-    if (!parentPath || visitedParentPaths.has(parentPath)) continue;
-    visitedParentPaths.add(parentPath);
+  const children = subsessionsByParent[parentSessionPath] ?? [];
+  for (const child of children) {
+    const childRuntimeStatus = subagentStatusMap[child.sessionId];
+    const childSessionRuntimeStatus = sessionStatusMap[child.sessionId];
+    const childSidebarStatus = getSubagentSidebarStatus(
+      child,
+      childRuntimeStatus,
+      childSessionRuntimeStatus,
+    );
+    if (childSidebarStatus === "permission") result.push("permission");
+    else if (childSidebarStatus === "retrying") result.push("retrying");
+    else if (childSidebarStatus === "running") result.push("streaming");
 
-    const children = subsessionsByParent[parentPath] ?? [];
-    for (const child of children) {
-      const childRuntimeStatus = subagentStatusMap[child.sessionId];
-      const childSessionRuntimeStatus = sessionStatusMap[child.sessionId];
-      const childSidebarStatus = getSubagentSidebarStatus(
-        child,
-        childRuntimeStatus,
-        childSessionRuntimeStatus,
+    if (child.sessionPath) {
+      result.push(
+        ...collectChildSidebarStatuses(
+          child.sessionPath,
+          subsessionsByParent,
+          subagentStatusMap,
+          sessionStatusMap,
+          cache,
+          visiting,
+        ),
       );
-      if (childSidebarStatus === "permission") result.push("permission");
-      else if (childSidebarStatus === "retrying") result.push("retrying");
-      else if (childSidebarStatus === "running") result.push("streaming");
-
-      if (child.sessionPath) pendingParentPaths.push(child.sessionPath);
     }
   }
 
+  visiting.delete(parentSessionPath);
+  cache.set(parentSessionPath, result);
   return result;
 }
 
-function StatusBadge({ session }: { session: SessionMeta }) {
+function StatusBadge({ badgeStatus }: { badgeStatus: SidebarBadgeStatus }) {
   const { t } = useTranslation("common");
-  const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
-  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
-  const subagentStatusMap = useSubagentStore((s) => s.subagentStatusMap);
-  const status = sessionStatusMap[session.sessionId];
-  const childStatuses = collectChildSidebarStatuses(
-    session.sessionPath,
-    subsessionsByParent,
-    subagentStatusMap,
-    sessionStatusMap,
-  );
-  const badgeStatus = getSessionSidebarStatus(session, status, childStatuses);
-
   if (badgeStatus === "working") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
@@ -582,16 +700,30 @@ function StatusBadge({ session }: { session: SessionMeta }) {
   );
 }
 
+export const WORKSPACE_BADGE_CLASS =
+  "inline-flex min-w-[1.25rem] max-w-[5.75rem] shrink items-center gap-0.5 overflow-hidden whitespace-nowrap rounded border border-semantic-tool/20 bg-semantic-tool/15 px-1.5 py-0.5 text-[10px] font-medium text-semantic-tool";
+export const WORKSPACE_BADGE_LABEL_CLASS = "min-w-0 truncate";
+
+export function getWorkspaceBadgeName(workspace: {
+  path: string;
+  branch: string;
+  isMain: boolean;
+}): string {
+  return workspace.isMain
+    ? (workspace.path.split("/").filter(Boolean).pop() ?? workspace.path)
+    : workspace.branch;
+}
+
 function WorkspaceBadge({
   workspace,
 }: {
   workspace: { path: string; branch: string; isMain: boolean };
 }) {
-  const name = workspace.isMain ? workspace.path.split("/").pop() : workspace.branch;
+  const name = getWorkspaceBadgeName(workspace);
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
-      {!workspace.isMain && <GitBranch className="w-2.5 h-2.5" />}
-      {name}
+    <span className={WORKSPACE_BADGE_CLASS} title={`${name} · ${workspace.path}`}>
+      {!workspace.isMain && <GitBranch className="h-2.5 w-2.5 shrink-0" />}
+      <span className={WORKSPACE_BADGE_LABEL_CLASS}>{name}</span>
     </span>
   );
 }
@@ -673,6 +805,8 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
 
 function DelegateChildItem({ session }: { session: SessionMeta }) {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
+  const badgeStatus = getSessionSidebarStatus(session, sessionStatusMap[session.sessionId]);
   return (
     <SessionItem
       key={session.sessionId}
@@ -681,6 +815,7 @@ function DelegateChildItem({ session }: { session: SessionMeta }) {
       isExpanded={false}
       onToggleExpand={() => {}}
       isChild
+      badgeStatus={badgeStatus}
     />
   );
 }
@@ -692,6 +827,7 @@ function SessionItem({
   isExpanded,
   onToggleExpand,
   isChild = false,
+  badgeStatus,
 }: {
   session: SessionMeta;
   isActive: boolean;
@@ -699,6 +835,7 @@ function SessionItem({
   isExpanded: boolean;
   onToggleExpand: () => void;
   isChild?: boolean;
+  badgeStatus: SidebarBadgeStatus;
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
   const renameSession = useSessionStore((s) => s.renameSession);
@@ -820,6 +957,7 @@ function SessionItem({
     <div className="py-1 first:pt-0.5 last:pb-0.5">
       <div
         data-testid={`session-item-${session.sessionId}`}
+        data-session-id={session.sessionId}
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
             ? "bg-semantic-accent/10 text-accent-text shadow-sm border border-semantic-accent/20 border-l-2 border-l-semantic-accent/50"
@@ -914,7 +1052,7 @@ function SessionItem({
         </div>
 
         {!isEditing && (
-          <div className="flex items-center gap-1.5 mt-1.5">
+          <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
             {!isChild && (
               <div className="shrink-0 w-[18px]">
                 {hasExpandableChildren && (
@@ -934,7 +1072,7 @@ function SessionItem({
                 )}
               </div>
             )}
-            <StatusBadge session={session} />
+            <StatusBadge badgeStatus={badgeStatus} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
@@ -1039,17 +1177,18 @@ export async function openSidebarSubagentSession(
   parentSessionId: string,
   subSessionId: string,
 ): Promise<void> {
-  const sessionStore = useSessionStore.getState();
-  sessionStore.setActiveSession(parentSessionId, true);
+  await jumpToSessionById(subSessionId, { subagentParentSessionId: parentSessionId });
+}
 
-  const parentSession = Object.values(sessionStore.sessionsByProject ?? {})
-    .flat()
-    .find((session) => session.sessionId === parentSessionId);
-  if (parentSession?.sessionPath) {
-    await useSubagentStore.getState().loadSubsessions(parentSession.sessionPath);
-  }
-
-  useSubagentStore.getState().setActiveSubsession(parentSessionId, subSessionId);
+export function isSubagentSidebarItemActive(options: {
+  activeSessionId: string | null | undefined;
+  activeSubsessionId: string | null | undefined;
+  subSessionId: string;
+}): boolean {
+  return (
+    options.activeSubsessionId === options.subSessionId ||
+    options.activeSessionId === options.subSessionId
+  );
 }
 
 function SubagentItem({
@@ -1061,7 +1200,12 @@ function SubagentItem({
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
-  const isActive = activeSubId === sub.sessionId;
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const isActive = isSubagentSidebarItemActive({
+    activeSessionId,
+    activeSubsessionId: activeSubId,
+    subSessionId: sub.sessionId,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);

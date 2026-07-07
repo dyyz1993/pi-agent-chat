@@ -20,10 +20,16 @@ export interface SessionCompactionEntry {
   timestamp: number;
 }
 
+export interface SessionDeletionEntry {
+  entryId: string;
+  targetIds: string[];
+}
+
 export interface SessionCacheData {
   messages: SessionMessageEntry[];
   customEntries: SessionCustomEntry[];
   compactionEntries: SessionCompactionEntry[];
+  deletionEntries?: SessionDeletionEntry[];
   parentById: Map<string, string | null>;
   lastJsonlLeafPointer: string | null;
   activeJsonlLeafId: string | null;

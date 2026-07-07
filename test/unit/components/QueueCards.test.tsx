@@ -23,6 +23,7 @@ vi.mock("react-i18next", () => ({
         revokeQueuedMessages: `Dismiss ${String(params?.count ?? "")} queued messages`,
         revokeQueuedMessage: `Dismiss queued message: ${String(params?.text ?? "")}`,
         sendQueuedMessageNow: `Send queued message now: ${String(params?.text ?? "")}`,
+        insertQueuedMessageNow: `Insert queued message now: ${String(params?.text ?? "")}`,
         expandQueuedMessage: `Expand queued message: ${String(params?.text ?? "")}`,
         collapseQueuedMessage: `Collapse queued message: ${String(params?.text ?? "")}`,
         queuedSteeringLabel: "Steering",
@@ -87,23 +88,67 @@ describe("QueueCards", () => {
     });
   });
 
-  it("promotes only the selected follow-up message to steering", async () => {
+  it("hides the clear-all action when there is only one queued message", () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        "sess-1": {
+          steering: ["single steer"],
+          followUp: [],
+        },
+      },
+    });
+
+    render(<QueueCards sessionId="sess-1" />);
+
+    expect(screen.queryByRole("button", { name: "Dismiss 1 queued messages" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Dismiss queued message: single steer" }),
+    ).toBeTruthy();
+  });
+
+  it("keeps the clear-all action when multiple queued messages are present", () => {
+    render(<QueueCards sessionId="sess-1" />);
+
+    expect(screen.getByRole("button", { name: "Dismiss 3 queued messages" })).toBeTruthy();
+  });
+
+  it("inserts the selected follow-up message immediately", async () => {
     render(<QueueCards sessionId="sess-1" />);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Send queued message now: first follow-up" }),
+      screen.getByRole("button", { name: "Insert queued message now: first follow-up" }),
     );
 
     await waitFor(() => {
-      expect(apiClient.call).toHaveBeenCalledWith("agent.promoteQueuedFollowUp", {
+      expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
         sessionId: "sess-1",
-        item: { type: "followUp", index: 0, text: "first follow-up" },
+        promote: 0,
+        immediate: true,
       });
     });
 
     expect(useSessionQueueStore.getState().queueBySession["sess-1"]).toEqual({
-      steering: ["steer now", "first follow-up"],
+      steering: ["steer now"],
       followUp: ["second follow-up with\nmore detail"],
+    });
+  });
+
+  it("inserts the selected steering message immediately", async () => {
+    render(<QueueCards sessionId="sess-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Insert queued message now: steer now" }));
+
+    await waitFor(() => {
+      expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
+        sessionId: "sess-1",
+        promote: undefined,
+        immediate: true,
+      });
+    });
+
+    expect(useSessionQueueStore.getState().queueBySession["sess-1"]).toEqual({
+      steering: ["steer now"],
+      followUp: ["first follow-up", "second follow-up with\nmore detail"],
     });
   });
 });

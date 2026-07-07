@@ -340,12 +340,15 @@ describe("chat pagination", () => {
 
     const initialMsgs = useChatStore.getState().messagesBySession["test-session"]!;
     expect(initialMsgs.length).toBe(PAGE_SIZE);
+    const historyVersionBeforeLoadMore = useChatStore.getState().historyLoadVersion;
+    const sessionHistoryVersionBeforeLoadMore =
+      useChatStore.getState().historyLoadVersionBySession["test-session"];
 
     expect(useChatStore.getState().hasMoreMessagesBySession!["test-session"]).toBe(true);
     expect(useChatStore.getState().nextCursorBySession!["test-session"]).toBe("entry-50");
 
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: allMessages.messages,
+      messages: allMessages.messages.slice(0, PAGE_SIZE),
       customEntries: [],
       hasMore: false,
       nextCursor: null,
@@ -358,6 +361,7 @@ describe("chat pagination", () => {
       expect.objectContaining({
         sessionId: "test-session",
         afterEntryId: "entry-50",
+        limit: PAGE_SIZE,
       }),
     );
 
@@ -365,6 +369,91 @@ describe("chat pagination", () => {
     expect(afterLoadMore.length).toBe(100);
     expect(afterLoadMore[0].id).toBe("msg-0");
     expect(afterLoadMore[PAGE_SIZE].id).toBe(`msg-${PAGE_SIZE}`);
+    expect(useChatStore.getState().historyLoadVersion).toBe(historyVersionBeforeLoadMore);
+    expect(useChatStore.getState().historyLoadVersionBySession["test-session"]).toBe(
+      sessionHistoryVersionBeforeLoadMore,
+    );
+  });
+
+  it("loadTopMessages should request the oldest window directly and keep the latest cache", async () => {
+    useSessionStore.setState({
+      sessionsByProject: {
+        p1: [
+          {
+            sessionId: "test-session",
+            sessionPath: "/tmp/test-session.jsonl",
+          },
+        ],
+      },
+    });
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [makeRawMessage(100, "user"), makeRawMessage(101, "assistant")],
+      },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-100" },
+    });
+    const historyVersionBeforeLoadTop = useChatStore.getState().historyLoadVersion;
+    const sessionHistoryVersionBeforeLoadTop =
+      useChatStore.getState().historyLoadVersionBySession["test-session"];
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawMessage(0, "user"), makeRawMessage(1, "assistant")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadTopMessages("test-session");
+
+    expect(apiClient.call).toHaveBeenLastCalledWith("agent.getFullMessages", {
+      sessionId: "test-session",
+      sessionPath: "/tmp/test-session.jsonl",
+      fromStart: true,
+      limit: PAGE_SIZE,
+    });
+
+    const messages = useChatStore.getState().messagesBySession["test-session"]!;
+    expect(messages.map((message) => message.id)).toEqual(["msg-0", "msg-1", "msg-100", "msg-101"]);
+    expect(useChatStore.getState().hasMoreMessagesBySession["test-session"]).toBe(false);
+    expect(useChatStore.getState().nextCursorBySession["test-session"]).toBeNull();
+    expect(useChatStore.getState().historyLoadVersion).toBe(historyVersionBeforeLoadTop);
+    expect(useChatStore.getState().historyLoadVersionBySession["test-session"]).toBe(
+      sessionHistoryVersionBeforeLoadTop,
+    );
+  });
+
+  it("clearTopWindowMessages should drop temporary oldest window and restore bottom pagination", async () => {
+    useSessionStore.setState({
+      sessionsByProject: {
+        p1: [
+          {
+            sessionId: "test-session",
+            sessionPath: "/tmp/test-session.jsonl",
+          },
+        ],
+      },
+    });
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [makeRawMessage(100, "user"), makeRawMessage(101, "assistant")],
+      },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-100" },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawMessage(0, "user"), makeRawMessage(1, "assistant")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadTopMessages("test-session");
+    useChatStore.getState().clearTopWindowMessages("test-session");
+
+    const messages = useChatStore.getState().messagesBySession["test-session"]!;
+    expect(messages.map((message) => message.id)).toEqual(["msg-100", "msg-101"]);
+    expect(useChatStore.getState().hasMoreMessagesBySession["test-session"]).toBe(true);
+    expect(useChatStore.getState().nextCursorBySession["test-session"]).toBe("entry-100");
   });
 
   it("loadMoreMessages should not turn older orphan tool calls into running cards", async () => {

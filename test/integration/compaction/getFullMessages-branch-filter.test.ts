@@ -320,12 +320,71 @@ describe("getFullMessages leaf→root path filtering", () => {
       afterEntryId: latest.nextCursor ?? undefined,
     });
 
-    expect(previous.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual([
-      "e3",
-      "e4",
-    ]);
+    expect(previous.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e3", "e4"]);
     expect(previous.hasMore).toBe(true);
     expect(previous.nextCursor).toBe("e3");
+  });
+
+  it("returns only custom entries inside the requested message page window", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "start"),
+        customEntry("c1", "e1", "bash_background_process", { command: "old-1" }),
+        msgEntry("e2", "c1", "assistant", "reply"),
+        customEntry("c2", "e2", "bash_background_process", { command: "old-2" }),
+        msgEntry("e3", "c2", "user", "more"),
+        customEntry("c3", "e3", "bash_background_process", { command: "new-1" }),
+        msgEntry("e4", "c3", "assistant", "reply-2"),
+        customEntry("c4", "e4", "bash_background_process", { command: "new-2" }),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+    internals(manager).leafIds.set("s1", "c4");
+
+    const latest = await manager.getFullMessages("s1", sessionFile, { limit: 2 });
+
+    expect(latest.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e3", "e4"]);
+    expect(latest.customEntries.map((entry) => entry.id)).toEqual(["c3", "c4"]);
+    expect(latest.nextCursor).toBe("e3");
+
+    const previous = await manager.getFullMessages("s1", sessionFile, {
+      limit: 2,
+      afterEntryId: latest.nextCursor ?? undefined,
+    });
+
+    expect(previous.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e1", "e2"]);
+    expect(previous.customEntries.map((entry) => entry.id)).toEqual(["c1", "c2"]);
+  });
+
+  it("returns the oldest message window directly without dragging later custom entries", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "start"),
+        customEntry("c1", "e1", "bash_background_process", { command: "old-1" }),
+        msgEntry("e2", "c1", "assistant", "reply"),
+        customEntry("c2", "e2", "bash_background_process", { command: "old-2" }),
+        msgEntry("e3", "c2", "user", "middle"),
+        customEntry("c3", "e3", "bash_background_process", { command: "middle" }),
+        msgEntry("e4", "c3", "assistant", "latest"),
+        customEntry("c4", "e4", "bash_background_process", { command: "latest" }),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+    internals(manager).leafIds.set("s1", "c4");
+
+    const result = await manager.getFullMessages("s1", sessionFile, {
+      limit: 2,
+      fromStart: true,
+    });
+
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e1", "e2"]);
+    expect(result.customEntries.map((entry) => entry.id)).toEqual(["c1", "c2"]);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
   });
 
   it("handles session with no JSONL file gracefully", async () => {

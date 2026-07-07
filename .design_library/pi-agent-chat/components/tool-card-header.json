@@ -1,0 +1,45 @@
+{
+  "slug": "tool-card-header",
+  "schemaVersion": 2,
+  "name": "ToolCardHeader",
+  "category": "primitive",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "header",
+      "evidence": "Standardized header for tool execution cards with icon, name, status, and actions"
+    }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["running", "done", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Running Header",
+      "traits": { "status": "running", "toolName": "Bash", "target": "npm test" },
+      "whySelected": "Active tool header",
+      "childrenDigest": "Spinner + tool icon + tool name + target + elapsed time"
+    },
+    {
+      "name": "Done Header",
+      "traits": {
+        "status": "done",
+        "toolName": "Read",
+        "target": "src/app.ts",
+        "duration": "0.5s"
+      },
+      "whySelected": "Completed tool header",
+      "childrenDigest": "Check icon + tool icon + tool name + target + duration badge"
+    }
+  ],
+  "anatomy": {
+    "parts": ["status-icon", "tool-icon", "tool-name", "target", "duration", "actions"],
+    "structurePatterns": ["inline-header"]
+  },
+  "usageHints": {
+    "priorityHint": 36,
+    "context": "Shared header component for all tool execution cards"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Status-colored icon (green check, yellow spinner, red X), tool type icon, monospace target, duration badge"
+}

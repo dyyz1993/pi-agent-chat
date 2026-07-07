@@ -1,0 +1,111 @@
+/* pi-agent-apple — Apple HIG 暗色风格设计系统 */
+/* Generated: 2026-07-05 */
+
+:root {
+  /* Background (macOS 暗色灰阶) */
+  --bg-base: #1c1c1e;
+  --bg-sidebar: rgba(30, 30, 30, 0.85);
+  --bg-surface: rgba(44, 44, 46, 0.7);
+  --bg-elevated: rgba(58, 58, 60, 0.6);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+  --bg-input: rgba(0, 0, 0, 0.25);
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --text-muted: rgba(255, 255, 255, 0.2);
+  --text-inverse: #1c1c1e;
+  --text-link: #0a84ff;
+  --text-link-hover: #409cff;
+
+  /* Border (半透明) */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-focus: rgba(10, 132, 255, 0.5);
+  --border-muted: rgba(255, 255, 255, 0.04);
+
+  /* Accent (Apple Blue) */
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-muted: rgba(10, 132, 255, 0.15);
+
+  /* Primary */
+  --primary: #0a84ff;
+  --primary-hover: #409cff;
+
+  /* Semantic Status (Apple HIG) */
+  --success: #30d158;
+  --success-muted: rgba(48, 209, 88, 0.12);
+  --warning: #ffd60a;
+  --warning-muted: rgba(255, 214, 10, 0.12);
+  --error: #ff453a;
+  --error-muted: rgba(255, 69, 58, 0.12);
+  --info: #64d2ff;
+  --info-muted: rgba(100, 210, 255, 0.12);
+
+  /* Semantic Tool */
+  --tool: #5ac8fa;
+  --tool-muted: rgba(90, 200, 250, 0.12);
+  --agent: #bf5af2;
+  --agent-muted: rgba(191, 90, 242, 0.12);
+  --memory: #66d4cf;
+  --memory-muted: rgba(102, 212, 207, 0.12);
+
+  /* Typography */
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+    "PingFang SC", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 15px;
+  --font-size-h2: 17px;
+  --font-size-h1: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.2;
+  --line-height-mono: 1.5;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* Radius (macOS 标准圆角) */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Shadows (带半透明边框线的 Apple 风格) */
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-2: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-3: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-4: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+
+  /* Transitions (Apple 弹性曲线) */
+  --transition-fast: 120ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-normal: 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-slow: 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  /* Z-index */
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}

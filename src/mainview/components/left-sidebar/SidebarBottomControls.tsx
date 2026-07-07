@@ -33,8 +33,10 @@ import { DropdownSelect } from "../primitives";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { useNotificationStore } from "../../stores/use-notification-store";
+import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 
 const log = createLogger("chat");
+const EMPTY_AVAILABLE_MODELS: ReturnType<typeof useSessionStore.getState>["availableModels"] = [];
 
 const THINKING_LEVEL_KEYS = [
   "thinkingOff",
@@ -59,20 +61,47 @@ const THINKING_LEVEL_VALUES = ["off", "minimal", "low", "medium", "high", "xhigh
 
 export function SidebarBottomControls() {
   const { t } = useTranslation("status");
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = useEffectiveSessionId();
   const agentReady = useSessionStore(
     useCallback(
       (s) => (activeSessionId ? !!s.agentReady[activeSessionId] : false),
       [activeSessionId],
     ),
   );
-  const currentModel = useSessionStore((s) => s.currentModel);
+  const currentModel = useSessionStore(
+    useCallback(
+      (s) =>
+        activeSessionId
+          ? (s.modelBySession?.[activeSessionId] ??
+            (s.activeSessionId === activeSessionId ? s.currentModel : null))
+          : null,
+      [activeSessionId],
+    ),
+  );
   const modelStateLoading = useSessionStore((s) => s.modelStateLoading);
-  const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
-  const availableModels = useSessionStore((s) => s.availableModels);
-  const setCurrentModel = useSessionStore((s) => s.setCurrentModel);
+  const currentThinkingLevel = useSessionStore(
+    useCallback(
+      (s) =>
+        activeSessionId
+          ? (s.thinkingLevelBySession?.[activeSessionId] ?? s.currentThinkingLevel)
+          : s.currentThinkingLevel,
+      [activeSessionId],
+    ),
+  );
+  const availableModels = useSessionStore(
+    useCallback(
+      (s) =>
+        activeSessionId
+          ? (s.availableModelsBySession?.[activeSessionId] ??
+            (s.activeSessionId === activeSessionId ? s.availableModels : EMPTY_AVAILABLE_MODELS))
+          : EMPTY_AVAILABLE_MODELS,
+      [activeSessionId],
+    ),
+  );
+  const setModelForSession = useSessionStore((s) => s.setModelForSession);
   const setThinkingLevel = useSessionStore((s) => s.setThinkingLevel);
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
+  const fetchInitialState = useSessionStore((s) => s.fetchInitialState);
 
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const thinkingRef = useRef<HTMLDivElement>(null);
@@ -82,22 +111,37 @@ export function SidebarBottomControls() {
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
 
-  // 当前项目路径
-  const projectPath = useSessionStore((s) => {
+  const tabProjectPath = useSessionStore((s) => {
     const tab = s.projectTabs.find((t) => t.id === s.activeProjectId);
     return tab?.path ?? null;
   });
 
+  const currentSession = useMemo(() => {
+    if (!activeSessionId) return null;
+    for (const sessions of Object.values(sessionsByProject)) {
+      const found = sessions.find((s) => s.sessionId === activeSessionId);
+      if (found) return found;
+    }
+    return null;
+  }, [activeSessionId, sessionsByProject]);
+
+  // Tier is scoped to the effective session project, not only the active tab.
+  // This keeps refresh/subsession/worktree selection aligned with the model row.
+  const projectPath = currentSession?.projectPath ?? tabProjectPath;
+
   const currentTier = useTierStore((s) =>
-    projectPath ? (s.dataByProject[projectPath]?.currentTier ?? null) : null,
+    activeSessionId && projectPath
+      ? s.getCurrentTierForSession(activeSessionId, projectPath)
+      : null,
   );
   const switchToTier = useTierStore((s) => s.switchToTier);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
-  const sessionTierModels = useTierStore((s) =>
-    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
+  const saveTierModelsForSession = useTierStore((s) => s.saveTierModelsForSession);
+  const tierModels = useTierStore((s) =>
+    activeSessionId && projectPath
+      ? s.getTierModelsForSession(activeSessionId, projectPath)
+      : s.globalDefaults,
   );
-  const globalDefaults = useTierStore((s) => s.globalDefaults);
-  const tierModels = sessionTierModels ?? globalDefaults;
   const [switchingTier, setSwitchingTier] = useState(false);
   const [tierConfigOpen, setTierConfigOpen] = useState(false);
   const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
@@ -136,25 +180,25 @@ export function SidebarBottomControls() {
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const sessionFetchedRef = useRef<string | null>(null);
+  const tierFetchedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeSessionId) return;
     if (sessionFetchedRef.current === activeSessionId) return;
     sessionFetchedRef.current = activeSessionId;
-    fetchModelState(activeSessionId);
+    fetchInitialState(activeSessionId, { force: true });
+    fetchModelState(activeSessionId, { force: true });
+  }, [activeSessionId, fetchInitialState, fetchModelState]);
+
+  useEffect(() => {
+    if (!activeSessionId || !projectPath) return;
+    const key = `${activeSessionId}:${projectPath}`;
+    if (tierFetchedRef.current === key) return;
+    tierFetchedRef.current = key;
     fetchTierConfig(activeSessionId);
-  }, [activeSessionId, fetchModelState, fetchTierConfig]);
+  }, [activeSessionId, projectPath, fetchTierConfig]);
 
   const currentTab = projectTabs.find((t) => t.id === activeProjectId);
   const activeTabPath = currentTab?.path ?? "";
-
-  const currentSession = useMemo(() => {
-    if (!activeSessionId) return null;
-    for (const sessions of Object.values(sessionsByProject)) {
-      const found = sessions.find((s) => s.sessionId === activeSessionId);
-      if (found) return found;
-    }
-    return null;
-  }, [activeSessionId, sessionsByProject]);
 
   const currentWorkspace = useMemo(() => {
     if (!currentSession) return worktrees[0] ?? null;
@@ -289,27 +333,14 @@ export function SidebarBottomControls() {
     if (!activeSessionId || !projectPath) return;
     setTierConfigSaving(true);
     try {
-      await apiClient.call("agent.setTierModels", {
-        sessionId: activeSessionId,
-        models: tierConfigModels,
-      });
-      useTierStore.getState().setProjectTierModels(projectPath, tierConfigModels);
+      await saveTierModelsForSession(activeSessionId, projectPath, tierConfigModels);
       setTierConfigOpen(false);
-      await fetchTierConfig(activeSessionId, { force: true });
-      // If the currently active tier exists, re-apply it to switch to the new model
-      const { dataByProject, globalDefaults } = useTierStore.getState();
-      const projectData = dataByProject[projectPath];
-      const activeTier = projectData?.currentTier ?? null;
-      const updatedModels = projectData?.tierModels ?? globalDefaults;
-      if (activeTier && updatedModels[activeTier]) {
-        await switchToTier(activeTier, activeSessionId);
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("save tier config failed", { error: msg });
     }
     setTierConfigSaving(false);
-  }, [activeSessionId, projectPath, tierConfigModels, fetchTierConfig, switchToTier]);
+  }, [activeSessionId, projectPath, tierConfigModels, saveTierModelsForSession]);
 
   const handleSelectModel = useCallback(
     async (key: string) => {
@@ -322,12 +353,18 @@ export function SidebarBottomControls() {
         await apiClient.call("agent.reload", { sessionId: activeSessionId });
         await apiClient.call("agent.setModel", {
           sessionId: activeSessionId,
-          provider,
-          modelId,
+          model: key,
         });
-        setCurrentModel(provider, modelId);
+        setModelForSession(activeSessionId, provider, modelId);
         if (projectPath) {
-          useTierStore.getState().syncTierFromModel(projectPath, provider, modelId);
+          const tierStore = useTierStore.getState();
+          const models = tierStore.getTierModelsForSession(activeSessionId, projectPath);
+          const matchedTier = TIER_KEYS.find(
+            (tier) => models[tier]?.toLowerCase() === `${provider}/${modelId}`.toLowerCase(),
+          );
+          if (matchedTier) {
+            tierStore.setSessionCurrentTier(activeSessionId, projectPath, matchedTier);
+          }
         }
         fetchModelState(activeSessionId);
       } catch (err) {
@@ -344,7 +381,7 @@ export function SidebarBottomControls() {
       }
       setSwitching(false);
     },
-    [activeSessionId, switching, currentModel, setCurrentModel, fetchModelState, t],
+    [activeSessionId, switching, currentModel, setModelForSession, projectPath, fetchModelState, t],
   );
 
   const handleSelectThinking = useCallback(
@@ -359,7 +396,7 @@ export function SidebarBottomControls() {
           sessionId: activeSessionId,
           level,
         });
-        setThinkingLevel(level);
+        setThinkingLevel(level, activeSessionId);
       } catch (err) {
         log.warn("setThinkingLevel failed", { error: String(err) });
       }
@@ -494,10 +531,7 @@ export function SidebarBottomControls() {
                         void toggleAgentFavorite(agent.name);
                       }}
                     >
-                      <Star
-                        className="w-3 h-3"
-                        fill={isFavorite ? "currentColor" : "none"}
-                      />
+                      <Star className="w-3 h-3" fill={isFavorite ? "currentColor" : "none"} />
                     </button>
                     <AgentAvatar
                       avatar={agent.avatar}

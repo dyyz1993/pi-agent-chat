@@ -8,15 +8,12 @@ export const AGENT_CHANNEL_NAMES = [
   "rules-engine",
   "memory",
   "coordinator",
-  "coordinator_client",
   "supervisor",
   "file-snapshot",
   "file-review",
 ] as const;
 
 export type AgentChannelName = (typeof AGENT_CHANNEL_NAMES)[number];
-
-const COORDINATOR_CHANNEL_NAMES = new Set<AgentChannelName>(["coordinator", "coordinator_client"]);
 
 export interface ChannelRegistrableClient {
   channel: (name: string) => {
@@ -35,7 +32,7 @@ export function registerAgentChannels(options: {
     try {
       options.client.channel(name).onReceive((data: unknown) => {
         const sessionId = options.getSessionId();
-        if (COORDINATOR_CHANNEL_NAMES.has(name)) {
+        if (name === "coordinator") {
           options.handleCoordinatorCall(sessionId, data, name);
           return;
         }

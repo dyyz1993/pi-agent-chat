@@ -66,6 +66,42 @@ describe("scanSessionDir two-phase optimization", () => {
     expect(ids).toEqual(["sess-001", "sess-002"]);
   });
 
+  it("preserves delegated session agent metadata from the JSONL header", async () => {
+    const filePath = join(TEST_SESSIONS_DIR, "delegate-rust.jsonl");
+    await writeFile(
+      filePath,
+      [
+        JSON.stringify({
+          type: "session",
+          version: 3,
+          id: "delegate-rust",
+          timestamp: "2026-01-01T00:00:00Z",
+          cwd: TEST_PROJECT_DIR,
+          delegateParentSessionId: "parent",
+          agent: "rust",
+        }),
+        JSON.stringify({
+          type: "delegate_info",
+          id: "delegate_info",
+          delegateParentSessionId: "parent",
+          delegateType: "coordinator",
+          agent: "rust",
+        }),
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const result = await scanSessionDir(TEST_SESSIONS_DIR);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      sessionId: "delegate-rust",
+      delegateParentSessionId: "parent",
+      delegateType: "coordinator",
+      agent: "rust",
+    });
+  });
+
   it("when files > 120, only returns up to 100 after processing", async () => {
     const promises = [];
     for (let i = 0; i < 150; i++) {
@@ -91,11 +127,7 @@ describe("scanSessionDir two-phase optimization", () => {
   });
 
   it("empty files (size=0) are skipped", async () => {
-    await writeFile(
-      join(TEST_SESSIONS_DIR, "empty.jsonl"),
-      "",
-      "utf-8",
-    );
+    await writeFile(join(TEST_SESSIONS_DIR, "empty.jsonl"), "", "utf-8");
     await createSessionFile("valid");
 
     const result = await scanSessionDir(TEST_SESSIONS_DIR);
@@ -105,11 +137,7 @@ describe("scanSessionDir two-phase optimization", () => {
   });
 
   it("non-jsonl files are ignored", async () => {
-    await writeFile(
-      join(TEST_SESSIONS_DIR, "notes.txt"),
-      "hello",
-      "utf-8",
-    );
+    await writeFile(join(TEST_SESSIONS_DIR, "notes.txt"), "hello", "utf-8");
     await createSessionFile("sess-001");
 
     const result = await scanSessionDir(TEST_SESSIONS_DIR);

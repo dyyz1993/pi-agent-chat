@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linear 风格设计系统 — pi-agent-linear</title>
+    <link rel="stylesheet" href="../../colors_and_type.css" />
+    <style>
+      /* ================================
+   Reset & Base
+   ================================ */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        background: var(--bg-base);
+        color: var(--text-primary);
+        font-family: var(--font-body);
+        font-size: var(--font-size-body);
+        line-height: var(--line-height-body);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* ================================
+   Layout Shell
+   ================================ */
+      .shell {
+        display: flex;
+        height: 100vh;
+        width: 100%;
+      }
+
+      /* -- Left Sidebar (240px) -- */
+      .sidebar {
+        width: 240px;
+        flex-shrink: 0;
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .sidebar-header {
+        padding: var(--space-4) var(--space-4) var(--space-2);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .sidebar-logo {
+        width: 24px;
+        height: 24px;
+        background: var(--accent);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .sidebar-logo svg {
+        width: 14px;
+        height: 14px;
+        color: #fff;
+      }
+      .sidebar-title {
+        font-size: var(--font-size-lead);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+        letter-spacing: var(--letter-spacing-tight);
+      }
+      .sidebar-new-chat {
+        margin: var(--space-2) var(--space-4) var(--space-4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        padding: var(--space-2) 0;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: background var(--transition-fast);
+      }
+      .sidebar-new-chat:hover {
+        background: var(--accent-hover);
+      }
+      .sidebar-new-chat svg {
+        width: 14px;
+        height: 14px;
+      }
+      .sidebar-section-label {
+        padding: var(--space-1) var(--space-4);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: var(--letter-spacing-wide);
+      }
+      .sidebar-sessions {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-1) var(--space-2);
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .sidebar-session {
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: background var(--transition-fast);
+        overflow: hidden;
+      }
+      .sidebar-session:hover {
+        background: var(--bg-hover);
+      }
+      .sidebar-session.active {
+        background: var(--bg-active);
+      }
+      .sidebar-session-title {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .sidebar-session-preview {
+        font-size: var(--font-size-caption);
+        color: var(--text-tertiary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 2px;
+      }
+
+      /* -- Main Content -- */
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+        background: var(--bg-base);
+      }
+      .main-header {
+        padding: var(--space-3) var(--space-5);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+      }
+      .main-header-left {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+      .main-header-left h1 {
+        font-size: var(--font-size-h1);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+        letter-spacing: var(--letter-spacing-tight);
+        line-height: var(--line-height-heading);
+      }
+      .main-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: 2px var(--space-2);
+        background: var(--accent-muted);
+        color: var(--accent);
+        border-radius: var(--radius-full);
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-medium);
+      }
+      .main-header-right {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+      .header-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-full);
+        background: var(--success);
+        box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+      }
+      .header-status {
+        font-size: var(--font-size-caption);
+        color: var(--text-secondary);
+      }
+
+      /* Messages Area */
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-5);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+      }
+      .messages::-webkit-scrollbar {
+        width: 6px;
+      }
+      .messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .messages::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+      }
+      .messages::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      /* User Message */
+      .msg-user {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: var(--space-1);
+      }
+      .msg-user-bubble {
+        max-width: 70%;
+        padding: var(--space-3) var(--space-4);
+        background: var(--accent);
+        color: #fff;
+        border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+        font-size: var(--font-size-body);
+        line-height: var(--line-height-body);
+      }
+      .msg-user-time {
+        font-size: var(--font-size-xs);
+        color: var(--text-muted);
+      }
+
+      /* Agent Message Group */
+      .msg-agent-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        max-width: 100%;
+      }
+      .msg-agent-label {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: var(--font-size-caption);
+        color: var(--text-muted);
+      }
+      .msg-agent-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-full);
+        background: var(--accent);
+      }
+
+      /* ================================
+   Card System
+   ================================ */
+      .card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-1);
+        transition:
+          border-color var(--transition-fast),
+          box-shadow var(--transition-fast);
+        width: 100%;
+      }
+      .card:hover {
+        border-color: var(--border-hover);
+        box-shadow: var(--shadow-2);
+      }
+
+      /* Card Header */
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--border-muted);
+      }
+      .card-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .card-icon svg {
+        width: 14px;
+        height: 14px;
+      }
+      .card-icon-violet {
+        background: var(--accent-muted);
+        color: var(--accent);
+      }
+      .card-icon-cyan {
+        background: var(--tool-muted);
+        color: var(--tool);
+      }
+      .card-icon-blue {
+        background: var(--primary-muted);
+        color: var(--primary);
+      }
+      .card-icon-green {
+        background: var(--success-muted);
+        color: var(--success);
+      }
+      .card-icon-red {
+        background: var(--error-muted);
+        color: var(--error);
+      }
+      .card-icon-amber {
+        background: var(--warning-muted);
+        color: var(--warning);
+      }
+      .card-icon-teal {
+        background: var(--memory-muted);
+        color: var(--memory);
+      }
+
+      .card-header-title {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-primary);
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: 2px var(--space-2);
+        border-radius: var(--radius-full);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        flex-shrink: 0;
+      }
+      .badge-success {
+        background: var(--success-muted);
+        color: var(--success);
+      }
+      .badge-error {
+        background: var(--error-muted);
+        color: var(--error);
+      }
+      .badge-exit0 {
+        background: var(--success-muted);
+        color: var(--success);
+      }
+      .badge-time {
+        background: var(--accent-subtle);
+        color: var(--accent-hover);
+      }
+      .badge-created {
+        background: var(--success-muted);
+        color: var(--success);
+      }
+      .badge-warning {
+        background: var(--warning-muted);
+        color: var(--warning);
+      }
+
+      .card-header-action {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+      }
+      .card-collapse-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: var(--space-1);
+        border-radius: var(--radius-sm);
+        transition:
+          color var(--transition-fast),
+          background var(--transition-fast);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card-collapse-btn:hover {
+        color: var(--text-secondary);
+        background: var(--bg-hover);
+      }
+      .card-collapse-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* Card Body */
+      .card-body {
+        padding: var(--space-4);
+        font-size: var(--font-size-body);
+        color: var(--text-secondary);
+        line-height: var(--line-height-body);
+      }
+
+      /* ================================
+   Card-Specific Styles
+   ================================ */
+
+      /* Thinking Card */
+      .thinking-body {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--font-size-body);
+        color: var(--text-tertiary);
+        line-height: var(--line-height-body);
+        font-style: italic;
+      }
+      .thinking-body.collapsed {
+        max-height: 0;
+        padding: 0 var(--space-4);
+        overflow: hidden;
+        transition:
+          max-height var(--transition-slow),
+          padding var(--transition-slow);
+      }
+
+      /* Code Block (for Bash/Read) */
+      .code-block {
+        background: var(--bg-base);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+      .code-block-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--space-2) var(--space-3);
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid var(--border-muted);
+      }
+      .code-block-lang {
+        font-size: var(--font-size-xs);
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+      }
+      .code-block-copy {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 2px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color var(--transition-fast);
+      }
+      .code-block-copy:hover {
+        color: var(--text-secondary);
+      }
+      .code-block-copy svg {
+        width: 12px;
+        height: 12px;
+      }
+      .code-block pre {
+        padding: var(--space-3);
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        line-height: var(--line-height-mono);
+        color: var(--text-secondary);
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .code-block pre .cmd {
+        color: var(--accent);
+      }
+      .code-block pre .arg {
+        color: var(--text-primary);
+      }
+      .code-block pre .str {
+        color: var(--success);
+      }
+      .code-block pre .comment {
+        color: var(--text-muted);
+        font-style: italic;
+      }
+
+      /* Bash Output */
+      .bash-output {
+        background: var(--bg-base);
+        border-top: 1px solid var(--border-muted);
+        padding: var(--space-3);
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        line-height: var(--line-height-mono);
+        color: var(--text-tertiary);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      /* File Path */
+      .file-path {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-2);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-muted);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-3);
+      }
+      .file-path svg {
+        width: 12px;
+        height: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Error Card */
+      .error-title {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-medium);
+        color: var(--error);
+        margin-bottom: var(--space-2);
+      }
+      .error-message {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        color: var(--text-secondary);
+        background: var(--error-muted);
+        padding: var(--space-3);
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(248, 113, 113, 0.15);
+        line-height: var(--line-height-mono);
+      }
+
+      /* Confirm Card */
+      .confirm-body {
+        padding: var(--space-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+      }
+      .confirm-question {
+        font-size: var(--font-size-body);
+        color: var(--text-primary);
+        font-weight: var(--font-weight-medium);
+      }
+      .confirm-desc {
+        font-size: var(--font-size-body);
+        color: var(--text-secondary);
+        line-height: var(--line-height-body);
+      }
+      .confirm-actions {
+        display: flex;
+        gap: var(--space-2);
+        justify-content: flex-end;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-medium);
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition:
+          background var(--transition-fast),
+          border-color var(--transition-fast),
+          box-shadow var(--transition-fast);
+        font-family: var(--font-body);
+      }
+      .btn-ghost {
+        background: transparent;
+        border-color: var(--border);
+        color: var(--text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+        color: var(--text-primary);
+      }
+      .btn-danger {
+        background: var(--error);
+        border-color: var(--error);
+        color: #fff;
+      }
+      .btn-danger:hover {
+        background: #ef4444;
+        border-color: #ef4444;
+        box-shadow: 0 0 12px rgba(248, 113, 113, 0.3);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+      .btn-option {
+        background: var(--bg-base);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: var(--space-3) var(--space-4);
+        text-align: left;
+        border-radius: var(--radius-md);
+        width: 100%;
+      }
+      .btn-option:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+      }
+
+      /* Memory Card */
+      .memory-grid {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+      .memory-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-2) var(--space-3);
+        background: var(--bg-base);
+        border: 1px solid var(--border-muted);
+        border-radius: var(--radius-sm);
+      }
+      .memory-key {
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-medium);
+        color: var(--memory);
+        min-width: 100px;
+        font-family: var(--font-mono);
+      }
+      .memory-value {
+        font-size: var(--font-size-caption);
+        color: var(--text-secondary);
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Ask User Options */
+      .option-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+
+      /* ================================
+   Input Bar
+   ================================ */
+      .input-bar {
+        padding: var(--space-3) var(--space-5);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .input-row {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--space-3);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: var(--space-3) var(--space-4);
+        transition:
+          border-color var(--transition-fast),
+          box-shadow var(--transition-fast);
+      }
+      .input-row:focus-within {
+        border-color: var(--border-focus);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
+      }
+      .input-field {
+        flex: 1;
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        font-family: var(--font-body);
+        font-size: var(--font-size-body);
+        line-height: var(--line-height-body);
+        resize: none;
+        outline: none;
+        min-height: 21px;
+        max-height: 120px;
+      }
+      .input-field::placeholder {
+        color: var(--text-muted);
+      }
+      .input-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex-shrink: 0;
+      }
+      .input-action-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: var(--space-1);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          color var(--transition-fast),
+          background var(--transition-fast);
+      }
+      .input-action-btn:hover {
+        color: var(--text-secondary);
+        background: var(--bg-hover);
+      }
+      .input-action-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .input-send {
+        width: 32px;
+        height: 32px;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius-md);
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          background var(--transition-fast),
+          box-shadow var(--transition-fast);
+        flex-shrink: 0;
+      }
+      .input-send:hover {
+        background: var(--accent-hover);
+        box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+      }
+      .input-send svg {
+        width: 16px;
+        height: 16px;
+      }
+      .model-selector {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: 2px var(--space-2);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border-muted);
+        border-radius: var(--radius-sm);
+        font-size: var(--font-size-xs);
+        color: var(--text-tertiary);
+        cursor: pointer;
+        transition:
+          background var(--transition-fast),
+          border-color var(--transition-fast);
+      }
+      .model-selector:hover {
+        background: var(--bg-hover);
+        border-color: var(--border);
+      }
+
+      /* ================================
+   Right Panel (280px)
+   ================================ */
+      .right-panel {
+        width: 280px;
+        flex-shrink: 0;
+        background: var(--bg-surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .right-panel-header {
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border);
+      }
+      .right-panel-header h3 {
+        font-size: var(--font-size-lead);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+      }
+      .right-panel-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-3);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+      }
+      .right-panel-content::-webkit-scrollbar {
+        width: 6px;
+      }
+      .right-panel-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .right-panel-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+      }
+
+      /* Right Panel - Session Info */
+      .info-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+      .info-label {
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: var(--letter-spacing-wide);
+      }
+      .info-value {
+        font-size: var(--font-size-body);
+        color: var(--text-secondary);
+      }
+      .info-divider {
+        height: 1px;
+        background: var(--border);
+        margin: var(--space-2) 0;
+      }
+
+      /* Right Panel - Token Usage */
+      .token-bar {
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .token-bar-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+        transition: width var(--transition-slow);
+      }
+
+      /* Right Panel - Tool Stats */
+      .tool-stat {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--space-1) 0;
+      }
+      .tool-stat-name {
+        font-size: var(--font-size-caption);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .tool-stat-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-full);
+      }
+      .tool-stat-count {
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-tertiary);
+        font-family: var(--font-mono);
+      }
+
+      /* ================================
+   Horizontal Rule Divider
+   ================================ */
+      .msg-divider {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-2) 0;
+      }
+      .msg-divider::before,
+      .msg-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+      .msg-divider-text {
+        font-size: var(--font-size-xs);
+        color: var(--text-muted);
+        white-space: nowrap;
+      }
+
+      /* Agent text response */
+      .msg-text {
+        font-size: var(--font-size-body);
+        color: var(--text-secondary);
+        line-height: var(--line-height-body);
+        max-width: 100%;
+      }
+      .msg-text p {
+        margin-bottom: var(--space-2);
+      }
+      .msg-text p:last-child {
+        margin-bottom: 0;
+      }
+      .msg-text code {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-caption);
+        background: rgba(255, 255, 255, 0.06);
+        padding: 2px var(--space-1);
+        border-radius: 3px;
+        color: var(--text-primary);
+      }
+
+      /* ================================
+   Scrollbar global
+   ================================ */
+      .sidebar-sessions::-webkit-scrollbar {
+        width: 4px;
+      }
+      .sidebar-sessions::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .sidebar-sessions::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <!-- ================================
+       Left Sidebar (240px)
+       ================================ -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-logo">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          </div>
+          <span class="sidebar-title">Pi Agent</span>
+        </div>
+
+        <button class="sidebar-new-chat">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New Chat
+        </button>
+
+        <div class="sidebar-section-label">Today</div>
+        <div class="sidebar-sessions">
+          <div class="sidebar-session active">
+            <div class="sidebar-session-title">Refactor auth module</div>
+            <div class="sidebar-session-preview">I have refactored the auth module to use...</div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Fix memory leak in chat</div>
+            <div class="sidebar-session-preview">
+              The memory leak was caused by event listeners...
+            </div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Add dark mode toggle</div>
+            <div class="sidebar-session-preview">
+              Implemented theme switching with CSS variables...
+            </div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Write unit tests for API</div>
+            <div class="sidebar-session-preview">
+              Created 12 test cases covering the REST endpoints...
+            </div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Optimize database queries</div>
+            <div class="sidebar-session-preview">Added indexes and rewrote N+1 queries...</div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Deploy to staging</div>
+            <div class="sidebar-session-preview">Built and deployed to staging environment...</div>
+          </div>
+        </div>
+
+        <div class="sidebar-section-label">Yesterday</div>
+        <div class="sidebar-sessions">
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Setup CI/CD pipeline</div>
+            <div class="sidebar-session-preview">Configured GitHub Actions for automated...</div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Review pull request</div>
+            <div class="sidebar-session-preview">
+              Reviewed the changes to the payment service...
+            </div>
+          </div>
+          <div class="sidebar-session">
+            <div class="sidebar-session-title">Update dependencies</div>
+            <div class="sidebar-session-preview">Updated 15 packages, resolved 3 conflicts...</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ================================
+       Main Content
+       ================================ -->
+      <main class="main">
+        <!-- Header -->
+        <div class="main-header">
+          <div class="main-header-left">
+            <h1>Linear 风格设计系统</h1>
+            <span class="main-header-badge">pi-agent-linear</span>
+          </div>
+          <div class="main-header-right">
+            <div class="header-dot"></div>
+            <span class="header-status">Claude 3.5 Sonnet</span>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="messages">
+          <!-- User Message -->
+          <div class="msg-user">
+            <div class="msg-user-bubble">
+              Refactor the authentication module to use JWT tokens instead of session cookies. Also
+              add rate limiting middleware.
+            </div>
+            <span class="msg-user-time">2:34 PM</span>
+          </div>
+
+          <!-- Agent Group -->
+          <div class="msg-agent-group">
+            <div class="msg-agent-label">
+              <div class="msg-agent-dot"></div>
+              Pi Agent
+            </div>
+
+            <!-- Card 1: ThinkingCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-violet">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"
+                    />
+                    <line x1="10" y1="22" x2="14" y2="22" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Thinking</span>
+                <span class="card-header-badge badge-time">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="width: 10px; height: 10px"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  思考了 3.2s
+                </span>
+                <div class="card-header-action">
+                  <button class="card-collapse-btn" title="折叠">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="thinking-body">
+                I need to analyze the current authentication module structure. The session-based
+                auth uses express-session with Redis store. I should migrate to JWT with httpOnly
+                cookies for better CSRF protection. The rate limiter should use express-rate-limit
+                with a sliding window algorithm.
+              </div>
+            </div>
+
+            <!-- Card 2: BashExecutionCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-cyan">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="4 17 10 11 4 5" />
+                    <line x1="12" y1="19" x2="20" y2="19" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Bash</span>
+                <span class="card-header-badge badge-exit0">exit 0</span>
+                <div class="card-header-action">
+                  <button class="card-collapse-btn" title="复制">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="code-block" style="border: none; border-radius: 0">
+                <div class="code-block-header">
+                  <span class="code-block-lang">bash</span>
+                </div>
+                <pre><span class="cmd">npm</span> <span class="arg">install</span> <span class="str">jsonwebtoken</span> <span class="str">express-rate-limit</span> <span class="str">cookie-parser</span></pre>
+              </div>
+              <div class="bash-output">
+                added 3 packages in 1.2s packages: + express-rate-limit@7.1.5 + jsonwebtoken@9.0.2 +
+                cookie-parser@1.4.6
+              </div>
+            </div>
+
+            <!-- Card 3: ReadFileCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-blue">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Read File</span>
+                <div class="card-header-action">
+                  <button class="card-collapse-btn" title="折叠">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="file-path">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                    <polyline points="13 2 13 9 20 9" />
+                  </svg>
+                  src/middleware/auth.ts
+                </div>
+                <div class="code-block">
+                  <div class="code-block-header">
+                    <span class="code-block-lang">typescript</span>
+                    <button class="code-block-copy" title="复制代码">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                  </div>
+                  <pre><span class="keyword" style="color:#c792ea">import</span> { Router } <span class="keyword" style="color:#c792ea">from</span> <span class="str">'express'</span>
+<span class="keyword" style="color:#c792ea">import</span> jwt <span class="keyword" style="color:#c792ea">from</span> <span class="str">'jsonwebtoken'</span>
+
+<span class="keyword" style="color:#c792ea">const</span> <span class="def" style="color:#82aaff">router</span> = Router()
+
+<span class="comment">// Verify JWT token middleware</span>
+<span class="keyword" style="color:#c792ea">export const</span> <span class="def" style="color:#82aaff">authenticate</span> = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  <span class="keyword" style="color:#c792ea">const</span> token = req.cookies.<span class="def" style="color:#82aaff">token</span>
+  <span class="keyword" style="color:#c792ea">if</span> (!token) <span class="keyword" style="color:#c792ea">return</span> res.sendStatus(<span class="num" style="color:#f78c6c">401</span>)
+  <span class="keyword" style="color:#c792ea">try</span> {
+    <span class="keyword" style="color:#c792ea">const</span> decoded = jwt.<span class="func" style="color:#82aaff">verify</span>(token, process.env.JWT_SECRET)
+    req.user = decoded
+    <span class="func" style="color:#82aaff">next</span>()
+  } <span class="keyword" style="color:#c792ea">catch</span> {
+    res.<span class="func" style="color:#82aaff">sendStatus</span>(<span class="num" style="color:#f78c6c">403</span>)
+  }
+}</pre>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 4: WriteFileCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-green">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Write File</span>
+                <span class="card-header-badge badge-created">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="width: 10px; height: 10px"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Created
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="file-path">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                    <polyline points="13 2 13 9 20 9" />
+                  </svg>
+                  src/middleware/rateLimit.ts
+                </div>
+                <div class="code-block">
+                  <div class="code-block-header">
+                    <span class="code-block-lang">typescript</span>
+                    <button class="code-block-copy" title="复制代码">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                  </div>
+                  <pre><span class="keyword" style="color:#c792ea">import</span> rateLimit <span class="keyword" style="color:#c792ea">from</span> <span class="str">'express-rate-limit'</span>
+
+<span class="keyword" style="color:#c792ea">export const</span> <span class="def" style="color:#82aaff">limiter</span> = rateLimit({
+  windowMs: <span class="num" style="color:#f78c6c">15</span> * <span class="num" style="color:#f78c6c">60</span> * <span class="num" style="color:#f78c6c">1000</span>, <span class="comment">// 15 min</span>
+  max: <span class="num" style="color:#f78c6c">100</span>,
+  message: { error: <span class="str">'Too many requests'</span> },
+  standardHeaders: <span class="num" style="color:#f78c6c">true</span>,
+})</pre>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 5: ErrorMessageCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-red">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Error</span>
+                <span class="card-header-badge badge-error">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="width: 10px; height: 10px"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  TypeError
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="error-title">Cannot read property 'secret' of undefined</div>
+                <div class="error-message">
+                  Error: Cannot read properties of undefined (reading 'secret') at authenticate
+                  (src/middleware/auth.ts:12:45) at Layer.handle
+                  (node_modules/express/lib/router/layer.js:95:5)
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 6: ConfirmCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-amber">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Confirmation Required</span>
+              </div>
+              <div class="confirm-body">
+                <div class="confirm-question">Delete old session store files?</div>
+                <div class="confirm-desc">
+                  Found 3 obsolete session store files that are no longer needed after the JWT
+                  migration. This action cannot be undone.
+                </div>
+                <div class="confirm-actions">
+                  <button class="btn btn-ghost">Cancel</button>
+                  <button class="btn btn-danger">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      style="width: 14px; height: 14px"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path
+                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                      />
+                    </svg>
+                    Delete Files
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 7: MemoryCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-teal">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+                    />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Memory Updated</span>
+                <span class="card-header-badge badge-success">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="width: 10px; height: 10px"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Saved
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="memory-grid">
+                  <div class="memory-row">
+                    <span class="memory-key">auth_type</span>
+                    <span class="memory-value">JWT with httpOnly cookies</span>
+                  </div>
+                  <div class="memory-row">
+                    <span class="memory-key">jwt_algo</span>
+                    <span class="memory-value">HS256</span>
+                  </div>
+                  <div class="memory-row">
+                    <span class="memory-key">token_ttl</span>
+                    <span class="memory-value">15m access, 7d refresh</span>
+                  </div>
+                  <div class="memory-row">
+                    <span class="memory-key">rate_limit</span>
+                    <span class="memory-value">100 req / 15min per IP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 8: AskUserQuestionCard -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon card-icon-violet">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <span class="card-header-title">Choose an option</span>
+              </div>
+              <div class="card-body">
+                <div class="confirm-desc" style="margin-bottom: var(--space-3)">
+                  How would you like to handle token refresh?
+                </div>
+                <div class="option-list">
+                  <button class="btn btn-option">
+                    <div style="font-weight: var(--font-weight-medium); margin-bottom: 2px">
+                      Silent refresh
+                    </div>
+                    <div style="font-size: var(--font-size-caption); color: var(--text-muted)">
+                      Automatically refresh token in background using refresh cookie
+                    </div>
+                  </button>
+                  <button class="btn btn-option">
+                    <div style="font-weight: var(--font-weight-medium); margin-bottom: 2px">
+                      Prompt re-login
+                    </div>
+                    <div style="font-size: var(--font-size-caption); color: var(--text-muted)">
+                      Redirect to login page when access token expires
+                    </div>
+                  </button>
+                  <button class="btn btn-option">
+                    <div style="font-weight: var(--font-weight-medium); margin-bottom: 2px">
+                      Sliding session
+                    </div>
+                    <div style="font-size: var(--font-size-caption); color: var(--text-muted)">
+                      Issue new refresh token on each access token refresh
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agent Text Response -->
+            <div class="msg-text">
+              <p>I have refactored the authentication module. Here is a summary of the changes:</p>
+              <p>
+                1. Replaced session-based auth with <code>jsonwebtoken</code> for stateless token
+                management
+              </p>
+              <p>
+                2. Added <code>express-rate-limit</code> middleware with a 15-minute sliding window
+                (100 requests per IP)
+              </p>
+              <p>
+                3. Created <code>rateLimit.ts</code> middleware and updated
+                <code>auth.ts</code> with JWT verification
+              </p>
+              <p>4. Saved configuration to memory for future reference</p>
+              <p>
+                Please select your preferred token refresh strategy above to complete the
+                implementation.
+              </p>
+            </div>
+          </div>
+          <!-- /agent group -->
+
+          <!-- Divider -->
+          <div class="msg-divider">
+            <span class="msg-divider-text">2:38 PM</span>
+          </div>
+        </div>
+        <!-- /messages -->
+
+        <!-- Input Bar -->
+        <div class="input-bar">
+          <div class="input-row">
+            <div class="model-selector">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="width: 10px; height: 10px"
+              >
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+              Claude 3.5 Sonnet
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="width: 10px; height: 10px"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+            <textarea
+              class="input-field"
+              rows="1"
+              placeholder="Ask Pi Agent anything..."
+            ></textarea>
+            <div class="input-actions">
+              <button class="input-action-btn" title="Attach file">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+                  />
+                </svg>
+              </button>
+              <button class="input-send" title="发送">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- ================================
+       Right Panel (280px)
+       ================================ -->
+      <aside class="right-panel">
+        <div class="right-panel-header">
+          <h3>Session Details</h3>
+        </div>
+        <div class="right-panel-content">
+          <div class="info-section">
+            <div class="info-label">Session ID</div>
+            <div
+              class="info-value"
+              style="
+                font-family: var(--font-mono);
+                font-size: var(--font-size-caption);
+                color: var(--text-tertiary);
+              "
+            >
+              ses_7x9kQm2pL4
+            </div>
+            <div class="info-divider"></div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-label">Model</div>
+            <div class="info-value">Claude 3.5 Sonnet</div>
+            <div class="info-divider"></div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-label">Token Usage</div>
+            <div class="info-value" style="margin-bottom: var(--space-2)">12,847 / 200,000</div>
+            <div class="token-bar">
+              <div class="token-bar-fill" style="width: 6.4%"></div>
+            </div>
+            <div class="info-divider"></div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-label">Tools Used</div>
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-1);
+                margin-top: var(--space-1);
+              "
+            >
+              <div class="tool-stat">
+                <div class="tool-stat-name">
+                  <div class="tool-stat-dot" style="background: var(--tool)"></div>
+                  Bash
+                </div>
+                <div class="tool-stat-count">3</div>
+              </div>
+              <div class="tool-stat">
+                <div class="tool-stat-name">
+                  <div class="tool-stat-dot" style="background: var(--primary)"></div>
+                  Read File
+                </div>
+                <div class="tool-stat-count">5</div>
+              </div>
+              <div class="tool-stat">
+                <div class="tool-stat-name">
+                  <div class="tool-stat-dot" style="background: var(--success)"></div>
+                  Write File
+                </div>
+                <div class="tool-stat-count">2</div>
+              </div>
+              <div class="tool-stat">
+                <div class="tool-stat-name">
+                  <div class="tool-stat-dot" style="background: var(--memory)"></div>
+                  Memory
+                </div>
+                <div class="tool-stat-count">1</div>
+              </div>
+              <div class="tool-stat">
+                <div class="tool-stat-name">
+                  <div class="tool-stat-dot" style="background: var(--accent)"></div>
+                  Thinking
+                </div>
+                <div class="tool-stat-count">4</div>
+              </div>
+            </div>
+            <div class="info-divider"></div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-label">Duration</div>
+            <div class="info-value">3m 24s</div>
+            <div class="info-divider"></div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-label">Status</div>
+            <div class="info-value" style="display: flex; align-items: center; gap: var(--space-2)">
+              <div class="header-dot" style="width: 6px; height: 6px"></div>
+              Waiting for input
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <!-- /shell -->
+  </body>
+</html>

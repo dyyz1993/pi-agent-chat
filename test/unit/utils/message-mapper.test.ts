@@ -178,6 +178,38 @@ describe("messageToChatMessage", () => {
     });
   });
 
+  it("attaches provider request diagnostics to provider error messages", () => {
+    const msg = {
+      role: "assistant",
+      content: [],
+      timestamp: 7100,
+      provider: "opencode-go",
+      model: "deepseek-v4-flash",
+      stopReason: "error",
+      errorMessage: "400 Error from provider (Console Go): Upstream request failed",
+    } as unknown as AssistantMessage;
+    const providerRequest = {
+      version: 1 as const,
+      provider: "opencode-go",
+      modelId: "deepseek-v4-flash",
+      api: "openai-completions",
+      timestamp: new Date(7000).toISOString(),
+      payloadChars: 423283,
+      payloadTokens: 105821,
+      topLevelKeys: ["messages", "model", "tools", "thinking"],
+      sections: [
+        { id: "messages" as const, label: "Messages", chars: 389425, tokens: 97357, count: 386 },
+        { id: "tools" as const, label: "Tools", chars: 33695, tokens: 8424, count: 47 },
+      ],
+    };
+
+    expect(messageToChatMessage(msg, "asst-error", undefined, providerRequest)).toMatchObject({
+      id: "asst-error",
+      role: "error",
+      providerRequest,
+    });
+  });
+
   it("extracts tokenUsage from assistant with usage", () => {
     const msg: AssistantMessage = {
       role: "assistant",
@@ -313,6 +345,30 @@ describe("messageToChatMessage", () => {
       role: "compactionSummary",
       content: [{ type: "compactionSummary", summary: "compacted content", tokensBefore: 5000 }],
       timestamp: 15000,
+    });
+  });
+
+  it("converts branchSummary messages from segment summaries into summary cards", () => {
+    const msg = {
+      role: "branchSummary",
+      summary: "summarized selected entries",
+      fromId: "entry-1",
+      timestamp: 15500,
+    } as unknown as Message;
+    const result = messageToChatMessage(msg, "branch-summary-1");
+    expect(result).toEqual({
+      id: "branch-summary-1",
+      role: "compactionSummary",
+      content: [
+        {
+          type: "compactionSummary",
+          summary: "summarized selected entries",
+          tokensBefore: undefined,
+          status: "completed",
+          reason: "segment:entry-1",
+        },
+      ],
+      timestamp: 15500,
     });
   });
 

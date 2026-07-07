@@ -238,6 +238,83 @@ describe("agent project trust handlers", () => {
     expect(agentMocks.stop).not.toHaveBeenCalled();
   });
 
+  it("dedupes concurrent remote ssh configure calls for the same session config", async () => {
+    const projectPath = join(tempDir, "remote-shadow-concurrent");
+    const sessionPath = join(tempDir, "session-concurrent.jsonl");
+    const remoteProject = {
+      id: "remote-id",
+      name: "remote-project",
+      runtime: "ssh",
+      sshRuntimeKind: "ssh-command",
+      profileId: "profile-id",
+      host: "xyz-mac",
+      remotePath: "/tmp/remote-project",
+      localPath: projectPath,
+      sshArgs: ["-o", "BatchMode=yes"],
+      shell: "/bin/bash",
+      createdAt: 1,
+      lastOpened: 1,
+    };
+    const startResult = Promise.resolve({
+      agentId: "session-concurrent",
+      status: "started" as const,
+    });
+    agentMocks.start.mockReturnValueOnce(startResult).mockReturnValueOnce(startResult);
+    agentMocks.getRemoteProjectByLocalPath
+      .mockResolvedValueOnce(remoteProject)
+      .mockResolvedValueOnce(remoteProject);
+    agentMocks.callChannel.mockResolvedValueOnce({ ok: true, enabled: true, configured: true });
+
+    const start = server.handlers.get("agent.start")!;
+    await expect(
+      Promise.all([
+        start({ sessionId: "session-concurrent", projectPath, sessionPath }),
+        start({ sessionId: "session-concurrent", projectPath, sessionPath }),
+      ]),
+    ).resolves.toEqual([
+      { agentId: "session-concurrent", status: "started" },
+      { agentId: "session-concurrent", status: "started" },
+    ]);
+
+    expect(agentMocks.callChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reconfigure unchanged remote ssh runtime for an already running session", async () => {
+    const projectPath = join(tempDir, "remote-shadow-running");
+    const sessionPath = join(tempDir, "session-running.jsonl");
+    const remoteProject = {
+      id: "remote-id",
+      name: "remote-project",
+      runtime: "ssh",
+      sshRuntimeKind: "ssh-command",
+      profileId: "profile-id",
+      host: "xyz-mac",
+      remotePath: "/tmp/remote-project",
+      localPath: projectPath,
+      sshArgs: ["-o", "BatchMode=yes"],
+      shell: "/bin/bash",
+      createdAt: 1,
+      lastOpened: 1,
+    };
+    agentMocks.start
+      .mockResolvedValueOnce({ agentId: "session-running", status: "started" })
+      .mockResolvedValueOnce({ agentId: "session-running", status: "already_running" });
+    agentMocks.getRemoteProjectByLocalPath
+      .mockResolvedValueOnce(remoteProject)
+      .mockResolvedValueOnce(remoteProject);
+    agentMocks.callChannel.mockResolvedValueOnce({ ok: true, enabled: true, configured: true });
+
+    const start = server.handlers.get("agent.start")!;
+    await expect(
+      start({ sessionId: "session-running", projectPath, sessionPath }),
+    ).resolves.toEqual({ agentId: "session-running", status: "started" });
+    await expect(
+      start({ sessionId: "session-running", projectPath, sessionPath }),
+    ).resolves.toEqual({ agentId: "session-running", status: "already_running" });
+
+    expect(agentMocks.callChannel).toHaveBeenCalledTimes(1);
+  });
+
   it("fails agent.start instead of falling back to local tools when remote ssh configure fails", async () => {
     const projectPath = join(tempDir, "remote-shadow-fail");
     const sessionPath = join(tempDir, "session-fail.jsonl");

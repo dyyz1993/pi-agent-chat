@@ -1,0 +1,50 @@
+{
+  "slug": "lsp-diagnostics-card",
+  "schemaVersion": 2,
+  "name": "LspDiagnosticsCard",
+  "category": "diagnostic",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    {
+      "type": "diagnostic",
+      "evidence": "Full diagnostics panel showing all LSP errors/warnings for a file"
+    }
+  ],
+  "variantDimensions": [{ "name": "severity", "values": ["error", "warning", "info", "hint"] }],
+  "representativeVariants": [
+    {
+      "name": "Error List",
+      "traits": {
+        "severity": "error",
+        "filePath": "src/app.ts",
+        "diagnostics": [
+          { "line": 42, "message": "Type 'string' is not assignable", "code": "TS2322" }
+        ]
+      },
+      "whySelected": "TypeScript error display",
+      "childrenDigest": "File header + diagnostic list with line numbers and error codes"
+    },
+    {
+      "name": "Clean",
+      "traits": { "severity": "info", "filePath": "src/utils.ts", "diagnostics": [] },
+      "whySelected": "No issues found",
+      "childrenDigest": "File header + success message"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "file-path",
+      "severity-icon",
+      "diagnostic-item",
+      "line-number",
+      "error-code",
+      "error-message"
+    ],
+    "structurePatterns": ["stacked-header-list"]
+  },
+  "usageHints": { "priorityHint": 30, "context": "LSP diagnostics display for files" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "List-based layout, each diagnostic is a row with severity icon, line number, code, and message"
+}

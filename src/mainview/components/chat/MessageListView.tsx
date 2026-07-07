@@ -106,9 +106,16 @@ function useStableMessages(source: "main" | "sub"): ChatMessage[] {
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
 
   const selector = useCallback(
-    (s: { messagesBySession: Record<string, ChatMessage[]> }) => {
+    (s: {
+      messagesBySession: Record<string, ChatMessage[]>;
+      focusMessagesBySession: Record<string, ChatMessage[]>;
+      messageViewBySession: Record<string, "tail" | "focus">;
+    }) => {
       const targetSessionId = source === "sub" ? activeSubId : sessionId;
       if (!targetSessionId) return EMPTY_MSGS;
+      if ((s.messageViewBySession[targetSessionId] ?? "tail") === "focus") {
+        return s.focusMessagesBySession[targetSessionId] || EMPTY_MSGS;
+      }
       return s.messagesBySession[targetSessionId] || EMPTY_MSGS;
     },
     [activeSubId, sessionId, source],
@@ -395,6 +402,19 @@ export const MessageListView = memo(function MessageListView({
     }
     const activity = compactionActivity;
     if (!activity || activity.status === "completed") return messages;
+    if (
+      activity.status !== "running" &&
+      messages.some((msg) =>
+        msg.content.some(
+          (block) =>
+            block.type === "compactionSummary" &&
+            block.status === activity.status &&
+            block.reason === activity.reason,
+        ),
+      )
+    ) {
+      return messages;
+    }
     if (messages.some((msg) => msg.id === `__compaction_running__:${activeSessionId}`)) {
       return messages;
     }
@@ -503,10 +523,11 @@ export const MessageListView = memo(function MessageListView({
         ref={vlistRef}
         scrollRef={scrollRef as React.RefObject<HTMLDivElement | null>}
         bufferSize={bufferSize}
+        data={processedMessages}
         onScroll={() => onScroll?.()}
         onScrollEnd={() => onScrollEnd?.()}
       >
-        {processedMessages.map((item) => {
+        {(item) => {
           if (item.hide) return <div key={item.msg.id} style={{ height: 0 }} />;
           const meta = cardMeta.get(item.msg.id);
           return (
@@ -519,7 +540,7 @@ export const MessageListView = memo(function MessageListView({
               />
             </div>
           );
-        })}
+        }}
       </Virtualizer>
     </div>
   );

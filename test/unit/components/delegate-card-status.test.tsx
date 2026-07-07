@@ -141,16 +141,28 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   useTierStore: Object.assign(
     vi.fn((selector: (s: unknown) => unknown) =>
       selector({
-        dataByProject: {
-          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        dataBySession: {
+          "parent-session": {
+            projectPath: "/fake/project",
+            tierModels: {},
+            currentTier: hoisted.currentTier,
+          },
         },
+        getCurrentTierForSession: () => hoisted.currentTier,
+        getTierModelsForSession: () => ({}),
       }),
     ),
     {
       getState: vi.fn(() => ({
-        dataByProject: {
-          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        dataBySession: {
+          "parent-session": {
+            projectPath: "/fake/project",
+            tierModels: {},
+            currentTier: hoisted.currentTier,
+          },
         },
+        getCurrentTierForSession: () => hoisted.currentTier,
+        getTierModelsForSession: () => ({}),
       })),
       subscribe: vi.fn(),
     },

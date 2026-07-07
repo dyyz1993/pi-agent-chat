@@ -84,7 +84,7 @@ describe("MessageCard stop boundary rendering", () => {
     expect(screen.queryByText("emptyTurn")).not.toBeInTheDocument();
   });
 
-  it("shows bash background process details when the message is expanded", () => {
+  it("keeps bash background process entries compact in the chat timeline", () => {
     useSessionStore.setState({ activeSessionId: "sess-1" });
     const message: ChatMessage = {
       id: "msg-bash-bg-expanded",
@@ -113,15 +113,13 @@ describe("MessageCard stop boundary rendering", () => {
 
     render(<MessageCard message={message} />);
 
-    expect(screen.getByText("命令")).toBeInTheDocument();
-    expect(screen.getByText("工作目录")).toBeInTheDocument();
-    expect(screen.getByText("Bash ID")).toBeInTheDocument();
-    expect(screen.getByText("进程 ID")).toBeInTheDocument();
-    expect(screen.getByText("退出码")).toBeInTheDocument();
-    expect(screen.getByText("日志")).toBeInTheDocument();
-    expect(screen.getByText("/tmp/cumulative_sum_test.sh")).toBeInTheDocument();
-    expect(screen.getByText("/tmp/project")).toBeInTheDocument();
-    expect(screen.getByText("bash-fabe60")).toBeInTheDocument();
+    expect(screen.getByText("正常退出")).toBeInTheDocument();
+    expect(screen.getByText(/自动后台/)).toBeInTheDocument();
+    expect(screen.getByText(/bash-fabe60/)).toBeInTheDocument();
+    expect(screen.queryByText("命令")).not.toBeInTheDocument();
+    expect(screen.queryByText("工作目录")).not.toBeInTheDocument();
+    expect(screen.queryByText("/tmp/project")).not.toBeInTheDocument();
+    expect(screen.queryByText("/tmp/pi-bash-fabe60.log")).not.toBeInTheDocument();
   });
 
   it("uses tool execution details for collapsed assistant previews", () => {

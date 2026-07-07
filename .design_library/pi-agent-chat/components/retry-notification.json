@@ -1,0 +1,28 @@
+{
+  "slug": "retry-notification",
+  "schemaVersion": 2,
+  "name": "RetryNotification",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "notification", "evidence": "Auto-retry notification with countdown progress bar" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Retrying",
+      "traits": { "attempt": 2, "maxAttempts": 3, "remaining": 5 },
+      "whySelected": "Active retry notification",
+      "childrenDigest": "Spinner icon + auto-retrying label + attempt counter + countdown bar + time remaining"
+    }
+  ],
+  "anatomy": {
+    "parts": ["spinner-icon", "label", "attempt-text", "progress-bar", "time-remaining"],
+    "structurePatterns": ["inline-notification"]
+  },
+  "usageHints": { "priorityHint": 69, "context": "Auto-retry status display in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Fixed top-right position, red accent bg, animated progress bar, countdown display, compact"
+}

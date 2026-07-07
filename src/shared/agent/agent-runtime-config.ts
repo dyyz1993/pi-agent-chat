@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, realpathSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "fs";
+import { homedir } from "os";
 import * as path from "path";
 
 import { config } from "../../server-config";
@@ -13,6 +14,64 @@ export const BUILTIN_INTERNAL_EXTENSION_NAMES = new Set(["_multi-compaction"]);
 
 interface ScanExtensionDirOptions {
   allowPrivateEntries?: ReadonlySet<string>;
+}
+
+function getAgentSettingsPath(): string {
+  const agentDir = process.env.PI_CODING_AGENT_DIR?.trim() || path.join(homedir(), ".pi", "agent");
+  return path.join(agentDir, "settings.json");
+}
+
+function pathKeys(value: string): string[] {
+  const keys = new Set([path.normalize(value)]);
+  if (path.isAbsolute(value) && existsSync(value)) {
+    try {
+      keys.add(path.normalize(realpathSync(value)));
+    } catch {
+      // Best-effort normalization only; the raw path key is still useful.
+    }
+  }
+  return [...keys];
+}
+
+function readDisabledExtensionEntries(): string[] {
+  const settingsPath = getAgentSettingsPath();
+  if (!existsSync(settingsPath)) return [];
+  try {
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as { extensions?: unknown };
+    return Array.isArray(settings.extensions)
+      ? settings.extensions.filter(
+          (entry): entry is string => typeof entry === "string" && entry.startsWith("-"),
+        )
+      : [];
+  } catch (err: unknown) {
+    log.warn("Failed to read disabled extension settings", {
+      settingsPath,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
+}
+
+export function filterDisabledExtensionPaths(
+  extensionPaths: string[],
+  disabledExtensionEntries: string[] = readDisabledExtensionEntries(),
+): string[] {
+  if (disabledExtensionEntries.length === 0) return extensionPaths;
+
+  const disabledPathKeys = new Set<string>();
+  for (const entry of disabledExtensionEntries) {
+    const target = entry.slice(1).trim();
+    if (!target || target.startsWith("!") || target.startsWith("+")) continue;
+    for (const key of pathKeys(target)) {
+      disabledPathKeys.add(key);
+    }
+  }
+
+  if (disabledPathKeys.size === 0) return extensionPaths;
+  return extensionPaths.filter((extensionPath) => {
+    const keys = pathKeys(extensionPath);
+    return !keys.some((key) => disabledPathKeys.has(key));
+  });
 }
 
 /**
@@ -121,15 +180,18 @@ export function discoverExtensionArgs(options?: { includeUser?: boolean }): stri
     });
   }
 
+  const filteredExtensionPaths = filterDisabledExtensionPaths(extensionPaths);
+
   log.info("Discovered extensions", {
     userDir: userExtDir,
     builtinDir: builtinExtDir,
-    count: extensionPaths.length,
+    count: filteredExtensionPaths.length,
+    filteredCount: extensionPaths.length - filteredExtensionPaths.length,
   });
-  for (const p of extensionPaths) {
+  for (const p of filteredExtensionPaths) {
     log.info("  -> extension:", { path: p });
   }
-  return extensionPaths.flatMap((p) => ["--extension", p]);
+  return filteredExtensionPaths.flatMap((p) => ["--extension", p]);
 }
 
 export function parseTierModel(

@@ -4,49 +4,55 @@ import { useSessionReturnStore } from "../../../stores/use-session-return-store"
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import type { SessionMeta } from "../../../types";
 
-async function openSubagentTargetSession(
-  session: SessionMeta,
+interface JumpToSessionOptions {
+  returnSourceSessionId?: string | null;
+  subagentParentSessionId?: string | null;
+}
+
+async function findSessionAcrossProjects(
+  sessionId: string,
   state: ReturnType<typeof useSessionStore.getState>,
-  activeProjectId: string | null,
-  options?: { returnSourceSessionId?: string | null },
-): Promise<boolean> {
-  if (session.delegateType !== "subagent" || !session.delegateParentSessionId) return false;
-
-  const parentSessionId = session.delegateParentSessionId;
-  let parentSession: SessionMeta | undefined;
-  let parentTabId: string | null = null;
-
+): Promise<{ session: SessionMeta; tabId: string } | null> {
   for (const tab of state.projectTabs) {
     const sessions = state.sessionsByProject[tab.path];
-    const found = sessions?.find((item) => item.sessionId === parentSessionId);
+    const found = sessions?.find((item) => item.sessionId === sessionId);
     if (found) {
-      parentSession = found;
-      parentTabId = tab.id;
-      break;
+      return { session: found, tabId: tab.id };
     }
   }
 
-  if (!parentSession) {
-    for (const tab of state.projectTabs) {
-      try {
-        const sessions = await state.loadSessionsForProject(tab.path);
-        const found = sessions?.find((item) => item.sessionId === parentSessionId);
-        if (found) {
-          parentSession = found;
-          parentTabId = tab.id;
-          break;
-        }
-      } catch {
-        continue;
+  for (const tab of state.projectTabs) {
+    try {
+      const sessions = await state.loadSessionsForProject(tab.path);
+      const found = sessions?.find((item) => item.sessionId === sessionId);
+      if (found) {
+        return { session: found, tabId: tab.id };
       }
+    } catch {
+      continue;
     }
   }
 
-  if (!parentSession || !parentTabId) return false;
+  return null;
+}
+
+async function openSubagentByParentSessionId(
+  parentSessionId: string,
+  subSessionId: string,
+  state: ReturnType<typeof useSessionStore.getState>,
+  activeProjectId: string | null,
+  options?: JumpToSessionOptions,
+): Promise<boolean> {
+  const parentMatch = await findSessionAcrossProjects(parentSessionId, state);
+  if (!parentMatch) return false;
+
+  const { session: parentSession, tabId: parentTabId } = parentMatch;
 
   const returnSourceSessionId = options?.returnSourceSessionId ?? null;
   if (returnSourceSessionId && returnSourceSessionId !== parentSession.sessionId) {
-    useSessionReturnStore.getState().setReturnSource(parentSession.sessionId, returnSourceSessionId);
+    useSessionReturnStore
+      .getState()
+      .setReturnSource(parentSession.sessionId, returnSourceSessionId);
   }
 
   if (parentTabId !== activeProjectId) {
@@ -55,13 +61,30 @@ async function openSubagentTargetSession(
 
   state.setActiveSession(parentSession.sessionId, true);
   await useSubagentStore.getState().loadSubsessions(parentSession.sessionPath);
-  useSubagentStore.getState().setActiveSubsession(parentSession.sessionId, session.sessionId);
+  useSubagentStore.getState().setActiveSubsession(parentSession.sessionId, subSessionId);
   return true;
+}
+
+async function openSubagentTargetSession(
+  session: SessionMeta,
+  state: ReturnType<typeof useSessionStore.getState>,
+  activeProjectId: string | null,
+  options?: JumpToSessionOptions,
+): Promise<boolean> {
+  if (session.delegateType !== "subagent" || !session.delegateParentSessionId) return false;
+
+  return openSubagentByParentSessionId(
+    session.delegateParentSessionId,
+    session.sessionId,
+    state,
+    activeProjectId,
+    options,
+  );
 }
 
 export async function jumpToSessionById(
   sessionId: string | undefined,
-  options?: { returnSourceSessionId?: string | null },
+  options?: JumpToSessionOptions,
 ): Promise<void> {
   if (!sessionId) return;
 
@@ -114,6 +137,20 @@ export async function jumpToSessionById(
     } catch {
       continue;
     }
+  }
+
+  const subagentParentSessionId = options?.subagentParentSessionId ?? null;
+  if (
+    subagentParentSessionId &&
+    (await openSubagentByParentSessionId(
+      subagentParentSessionId,
+      sessionId,
+      state,
+      activeProjectId,
+      options,
+    ))
+  ) {
+    return;
   }
 
   const returnSourceSessionId = options?.returnSourceSessionId ?? null;

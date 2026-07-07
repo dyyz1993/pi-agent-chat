@@ -22,6 +22,7 @@ import { useForkDialogStore } from "../../../stores/use-fork-dialog-store";
 import { apiClient } from "../../../lib/api-client";
 import { useActiveSessionActionGuard } from "../../../hooks/use-active-session-action-guard";
 import { getCustomEntryMeta } from "../../../lib/custom-entry-registry";
+import { pickForkEntryIdForTurn, pickForkFallbackMessageIds } from "../../../lib/fork-entry-target";
 import { getMemoryConfig, getMemorySummary, isMemoryEntryType } from "../memory-config";
 
 const log = createLogger("chat");
@@ -347,21 +348,17 @@ export const TimelineTurn = memo(function TimelineTurn({
                     const sessionId = activeSessionGuard.guard({ requireReady: false });
                     if (!sessionId) return;
                     try {
-                      let entryId: string | null =
-                        turn.userEntryId ?? turn.assistantEntryId ?? null;
+                      let entryId: string | null = pickForkEntryIdForTurn(turn);
                       if (!entryId) {
                         const result = await apiClient.call("agent.getTree", { sessionId });
                         const entries: Array<{ id: string; type: string; label?: string }> =
                           result.entries ?? result ?? [];
                         if (!Array.isArray(entries) || entries.length === 0) return;
                         const byId = new Map(entries.map((e) => [e.id, e]));
-                        if (turn.userMessageId) {
-                          const entry = byId.get(turn.userMessageId);
+                        for (const messageId of pickForkFallbackMessageIds(turn)) {
+                          const entry = byId.get(messageId);
                           if (entry) entryId = entry.id;
-                        }
-                        if (!entryId && turn.assistantMessageId) {
-                          const entry = byId.get(turn.assistantMessageId);
-                          if (entry) entryId = entry.id;
+                          if (entryId) break;
                         }
                       }
                       if (!entryId) return;
@@ -460,11 +457,14 @@ function TimelineItemRenderer({
         </div>
       );
     case "customEntry": {
-      const memoryConfig = isMemoryEntryType(item.customType) ? getMemoryConfig(item.customType) : undefined;
+      const memoryConfig = isMemoryEntryType(item.customType)
+        ? getMemoryConfig(item.customType)
+        : undefined;
       const registryMeta = getCustomEntryMeta(item.customType);
       const customLabel = memoryConfig?.label ?? registryMeta?.label ?? item.customType;
-      const customSummary =
-        isMemoryEntryType(item.customType) ? getMemorySummary(item.customType, item.data) : null;
+      const customSummary = isMemoryEntryType(item.customType)
+        ? getMemorySummary(item.customType, item.data)
+        : null;
       return (
         <div className="group/item relative flex gap-2">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}

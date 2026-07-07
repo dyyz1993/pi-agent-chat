@@ -9,6 +9,7 @@ export interface SurfaceHeaderProps {
   closeLabel: string;
   onClose: () => void;
   closeButtonSize?: "compact" | "touch";
+  safeAreaTop?: boolean;
   icon?: ReactNode;
   actions?: ReactNode;
   className?: string;
@@ -20,6 +21,7 @@ export const SurfaceHeader = memo(function SurfaceHeader({
   closeLabel,
   onClose,
   closeButtonSize = "compact",
+  safeAreaTop = false,
   icon,
   actions,
   className,
@@ -33,9 +35,9 @@ export const SurfaceHeader = memo(function SurfaceHeader({
       className={cx(
         "flex shrink-0 items-center gap-2 border-b border-border-secondary bg-surface-dim px-4 py-2",
         "dark:bg-surface-code",
+        safeAreaTop && "surface-header-safe-top",
         className,
       )}
-      style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
     >
       {icon}
       <h2

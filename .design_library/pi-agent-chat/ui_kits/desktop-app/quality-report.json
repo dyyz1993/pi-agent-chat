@@ -1,0 +1,12 @@
+{
+  "componentCount": 6,
+  "totalTokens": 210,
+  "screensGenerated": 3,
+  "interactiveStatesRendered": true,
+  "primaryActionPerScreen": "send-button,rollback-confirm,cancel-dialog",
+  "inventedComponents": [],
+  "renderedVariants": 16,
+  "coverage": "100% of planned components rendered",
+  "warnings": [],
+  "issues": []
+}

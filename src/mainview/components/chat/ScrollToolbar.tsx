@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ChevronUp, ChevronDown, Pause, Play } from "lucide-react";
+import { ChevronUp, ChevronDown, Loader2, Pause, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface ScrollToolbarProps {
@@ -9,6 +9,7 @@ interface ScrollToolbarProps {
   onScrollToTop: () => void;
   onScrollToBottom: () => void;
   onToggleAutoScroll: () => void;
+  isSeekingTop?: boolean;
 }
 
 export const ScrollToolbar = memo(function ScrollToolbar({
@@ -18,6 +19,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
   onScrollToTop,
   onScrollToBottom,
   onToggleAutoScroll,
+  isSeekingTop = false,
 }: ScrollToolbarProps) {
   const { t } = useTranslation("chat");
   const showNavButtons = !isAtTop || !isAtBottom;
@@ -38,14 +40,19 @@ export const ScrollToolbar = memo(function ScrollToolbar({
       </button>
       {showNavButtons && (
         <div className="flex flex-col gap-1">
-          {!isAtTop && (
+          {(!isAtTop || isSeekingTop) && (
             <button
               onClick={onScrollToTop}
+              disabled={isSeekingTop}
               className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
               title={t("scroll.scrollToTop")}
               aria-label={t("scroll.scrollToTop")}
             >
-              <ChevronUp className="w-4 h-4" />
+              {isSeekingTop ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ChevronUp className="w-4 h-4" />
+              )}
             </button>
           )}
           {!isAtBottom && (

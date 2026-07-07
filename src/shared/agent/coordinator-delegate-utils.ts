@@ -26,6 +26,7 @@ export interface CoordinatorSessionCreatedPayload {
     parentSessionPath: string;
     delegateParentSessionId: string;
     delegateType: CoordinatorSessionCreatedDelegateType;
+    agent?: string;
     messageCount: 0;
     firstMessage: string;
     createdAt: number;
@@ -81,6 +82,7 @@ export async function writeDelegateSessionHeader(options: {
   parentSessionPath: string;
   delegateType: DelegateSessionType;
   permissionMode?: string;
+  agent?: string;
   createdAt?: number;
   timestamp?: string;
 }): Promise<void> {
@@ -93,6 +95,7 @@ export async function writeDelegateSessionHeader(options: {
     cwd: options.projectPath,
     delegateParentSessionId: options.parentSessionId,
     permissionMode: options.permissionMode,
+    agent: options.agent,
   });
   const delegateInfoEntry = JSON.stringify({
     type: "delegate_info",
@@ -102,6 +105,7 @@ export async function writeDelegateSessionHeader(options: {
     delegateParentSessionId: options.parentSessionId,
     parentSessionPath: options.parentSessionPath,
     delegateType: options.delegateType,
+    agent: options.agent,
     createdAt: options.createdAt ?? Date.now(),
   });
   await writeFile(options.sessionPath, `${headerEntry}\n${delegateInfoEntry}\n`, "utf-8");
@@ -214,6 +218,7 @@ export function buildCoordinatorSessionCreatedEvent(options: {
   projectPath: string;
   parentSessionPath: string;
   delegateType: CoordinatorSessionCreatedDelegateType;
+  agent?: string;
   firstMessage: string;
   createdAt?: number;
 }): CoordinatorSessionCreatedPayload {
@@ -228,6 +233,7 @@ export function buildCoordinatorSessionCreatedEvent(options: {
       parentSessionPath: options.parentSessionPath,
       delegateParentSessionId: options.parentSessionId,
       delegateType: options.delegateType,
+      agent: options.agent,
       messageCount: 0,
       firstMessage: options.firstMessage,
       createdAt,

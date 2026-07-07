@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
-import type { BashProcess } from "../../../shared/modules/bash";
+import type { BashChannelEvent, BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
 import { ModalDialog } from "../primitives";
 import { createLogger } from "../../../shared/lib/logger";
@@ -156,10 +156,12 @@ function BashProcessCard({
 function LogViewer({
   logPath,
   toolCallId,
+  sessionId,
   onClose,
 }: {
   logPath: string;
   toolCallId: string;
+  sessionId?: string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation("chat");
@@ -177,6 +179,7 @@ function LogViewer({
   const loadingRef = useRef(false);
   const initTag = useRef(0);
   const subIdRef = useRef<string | null>(null);
+  const bashEventSubIdRef = useRef<string | null>(null);
   const autoScrollRef = useRef(true);
   const isProgrammaticScrollRef = useRef(false);
 
@@ -188,6 +191,36 @@ function LogViewer({
     isProgrammaticScrollRef.current = true;
     vlistRef.current?.scrollToIndex(lines.length - 1, { align: "end" });
   }, [lines.length]);
+
+  const appendLiveLines = useCallback((incomingLines: string[]) => {
+    const normalized = incomingLines
+      .flatMap((line) => line.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n"))
+      .filter((line) => line.length > 0);
+
+    if (normalized.length === 0) return;
+
+    setLines((prev) => {
+      let overlap = 0;
+      const maxOverlap = Math.min(prev.length, normalized.length);
+      for (let len = maxOverlap; len > 0; len--) {
+        const prevSlice = prev.slice(prev.length - len);
+        const incomingSlice = normalized.slice(0, len);
+        if (prevSlice.every((line, index) => line === incomingSlice[index])) {
+          overlap = len;
+          break;
+        }
+      }
+
+      const additions = normalized.slice(overlap);
+      if (additions.length === 0) return prev;
+
+      offsetRef.current += additions.length;
+      setTotalLines((current) =>
+        Math.max(current + additions.length, prev.length + additions.length),
+      );
+      return [...prev, ...additions];
+    });
+  }, []);
 
   // --- Auto-scroll on new lines ---
   const prevLinesLengthRef = useRef(0);
@@ -213,19 +246,19 @@ function LogViewer({
     setTotalLines(0);
     setHasMore(false);
     subIdRef.current = null;
+    bashEventSubIdRef.current = null;
 
     let cancelled = false;
+    const sid = sessionId ?? useSessionStore.getState().activeSessionId ?? undefined;
 
     (async () => {
       try {
-        const sid = useSessionStore.getState().activeSessionId;
         const id = await apiClient.subscribe(
           "bash.logUpdate",
           (payload: { logPath: string; newLines: string[] }) => {
             if (payload.logPath !== logPath || initTag.current !== tag) return;
             if (payload.newLines.length === 0) return;
-            setLines((prev) => [...prev, ...payload.newLines]);
-            setTotalLines((prev) => prev + payload.newLines.length);
+            appendLiveLines(payload.newLines);
           },
           sid ? { sessionId: sid } : undefined,
         );
@@ -264,16 +297,55 @@ function LogViewer({
       }
     })();
 
+    if (sid && toolCallId) {
+      apiClient
+        .subscribe(
+          "bash.event",
+          (payload: { sessionId: string; event: BashChannelEvent }) => {
+            if (cancelled || initTag.current !== tag) return;
+            if (payload.sessionId !== sid) return;
+            if (payload.event?.type !== "output") return;
+            if (payload.event.toolCallId !== toolCallId) return;
+            if (!payload.event.data) return;
+            appendLiveLines([payload.event.data]);
+          },
+          { sessionId: sid },
+        )
+        .then((id) => {
+          if (cancelled) {
+            apiClient.unsubscribe(id);
+            return;
+          }
+          bashEventSubIdRef.current = id;
+        })
+        .catch((err) => {
+          log.warn("bash.event subscribe failed", { error: String(err) });
+        });
+
+      apiClient
+        .call("bash.command", { sessionId: sid, action: "subscribe_output", toolCallId })
+        .catch((err) => {
+          log.warn("subscribe_output failed", { toolCallId, error: String(err) });
+        });
+    }
+
     return () => {
       cancelled = true;
       mountedRef.current = false;
       if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
-      const sid = useSessionStore.getState().activeSessionId;
+      if (bashEventSubIdRef.current) apiClient.unsubscribe(bashEventSubIdRef.current);
       apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch((err) => {
         log.warn("unwatchLog failed", { error: String(err) });
       });
+      if (sid && toolCallId) {
+        apiClient
+          .call("bash.command", { sessionId: sid, action: "unsubscribe_output", toolCallId })
+          .catch((err) => {
+            log.warn("unsubscribe_output failed", { toolCallId, error: String(err) });
+          });
+      }
     };
-  }, [logPath]);
+  }, [appendLiveLines, logPath, sessionId, toolCallId]);
 
   // --- Scroll handler with programmatic scroll guard ---
   const handleScroll = useCallback(() => {
@@ -484,6 +556,7 @@ export function BashPanel() {
         <LogViewer
           logPath={logViewer.logPath}
           toolCallId={logViewer.toolCallId}
+          sessionId={activeSessionId}
           onClose={() => setLogViewer(null)}
         />
       )}

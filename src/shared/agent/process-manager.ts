@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync } from "fs";
 
 import * as path from "path";
 import type { RPCServer } from "@dyyz1993/rpc-core";
@@ -16,7 +16,14 @@ import { SessionMessageReader } from "./session-message-reader";
 import { AgentEventHandler } from "./event-handler";
 import type { AgentEventHandlerDeps } from "./event-handler";
 import { CoordinatorHandler } from "./coordinator-handler";
-import type { TierKey } from "./agent-runtime-config";
+import {
+  BUILTIN_INTERNAL_EXTENSION_NAMES,
+  filterDisabledExtensionPaths,
+  parseTierModel,
+  scanExtensionDir,
+  TIER_KEYS,
+  type TierKey,
+} from "./agent-runtime-config";
 import { registerAgentChannels } from "./agent-channel-registration";
 import {
   getAvailableModelsOperation,
@@ -48,6 +55,10 @@ import {
   exportHtmlOperation,
 } from "./agent-client-history-operations";
 import {
+  getFullMessagesAroundOperation,
+  getMessageNavPageOperation,
+} from "./agent-client-message-operations";
+import {
   compactOperation,
   setAutoCompactionOperation,
   setAutoRetryOperation,
@@ -70,6 +81,7 @@ import {
   getContextUsageOperation,
 } from "./agent-client-session-operations";
 import {
+  abortOperation,
   sendPromptOperation,
   steerOperation,
   followUpOperation,
@@ -137,6 +149,48 @@ import {
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
+const TIER_KEY_SET = new Set<string>(TIER_KEYS);
+
+function isTierKey(value: string): value is TierKey {
+  return TIER_KEY_SET.has(value);
+}
+
+function parseExplicitModelName(model: string): { provider: string; modelId: string } {
+  const [provider, ...modelParts] = model.split("/");
+  const modelId = modelParts.join("/");
+  if (!provider || !modelId) {
+    throw new Error(
+      `Invalid model "${model}". Expected format: provider/modelId or tier alias (${TIER_KEYS.join(
+        "/",
+      )})`,
+    );
+  }
+  return { provider, modelId };
+}
+
+function readPersistedSessionAgent(sessionPath: string): string | null {
+  if (!sessionPath || !existsSync(sessionPath)) return null;
+  try {
+    const lines = readFileSync(sessionPath, "utf-8").split("\n").slice(0, 20);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const entry = JSON.parse(line) as Record<string, unknown>;
+      if (
+        (entry.type === "session" || entry.type === "delegate_info") &&
+        typeof entry.agent === "string" &&
+        entry.agent.trim()
+      ) {
+        return entry.agent;
+      }
+    }
+  } catch (err: unknown) {
+    log.debug("failed to read persisted session agent", {
+      sessionPath,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return null;
+}
 
 /**
  * Race a promise against a timeout. Rejects with a descriptive error if the
@@ -149,58 +203,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
     ),
   ]);
-}
-
-/**
- * Scan the global extensions directory (~/.pi/agent/extensions/) and
- * return `--extension <path>` args for each discovered entry.
- *
- * Layout: each subdirectory with an index.ts/js, or each .ts/.js file,
- * is treated as an extension. Symlinks are resolved.
- */
-function scanExtensionDir(dir: string, extensionPaths: string[]): void {
-  if (!existsSync(dir)) return;
-
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__tests__")
-        continue;
-
-      let isDir = entry.isDirectory();
-      let isFile = entry.isFile();
-      if (entry.isSymbolicLink()) {
-        try {
-          const stats = statSync(path.join(dir, entry.name));
-          isDir = stats.isDirectory();
-          isFile = stats.isFile();
-        } catch (e) {
-          log.debug("scanExtensions: skipping symlink target", {
-            name: entry.name,
-            error: String(e),
-          });
-          continue;
-        }
-      }
-
-      const fullPath = path.join(dir, entry.name);
-      if (isDir) {
-        const indexTs = path.join(fullPath, "index.ts");
-        const indexJs = path.join(fullPath, "index.js");
-        if (existsSync(indexTs)) {
-          extensionPaths.push(indexTs);
-        } else if (existsSync(indexJs)) {
-          extensionPaths.push(indexJs);
-        }
-      } else if (isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))) {
-        extensionPaths.push(fullPath);
-      }
-    }
-  } catch (err: unknown) {
-    log.warn("Failed to scan extensions directory", {
-      dir,
-      err: err instanceof Error ? err.message : String(err),
-    });
-  }
 }
 
 function getBuiltinExtensionsDir(): string | undefined {
@@ -252,18 +254,23 @@ function discoverExtensionArgs(includeUser = true): string[] {
 
   const builtinExtDir = getBuiltinExtensionsDir();
   if (builtinExtDir && existsSync(builtinExtDir)) {
-    scanExtensionDir(builtinExtDir, extensionPaths);
+    scanExtensionDir(builtinExtDir, extensionPaths, {
+      allowPrivateEntries: BUILTIN_INTERNAL_EXTENSION_NAMES,
+    });
   }
+
+  const filteredExtensionPaths = filterDisabledExtensionPaths(extensionPaths);
 
   log.info("Discovered extensions", {
     userDir: userExtDir,
     builtinDir: builtinExtDir,
-    count: extensionPaths.length,
+    count: filteredExtensionPaths.length,
+    filteredCount: extensionPaths.length - filteredExtensionPaths.length,
   });
-  for (const p of extensionPaths) {
+  for (const p of filteredExtensionPaths) {
     log.info("  → extension:", { path: p });
   }
-  return extensionPaths.flatMap((p) => ["--extension", p]);
+  return filteredExtensionPaths.flatMap((p) => ["--extension", p]);
 }
 
 // Lazy-init: discoverExtensionArgs() hits the filesystem (realpathSync on
@@ -795,6 +802,7 @@ export class AgentProcessManager {
       tokensBefore?: number;
       timestamp: number;
     }>;
+    deletionEntries?: Array<{ entryId: string; targetIds: string[] }>;
     parentById: Map<string, string | null>;
     lineCount: number;
     lastJsonlLeafPointer: string | null;
@@ -821,6 +829,7 @@ export class AgentProcessManager {
         tokensBefore?: number;
         timestamp: number;
       }>;
+      deletionEntries?: Array<{ entryId: string; targetIds: string[] }>;
       parentById: Map<string, string | null>;
       lineCount: number;
       lastJsonlLeafPointer: string | null;
@@ -866,6 +875,7 @@ export class AgentProcessManager {
       tokensBefore?: number;
       timestamp: number;
     }>;
+    newDeletionEntries: Array<{ entryId: string; targetIds: string[] }>;
     lastLeafPointer: string | null;
   }> {
     return this.messageReader.readJsonlFromByteOffset(
@@ -915,7 +925,10 @@ export class AgentProcessManager {
       broadcastEvent: (method, params, meta) => this.broadcastEvent(method, params, meta),
       setSessionName: (sessionId, name) => this.setSessionName(sessionId, name),
       switchAgent: (sessionId, agentName) => this.switchAgent(sessionId, agentName),
+      setActiveTools: (sessionId, toolNames) => this.setActiveTools(sessionId, toolNames),
       setModel: (sessionId, provider, modelId) => this.setModel(sessionId, provider, modelId),
+      setModelFromName: (sessionId, model, options) =>
+        this.setModelFromName(sessionId, model, options),
       setPermissionMode: (sessionId, mode) => this.setPermissionMode(sessionId, mode),
       getState: (sessionId) => this.getState(sessionId),
       getStatus: (sessionId) => this.getStatus(sessionId),
@@ -1122,6 +1135,18 @@ export class AgentProcessManager {
     this._startPromises.set(sessionId, startPromise);
     try {
       const result = await startPromise;
+      const persistedAgent = options?.delegateParentSessionId
+        ? null
+        : readPersistedSessionAgent(sessionPath);
+      if (result.status === "started" && persistedAgent) {
+        await this.switchAgent(sessionId, persistedAgent).catch((err: unknown) => {
+          log.warn("[start] failed to restore persisted session agent", {
+            sessionId,
+            agent: persistedAgent,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
       const connectedStatus = connectingStatus
         ? { ...connectingStatus, status: "connected" as const, error: undefined }
         : null;
@@ -1153,15 +1178,26 @@ export class AgentProcessManager {
       ensureManagedClient: (sid) => this.ensureManagedClient(sid),
       isClientAlive: (sid, m) => this.isClientAlive(sid, m),
       cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
-      emitAgentEnd: (sid) => this.emitAgentEvent(sid, { type: "agent_end" } as SanitizedEvent),
+      emitAgentEnd: (sid, reason) =>
+        this.emitAgentEvent(
+          sid,
+          (reason ? { type: "agent_end", reason } : { type: "agent_end" }) as SanitizedEvent,
+        ),
     });
   }
 
-  steer(sessionId: string, content: string, images?: ImageContent[]): boolean {
+  steer(
+    sessionId: string,
+    content?: string,
+    images?: ImageContent[],
+    options?: { promote?: number; immediate?: boolean },
+  ): boolean {
     return steerOperation({
       sessionId,
       content,
       images,
+      promote: options?.promote,
+      immediate: options?.immediate,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
@@ -1176,20 +1212,12 @@ export class AgentProcessManager {
   }
 
   async abort(sessionId: string): Promise<boolean> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-    await managed.client.abort().catch((err: unknown) => {
-      log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) });
+    return abortOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      broadcastIdle: (sid) => this.broadcastSessionStatus(sid, "idle"),
+      emitAgentEvent: (sid, event) => this.emitAgentEvent(sid, event),
     });
-    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
-      (err: unknown) => {
-        log.warn("emitAgentEvent(agent_end) after abort error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      },
-    );
-    return true;
   }
 
   async setCwd(sessionId: string, cwd: string): Promise<boolean> {
@@ -1517,7 +1545,7 @@ export class AgentProcessManager {
   async getFullMessages(
     sessionId: string,
     sessionPath?: string,
-    options?: { limit?: number; afterEntryId?: string },
+    options?: { limit?: number; afterEntryId?: string; fromStart?: boolean },
   ): Promise<{
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
@@ -1526,6 +1554,58 @@ export class AgentProcessManager {
     nextCursor: string | null;
   }> {
     return this.messageReader.getFullMessages(sessionId, sessionPath, options);
+  }
+
+  async getMessageNavPage(
+    sessionId: string,
+    sessionPath?: string,
+    options?: { limit?: number; afterEntryId?: string; fromStart?: boolean },
+  ): Promise<{
+    messages: AgentMessageForUI[];
+    hasMore: boolean;
+    totalCount: number;
+    nextCursor: string | null;
+  }> {
+    return getMessageNavPageOperation({
+      sessionId,
+      sessionPath,
+      pagination: options,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      resolveSessionPath: (sid) => this.resolveSessionPath(sid),
+      leafIds: this.leafIds,
+      getSessionCache: (sid, resolvedSessionPath) => this.getSessionCache(sid, resolvedSessionPath),
+      setSessionCache: (sid, resolvedSessionPath, data) =>
+        this.setSessionCache(sid, resolvedSessionPath, data),
+    });
+  }
+
+  async getFullMessagesAround(
+    sessionId: string,
+    sessionPath: string | undefined,
+    options: { targetEntryId: string; before?: number; after?: number },
+  ): Promise<{
+    messages: AgentMessageForUI[];
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMoreBefore: boolean;
+    hasMoreAfter: boolean;
+    beforeCursor: string | null;
+    afterCursor: string | null;
+    targetFound: boolean;
+    totalCount: number;
+  }> {
+    return getFullMessagesAroundOperation({
+      sessionId,
+      sessionPath,
+      targetEntryId: options.targetEntryId,
+      before: options.before,
+      after: options.after,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      resolveSessionPath: (sid) => this.resolveSessionPath(sid),
+      leafIds: this.leafIds,
+      getSessionCache: (sid, resolvedSessionPath) => this.getSessionCache(sid, resolvedSessionPath),
+      setSessionCache: (sid, resolvedSessionPath, data) =>
+        this.setSessionCache(sid, resolvedSessionPath, data),
+    });
   }
 
   async getAvailableModels(
@@ -1552,6 +1632,70 @@ export class AgentProcessManager {
       getActiveManaged: (sid) => this.getActiveManaged(sid),
       ensureManagedClient: (sid) => this.ensureManagedClient(sid),
     });
+  }
+
+  async setModelFromName(
+    sessionId: string,
+    model: string,
+    options: {
+      parentSessionId?: string;
+      projectPath?: string;
+    } = {},
+  ): Promise<{ provider: string; id: string }> {
+    const resolved = await this.resolveModelName(model, {
+      parentSessionId: options.parentSessionId ?? sessionId,
+      projectPath:
+        options.projectPath ??
+        this.sessionProjectPaths.get(sessionId) ??
+        this.getActiveManaged(sessionId)?.info.projectPath,
+    });
+    return this.setModel(sessionId, resolved.provider, resolved.modelId);
+  }
+
+  async resolveModelName(
+    model: string,
+    options: {
+      parentSessionId: string;
+      projectPath?: string;
+    },
+  ): Promise<{ provider: string; modelId: string }> {
+    const trimmed = model.trim();
+    if (!trimmed) {
+      throw new Error("Model is empty");
+    }
+
+    if (trimmed.includes("/")) {
+      return parseExplicitModelName(trimmed);
+    }
+
+    const normalizedAlias = trimmed.toLowerCase();
+    if (isTierKey(normalizedAlias)) {
+      const resolved = await this.resolveTierModel({
+        tier: normalizedAlias,
+        parentSessionId: options.parentSessionId,
+      });
+      if (resolved) return resolved;
+      throw new Error(`Tier "${normalizedAlias}" is not configured`);
+    }
+
+    throw new Error(
+      `Invalid model "${model}". Expected format: provider/modelId or tier alias (${TIER_KEYS.join(
+        "/",
+      )})`,
+    );
+  }
+
+  private async resolveTierModel(options: {
+    tier: TierKey;
+    parentSessionId: string;
+  }): Promise<{ provider: string; modelId: string } | null> {
+    const runtimeConfig = await this.getTierModels(options.parentSessionId).catch(() => null);
+    const runtimeModel = runtimeConfig?.models?.[options.tier];
+    if (runtimeModel) {
+      return parseTierModel(options.tier, runtimeModel);
+    }
+
+    return null;
   }
 
   async switchTier(
@@ -1955,6 +2099,26 @@ export class AgentProcessManager {
       sessionId,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
+  }
+
+  async deleteEntries(sessionId: string, targetIds: string[]): Promise<{ entryId: string }> {
+    const managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      throw new Error("Client not found");
+    }
+    return managed.client.deleteEntries(targetIds);
+  }
+
+  async summarizeEntries(
+    sessionId: string,
+    targetIds: string[],
+    options?: { summary?: string; model?: string },
+  ): Promise<{ entryId: string }> {
+    const managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      throw new Error("Client not found");
+    }
+    return managed.client.summarizeEntries(targetIds, options);
   }
 
   async fork(

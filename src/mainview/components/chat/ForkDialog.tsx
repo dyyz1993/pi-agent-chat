@@ -44,11 +44,10 @@ export const ForkDialog = memo(function ForkDialog() {
     return null;
   });
 
-  const currentTier = useTierStore((s) =>
-    projectPath ? (s.dataByProject[projectPath]?.currentTier ?? null) : null,
-  );
   const forkTierModels = useTierStore((s) =>
-    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
+    forkSessionId && projectPath
+      ? s.getTierModelsForSession(forkSessionId, projectPath)
+      : undefined,
   );
   const globalDefaults = useTierStore((s) => s.globalDefaults);
   const tierModels = forkTierModels ?? globalDefaults;
@@ -61,7 +60,9 @@ export const ForkDialog = memo(function ForkDialog() {
       const agent = useAgentStore.getState().getCurrentAgentForSession(config.sessionId);
       setSelectedAgent(agent);
       const tier =
-        (projectPath ? useTierStore.getState().getCurrentTier(projectPath) : null) ?? "pro";
+        (projectPath
+          ? useTierStore.getState().getCurrentTierForSession(config.sessionId, projectPath)
+          : null) ?? "pro";
       setSelectedTier(tier as TierKey);
     }
   }, [open, config, projectPath]);
@@ -139,9 +140,10 @@ export const ForkDialog = memo(function ForkDialog() {
         });
       }
 
-      if (selectedTier !== currentTier) {
-        await useTierStore.getState().switchToTier(selectedTier, result.newSessionId);
-      }
+      const tierStore = useTierStore.getState();
+      tierStore.setSessionTierModels(result.newSessionId, activeTab.path, tierModels);
+      tierStore.setSessionCurrentTier(result.newSessionId, activeTab.path, selectedTier);
+      await tierStore.saveTierModelsForSession(result.newSessionId, activeTab.path, tierModels);
 
       useNotificationStore.getState().push({ message: t("messageCard.forked"), level: "info" });
       closeDialog();
@@ -150,7 +152,7 @@ export const ForkDialog = memo(function ForkDialog() {
     } finally {
       setForking(false);
     }
-  }, [selectedAgent, selectedTier, currentTier, t, closeDialog, setForking]);
+  }, [selectedAgent, selectedTier, tierModels, t, closeDialog, setForking]);
 
   if (!open || !config) return null;
 

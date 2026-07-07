@@ -1,0 +1,46 @@
+{
+  "slug": "long-content-card",
+  "schemaVersion": 2,
+  "name": "LongContentCard",
+  "category": "context",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "content",
+      "evidence": "Expandable long content with collapsed preview and full view"
+    }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["collapsed", "expanded"] }],
+  "representativeVariants": [
+    {
+      "name": "Collapsed",
+      "traits": {
+        "state": "collapsed",
+        "title": "Design Document",
+        "lineCount": 245,
+        "preview": "# Design System\n\nThis document outlines..."
+      },
+      "whySelected": "Collapsed long content",
+      "childrenDigest": "Title + line count + truncated preview + expand button"
+    },
+    {
+      "name": "Expanded",
+      "traits": {
+        "state": "expanded",
+        "title": "Design Document",
+        "content": "Full document content here..."
+      },
+      "whySelected": "Expanded full content",
+      "childrenDigest": "Title + full content + collapse button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["title", "line-count", "preview", "expand-toggle", "full-content"],
+    "structurePatterns": ["expandable-content"]
+  },
+  "usageHints": { "priorityHint": 54, "context": "Long text/code/document content in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Rounded-xl corners (unique), smooth expand/collapse animation, truncated preview with gradient fade"
+}

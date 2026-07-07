@@ -55,25 +55,25 @@ describe("AgentPanel refresh", () => {
     useLayoutStore.setState({ activePanelTab: originalActivePanelTab });
   });
 
-  it("refreshes the agent list as well as agent detail data", () => {
+  it("refreshes through the agent list loader and system prompt", () => {
     render(<AgentPanel />);
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     expect(fetchAgents).toHaveBeenCalledWith("sess-1");
-    expect(fetchAgentDetail).toHaveBeenCalledWith("sess-1");
-    expect(fetchAllTools).toHaveBeenCalledWith("sess-1");
+    expect(fetchAgentDetail).not.toHaveBeenCalled();
+    expect(fetchAllTools).not.toHaveBeenCalled();
     expect(fetchSystemPrompt).toHaveBeenCalledWith("sess-1");
   });
 
-  it("auto-refreshes the agent list when the agent panel tab becomes active", () => {
+  it("auto-refreshes through the agent list loader when the agent panel tab becomes active", () => {
     useLayoutStore.setState({ activePanelTab: "agent" });
 
     render(<AgentPanel />);
 
     expect(fetchAgents).toHaveBeenCalledWith("sess-1");
-    expect(fetchAgentDetail).toHaveBeenCalledWith("sess-1");
-    expect(fetchAllTools).toHaveBeenCalledWith("sess-1");
+    expect(fetchAgentDetail).not.toHaveBeenCalled();
+    expect(fetchAllTools).not.toHaveBeenCalled();
     expect(fetchSystemPrompt).toHaveBeenCalledWith("sess-1");
   });
 
@@ -98,8 +98,8 @@ describe("AgentPanel refresh", () => {
     render(<AgentPanel />);
 
     expect(fetchAgents).toHaveBeenCalledWith("child-session");
-    expect(fetchAgentDetail).toHaveBeenCalledWith("child-session");
-    expect(fetchAllTools).toHaveBeenCalledWith("child-session");
+    expect(fetchAgentDetail).not.toHaveBeenCalled();
+    expect(fetchAllTools).not.toHaveBeenCalled();
     expect(fetchSystemPrompt).toHaveBeenCalledWith("child-session");
     expect(fetchAgents).not.toHaveBeenCalledWith("parent-session");
   });

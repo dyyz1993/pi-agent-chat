@@ -1,0 +1,34 @@
+{
+  "slug": "compaction-summary-card",
+  "schemaVersion": 2,
+  "name": "CompactionSummaryCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "summary", "evidence": "Context compaction summary when conversation is condensed" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Compacted",
+      "traits": {
+        "originalCount": 15,
+        "summary": "Discussion covered refactoring auth module and fixing TypeScript errors"
+      },
+      "whySelected": "Shows what was condensed",
+      "childrenDigest": "Icon + label + summary text + message count badge"
+    }
+  ],
+  "anatomy": {
+    "parts": ["icon", "label", "summary", "badge"],
+    "structurePatterns": ["stacked-label-content"]
+  },
+  "usageHints": {
+    "priorityHint": 14,
+    "context": "Context window management, conversation compaction"
+  },
+  "doNotInvent": [],
+  "unknowns": ["exact trigger conditions"],
+  "keyInsightSeed": "Muted/compact style with info icon, shows count of compacted messages"
+}

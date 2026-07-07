@@ -1,0 +1,46 @@
+{
+  "slug": "button",
+  "schemaVersion": 2,
+  "name": "Button",
+  "category": "action",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "button", "evidence": "interactive clickable element with action semantics" }
+  ],
+  "variantDimensions": [
+    { "name": "variant", "values": ["primary", "ghost", "subtle"] },
+    { "name": "size", "values": ["sm", "md", "lg"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Primary Medium",
+      "traits": { "variant": "primary", "size": "md", "label": "Send" },
+      "whySelected": "Most common action button in chat input bar",
+      "childrenDigest": "Single text label, no icon"
+    },
+    {
+      "name": "Ghost Small",
+      "traits": { "variant": "ghost", "size": "sm", "label": "Rollback Code" },
+      "whySelected": "Turn action buttons in timeline toolbar",
+      "childrenDigest": "Text label with optional inline icon"
+    },
+    {
+      "name": "Subtle Large",
+      "traits": { "variant": "subtle", "size": "lg", "label": "Cancel" },
+      "whySelected": "Modal/dialog cancel actions",
+      "childrenDigest": "Single text label"
+    }
+  ],
+  "anatomy": {
+    "parts": ["label", "icon (optional)"],
+    "structurePatterns": ["single-row inline-flex"]
+  },
+  "usageHints": {
+    "priorityHint": 1,
+    "context": "Chat input send, turn actions, modal buttons, tool card actions"
+  },
+  "doNotInvent": ["button-group", "icon-only-round-button"],
+  "unknowns": ["exact hover animation timing"],
+  "keyInsightSeed": "Compact button heights (32/36/40px), blue accent primary, ghost and subtle secondary variants"
+}

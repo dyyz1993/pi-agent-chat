@@ -38,6 +38,25 @@ type AskDraftAnswer = { selected: string[]; text: string };
 
 const SINGLE_SELECT_ADVANCE_DELAY_MS = 500;
 
+function AutoDenyHint({
+  timeout,
+  className = "mt-1.5 px-0.5",
+}: {
+  timeout?: number;
+  className?: string;
+}) {
+  const { t } = useTranslation("chat");
+  if (timeout == null || timeout <= 0) return null;
+  return (
+    <div className={`flex items-center gap-1 ${className}`}>
+      <Clock className="w-3 h-3 text-text-tertiary" />
+      <span className="text-[10px] text-text-tertiary">
+        {t("uiCard.autoDeny", { seconds: Math.ceil(timeout / 1000) })}
+      </span>
+    </div>
+  );
+}
+
 const BG_MAP: Record<string, string> = {
   pending:
     "border border-status-warning/30 dark:border-status-warning/40 bg-status-warning/10 dark:bg-status-warning/25",
@@ -230,6 +249,7 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
                 </code>
               </div>
             )}
+            <AutoDenyHint timeout={block.timeout} />
             <div className="flex gap-1.5">
               <button
                 onClick={() => respondById(block.id, { confirmed: true })}
@@ -844,7 +864,6 @@ export const AskUserQuestionToolCard = memo(function AskUserQuestionToolCard({
 });
 
 export const PathPermissionCard = memo(function PathPermissionCard({ block }: { block: UIBlock }) {
-  const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const isPending = block.status === "pending";
   const meta = block.permissionMeta?.type === "path_boundary" ? block.permissionMeta : undefined;
@@ -943,14 +962,7 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
           rememberOptions={rememberOptions}
           onSelect={(value) => respondById(block.id, { value })}
         />
-        {block.timeout != null && block.timeout > 0 && (
-          <div className="flex items-center gap-1 mt-1.5 px-0.5">
-            <Clock className="w-3 h-3 text-text-tertiary" />
-            <span className="text-[10px] text-text-tertiary">
-              {t("uiCard.autoDeny", { seconds: Math.ceil(block.timeout / 1000) })}
-            </span>
-          </div>
-        )}
+        <AutoDenyHint timeout={block.timeout} />
       </div>
     </CardShell>
   );
@@ -961,7 +973,6 @@ export const RuntimePermissionCard = memo(function RuntimePermissionCard({
 }: {
   block: UIBlock;
 }) {
-  const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const isPending = block.status === "pending";
   const meta =
@@ -1029,14 +1040,7 @@ export const RuntimePermissionCard = memo(function RuntimePermissionCard({
           rememberOptions={meta?.rememberOptions}
           onSelect={(value) => respondById(block.id, { value })}
         />
-        {block.timeout != null && block.timeout > 0 && (
-          <div className="flex items-center gap-1 mt-1.5 px-0.5">
-            <Clock className="w-3 h-3 text-text-tertiary" />
-            <span className="text-[10px] text-text-tertiary">
-              {t("uiCard.autoDeny", { seconds: Math.ceil(block.timeout / 1000) })}
-            </span>
-          </div>
-        )}
+        <AutoDenyHint timeout={block.timeout} />
       </div>
     </CardShell>
   );

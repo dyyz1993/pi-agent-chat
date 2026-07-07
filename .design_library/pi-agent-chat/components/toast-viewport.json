@@ -1,0 +1,37 @@
+{
+  "slug": "toast-viewport",
+  "schemaVersion": 2,
+  "name": "ToastViewport",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "toast", "evidence": "Stacked toast notification area with auto-dismiss" }
+  ],
+  "variantDimensions": [{ "name": "level", "values": ["info", "warning", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Error Toast",
+      "traits": { "level": "error", "message": "Connection lost", "dismissible": true },
+      "whySelected": "Error toast notification",
+      "childrenDigest": "Error icon + message text + dismiss button"
+    },
+    {
+      "name": "Info Toast",
+      "traits": { "level": "info", "message": "File saved", "dismissible": true },
+      "whySelected": "Info toast",
+      "childrenDigest": "Info icon + message + dismiss button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["toast-item", "level-icon", "message", "dismiss-button", "progress-bar"],
+    "structurePatterns": ["stacked-notifications"]
+  },
+  "usageHints": {
+    "priorityHint": 62,
+    "context": "Transient toast notifications, stacked from top-right"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "z-toast, stacked with gap-2, pointer-events-none container, rounded-lg, backdrop-blur-sm, limit 3 visible, semantic bg colors"
+}

@@ -1,0 +1,40 @@
+{
+  "slug": "image-card",
+  "schemaVersion": 2,
+  "name": "ImageCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "media", "evidence": "Image preview card with thumbnail and metadata" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["loading", "loaded", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Loaded",
+      "traits": {
+        "state": "loaded",
+        "src": "screenshot.png",
+        "alt": "UI preview",
+        "width": 800,
+        "height": 600
+      },
+      "whySelected": "Successfully loaded image",
+      "childrenDigest": "Image thumbnail + dimensions badge + open button"
+    },
+    {
+      "name": "Error",
+      "traits": { "state": "error", "alt": "Failed to load" },
+      "whySelected": "Image load failure",
+      "childrenDigest": "Image icon + error message + retry button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["thumbnail", "dimensions-badge", "alt-text", "open-button", "error-fallback"],
+    "structurePatterns": ["media-preview"]
+  },
+  "usageHints": { "priorityHint": 44, "context": "Image preview in chat responses" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Rounded-lg container, responsive thumbnail with aspect ratio, open-in-viewer action"
+}

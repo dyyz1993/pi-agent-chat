@@ -3,10 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   fetchAgents: vi.fn(),
+  fetchInitialState: vi.fn(),
   fetchModelState: vi.fn(),
   fetchTierConfig: vi.fn(),
   switchAgent: vi.fn(),
   toggleAgentFavorite: vi.fn(),
+  tierDataBySession: {} as Record<
+    string,
+    { projectPath: string; tierModels: Record<string, string>; currentTier: string | null }
+  >,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -21,6 +26,9 @@ vi.mock("react-i18next", () => ({
         agentBuild: "Build",
         loading: "Loading",
         notLoaded: "Not loaded",
+        tierFast: "Fast",
+        tierPro: "Pro",
+        tierMax: "Max",
         thinkingOff: "Off",
         default: "Default",
         mainWorkspace: "Main workspace",
@@ -40,9 +48,11 @@ const mockSessionState = {
   currentModel: null,
   modelStateLoading: false,
   currentThinkingLevel: "off",
+  thinkingLevelBySession: {},
   availableModels: [],
   setCurrentModel: vi.fn(),
   setThinkingLevel: vi.fn(),
+  fetchInitialState: hoisted.fetchInitialState,
   fetchModelState: hoisted.fetchModelState,
   sessionsByProject: {
     "/project": [
@@ -73,12 +83,20 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   TIER_KEYS: ["fast", "pro", "max"],
   useTierStore: vi.fn((selector: (state: unknown) => unknown) =>
     selector({
-      dataByProject: {},
+      dataBySession: hoisted.tierDataBySession,
       globalDefaults: {},
+      getCurrentTierForSession: (sessionId: string, projectPath: string) =>
+        hoisted.tierDataBySession[sessionId]?.projectPath === projectPath
+          ? (hoisted.tierDataBySession[sessionId]?.currentTier ?? null)
+          : null,
+      getTierModelsForSession: (sessionId: string, projectPath: string) =>
+        hoisted.tierDataBySession[sessionId]?.projectPath === projectPath
+          ? (hoisted.tierDataBySession[sessionId]?.tierModels ?? {})
+          : {},
       switchToTier: vi.fn(),
       fetchTierConfig: hoisted.fetchTierConfig,
-      setProjectTierModels: vi.fn(),
-      syncTierFromModel: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
+      syncTierFromModelForSession: vi.fn(),
     }),
   ),
 }));
@@ -179,10 +197,23 @@ import { SidebarBottomControls } from "../../../src/mainview/components/left-sid
 describe("SidebarBottomControls agent menu", () => {
   beforeEach(() => {
     hoisted.fetchAgents.mockReset();
+    hoisted.fetchInitialState.mockReset();
     hoisted.fetchModelState.mockReset();
     hoisted.fetchTierConfig.mockReset();
     hoisted.switchAgent.mockReset();
     hoisted.toggleAgentFavorite.mockReset();
+    hoisted.tierDataBySession = {};
+    mockSessionState.sessionsByProject = {
+      "/project": [
+        {
+          sessionId: "sess-1",
+          projectPath: "/project",
+          sessionPath: "/project/sess-1.jsonl",
+        },
+      ],
+    };
+    mockSessionState.projectTabs = [{ id: "tab-1", path: "/project", name: "Project" }];
+    mockSessionState.activeProjectId = "tab-1";
   });
 
   afterEach(() => {
@@ -195,5 +226,29 @@ describe("SidebarBottomControls agent menu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Agent Select" }));
 
     expect(hoisted.fetchAgents).toHaveBeenCalledWith("sess-1");
+  });
+
+  it("shows the tier selected for the effective session project after refresh", () => {
+    mockSessionState.sessionsByProject = {
+      "/worktree/project": [
+        {
+          sessionId: "sess-1",
+          projectPath: "/worktree/project",
+          sessionPath: "/worktree/project/sess-1.jsonl",
+        },
+      ],
+    };
+    mockSessionState.projectTabs = [{ id: "tab-1", path: "/parent/project", name: "Project" }];
+    hoisted.tierDataBySession = {
+      "sess-1": {
+        projectPath: "/worktree/project",
+        tierModels: { fast: "opencode-go/deepseek-v4-flash" },
+        currentTier: "fast",
+      },
+    };
+
+    render(<SidebarBottomControls />);
+
+    expect(screen.getByTitle("Fast").className).toContain("text-semantic-accent");
   });
 });

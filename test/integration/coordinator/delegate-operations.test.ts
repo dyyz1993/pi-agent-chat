@@ -185,13 +185,147 @@ describe("coordinator delegate operations", () => {
       params:
         '{"title":"指派: Inspect","agent":"frontend-dev","projectPath":"/project","replyMode":"interrupt"}',
     });
+
+    const childSessionPath = join(dir, "child-agent.jsonl");
+    const childJsonl = readFileSync(childSessionPath, "utf-8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(childJsonl[0]).toMatchObject({
+      type: "session",
+      id: "child-agent",
+      agent: "frontend-dev",
+    });
+    expect(childJsonl[1]).toMatchObject({
+      type: "delegate_info",
+      agent: "frontend-dev",
+    });
+  });
+
+  it("keeps session_delegate_send available after switching an async delegate to an agent tool whitelist", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-reply-tool-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const switchAgent = vi.fn().mockResolvedValue({
+      agentName: "frontend-dev",
+      tools: ["read", "write", "edit", "bash"],
+    });
+    const setActiveTools = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo and report back",
+          title: "Inspect",
+          agent: "frontend-dev",
+        },
+        getActiveManaged: () => makeManaged("idle", parentSessionPath),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        switchAgent,
+        setActiveTools,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap: new Map(),
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        sessionIdFactory: () => "child-agent",
+      }),
+    ).resolves.toEqual({ sessionId: "child-agent", status: "started" });
+
+    expect(setActiveTools).toHaveBeenCalledWith("child-agent", [
+      "read",
+      "write",
+      "edit",
+      "bash",
+      "session_delegate_send",
+    ]);
+    expect(setActiveTools.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("resolves async delegate tier aliases before setting the model", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-model-alias-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const setModelFromName = vi.fn().mockResolvedValue({ provider: "anthropic", id: "claude-pro" });
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo",
+          title: "Inspect",
+          model: "PRO",
+        },
+        getActiveManaged: () => makeManaged("idle", parentSessionPath),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        setModelFromName,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap: new Map(),
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        sessionIdFactory: () => "child-model-alias",
+      }),
+    ).resolves.toEqual({ sessionId: "child-model-alias", status: "started" });
+
+    expect(setModelFromName).toHaveBeenCalledWith("child-model-alias", "PRO", {
+      parentSessionId: "parent",
+      projectPath: "/project",
+    });
+    expect(setModelFromName.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not rewrite async delegate tools when session_delegate_send is already active", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-reply-tool-present-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const setActiveTools = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo and report back",
+          title: "Inspect",
+          agent: "frontend-dev",
+        },
+        getActiveManaged: () => makeManaged("idle", parentSessionPath),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        switchAgent: vi.fn().mockResolvedValue({
+          agentName: "frontend-dev",
+          tools: ["read", "session_delegate_send"],
+        }),
+        setActiveTools,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send: vi.fn(),
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap: new Map(),
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+        sessionIdFactory: () => "child-agent",
+      }),
+    ).resolves.toEqual({ sessionId: "child-agent", status: "started" });
+
+    expect(setActiveTools).not.toHaveBeenCalled();
   });
 
   it("sets coordinator delegate model before sending the task", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pi-delegate-model-"));
     const parentSessionPath = join(dir, "parent.jsonl");
     writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
-    const setModel = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
+    const setModelFromName = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
     const send = vi.fn();
 
     await expect(
@@ -205,7 +339,7 @@ describe("coordinator delegate operations", () => {
         },
         getActiveManaged: () => makeManaged("idle", parentSessionPath),
         start: vi.fn().mockResolvedValue({ status: "started" }),
-        setModel,
+        setModelFromName,
         setSessionName: vi.fn().mockResolvedValue(undefined),
         send,
         broadcastEvent: vi.fn().mockResolvedValue(undefined),
@@ -216,8 +350,13 @@ describe("coordinator delegate operations", () => {
       }),
     ).resolves.toEqual({ sessionId: "child-model", status: "started" });
 
-    expect(setModel).toHaveBeenCalledWith("child-model", "openai", "gpt-4.1");
-    expect(setModel.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
+    expect(setModelFromName).toHaveBeenCalledWith("child-model", "openai/gpt-4.1", {
+      parentSessionId: "parent",
+      projectPath: "/project",
+    });
+    expect(setModelFromName.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
   });
 
   it("starts cross-project coordinator delegates in the target project session directory", async () => {
@@ -534,7 +673,7 @@ describe("coordinator delegate operations", () => {
     const sourcePath = join(dir, "source.jsonl");
     writeFileSync(sourcePath, '{"type":"session","id":"source"}\n', "utf-8");
     const parentChildMap = new Map([["parent", new Set(["source"])]]);
-    const setModel = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
+    const setModelFromName = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
     const send = vi.fn();
 
     await expect(
@@ -549,7 +688,7 @@ describe("coordinator delegate operations", () => {
         },
         clients: new Map([["source", makeManaged("idle", sourcePath)]]),
         start: vi.fn().mockResolvedValue({ status: "started" }),
-        setModel,
+        setModelFromName,
         setSessionName: vi.fn().mockResolvedValue(undefined),
         send,
         broadcastEvent: vi.fn().mockResolvedValue(undefined),
@@ -558,8 +697,51 @@ describe("coordinator delegate operations", () => {
       }),
     ).resolves.toEqual({ sessionId: "forked-model", status: "started" });
 
-    expect(setModel).toHaveBeenCalledWith("forked-model", "openai", "gpt-4.1");
-    expect(setModel.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
+    expect(setModelFromName).toHaveBeenCalledWith("forked-model", "openai/gpt-4.1", {
+      parentSessionId: "parent",
+      projectPath: "/project",
+    });
+    expect(setModelFromName.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("resolves forked delegate tier aliases before setting the model", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-fork-model-alias-"));
+    const sourcePath = join(dir, "source.jsonl");
+    writeFileSync(sourcePath, '{"type":"session","id":"source"}\n', "utf-8");
+    const parentChildMap = new Map([["parent", new Set(["source"])]]);
+    const setModelFromName = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-5-pro" });
+    const send = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "source",
+          task: "continue from here",
+          title: "Forked Task",
+          model: "pro",
+        },
+        clients: new Map([["source", makeManaged("idle", sourcePath)]]),
+        start: vi.fn().mockResolvedValue({ status: "started" }),
+        setModelFromName,
+        setSessionName: vi.fn().mockResolvedValue(undefined),
+        send,
+        broadcastEvent: vi.fn().mockResolvedValue(undefined),
+        parentChildMap,
+        sessionIdFactory: () => "forked-model-alias",
+      }),
+    ).resolves.toEqual({ sessionId: "forked-model-alias", status: "started" });
+
+    expect(setModelFromName).toHaveBeenCalledWith("forked-model-alias", "pro", {
+      parentSessionId: "parent",
+      projectPath: "/project",
+    });
+    expect(setModelFromName.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
   });
 
   it("rejects delegate forks when the source session is missing", async () => {
@@ -1119,7 +1301,7 @@ describe("coordinator delegate operations", () => {
 
   it("sets sync delegate model before sending the task", async () => {
     const syncDelegateResolvers = new Map();
-    const setModel = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
+    const setModelFromName = vi.fn().mockResolvedValue({ provider: "openai", id: "gpt-4.1" });
     const send = vi.fn();
 
     const promise = handleCoordinatorDelegateSyncOperation({
@@ -1134,7 +1316,7 @@ describe("coordinator delegate operations", () => {
       getActiveManaged: () => makeManaged("idle", "/tmp/parent.jsonl"),
       start: vi.fn().mockResolvedValue({ status: "started" }),
       switchAgent: vi.fn(),
-      setModel,
+      setModelFromName,
       setSessionName: vi.fn(),
       send,
       steer: vi.fn(),
@@ -1167,14 +1349,80 @@ describe("coordinator delegate operations", () => {
       sessionId: "child-model-sync",
       status: "completed",
     });
-    expect(setModel).toHaveBeenCalledWith("child-model-sync", "openai", "gpt-4.1");
-    expect(setModel.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
+    expect(setModelFromName).toHaveBeenCalledWith("child-model-sync", "openai/gpt-4.1", {
+      parentSessionId: "parent",
+      projectPath: "/project",
+    });
+    expect(setModelFromName.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
   });
 
-  it("times out sync delegates and clears pending state", async () => {
+  it("resolves sync delegate tier aliases before sending the task", async () => {
+    const syncDelegateResolvers = new Map();
+    const setModelFromName = vi.fn().mockResolvedValue({ provider: "anthropic", id: "claude-pro" });
+    const send = vi.fn();
+
+    const promise = handleCoordinatorDelegateSyncOperation({
+      parentSessionId: "parent",
+      msg: {
+        __call: "session_delegate_sync",
+        task: "review the diff",
+        title: "Review",
+        model: "pro",
+        timeoutMs: 300_000,
+      },
+      getActiveManaged: () => makeManaged("idle", "/tmp/parent.jsonl"),
+      start: vi.fn().mockResolvedValue({ status: "started" }),
+      switchAgent: vi.fn(),
+      setModelFromName,
+      setSessionName: vi.fn(),
+      send,
+      steer: vi.fn(),
+      stop: vi.fn().mockResolvedValue(true),
+      broadcastEvent: vi.fn().mockResolvedValue(undefined),
+      parentChildMap: new Map(),
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      syncDelegateResolvers,
+      subagentSyncChildren: new Set(),
+      syncDelegateLastText: new Map(),
+      sessionIdFactory: () => "child-model-alias-sync",
+    });
+
+    const resolver = await vi.waitFor(() => {
+      const current = syncDelegateResolvers.get("child-model-alias-sync");
+      expect(current).toBeDefined();
+      return current;
+    });
+    clearTimeout(resolver.timeout);
+    syncDelegateResolvers.delete("child-model-alias-sync");
+    resolver.resolve({
+      sessionId: "child-model-alias-sync",
+      status: "completed",
+      exitCode: 0,
+      finalText: "done",
+    });
+
+    await expect(promise).resolves.toMatchObject({
+      sessionId: "child-model-alias-sync",
+      status: "completed",
+    });
+    expect(setModelFromName).toHaveBeenCalledWith("child-model-alias-sync", "pro", {
+      parentSessionId: "parent",
+      projectPath: "/project",
+    });
+    expect(setModelFromName.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("times out sync delegates without stopping or unlinking the child session", async () => {
     const syncDelegateResolvers = new Map();
     const subagentSyncChildren = new Set<string>();
     const syncDelegateLastText = new Map([["child-sync", "partial"]]);
+    const parentChildMap = new Map<string, Set<string>>();
+    const stop = vi.fn().mockResolvedValue(true);
 
     const promise = handleCoordinatorDelegateSyncOperation({
       parentSessionId: "parent",
@@ -1189,9 +1437,9 @@ describe("coordinator delegate operations", () => {
       setSessionName: vi.fn(),
       send: vi.fn(),
       steer: vi.fn(),
-      stop: vi.fn().mockResolvedValue(true),
+      stop,
       broadcastEvent: vi.fn().mockResolvedValue(undefined),
-      parentChildMap: new Map(),
+      parentChildMap,
       delegateCreatedAt: new Map(),
       delegateReplyCount: new Map(),
       syncDelegateResolvers,
@@ -1200,14 +1448,20 @@ describe("coordinator delegate operations", () => {
       sessionIdFactory: () => "child-sync",
     });
 
-    await expect(promise).resolves.toEqual({
+    const result = await promise;
+    expect(result).toEqual({
       sessionId: "child-sync",
       status: "timeout",
       exitCode: 1,
-      finalText: "partial",
+      finalText: expect.stringContaining("子会话 ID: `child-sync`"),
     });
+    expect(result.finalText).toContain("session_delegate_status");
+    expect(result.finalText).toContain("session_delegate_stop");
+    expect(result.finalText).toContain("partial");
     expect(syncDelegateResolvers.has("child-sync")).toBe(false);
     expect(subagentSyncChildren.has("child-sync")).toBe(false);
     expect(syncDelegateLastText.has("child-sync")).toBe(false);
+    expect(stop).not.toHaveBeenCalled();
+    expect(parentChildMap.get("parent")?.has("child-sync")).toBe(true);
   });
 });

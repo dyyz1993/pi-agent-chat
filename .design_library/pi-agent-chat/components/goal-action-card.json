@@ -1,0 +1,34 @@
+{
+  "slug": "goal-action-card",
+  "schemaVersion": 2,
+  "name": "GoalActionCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "status", "evidence": "Goal/action plan display showing agent objectives" }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["in-progress", "completed"] }],
+  "representativeVariants": [
+    {
+      "name": "In Progress",
+      "traits": { "status": "in-progress", "goal": "Refactor authentication module" },
+      "whySelected": "Active goal tracking",
+      "childrenDigest": "Target icon + goal text + progress indicator"
+    },
+    {
+      "name": "Completed",
+      "traits": { "status": "completed", "goal": "Refactor authentication module" },
+      "whySelected": "Finished goal",
+      "childrenDigest": "Check icon + goal text + completion badge"
+    }
+  ],
+  "anatomy": {
+    "parts": ["icon", "goal-text", "status-indicator", "progress"],
+    "structurePatterns": ["inline-status"]
+  },
+  "usageHints": { "priorityHint": 15, "context": "Agent goal/action planning and tracking" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Compact inline style with accent color icon, progress indicator for active goals"
+}

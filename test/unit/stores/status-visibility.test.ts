@@ -30,14 +30,12 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
     getState: () => ({
-      getCurrentTier: vi.fn(() => null),
-      getTierModels: vi.fn(() => ({})),
+      getCurrentTierForSession: vi.fn(() => null),
+      getTierModelsForSession: vi.fn(() => ({})),
       fetchTierConfig: vi.fn(() => Promise.resolve()),
-      syncTierFromModel: vi.fn(),
+      syncTierFromModelForSession: vi.fn(),
       switchToTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
-      setProjectTierModels: vi.fn(),
-      setProjectCurrentTier: vi.fn(),
       dataBySession: {},
       globalDefaults: {},
     }),

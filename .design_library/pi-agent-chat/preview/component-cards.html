@@ -1,0 +1,3742 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pi-agent-chat Cards Preview</title>
+    <link rel="stylesheet" href="../colors_and_type.css" />
+    <style>
+      /* ===== Page Scaffold ===== */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #0b111a;
+        color: #f2f6fb;
+        font-family: var(--font-body), "Inter", sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        padding: 32px;
+      }
+      .preview-container {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .preview-container > h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--pi-violet-400);
+        margin-bottom: 32px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #1e2a3a;
+      }
+      section {
+        margin-bottom: 40px;
+      }
+      section > h2 {
+        font-size: 15px;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 4px;
+      }
+      section > .section-desc {
+        font-size: 12px;
+        color: #64748b;
+        margin-bottom: 16px;
+      }
+      .variant-group {
+        margin-bottom: 20px;
+      }
+      .variant-group > h3 {
+        font-size: 12px;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+      }
+
+      /* ===== Base Card ===== */
+      .card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md, 12px);
+        overflow: hidden;
+      }
+      .card-elevated {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md, 12px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+      .card-tool {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid #1e2a3a;
+        border-left: 3px solid #334155;
+        border-radius: var(--radius-md, 12px);
+      }
+      .card-tool.status-running {
+        border-left-color: #fbbf24;
+      }
+      .card-tool.status-done {
+        border-left-color: #34d399;
+      }
+      .card-tool.status-error {
+        border-left-color: #f87171;
+      }
+
+      /* ===== Card Shell ===== */
+      .card-shell {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md, 12px);
+        padding: 12px 16px;
+      }
+      .card-shell.responded {
+        border-color: rgba(116, 108, 255, 0.3);
+        background: rgba(116, 108, 255, 0.05);
+      }
+      .card-shell-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .card-shell-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #64748b;
+      }
+      .card-shell.responded .card-shell-dot {
+        background: var(--pi-violet-400);
+      }
+      .card-shell-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+
+      /* ===== Badge ===== */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-full, 9999px);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .badge-success {
+        background: rgba(52, 211, 153, 0.15);
+        color: #34d399;
+      }
+      .badge-warning {
+        background: rgba(251, 191, 36, 0.15);
+        color: #fbbf24;
+      }
+      .badge-error {
+        background: rgba(248, 113, 113, 0.15);
+        color: #f87171;
+      }
+      .badge-info {
+        background: rgba(96, 165, 250, 0.15);
+        color: #60a5fa;
+      }
+      .badge-violet {
+        background: rgba(116, 108, 255, 0.15);
+        color: var(--pi-violet-400);
+      }
+      .badge-tool {
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+      }
+      .badge-agent {
+        background: rgba(139, 92, 246, 0.15);
+        color: #8b5cf6;
+      }
+      .badge-memory {
+        background: rgba(20, 184, 166, 0.15);
+        color: #14b8a6;
+      }
+      .badge-notify {
+        background: rgba(249, 115, 22, 0.15);
+        color: #f97316;
+      }
+      .badge-muted {
+        background: rgba(148, 163, 184, 0.1);
+        color: #94a3b8;
+      }
+
+      /* ===== Card Header ===== */
+      .card-hdr {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .card-hdr-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-sm, 8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .card-hdr-icon svg {
+        width: 14px;
+        height: 14px;
+      }
+      .card-hdr-icon.violet {
+        background: rgba(116, 108, 255, 0.15);
+        color: var(--pi-violet-400);
+      }
+      .card-hdr-icon.teal {
+        background: rgba(20, 184, 166, 0.15);
+        color: #14b8a6;
+      }
+      .card-hdr-icon.cyan {
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+      }
+      .card-hdr-icon.orange {
+        background: rgba(249, 115, 22, 0.15);
+        color: #f97316;
+      }
+      .card-hdr-icon.red {
+        background: rgba(248, 113, 113, 0.15);
+        color: #f87171;
+      }
+      .card-hdr-icon.green {
+        background: rgba(52, 211, 153, 0.15);
+        color: #34d399;
+      }
+      .card-hdr-icon.yellow {
+        background: rgba(251, 191, 36, 0.15);
+        color: #fbbf24;
+      }
+      .card-hdr-icon.blue {
+        background: rgba(96, 165, 250, 0.15);
+        color: #60a5fa;
+      }
+      .card-hdr-icon.gray {
+        background: rgba(148, 163, 184, 0.1);
+        color: #94a3b8;
+      }
+      .card-hdr-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .card-hdr-badge {
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+
+      /* ===== Card Body ===== */
+      .card-body {
+        padding: 12px 16px;
+      }
+      .card-body code {
+        font-family: var(--font-mono), "JetBrains Mono", monospace;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 1px 6px;
+        border-radius: 4px;
+        color: #e2e8f0;
+      }
+      .card-body pre {
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: var(--radius-sm, 8px);
+        padding: 12px;
+        overflow-x: auto;
+        font-family: var(--font-mono), "JetBrains Mono", monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #e2e8f0;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .card-body pre .keyword {
+        color: #c792ea;
+      }
+      .card-body pre .string {
+        color: #c3e88d;
+      }
+      .card-body pre .comment {
+        color: #64748b;
+        font-style: italic;
+      }
+      .card-body pre .func {
+        color: #82aaff;
+      }
+      .card-body pre .type {
+        color: #ffcb6b;
+      }
+      .card-body pre .number {
+        color: #f78c6c;
+      }
+
+      /* ===== Card Meta ===== */
+      .card-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 11px;
+        color: #64748b;
+      }
+
+      /* ===== Card Footer ===== */
+      .card-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      /* ===== Message Cards ===== */
+      .message-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .message-row.user {
+        flex-direction: row-reverse;
+      }
+      .message-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .message-avatar.assistant {
+        background: rgba(116, 108, 255, 0.2);
+        color: var(--pi-violet-400);
+      }
+      .message-bubble {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: var(--radius-lg, 16px);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .message-bubble.user {
+        background: rgba(116, 108, 255, 0.2);
+        border: 1px solid rgba(116, 108, 255, 0.3);
+        border-bottom-right-radius: 4px;
+        color: #e2e8f0;
+      }
+      .message-bubble.assistant {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom-left-radius: 4px;
+        color: #e2e8f0;
+      }
+
+      /* ===== Text Content (Markdown) ===== */
+      .md-content h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin: 12px 0 6px;
+      }
+      .md-content h4:first-child {
+        margin-top: 0;
+      }
+      .md-content ul {
+        padding-left: 20px;
+        margin: 6px 0;
+        color: #c8d1dc;
+      }
+      .md-content li {
+        margin-bottom: 4px;
+      }
+      .md-content p {
+        margin: 6px 0;
+        color: #c8d1dc;
+      }
+
+      /* ===== Error Message ===== */
+      .error-card {
+        border-left: 3px solid #f87171;
+      }
+      .error-card.recoverable {
+        border-left-color: #fbbf24;
+      }
+      .error-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        font-weight: 500;
+        font-size: 13px;
+      }
+      .error-header.fatal {
+        color: #f87171;
+      }
+      .error-header.recoverable {
+        color: #fbbf24;
+      }
+      .error-header svg {
+        flex-shrink: 0;
+      }
+      .error-body {
+        padding: 0 16px 10px;
+        font-size: 12px;
+        color: #94a3b8;
+        line-height: 1.5;
+      }
+      .stack-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: #64748b;
+        cursor: pointer;
+        margin-top: 6px;
+        padding: 2px 0;
+      }
+      .stack-toggle:hover {
+        color: #94a3b8;
+      }
+      .stack-trace {
+        margin-top: 8px;
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+        color: #64748b;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: var(--radius-sm, 8px);
+        padding: 8px 12px;
+        line-height: 1.6;
+        display: none;
+      }
+      .stack-trace.open {
+        display: block;
+      }
+
+      /* ===== Thinking Card ===== */
+      .thinking-card {
+        padding: 10px 16px;
+        font-size: 12px;
+        color: #94a3b8;
+      }
+      .thinking-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .thinking-label.active {
+        color: var(--pi-violet-400);
+      }
+      .thinking-label.done {
+        color: #34d399;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(116, 108, 255, 0.2);
+        border-top-color: var(--pi-violet-400);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      /* ===== Compaction Summary ===== */
+      .compaction-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        font-size: 12px;
+        color: #94a3b8;
+      }
+      .compaction-card svg {
+        flex-shrink: 0;
+        color: #60a5fa;
+      }
+      .compaction-card strong {
+        color: #e2e8f0;
+      }
+
+      /* ===== Goal Cards ===== */
+      .goal-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 16px;
+      }
+      .goal-icon {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .goal-content {
+        flex: 1;
+      }
+      .goal-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        margin-bottom: 2px;
+      }
+      .goal-desc {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+      .goal-progress {
+        margin-top: 8px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .goal-progress-bar {
+        height: 100%;
+        background: var(--pi-violet-400);
+        border-radius: 2px;
+        width: 65%;
+      }
+
+      /* ===== Tool Execution ===== */
+      .tool-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .tool-name {
+        font-family: var(--font-mono), monospace;
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        flex: 1;
+      }
+      .tool-card-header svg {
+        flex-shrink: 0;
+      }
+      .tool-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .tool-status-dot.running {
+        background: #fbbf24;
+      }
+      .tool-status-dot.done {
+        background: #34d399;
+      }
+      .tool-status-dot.error {
+        background: #f87171;
+      }
+      .tool-section {
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .tool-section:last-child {
+        border-bottom: none;
+      }
+      .tool-section-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 6px;
+      }
+      .tool-section code {
+        display: block;
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 8px 12px;
+        border-radius: 6px;
+        color: #e2e8f0;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .tool-output {
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 8px 12px;
+        border-radius: 6px;
+        color: #c8d1dc;
+        white-space: pre-wrap;
+        line-height: 1.5;
+        max-height: 80px;
+        overflow: hidden;
+      }
+      .exit-code {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+      }
+
+      /* ===== Bash Background ===== */
+      .bg-process-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        color: #94a3b8;
+      }
+      .bg-process-info code {
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: #e2e8f0;
+      }
+      .btn-stop {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm, 8px);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        background: rgba(248, 113, 113, 0.1);
+        color: #f87171;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      /* ===== Read / Write File Cards ===== */
+      .filepath {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        color: #e2e8f0;
+      }
+      .filepath svg {
+        flex-shrink: 0;
+        color: #64748b;
+      }
+      .lang-badge {
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+        padding: 1px 8px;
+        border-radius: var(--radius-full, 9999px);
+        background: rgba(96, 165, 250, 0.12);
+        color: #60a5fa;
+      }
+      .write-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .write-badge.create {
+        color: #34d399;
+      }
+      .write-badge.edit {
+        color: #fbbf24;
+      }
+      .write-badge.delete {
+        color: #f87171;
+      }
+      .diff-preview {
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-top: 8px;
+      }
+      .diff-add {
+        color: #34d399;
+      }
+      .diff-rm {
+        color: #f87171;
+      }
+      .diff-ctx {
+        color: #64748b;
+      }
+
+      /* ===== LSP Cards ===== */
+      .diag-counts {
+        display: flex;
+        gap: 12px;
+        padding: 8px 0;
+      }
+      .diag-count-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .diag-list {
+        font-size: 12px;
+      }
+      .diag-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .diag-item:last-child {
+        border-bottom: none;
+      }
+      .diag-line {
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+        color: #64748b;
+        white-space: nowrap;
+        min-width: 36px;
+      }
+      .diag-code {
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.3);
+        white-space: nowrap;
+      }
+      .diag-msg {
+        font-size: 12px;
+        color: #c8d1dc;
+        flex: 1;
+      }
+
+      /* ===== Memory Card ===== */
+      .memory-card .card-hdr-icon.pref {
+        background: rgba(20, 184, 166, 0.15);
+        color: #14b8a6;
+      }
+      .memory-card .card-hdr-icon.fact {
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+      }
+      .memory-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+      }
+      .memory-label.pref {
+        color: #14b8a6;
+      }
+      .memory-label.fact {
+        color: #06b6d4;
+      }
+      .memory-value {
+        font-size: 13px;
+        color: #e2e8f0;
+      }
+
+      /* ===== Supervisor Continue ===== */
+      .step-list {
+        padding: 0;
+        list-style: none;
+        margin: 0;
+      }
+      .step-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+        font-size: 13px;
+        color: #c8d1dc;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .step-list li:last-child {
+        border-bottom: none;
+      }
+      .step-num {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.06);
+        color: #94a3b8;
+        flex-shrink: 0;
+      }
+      .btn-continue {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        padding: 6px 16px;
+        border-radius: var(--radius-sm, 8px);
+        background: var(--pi-violet-400);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+      }
+
+      /* ===== Queue Cards ===== */
+      .queue-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 13px;
+        color: #94a3b8;
+      }
+      .queue-item:last-child {
+        border-bottom: none;
+      }
+      .queue-item.active {
+        background: rgba(116, 108, 255, 0.08);
+        color: #e2e8f0;
+      }
+      .queue-item.active .queue-num {
+        background: var(--pi-violet-400);
+        color: #fff;
+      }
+      .queue-item .spinner {
+        width: 12px;
+        height: 12px;
+      }
+      .queue-num {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.06);
+        color: #64748b;
+        flex-shrink: 0;
+      }
+
+      /* ===== Card Container ===== */
+      .card-container {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md, 12px);
+        overflow: hidden;
+      }
+      .card-container.accent {
+        border-left: 3px solid var(--pi-violet-400);
+      }
+      .card-container.compact {
+        border-radius: var(--radius-sm, 8px);
+      }
+      .card-container-title {
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .card-container-body {
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #c8d1dc;
+      }
+
+      /* ===== Confirm Card ===== */
+      .confirm-card {
+        padding: 16px;
+      }
+      .confirm-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #e2e8f0;
+        margin-bottom: 6px;
+      }
+      .confirm-desc {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-bottom: 14px;
+        line-height: 1.5;
+      }
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        border-radius: var(--radius-sm, 8px);
+        font-size: 12px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: var(--pi-violet-400);
+        color: #fff;
+      }
+      .btn-danger {
+        background: rgba(248, 113, 113, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(248, 113, 113, 0.3);
+      }
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.06);
+        color: #94a3b8;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .btn-success {
+        background: rgba(52, 211, 153, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+
+      /* ===== Ask User / Select / Input ===== */
+      .question-card {
+        padding: 16px;
+      }
+      .question-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        margin-bottom: 4px;
+      }
+      .question-desc {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-bottom: 12px;
+      }
+      .text-input {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: var(--radius-sm, 8px);
+        border: 1px solid #334155;
+        background: rgba(0, 0, 0, 0.3);
+        color: #e2e8f0;
+        font-family: var(--font-body);
+        font-size: 13px;
+        outline: none;
+      }
+      .text-input:focus {
+        border-color: var(--pi-violet-400);
+        box-shadow: 0 0 0 2px rgba(116, 108, 255, 0.2);
+      }
+      .path-input-wrap {
+        display: flex;
+        gap: 8px;
+      }
+      .path-input-wrap .text-input {
+        flex: 1;
+      }
+      .btn-browse {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 12px;
+        border-radius: var(--radius-sm, 8px);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .option-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .option-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: var(--radius-sm, 8px);
+        border: 1px solid #334155;
+        background: rgba(255, 255, 255, 0.03);
+        cursor: pointer;
+        font-size: 13px;
+        color: #c8d1dc;
+        transition: background 0.15s;
+      }
+      .option-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .option-item.selected {
+        border-color: rgba(116, 108, 255, 0.4);
+        background: rgba(116, 108, 255, 0.08);
+      }
+      .radio-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid #4b5563;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .radio-dot.checked {
+        border-color: var(--pi-violet-400);
+      }
+      .radio-dot.checked::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--pi-violet-400);
+      }
+      .check-box {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 2px solid #4b5563;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .check-box.checked {
+        border-color: var(--pi-violet-400);
+        background: var(--pi-violet-400);
+      }
+      .multi-select-count {
+        font-size: 11px;
+        color: #64748b;
+        margin-left: auto;
+      }
+
+      /* ===== Notify Card ===== */
+      .notify-card {
+        padding: 12px 16px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .notify-icon {
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .notify-content {
+        flex: 1;
+      }
+      .notify-title {
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+      .notify-desc {
+        font-size: 12px;
+      }
+      .notify-card.info {
+        background: rgba(96, 165, 250, 0.08);
+        border-color: rgba(96, 165, 250, 0.2);
+      }
+      .notify-card.info .notify-title {
+        color: #60a5fa;
+      }
+      .notify-card.info .notify-desc {
+        color: #94a3b8;
+      }
+      .notify-card.success {
+        background: rgba(52, 211, 153, 0.08);
+        border-color: rgba(52, 211, 153, 0.2);
+      }
+      .notify-card.success .notify-title {
+        color: #34d399;
+      }
+      .notify-card.success .notify-desc {
+        color: #94a3b8;
+      }
+      .notify-card.warning {
+        background: rgba(251, 191, 36, 0.08);
+        border-color: rgba(251, 191, 36, 0.2);
+      }
+      .notify-card.warning .notify-title {
+        color: #fbbf24;
+      }
+      .notify-card.warning .notify-desc {
+        color: #94a3b8;
+      }
+      .notify-card.error {
+        background: rgba(248, 113, 113, 0.08);
+        border-color: rgba(248, 113, 113, 0.2);
+      }
+      .notify-card.error .notify-title {
+        color: #f87171;
+      }
+      .notify-card.error .notify-desc {
+        color: #94a3b8;
+      }
+
+      /* ===== Permission Cards ===== */
+      .permission-card {
+        padding: 12px 16px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .perm-icon {
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .perm-content {
+        flex: 1;
+      }
+      .perm-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        margin-bottom: 2px;
+      }
+      .perm-desc {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+      .perm-path {
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #e2e8f0;
+        margin-top: 6px;
+        display: inline-block;
+      }
+      .perm-risk {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-top: 6px;
+      }
+      .perm-risk.low {
+        color: #34d399;
+      }
+      .perm-risk.high {
+        color: #f87171;
+      }
+      .perm-risk-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .perm-risk-dot.low {
+        background: #34d399;
+      }
+      .perm-risk-dot.high {
+        background: #f87171;
+      }
+
+      /* ===== UI Interaction Anchor ===== */
+      .ui-anchor {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        font-size: 12px;
+        color: #94a3b8;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .ui-anchor-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--pi-violet-400);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      /* ===== Respond UI Card ===== */
+      .respond-card {
+        padding: 12px 16px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .respond-card.success {
+        background: rgba(52, 211, 153, 0.06);
+      }
+      .respond-card.error {
+        background: rgba(248, 113, 113, 0.06);
+      }
+      .respond-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .respond-label.ok {
+        color: #34d399;
+      }
+      .respond-label.err {
+        color: #f87171;
+      }
+      .respond-detail {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+
+      /* ===== Context Reference ===== */
+      .ctx-ref {
+        padding: 10px 16px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .ctx-ref-icon {
+        flex-shrink: 0;
+        color: #64748b;
+      }
+      .ctx-ref-body {
+        flex: 1;
+      }
+      .ctx-ref-type {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #60a5fa;
+        margin-bottom: 2px;
+      }
+      .ctx-ref-path {
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        color: #e2e8f0;
+      }
+      .ctx-ref-range {
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+        color: #64748b;
+      }
+      .ctx-ref-conversation {
+        font-size: 13px;
+        color: #c8d1dc;
+        margin-top: 4px;
+      }
+
+      /* ===== Hook Intervention ===== */
+      .hook-card {
+        border-left: 3px solid #f97316;
+      }
+      .hook-card.block {
+        border-left-color: #f87171;
+      }
+      .hook-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .hook-card .hook-header {
+        color: #f97316;
+      }
+      .hook-card.block .hook-header {
+        color: #f87171;
+      }
+      .hook-body {
+        padding: 0 16px 10px;
+        font-size: 12px;
+        color: #94a3b8;
+      }
+
+      /* ===== Long Content ===== */
+      .long-content {
+        position: relative;
+      }
+      .long-content.collapsed pre {
+        max-height: 80px;
+        overflow: hidden;
+      }
+      .long-content.collapsed::after {
+        content: "";
+        position: absolute;
+        bottom: 36px;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+        pointer-events: none;
+      }
+      .expand-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        width: 100%;
+        padding: 6px;
+        font-size: 11px;
+        color: #64748b;
+        background: none;
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        cursor: pointer;
+      }
+      .expand-btn:hover {
+        color: #94a3b8;
+      }
+
+      /* ===== Image Card ===== */
+      .media-card {
+        padding: 0;
+      }
+      .media-thumb {
+        width: 100%;
+        height: 160px;
+        background: rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 32px;
+      }
+      .media-meta {
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #64748b;
+      }
+      .media-error {
+        padding: 24px 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: #f87171;
+        font-size: 12px;
+        text-align: center;
+      }
+      .media-error svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* ===== Video Card ===== */
+      .video-poster {
+        width: 100%;
+        height: 180px;
+        background: rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+      .play-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+      }
+
+      /* ===== Audio Card ===== */
+      .audio-card {
+        padding: 12px 16px;
+      }
+      .audio-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .audio-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+      }
+      .audio-duration {
+        font-size: 11px;
+        color: #64748b;
+        font-family: var(--font-mono), monospace;
+      }
+      .waveform {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 32px;
+        margin-bottom: 8px;
+      }
+      .waveform-bar {
+        width: 3px;
+        border-radius: 2px;
+        background: rgba(116, 108, 255, 0.4);
+      }
+      .waveform-bar.active {
+        background: var(--pi-violet-400);
+      }
+      .audio-progress {
+        height: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .audio-progress-bar {
+        height: 100%;
+        background: var(--pi-violet-400);
+        border-radius: 2px;
+        width: 45%;
+      }
+      .audio-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .audio-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .audio-time {
+        font-size: 11px;
+        color: #64748b;
+        font-family: var(--font-mono), monospace;
+      }
+
+      /* ===== HTML Card ===== */
+      .html-card {
+        padding: 0;
+      }
+      .html-titlebar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: rgba(0, 0, 0, 0.3);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 11px;
+        color: #64748b;
+      }
+      .html-titlebar-dots {
+        display: flex;
+        gap: 4px;
+      }
+      .html-titlebar-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .html-titlebar-dot.r {
+        background: #f87171;
+      }
+      .html-titlebar-dot.y {
+        background: #fbbf24;
+      }
+      .html-titlebar-dot.g {
+        background: #34d399;
+      }
+      .html-titlebar-url {
+        flex: 1;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-family: var(--font-mono), monospace;
+        font-size: 10px;
+        color: #64748b;
+        text-align: center;
+      }
+      .html-preview {
+        height: 120px;
+        background: rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: #64748b;
+      }
+
+      /* ===== URL Card ===== */
+      .url-card {
+        padding: 12px 16px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .url-favicon {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-sm, 8px);
+        background: rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .url-favicon svg {
+        width: 16px;
+        height: 16px;
+        color: #64748b;
+      }
+      .url-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .url-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+        margin-bottom: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .url-desc {
+        font-size: 12px;
+        color: #94a3b8;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .url-host {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 4px;
+      }
+
+      /* ===== Fallback / Text / Markdown Cards ===== */
+      .fallback-card {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+      }
+      .fallback-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-md, 12px);
+        background: rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+      }
+      .fallback-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #94a3b8;
+      }
+      .fallback-ext {
+        font-family: var(--font-mono), monospace;
+        font-size: 11px;
+        color: #64748b;
+      }
+      .text-preview {
+        font-family: var(--font-mono), monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #c8d1dc;
+        white-space: pre-wrap;
+        max-height: 100px;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body class="dark">
+    <div class="preview-container">
+      <h1>组件预览 — 卡片类</h1>
+
+      <!-- ============================================================ -->
+      <!-- 1. 消息类 -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>1. 消息类</h2>
+        <p class="section-desc">
+          MessageCard, TextContentCard, ErrorMessageCard, ThinkingCard, CompactionSummaryCard,
+          GoalActionCard, GoalCompleteCard
+        </p>
+
+        <!-- MessageCard -->
+        <div class="variant-group">
+          <h3>MessageCard 消息卡片</h3>
+          <div class="message-row user">
+            <div class="message-avatar assistant">P</div>
+            <div class="message-bubble user">
+              帮我重构一下 src/utils/parser.ts 文件，把重复的类型定义抽取到单独的 types.ts 中
+            </div>
+          </div>
+          <div class="message-row">
+            <div class="message-avatar assistant">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 8V4H8" />
+                <rect width="16" height="12" x="4" y="8" rx="2" />
+                <path d="M2 14h2" />
+                <path d="M20 14h2" />
+                <path d="M15 13v2" />
+                <path d="M9 13v2" />
+              </svg>
+            </div>
+            <div class="message-bubble assistant">
+              好的，我来分析一下当前的文件结构，然后将公共类型定义抽取到单独的模块中。
+            </div>
+          </div>
+        </div>
+
+        <!-- TextContentCard -->
+        <div class="variant-group">
+          <h3>TextContentCard Markdown 内容卡片</h3>
+          <div class="card">
+            <div class="card-body md-content">
+              <h4>重构计划</h4>
+              <p>以下是本次重构的主要步骤：</p>
+              <ul>
+                <li>识别重复的类型定义（Interface / Type Alias）</li>
+                <li>创建 <code>types/</code> 目录结构</li>
+                <li>更新所有 import 引用路径</li>
+                <li>运行 TypeScript 编译验证</li>
+              </ul>
+              <h4>示例代码</h4>
+              <pre><span class="keyword">export interface</span> <span class="type">ParseResult</span> {
+  <span class="func">success</span>: <span class="type">boolean</span>;
+  <span class="func">data</span>: <span class="type">Record</span>&lt;<span class="type">string</span>, <span class="type">unknown</span>&gt;;
+  <span class="func">errors</span>: <span class="type">ParseError</span>[];
+}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- ErrorMessageCard -->
+        <div class="variant-group">
+          <h3>ErrorMessageCard 错误消息卡片</h3>
+          <div class="card error-card" style="margin-bottom: 12px">
+            <div class="error-header fatal">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+              Fatal Error: Cannot find module 'typescript'
+            </div>
+            <div class="error-body">
+              进程无法继续执行，缺少必要依赖项。请安装依赖后重试。
+              <div class="stack-toggle" onclick="this.nextElementSibling.classList.toggle('open')">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+                展开 Stack Trace
+              </div>
+              <div class="stack-trace">
+                Error: Cannot find module 'typescript' at Function.resolveFilename
+                (node:internal/modules/cjs/loader:1085:15) at Function._load
+                (node:internal/modules/cjs/loader:931:27) at Module.require
+                (node:internal/modules/cjs/loader:1151:19) at require (node:internal/helpers:119:18)
+              </div>
+            </div>
+          </div>
+          <div class="card error-card recoverable">
+            <div class="error-header recoverable">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              Warning: Deprecated API usage detected
+            </div>
+            <div class="error-body">
+              检测到使用了已弃用的 <code>fs.exists()</code> 方法，建议替换为
+              <code>fs.stat()</code>。
+            </div>
+          </div>
+        </div>
+
+        <!-- ThinkingCard -->
+        <div class="variant-group">
+          <h3>ThinkingCard 思考卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="thinking-card">
+              <div class="thinking-label active">
+                <div class="spinner"></div>
+                正在分析代码结构...
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="thinking-card">
+              <div class="thinking-label done">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#34d399"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" />
+                  <path d="M8.5 8.5v.01" />
+                  <path d="M16 15.5v.01" />
+                  <path d="M12 12v.01" />
+                  <path d="M11 17v.01" />
+                  <path d="M7 14h.01" />
+                </svg>
+                思考完成
+              </div>
+              <div style="margin-top: 4px">已识别 3 个重复类型定义，需要重构的文件共 5 个。</div>
+              <span class="badge badge-muted" style="margin-top: 8px">
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                2.4s
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CompactionSummaryCard -->
+        <div class="variant-group">
+          <h3>CompactionSummaryCard 压缩摘要卡片</h3>
+          <div class="card">
+            <div class="compaction-card">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"
+                />
+                <path d="M18 14h-8" />
+                <path d="M15 18h-5" />
+                <path d="M10 6h8v4h-8V6Z" />
+              </svg>
+              <span>已压缩 <strong>42 条消息</strong>，保留关键决策与文件变更摘要</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- GoalActionCard -->
+        <div class="variant-group">
+          <h3>GoalActionCard 目标行动卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="goal-card">
+              <div class="goal-icon" style="color: var(--pi-violet-400)">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </div>
+              <div class="goal-content">
+                <div class="goal-title">重构 parser.ts 模块</div>
+                <div class="goal-desc">抽取公共类型定义，更新 import 引用</div>
+                <div class="goal-progress"><div class="goal-progress-bar"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="goal-card">
+              <div class="goal-icon" style="color: #34d399">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+              <div class="goal-content">
+                <div class="goal-title">安装项目依赖</div>
+                <div class="goal-desc">已完成所有依赖项安装</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GoalCompleteCard -->
+        <div class="variant-group">
+          <h3>GoalCompleteCard 目标完成卡片</h3>
+          <div class="card">
+            <div class="card-hdr">
+              <div class="card-hdr-icon green">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">目标已完成</span>
+            </div>
+            <div class="card-body" style="font-size: 12px; color: #c8d1dc">
+              <div style="display: flex; gap: 24px">
+                <div>
+                  <span style="color: #64748b">修改文件</span><br /><strong style="color: #e2e8f0"
+                    >5 个</strong
+                  >
+                </div>
+                <div>
+                  <span style="color: #64748b">新增文件</span><br /><strong style="color: #e2e8f0"
+                    >2 个</strong
+                  >
+                </div>
+                <div>
+                  <span style="color: #64748b">耗时</span><br /><strong style="color: #e2e8f0"
+                    >12.8s</strong
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- 2. 工具执行类 -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>2. 工具执行类</h2>
+        <p class="section-desc">
+          ToolExecutionCard, BashExecutionCard, ReadFileCard, WriteFileCard, LspExecutionCard,
+          SessionTaskCard, LspDiagnosticsCard
+        </p>
+
+        <!-- ToolExecutionCard -->
+        <div class="variant-group">
+          <h3>ToolExecutionCard 工具执行卡片</h3>
+          <div class="card card-tool status-running" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <div class="tool-status-dot running"></div>
+              <span class="tool-name">bash</span>
+              <span class="badge badge-warning">running</span>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">命令</div>
+              <code>npm run build -- --production</code>
+            </div>
+            <div class="card-meta">
+              <span style="display: flex; align-items: center; gap: 4px">
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                处理中...
+              </span>
+            </div>
+          </div>
+          <div class="card card-tool status-done" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <div class="tool-status-dot done"></div>
+              <span class="tool-name">bash</span>
+              <span class="badge badge-success">done</span>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">命令</div>
+              <code>npm run build -- --production</code>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">输出</div>
+              <div class="tool-output">Build completed successfully in 3.2s. Output: dist/</div>
+            </div>
+            <div class="card-meta">
+              <span class="badge badge-success" style="font-size: 11px">exit 0</span>
+              <span>3.2s</span>
+            </div>
+          </div>
+          <div class="card card-tool status-error">
+            <div class="tool-card-header">
+              <div class="tool-status-dot error"></div>
+              <span class="tool-name">bash</span>
+              <span class="badge badge-error">error</span>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">命令</div>
+              <code>npm run test</code>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">错误</div>
+              <div class="tool-output" style="color: #f87171">
+                FAIL src/utils/parser.test.ts Expected 3 assertions, received 0
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="badge badge-error" style="font-size: 11px">exit 1</span>
+              <span>1.8s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BashExecutionCard -->
+        <div class="variant-group">
+          <h3>BashExecutionCard Bash 执行卡片</h3>
+          <div class="card card-tool status-running" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+              <span class="tool-name">bash</span>
+              <div class="spinner" style="width: 12px; height: 12px"></div>
+            </div>
+            <div class="tool-section">
+              <code>tsc --watch --noEmit</code>
+            </div>
+          </div>
+          <div class="card card-tool status-done" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#34d399"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+              <span class="tool-name">bash</span>
+              <span class="badge badge-success" style="font-size: 11px"
+                ><svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                done</span
+              >
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">命令</div>
+              <code>git log --oneline -5</code>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-label">输出</div>
+              <div class="tool-output">
+                a3f8c2d feat: add type extraction module b7e1a9c refactor: move parser to utils/
+                c4d2f81 fix: resolve import paths e9a3b70 chore: update tsconfig f1c5d62 init:
+                project setup
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="exit-code"><span style="color: #34d399">exit 0</span></span>
+              <span>0.4s</span>
+            </div>
+          </div>
+          <div class="card card-tool">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+              <span class="tool-name">bash (background)</span>
+              <span class="badge badge-warning">running</span>
+            </div>
+            <div class="tool-section">
+              <div class="bg-process-info">
+                <span>PID:</span><code>48231</code> <span>运行时长:</span><code>02:34</code>
+                <button class="btn-stop">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                  Stop
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ReadFileCard -->
+        <div class="variant-group">
+          <h3>ReadFileCard 文件读取卡片</h3>
+          <div class="card card-tool status-done">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#34d399"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+              </svg>
+              <span class="tool-name">read_file</span>
+              <span class="badge badge-success">done</span>
+            </div>
+            <div class="card-body">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+                <div class="filepath">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                  </svg>
+                  src/utils/parser.ts
+                </div>
+                <span class="lang-badge">TypeScript</span>
+              </div>
+              <pre><span class="keyword">import</span> { <span class="type">Token</span>, <span class="type">TokenType</span> } <span class="keyword">from</span> <span class="string">'./tokenizer'</span>;
+
+<span class="comment">/**
+ * 解析输入字符串为 AST 节点
+ */</span>
+<span class="keyword">export function</span> <span class="func">parse</span>(input: <span class="type">string</span>): <span class="type">ASTNode</span> {
+  <span class="keyword">const</span> tokens = <span class="func">tokenize</span>(input);
+  <span class="keyword">return</span> <span class="func">buildAST</span>(tokens);
+}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- WriteFileCard -->
+        <div class="variant-group">
+          <h3>WriteFileCard 文件写入卡片</h3>
+          <div class="card card-tool" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#34d399"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span class="tool-name">write_file</span>
+              <span class="write-badge create"
+                ><svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Create</span
+              >
+            </div>
+            <div class="card-body">
+              <div class="filepath" style="margin-bottom: 8px">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                </svg>
+                src/types/index.ts
+              </div>
+            </div>
+          </div>
+          <div class="card card-tool" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+              <span class="tool-name">edit_file</span>
+              <span class="write-badge edit"
+                ><svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+                Edit</span
+              >
+            </div>
+            <div class="card-body">
+              <div class="filepath" style="margin-bottom: 8px">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                </svg>
+                src/utils/parser.ts
+              </div>
+              <div class="diff-preview">
+                <span class="diff-ctx"> import { Token, TokenType } from './tokenizer';</span>
+                <span class="diff-add">+ import { ParseResult, ParseError } from '../types';</span>
+                <span class="diff-ctx"> </span>
+                <span class="diff-rm">- interface ParseResult { ... }</span>
+                <span class="diff-add">+ export function parse(input: string): ParseResult {</span>
+              </div>
+            </div>
+          </div>
+          <div class="card card-tool">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#f87171"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              </svg>
+              <span class="tool-name">delete_file</span>
+              <span class="write-badge delete"
+                ><svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+                Delete</span
+              >
+            </div>
+            <div class="card-body">
+              <div class="filepath">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                </svg>
+                src/utils/legacy-parser.ts
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LspExecutionCard -->
+        <div class="variant-group">
+          <h3>LspExecutionCard LSP 执行卡片</h3>
+          <div class="card card-tool status-done">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#34d399"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+              <span class="tool-name">lsp_diagnostics</span>
+              <span class="badge badge-success">done</span>
+            </div>
+            <div class="card-body">
+              <div class="diag-counts">
+                <div class="diag-count-item" style="color: #f87171">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                  2 Errors
+                </div>
+                <div class="diag-count-item" style="color: #fbbf24">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                    />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                  5 Warnings
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SessionTaskCard -->
+        <div class="variant-group">
+          <h3>SessionTaskCard 会话任务卡片</h3>
+          <div class="card card-tool status-running" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <div class="tool-status-dot running"></div>
+              <span class="tool-name">session_task</span>
+              <span class="badge badge-warning">运行中</span>
+            </div>
+            <div class="card-body" style="font-size: 12px; color: #94a3b8">
+              正在执行代码重构任务...
+            </div>
+          </div>
+          <div class="card card-tool status-done">
+            <div class="tool-card-header">
+              <div class="tool-status-dot done"></div>
+              <span class="tool-name">session_task</span>
+              <span class="badge badge-success">完成</span>
+            </div>
+            <div class="card-body" style="font-size: 12px; color: #94a3b8">
+              任务已完成，共修改 5 个文件
+            </div>
+            <div class="card-meta">
+              <span>耗时 12.8s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- LspDiagnosticsCard -->
+        <div class="variant-group">
+          <h3>LspDiagnosticsCard LSP 诊断列表卡片</h3>
+          <div class="card card-tool status-error">
+            <div class="tool-card-header">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#f87171"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span class="tool-name">Diagnostics</span>
+              <span class="badge badge-error">2 errors</span>
+            </div>
+            <div class="card-body diag-list">
+              <div class="diag-item">
+                <span class="diag-line">L12</span>
+                <span
+                  class="diag-code"
+                  style="background: rgba(248, 113, 113, 0.15); color: #f87171"
+                  >TS2322</span
+                >
+                <span class="diag-msg">Type 'string' is not assignable to type 'number'</span>
+              </div>
+              <div class="diag-item">
+                <span class="diag-line">L27</span>
+                <span
+                  class="diag-code"
+                  style="background: rgba(248, 113, 113, 0.15); color: #f87171"
+                  >TS2304</span
+                >
+                <span class="diag-msg">Cannot find name 'parseConfig'</span>
+              </div>
+              <div class="diag-item">
+                <span class="diag-line">L5</span>
+                <span class="diag-code" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24"
+                  >TS6133</span
+                >
+                <span class="diag-msg">'unusedVar' is declared but never used</span>
+              </div>
+              <div class="diag-item">
+                <span class="diag-line">L34</span>
+                <span class="diag-code" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24"
+                  >TS6133</span
+                >
+                <span class="diag-msg">'tempResult' is declared but never used</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- 3. Agent/原语/队列类 -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>3. Agent / 原语 / 队列类</h2>
+        <p class="section-desc">
+          MemoryCard, BashBackgroundProcessCard, SupervisorContinueCard, QueueCards, CardContainer,
+          ToolCardHeader
+        </p>
+
+        <!-- MemoryCard -->
+        <div class="variant-group">
+          <h3>MemoryCard 记忆卡片</h3>
+          <div class="card memory-card" style="margin-bottom: 12px">
+            <div class="card-hdr">
+              <div class="card-hdr-icon teal">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">用户偏好</span>
+              <span class="card-hdr-badge"><span class="badge badge-memory">preference</span></span>
+            </div>
+            <div class="card-body">
+              <div class="memory-label pref">偏好 Preference</div>
+              <div class="memory-value">使用 strict TypeScript 模式，优先使用函数式组件</div>
+            </div>
+          </div>
+          <div class="card memory-card">
+            <div class="card-hdr">
+              <div class="card-hdr-icon cyan">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"
+                  />
+                  <path d="M18 14h-8" />
+                  <path d="M15 18h-5" />
+                  <path d="M10 6h8v4h-8V6Z" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">项目事实</span>
+              <span class="card-hdr-badge"><span class="badge badge-tool">fact</span></span>
+            </div>
+            <div class="card-body">
+              <div class="memory-label fact">事实 Fact</div>
+              <div class="memory-value">项目使用 pnpm 作为包管理器，Node.js 版本要求 >= 18</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BashBackgroundProcessCard -->
+        <div class="variant-group">
+          <h3>BashBackgroundProcessCard 后台进程卡片</h3>
+          <div class="card card-tool status-running">
+            <div class="card-hdr">
+              <div class="card-hdr-icon yellow">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="20" height="14" x="2" y="3" rx="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">后台进程</span>
+              <span class="card-hdr-badge"><span class="badge badge-warning">running</span></span>
+            </div>
+            <div class="card-body">
+              <div class="bg-process-info" style="flex-wrap: wrap">
+                <span>PID: <code>48231</code></span>
+                <span>运行时长: <code>02:34:12</code></span>
+                <button class="btn-stop">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                  Stop
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SupervisorContinueCard -->
+        <div class="variant-group">
+          <h3>SupervisorContinueCard 监督者继续卡片</h3>
+          <div class="card">
+            <div class="card-hdr">
+              <div class="card-hdr-icon violet">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="6 3 20 3 20 15 6 15" />
+                  <path d="M2 3h20v12H2z" opacity="0.5" />
+                  <path d="M12 15v4" />
+                  <path d="M8 19h8" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">继续执行</span>
+            </div>
+            <div class="card-body">
+              <ul class="step-list">
+                <li><span class="step-num">1</span> 已完成类型定义提取</li>
+                <li><span class="step-num">2</span> 已更新 import 路径</li>
+                <li>
+                  <span class="step-num" style="background: var(--pi-violet-400); color: #fff"
+                    >3</span
+                  >
+                  待执行: 运行编译验证
+                </li>
+              </ul>
+              <button class="btn-continue">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- QueueCards -->
+        <div class="variant-group">
+          <h3>QueueCards 队列卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="card-hdr">
+              <span class="card-hdr-title">等待队列</span>
+              <span class="badge badge-muted">3 items</span>
+            </div>
+            <div class="queue-item">
+              <span class="queue-num">1</span>
+              <span>读取 src/types/index.ts</span>
+              <span class="badge badge-muted" style="margin-left: auto">等待中</span>
+            </div>
+            <div class="queue-item active">
+              <span class="queue-num">2</span>
+              <div
+                class="spinner"
+                style="
+                  width: 12px;
+                  height: 12px;
+                  border-top-color: var(--pi-violet-400);
+                  border-color: rgba(116, 108, 255, 0.2);
+                "
+              ></div>
+              <span>编辑 src/utils/parser.ts</span>
+              <span class="badge badge-violet" style="margin-left: auto">处理中</span>
+            </div>
+            <div class="queue-item">
+              <span class="queue-num">3</span>
+              <span>运行 TypeScript 编译</span>
+              <span class="badge badge-muted" style="margin-left: auto">等待中</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CardContainer -->
+        <div class="variant-group">
+          <h3>CardContainer 容器卡片</h3>
+          <div class="card-container accent" style="margin-bottom: 12px">
+            <div class="card-container-title">默认 (Left Accent)</div>
+            <div class="card-container-body">
+              容器组件用于包裹多个子卡片，左侧紫色边框强调层级关系。
+            </div>
+          </div>
+          <div class="card-container compact">
+            <div class="card-container-title">紧凑模式 (Compact)</div>
+            <div class="card-container-body">
+              无左侧强调边框，使用更小的圆角，适用于空间有限的场景。
+            </div>
+          </div>
+        </div>
+
+        <!-- ToolCardHeader -->
+        <div class="variant-group">
+          <h3>ToolCardHeader 工具卡片头部</h3>
+          <div class="card card-tool status-running" style="margin-bottom: 12px">
+            <div class="tool-card-header">
+              <div class="tool-status-dot running"></div>
+              <span class="tool-name">read_file</span>
+              <span class="badge badge-warning">running</span>
+            </div>
+            <div class="card-body" style="font-size: 12px; color: #94a3b8; padding-top: 0">
+              正在读取文件...
+            </div>
+          </div>
+          <div class="card card-tool status-done">
+            <div class="tool-card-header">
+              <div class="tool-status-dot done"></div>
+              <span class="tool-name">read_file</span>
+              <span class="badge badge-success">done</span>
+            </div>
+            <div class="card-body" style="font-size: 12px; color: #94a3b8; padding-top: 0">
+              文件读取完成
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- 4. UI 交互类 -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>4. UI 交互类</h2>
+        <p class="section-desc">
+          CardShell, ConfirmCard, AskUserQuestionCard, SelectCard, InputCard, NotifyCard,
+          PathPermissionCard, RuntimePermissionCard, UIInteractionAnchor, RespondUICard
+        </p>
+
+        <!-- CardShell -->
+        <div class="variant-group">
+          <h3>CardShell 卡片外壳</h3>
+          <div class="card-shell" style="margin-bottom: 12px">
+            <div class="card-shell-header">
+              <div class="card-shell-dot"></div>
+              <span class="card-shell-title">Pending Response</span>
+            </div>
+            <div style="font-size: 12px; color: #94a3b8">等待用户确认操作...</div>
+          </div>
+          <div class="card-shell responded">
+            <div class="card-shell-header">
+              <div class="card-shell-dot"></div>
+              <span class="card-shell-title">Responded</span>
+            </div>
+            <div style="font-size: 12px; color: #c8d1dc">用户已确认，继续执行重构任务。</div>
+          </div>
+        </div>
+
+        <!-- ConfirmCard -->
+        <div class="variant-group">
+          <h3>ConfirmCard 确认卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="confirm-card">
+              <div class="confirm-title" style="color: #f87171">确认删除文件？</div>
+              <div class="confirm-desc">
+                即将删除 <code>src/utils/legacy-parser.ts</code>，此操作不可撤销。
+              </div>
+              <div class="confirm-actions">
+                <button class="btn btn-danger">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  </svg>
+                  确认删除
+                </button>
+                <button class="btn btn-ghost">取消</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="confirm-card">
+              <div class="confirm-title">继续执行构建？</div>
+              <div class="confirm-desc">检测到 3 个文件有未保存的更改。</div>
+              <div class="confirm-actions">
+                <button class="btn btn-primary">继续</button>
+                <button class="btn btn-ghost">取消</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AskUserQuestionCard -->
+        <div class="variant-group">
+          <h3>AskUserQuestionCard 问答卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="question-card">
+              <div class="question-label">请提供项目描述</div>
+              <div class="question-desc">用于生成 README 文件的内容</div>
+              <input type="text" class="text-input" placeholder="输入项目描述..." />
+            </div>
+          </div>
+          <div class="card">
+            <div class="question-card">
+              <div class="question-label">选择部署目标</div>
+              <div class="question-desc">请选择应用的部署平台</div>
+              <div class="option-list">
+                <div class="option-item selected">
+                  <div class="radio-dot checked"></div>
+                  <span>Vercel</span>
+                </div>
+                <div class="option-item">
+                  <div class="radio-dot"></div>
+                  <span>Cloudflare Pages</span>
+                </div>
+                <div class="option-item">
+                  <div class="radio-dot"></div>
+                  <span>AWS Amplify</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SelectCard -->
+        <div class="variant-group">
+          <h3>SelectCard 选择卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="question-card">
+              <div class="question-label">选择框架（单选）</div>
+              <div class="option-list">
+                <div class="option-item selected">
+                  <div class="radio-dot checked"></div>
+                  <span>React</span>
+                </div>
+                <div class="option-item">
+                  <div class="radio-dot"></div>
+                  <span>Vue 3</span>
+                </div>
+                <div class="option-item">
+                  <div class="radio-dot"></div>
+                  <span>Svelte</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="question-card">
+              <div class="question-label">选择需要安装的功能（多选）</div>
+              <div class="option-list">
+                <div class="option-item selected">
+                  <div class="check-box checked">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <span>ESLint</span>
+                </div>
+                <div class="option-item selected">
+                  <div class="check-box checked">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <span>Prettier</span>
+                </div>
+                <div class="option-item">
+                  <div class="check-box"></div>
+                  <span>Testing (Vitest)</span>
+                </div>
+              </div>
+              <div class="multi-select-count" style="margin-top: 8px">已选择 2 项</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- InputCard -->
+        <div class="variant-group">
+          <h3>InputCard 输入卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="question-card">
+              <div class="question-label">输入模块名称</div>
+              <input type="text" class="text-input" value="auth-module" placeholder="模块名称" />
+            </div>
+          </div>
+          <div class="card">
+            <div class="question-card">
+              <div class="question-label">选择项目路径</div>
+              <div class="path-input-wrap">
+                <input
+                  type="text"
+                  class="text-input"
+                  value="/Users/dev/projects/my-app"
+                  placeholder="项目路径"
+                />
+                <button class="btn-browse">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
+                  </svg>
+                  浏览
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NotifyCard -->
+        <div class="variant-group">
+          <h3>NotifyCard 通知卡片</h3>
+          <div class="card notify-card info" style="margin-bottom: 8px">
+            <div class="notify-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#60a5fa"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
+              </svg>
+            </div>
+            <div class="notify-content">
+              <div class="notify-title">信息通知</div>
+              <div class="notify-desc">新版本 v2.4.0 可用，包含性能优化和 Bug 修复。</div>
+            </div>
+          </div>
+          <div class="card notify-card success" style="margin-bottom: 8px">
+            <div class="notify-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#34d399"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+            <div class="notify-content">
+              <div class="notify-title">操作成功</div>
+              <div class="notify-desc">项目依赖已全部安装完成。</div>
+            </div>
+          </div>
+          <div class="card notify-card warning" style="margin-bottom: 8px">
+            <div class="notify-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+            </div>
+            <div class="notify-content">
+              <div class="notify-title">警告</div>
+              <div class="notify-desc">磁盘空间不足 10%，建议清理缓存。</div>
+            </div>
+          </div>
+          <div class="card notify-card error">
+            <div class="notify-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#f87171"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <div class="notify-content">
+              <div class="notify-title">错误</div>
+              <div class="notify-desc">连接 LSP 服务失败，代码补全功能可能受影响。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PathPermissionCard -->
+        <div class="variant-group">
+          <h3>PathPermissionCard 路径权限卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="permission-card">
+              <div class="perm-icon" style="color: #34d399">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                  <polyline points="10 17 15 12 10 7" />
+                  <line x1="15" y1="12" x2="3" y2="12" />
+                </svg>
+              </div>
+              <div class="perm-content">
+                <div class="perm-title">写入权限</div>
+                <div class="perm-desc">申请写入以下文件</div>
+                <div class="perm-path">/Users/dev/projects/my-app/src/types/index.ts</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="permission-card">
+              <div class="perm-icon" style="color: #60a5fa">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </div>
+              <div class="perm-content">
+                <div class="perm-title">读取权限</div>
+                <div class="perm-desc">申请读取项目配置文件</div>
+                <div class="perm-path">/Users/dev/projects/my-app/tsconfig.json</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RuntimePermissionCard -->
+        <div class="variant-group">
+          <h3>RuntimePermissionCard 运行时权限卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="permission-card">
+              <div class="perm-icon" style="color: #34d399">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              </div>
+              <div class="perm-content">
+                <div class="perm-title">执行 npm install</div>
+                <div class="perm-desc">安装项目依赖包</div>
+                <div class="perm-risk low">
+                  <div class="perm-risk-dot low"></div>
+                  低风险
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="permission-card">
+              <div class="perm-icon" style="color: #f87171">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                  />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div class="perm-content">
+                <div class="perm-title">执行 rm -rf node_modules</div>
+                <div class="perm-desc">删除 node_modules 目录及所有内容</div>
+                <div class="perm-risk high">
+                  <div class="perm-risk-dot high"></div>
+                  高风险
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- UIInteractionAnchor -->
+        <div class="variant-group">
+          <h3>UIInteractionAnchor UI 交互锚点</h3>
+          <div class="card">
+            <div class="ui-anchor">
+              <div class="ui-anchor-dot"></div>
+              <span style="color: #94a3b8">等待用户在 IDE 中选择代码区域</span>
+            </div>
+            <div style="padding: 10px 16px; font-size: 12px; color: #64748b">
+              Agent 正在等待用户操作以继续工作流...
+            </div>
+          </div>
+        </div>
+
+        <!-- RespondUICard -->
+        <div class="variant-group">
+          <h3>RespondUICard UI 响应卡片</h3>
+          <div class="card respond-card success" style="margin-bottom: 8px">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#34d399"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <span class="respond-label ok">操作成功</span>
+            <span class="respond-detail">文件已保存</span>
+          </div>
+          <div class="card respond-card error">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#f87171"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            <span class="respond-label err">操作失败</span>
+            <span class="respond-detail">权限不足</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- 5. 上下文类 -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>5. 上下文类</h2>
+        <p class="section-desc">ContextReferenceCard, HookInterventionCard, LongContentCard</p>
+
+        <!-- ContextReferenceCard -->
+        <div class="variant-group">
+          <h3>ContextReferenceCard 上下文引用卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="ctx-ref">
+              <div class="ctx-ref-icon">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                </svg>
+              </div>
+              <div class="ctx-ref-body">
+                <div class="ctx-ref-type">文件引用 File Reference</div>
+                <div class="ctx-ref-path">src/utils/parser.ts</div>
+                <div class="ctx-ref-range">L12 - L34</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ctx-ref">
+              <div class="ctx-ref-icon">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <div class="ctx-ref-body">
+                <div class="ctx-ref-type">对话引用 Conversation Reference</div>
+                <div class="ctx-ref-conversation">
+                  用户在之前的对话中提到项目使用 pnpm 作为包管理器
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HookInterventionCard -->
+        <div class="variant-group">
+          <h3>HookInterventionCard Hook 干预卡片</h3>
+          <div class="card hook-card" style="margin-bottom: 12px">
+            <div class="hook-header">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
+                />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+              Pre-tool Hook: 代码格式检查
+            </div>
+            <div class="hook-body">执行 <code>eslint --fix</code> 前的代码检查，已通过。</div>
+          </div>
+          <div class="card hook-card block">
+            <div class="hook-header">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+              </svg>
+              Blocked: 不允许修改 .env 文件
+            </div>
+            <div class="hook-body">安全策略禁止直接修改环境变量文件，请使用配置管理工具。</div>
+          </div>
+        </div>
+
+        <!-- LongContentCard -->
+        <div class="variant-group">
+          <h3>LongContentCard 长内容卡片</h3>
+          <div class="card long-content collapsed" id="lc-collapsed" style="margin-bottom: 12px">
+            <div class="card-body">
+              <pre>
+export interface Config {
+  port: number;
+  host: string;
+  database: DatabaseConfig;
+  cache: CacheConfig;
+  logging: LoggingConfig;
+  auth: AuthConfig;
+  rateLimit: RateLimitConfig;
+  cors: CorsConfig;
+  compression: CompressionConfig;
+  websocket: WebSocketConfig;
+  session: SessionConfig;
+  templates: TemplateConfig;
+  staticFiles: StaticFileConfig;
+  middleware: MiddlewareConfig[];
+  plugins: PluginConfig[];
+  environment: Environment;
+  version: string;
+  buildHash: string;
+  deployedAt: string;
+  features: FeatureFlags;
+}</pre
+              >
+            </div>
+            <button
+              class="expand-btn"
+              onclick="document.getElementById('lc-collapsed').classList.toggle('collapsed')"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+              展开全部内容
+            </button>
+          </div>
+          <div class="card">
+            <div class="card-body">
+              <pre>
+export interface Config {
+  port: number;
+  host: string;
+  database: DatabaseConfig;
+  // ... 完整内容已展示
+}</pre
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- 6. 预览类 -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>6. 预览类</h2>
+        <p class="section-desc">
+          ImageCard, VideoCard, AudioCard, HtmlCard, PdfCard, UrlCard, FallbackCard, MediaCardError,
+          TextCard, MarkdownCard
+        </p>
+
+        <!-- ImageCard -->
+        <div class="variant-group">
+          <h3>ImageCard 图片卡片</h3>
+          <div class="card media-card" style="margin-bottom: 12px">
+            <div class="media-thumb">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+            </div>
+            <div class="media-meta">
+              <span>screenshot.png</span>
+              <span class="badge badge-muted">1920 x 1080</span>
+            </div>
+          </div>
+          <div class="card media-card">
+            <div class="media-error">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+              <span>图片加载失败</span>
+              <span style="font-size: 11px; color: #64748b">network_error.png</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- VideoCard -->
+        <div class="variant-group">
+          <h3>VideoCard 视频卡片</h3>
+          <div class="card media-card" style="margin-bottom: 12px">
+            <div class="video-poster">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.5)"
+                stroke-width="1.5"
+              >
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <div class="play-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="none">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              </div>
+            </div>
+            <div class="media-meta">
+              <span>demo-recording.mp4</span>
+              <span class="badge badge-muted">02:34</span>
+            </div>
+          </div>
+          <div class="card media-card">
+            <div class="media-error">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+              <span>视频加载失败</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AudioCard -->
+        <div class="variant-group">
+          <h3>AudioCard 音频卡片</h3>
+          <div class="card" style="margin-bottom: 12px">
+            <div class="audio-card">
+              <div class="audio-header">
+                <span class="audio-title">podcast-episode-42.mp3</span>
+                <span class="audio-duration">18:32</span>
+              </div>
+              <div class="waveform">
+                <div class="waveform-bar" style="height: 8px"></div>
+                <div class="waveform-bar active" style="height: 20px"></div>
+                <div class="waveform-bar active" style="height: 28px"></div>
+                <div class="waveform-bar active" style="height: 24px"></div>
+                <div class="waveform-bar active" style="height: 16px"></div>
+                <div class="waveform-bar active" style="height: 32px"></div>
+                <div class="waveform-bar active" style="height: 20px"></div>
+                <div class="waveform-bar" style="height: 12px"></div>
+                <div class="waveform-bar" style="height: 18px"></div>
+                <div class="waveform-bar" style="height: 24px"></div>
+                <div class="waveform-bar" style="height: 10px"></div>
+                <div class="waveform-bar" style="height: 20px"></div>
+                <div class="waveform-bar" style="height: 28px"></div>
+                <div class="waveform-bar" style="height: 16px"></div>
+                <div class="waveform-bar" style="height: 22px"></div>
+                <div class="waveform-bar" style="height: 8px"></div>
+                <div class="waveform-bar" style="height: 14px"></div>
+                <div class="waveform-bar" style="height: 26px"></div>
+                <div class="waveform-bar" style="height: 18px"></div>
+                <div class="waveform-bar" style="height: 12px"></div>
+                <div class="waveform-bar" style="height: 24px"></div>
+                <div class="waveform-bar" style="height: 20px"></div>
+                <div class="waveform-bar" style="height: 10px"></div>
+                <div class="waveform-bar" style="height: 16px"></div>
+                <div class="waveform-bar" style="height: 22px"></div>
+                <div class="waveform-bar" style="height: 14px"></div>
+                <div class="waveform-bar" style="height: 8px"></div>
+                <div class="waveform-bar" style="height: 18px"></div>
+                <div class="waveform-bar" style="height: 12px"></div>
+                <div class="waveform-bar" style="height: 20px"></div>
+                <div class="waveform-bar" style="height: 16px"></div>
+              </div>
+              <div class="audio-progress"><div class="audio-progress-bar"></div></div>
+              <div class="audio-controls">
+                <button class="audio-btn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                </button>
+                <span class="audio-time">08:22 / 18:32</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="audio-card">
+              <div class="audio-header">
+                <span class="audio-title">narration-final.wav</span>
+                <span class="audio-duration">04:15</span>
+              </div>
+              <div class="waveform">
+                <div class="waveform-bar" style="height: 12px"></div>
+                <div class="waveform-bar" style="height: 20px"></div>
+                <div class="waveform-bar" style="height: 28px"></div>
+                <div class="waveform-bar" style="height: 16px"></div>
+                <div class="waveform-bar" style="height: 24px"></div>
+                <div class="waveform-bar" style="height: 10px"></div>
+                <div class="waveform-bar" style="height: 18px"></div>
+                <div class="waveform-bar" style="height: 22px"></div>
+                <div class="waveform-bar" style="height: 14px"></div>
+                <div class="waveform-bar" style="height: 26px"></div>
+                <div class="waveform-bar" style="height: 8px"></div>
+                <div class="waveform-bar" style="height: 20px"></div>
+                <div class="waveform-bar" style="height: 16px"></div>
+                <div class="waveform-bar" style="height: 12px"></div>
+                <div class="waveform-bar" style="height: 24px"></div>
+                <div class="waveform-bar" style="height: 18px"></div>
+                <div class="waveform-bar" style="height: 22px"></div>
+                <div class="waveform-bar" style="height: 10px"></div>
+                <div class="waveform-bar" style="height: 28px"></div>
+                <div class="waveform-bar" style="height: 14px"></div>
+              </div>
+              <div class="audio-progress">
+                <div class="audio-progress-bar" style="width: 100%"></div>
+              </div>
+              <div class="audio-controls">
+                <button class="audio-btn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                </button>
+                <span class="audio-time">播放完毕</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HtmlCard -->
+        <div class="variant-group">
+          <h3>HtmlCard HTML 预览卡片</h3>
+          <div class="card html-card">
+            <div class="html-titlebar">
+              <div class="html-titlebar-dots">
+                <div class="html-titlebar-dot r"></div>
+                <div class="html-titlebar-dot y"></div>
+                <div class="html-titlebar-dot g"></div>
+              </div>
+              <div class="html-titlebar-url">localhost:3000/dashboard</div>
+            </div>
+            <div class="html-preview">
+              <div style="text-align: center">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  style="margin-bottom: 6px; color: #64748b"
+                >
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+                <div style="font-size: 11px">HTML 渲染预览区域</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PdfCard -->
+        <div class="variant-group">
+          <h3>PdfCard PDF 预览卡片</h3>
+          <div class="card media-card">
+            <div class="media-thumb" style="height: 200px; flex-direction: column; gap: 8px">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+              </svg>
+              <span style="font-size: 11px; color: #64748b">PDF 首页缩略图</span>
+            </div>
+            <div class="media-meta">
+              <span>design-spec.pdf</span>
+              <span class="badge badge-muted">24 pages</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- UrlCard -->
+        <div class="variant-group">
+          <h3>UrlCard URL 预览卡片</h3>
+          <div class="card">
+            <div class="url-card">
+              <div class="url-favicon">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path
+                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                  />
+                </svg>
+              </div>
+              <div class="url-content">
+                <div class="url-title">pi-agent-chat Design System Documentation</div>
+                <div class="url-desc">
+                  Complete design tokens, component specifications, and usage guidelines for the
+                  pi-agent-chat project.
+                </div>
+                <div class="url-host">github.com/pi-agent-chat/design-system</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FallbackCard -->
+        <div class="variant-group">
+          <h3>FallbackCard 回退卡片</h3>
+          <div class="card">
+            <div class="fallback-card">
+              <div class="fallback-icon">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+              </div>
+              <div class="fallback-label">不支持的文件类型</div>
+              <div class="fallback-ext">.psd</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MediaCardError -->
+        <div class="variant-group">
+          <h3>MediaCardError 媒体错误卡片</h3>
+          <div class="card">
+            <div class="media-error">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span style="font-size: 13px; font-weight: 500">媒体加载错误</span>
+              <span style="font-size: 12px">无法加载此资源，请检查文件路径或网络连接</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TextCard -->
+        <div class="variant-group">
+          <h3>TextCard 文本预览卡片</h3>
+          <div class="card">
+            <div class="card-hdr">
+              <div class="card-hdr-icon gray">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">CHANGELOG.md</span>
+              <span class="card-hdr-badge"><span class="badge badge-muted">1.2 KB</span></span>
+            </div>
+            <div class="card-body">
+              <div class="text-preview">
+                ## v2.4.0 (2024-01-15) ### Added - New token extraction module - Support for Vue 3
+                template syntax ### Fixed - Import path resolution on Windows - Race condition in
+                parallel builds ### Changed - Updated minimum Node.js to v18
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MarkdownCard -->
+        <div class="variant-group">
+          <h3>MarkdownCard Markdown 渲染预览卡片</h3>
+          <div class="card">
+            <div class="card-hdr">
+              <div class="card-hdr-icon violet">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <span class="card-hdr-title">README.md</span>
+              <span class="card-hdr-badge"><span class="badge badge-violet">Markdown</span></span>
+            </div>
+            <div class="card-body md-content">
+              <h4>pi-agent-chat</h4>
+              <p>高性能 AI 聊天代理框架，支持多模态交互和工具调用。</p>
+              <h4>快速开始</h4>
+              <pre><span class="func">pnpm</span> install
+<span class="func">pnpm</span> dev</pre>
+              <p>访问 <code>http://localhost:3000</code> 查看效果。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

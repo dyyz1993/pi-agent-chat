@@ -176,3 +176,17 @@ describe("scroll tracking — does not mutate SideNav selection", () => {
     expect(source).not.toContain("isLoadingMoreBySession");
   });
 });
+
+describe("MessageListView virtualization — lazy item rendering", () => {
+  /**
+   * Long sessions can contain hundreds or thousands of tool-heavy messages.
+   * The Virtualizer must receive data and a render function so React only
+   * creates MessageCard elements for the rendered window.
+   */
+  it("passes processedMessages as data instead of mapping all rows into elements", () => {
+    const source = readSource("src/mainview/components/chat/MessageListView.tsx");
+    expect(source).toContain("data={processedMessages}");
+    expect(source).toContain("{(item) => {");
+    expect(source).not.toContain("{processedMessages.map((item)");
+  });
+});

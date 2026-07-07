@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Modal</title>
+    <link rel="stylesheet" href="../colors_and_type.css" />
+    <style>
+      /* Page scaffold — NOT extracted */
+      body {
+        margin: 0;
+        padding: var(--space-3);
+        background: var(--bg);
+        font-family: var(--font-body);
+        color: var(--fg);
+      }
+      .specimen {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+      }
+      .story {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .story-label {
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-eyebrow);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted-foreground);
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: var(--space-4) 0;
+      }
+
+      /* @component-css-start */
+      .modal-overlay {
+        background: rgba(17, 24, 39, 0.45);
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-5);
+        min-height: 310px;
+      }
+      .modal-container {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-5);
+        width: 400px;
+        max-width: 100%;
+      }
+      .modal-header {
+        padding: var(--space-4) var(--space-5) var(--space-2);
+      }
+      .modal-title {
+        font-family: var(--font-heading);
+        font-size: var(--font-size-h4);
+        font-weight: var(--font-weight-h4);
+        color: var(--text-primary);
+        margin: 0;
+      }
+      .modal-body {
+        padding: 0 var(--space-5) var(--space-4);
+      }
+      .modal-footer {
+        padding: var(--space-3) var(--space-5) var(--space-4);
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-2);
+      }
+      .modal-desc {
+        font-size: var(--font-size-body);
+        line-height: var(--line-height-body);
+        color: var(--text-secondary);
+        margin: 0;
+      }
+      .seg-ctrl {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        margin-bottom: var(--space-3);
+      }
+      .seg-item {
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-body);
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        white-space: nowrap;
+        transition: background 0.15s;
+      }
+      .seg-item:last-child {
+        border-right: none;
+      }
+      .seg-item.active {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--space-2) 0;
+      }
+      .toggle-row + .toggle-row {
+        border-top: 1px solid var(--rule);
+      }
+      .toggle-label {
+        font-size: var(--font-size-body);
+        color: var(--text-primary);
+      }
+      .toggle {
+        width: 36px;
+        height: 20px;
+        border-radius: var(--radius-full);
+        background: var(--pi-neutral-300);
+        position: relative;
+        flex-shrink: 0;
+        transition: background 0.15s;
+      }
+      .toggle.on {
+        background: var(--pi-success-500);
+      }
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-full);
+        background: var(--surface);
+        box-shadow: var(--shadow-1);
+        transition: transform 0.15s;
+      }
+      .toggle.on::after {
+        transform: translateX(16px);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-body);
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-body);
+        border: none;
+        cursor: pointer;
+        white-space: nowrap;
+        border-radius: var(--radius-md);
+        padding: var(--space-1) var(--space-4);
+        min-height: var(--size-button-height-md);
+        min-width: var(--size-button-height-md);
+        transition: background 0.15s;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--surface-container-low);
+      }
+      .btn-primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+      }
+      .btn-danger {
+        background: var(--error);
+        color: var(--on-error);
+      }
+      .btn-danger:hover {
+        filter: brightness(0.92);
+      }
+      /* @component-css-end */
+    </style>
+  </head>
+  <body>
+    <div class="specimen">
+      <div class="stage">
+        <div class="story">
+          <span class="story-label">Settings</span>
+          <div class="modal-overlay">
+            <div class="modal-container">
+              <div class="modal-header"><h3 class="modal-title">Settings</h3></div>
+              <div class="modal-body">
+                <div class="seg-ctrl">
+                  <div class="seg-item active">Developer</div>
+                  <div class="seg-item">Clean</div>
+                </div>
+                <div class="toggle-row">
+                  <span class="toggle-label">Auto-save</span>
+                  <div class="toggle on"></div>
+                </div>
+                <div class="toggle-row">
+                  <span class="toggle-label">Code lens</span>
+                  <div class="toggle"></div>
+                </div>
+                <div class="toggle-row">
+                  <span class="toggle-label">Minimap</span>
+                  <div class="toggle on"></div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-ghost">Cancel</button>
+                <button type="button" class="btn btn-primary">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr class="divider" />
+        <div class="story">
+          <span class="story-label">Confirm</span>
+          <div class="modal-overlay">
+            <div class="modal-container">
+              <div class="modal-header"><h3 class="modal-title">Rollback Code</h3></div>
+              <div class="modal-body">
+                <p class="modal-desc">Revert all file modifications made in this turn.</p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-ghost">Cancel</button>
+                <button type="button" class="btn btn-danger">Rollback</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

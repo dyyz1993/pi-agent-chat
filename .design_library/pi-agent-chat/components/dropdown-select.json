@@ -1,0 +1,59 @@
+{
+  "slug": "dropdown-select",
+  "schemaVersion": 2,
+  "name": "DropdownSelect",
+  "category": "form",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "select", "evidence": "Custom dropdown select with trigger button and popover menu" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["closed", "open", "disabled"] }],
+  "representativeVariants": [
+    {
+      "name": "Closed",
+      "traits": {
+        "state": "closed",
+        "value": "gpt-4",
+        "options": [
+          { "value": "gpt-4", "label": "GPT-4" },
+          { "value": "gpt-3.5", "label": "GPT-3.5" }
+        ]
+      },
+      "whySelected": "Standard closed select",
+      "childrenDigest": "Trigger button + chevron + selected label"
+    },
+    {
+      "name": "Open",
+      "traits": {
+        "state": "open",
+        "value": "gpt-4",
+        "options": [
+          { "value": "gpt-4", "label": "GPT-4" },
+          { "value": "gpt-3.5", "label": "GPT-3.5" }
+        ]
+      },
+      "whySelected": "Open dropdown menu",
+      "childrenDigest": "Trigger button + popover menu + option items with check mark"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "trigger-button",
+      "selected-label",
+      "chevron-icon",
+      "popover-menu",
+      "option-item",
+      "check-mark",
+      "description"
+    ],
+    "structurePatterns": ["dropdown-form"]
+  },
+  "usageHints": {
+    "priorityHint": 65,
+    "context": "Model picker, settings selects, filter dropdowns"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Custom select (not native), uses AnchoredPopover internally, keyboard navigable, selected item has check mark"
+}

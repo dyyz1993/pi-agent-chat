@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeTopLoadRestoredScrollTop,
+  shouldBlockComposerForRemoteDisconnect,
   shouldHideMessageSurfaceUntilInitialBottom,
   shouldStartTopLoad,
 } from "../../../src/mainview/components/chat/ChatPanel";
@@ -58,6 +59,17 @@ describe("ChatPanel initial bottom-first surface", () => {
         effectiveSessionId: null,
         messageCount: 3,
         initialScrollCompleteSessionId: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("reveals the message surface after the initial-scroll grace fallback", () => {
+    expect(
+      shouldHideMessageSurfaceUntilInitialBottom({
+        effectiveSessionId: "sess-1",
+        messageCount: 3,
+        initialScrollCompleteSessionId: null,
+        revealFallbackSessionId: "sess-1",
       }),
     ).toBe(false);
   });
@@ -126,6 +138,40 @@ describe("ChatPanel top-load trigger guard", () => {
         isViewingSubagent: true,
         initialScrollComplete: true,
         lockedSessionId: null,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("ChatPanel remote disconnect guard", () => {
+  it("blocks composer input for disconnected remote projects", () => {
+    expect(
+      shouldBlockComposerForRemoteDisconnect({
+        projectRuntime: "ssh",
+        projectConnected: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldBlockComposerForRemoteDisconnect({
+        hasRemoteProjectRef: true,
+        remoteConnectionStatus: "error",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not block local projects or remote projects that are still connecting", () => {
+    expect(
+      shouldBlockComposerForRemoteDisconnect({
+        projectRuntime: undefined,
+        remoteConnectionStatus: "error",
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldBlockComposerForRemoteDisconnect({
+        projectRuntime: "ssh",
+        remoteConnectionStatus: "connecting",
       }),
     ).toBe(false);
   });

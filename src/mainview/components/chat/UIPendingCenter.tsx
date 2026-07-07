@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   MessageCircleQuestion,
   ArrowRight,
@@ -19,8 +19,11 @@ import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dia
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useStatusStore } from "../../stores/use-status-store";
-import { IconButton } from "../primitives";
-import { PermissionActionButtons } from "./PermissionActionButtons";
+import { AnchoredPopover, IconButton } from "../primitives";
+import {
+  PermissionActionButtons,
+  findOneTimePermissionActionValue,
+} from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 import { jumpToSessionById } from "./primitives/useJumpToSession";
 
@@ -76,6 +79,19 @@ function approvalRisk(req: UIPendingRequest): ApprovalRisk | null {
     return isHighRiskCommand(req.hookMeta.command) ? "High" : "Medium";
   }
   return null;
+}
+
+function AutoDenyHint({ timeout }: { timeout?: number }) {
+  const { t } = useTranslation("chat");
+  if (timeout == null || timeout <= 0) return null;
+  return (
+    <div className="flex items-center gap-1 mt-1.5 px-0.5">
+      <Clock className="w-3 h-3 text-text-tertiary" />
+      <span className="text-[10px] text-text-tertiary">
+        {t("uiCard.autoDeny", { seconds: Math.ceil(timeout / 1000) })}
+      </span>
+    </div>
+  );
 }
 
 function buildApprovalSummaryRows(
@@ -246,6 +262,36 @@ function requestBelongsToActiveSessionTree(
   );
 }
 
+type BatchApprovalAction = {
+  requestId: string;
+  allowResponse?: Record<string, unknown>;
+  denyResponse?: Record<string, unknown>;
+  denyWithDismiss?: boolean;
+};
+
+function buildBatchApprovalAction(req: UIPendingRequest): BatchApprovalAction | null {
+  if (req.method === "select" && req.permissionMeta) {
+    const allowValue = findOneTimePermissionActionValue(req.options, "allow");
+    const denyValue = findOneTimePermissionActionValue(req.options, "deny");
+    if (!allowValue && !denyValue) return null;
+    return {
+      requestId: req.requestId,
+      allowResponse: allowValue ? { value: allowValue } : undefined,
+      denyResponse: denyValue ? { value: denyValue } : undefined,
+    };
+  }
+
+  if (req.method === "confirm" && req.hookMeta) {
+    return {
+      requestId: req.requestId,
+      allowResponse: { confirmed: true },
+      denyWithDismiss: true,
+    };
+  }
+
+  return null;
+}
+
 function ApprovalContextSummary({
   req,
   sessionName,
@@ -275,6 +321,62 @@ function ApprovalContextSummary({
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function BatchApprovalToolbar({ requests }: { requests: UIPendingRequest[] }) {
+  const { t } = useTranslation("chat");
+  const respondById = useUIDialogStore((s) => s.respondById);
+  const dismissById = useUIDialogStore((s) => s.dismissById);
+
+  const actions = useMemo(
+    () => requests.map(buildBatchApprovalAction).filter(Boolean) as BatchApprovalAction[],
+    [requests],
+  );
+  const allowActions = actions.filter((action) => action.allowResponse);
+  const denyActions = actions.filter(
+    (action) => action.denyResponse != null || action.denyWithDismiss === true,
+  );
+
+  if (allowActions.length === 0 && denyActions.length === 0) return null;
+
+  const handleBatch = (intent: "allow" | "deny") => {
+    const targetActions = intent === "allow" ? allowActions : denyActions;
+    for (const action of targetActions) {
+      if (intent === "allow" && action.allowResponse) {
+        respondById(action.requestId, action.allowResponse);
+      } else if (intent === "deny" && action.denyResponse) {
+        respondById(action.requestId, action.denyResponse);
+      } else if (intent === "deny" && action.denyWithDismiss) {
+        dismissById(action.requestId);
+      }
+    }
+  };
+
+  return (
+    <div className="border-b border-border-secondary bg-status-warning/5 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 text-[11px] text-text-secondary">
+          {t("uiPending.batchApprovalsHint", { count: actions.length })}
+        </span>
+        <button
+          type="button"
+          disabled={allowActions.length === 0}
+          onClick={() => handleBatch("allow")}
+          className="rounded-md border border-status-success/30 bg-status-success/12 px-2.5 py-1 text-[11px] font-medium text-status-success transition-colors hover:bg-status-success/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {t("uiPending.batchAllowOnce", { count: allowActions.length })}
+        </button>
+        <button
+          type="button"
+          disabled={denyActions.length === 0}
+          onClick={() => handleBatch("deny")}
+          className="rounded-md border border-status-error/30 bg-status-error/10 px-2.5 py-1 text-[11px] font-medium text-status-error transition-colors hover:bg-status-error/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {t("uiPending.batchDenyOnce", { count: denyActions.length })}
+        </button>
+      </div>
     </div>
   );
 }
@@ -400,14 +502,7 @@ function PanelCard({
             rememberOptions={rememberOptions}
             onSelect={(value) => respondById(req.requestId, { value })}
           />
-          {req.timeout != null && req.timeout > 0 && (
-            <div className="flex items-center gap-1 mt-1.5 px-0.5">
-              <Clock className="w-3 h-3 text-text-tertiary" />
-              <span className="text-[10px] text-text-tertiary">
-                {t("uiCard.autoDeny", { seconds: Math.ceil(req.timeout / 1000) })}
-              </span>
-            </div>
-          )}
+          <AutoDenyHint timeout={req.timeout} />
         </div>
       </div>
     );
@@ -605,6 +700,7 @@ function PanelCard({
               </code>
             </div>
           )}
+          {isHookConfirm && <AutoDenyHint timeout={req.timeout} />}
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
@@ -795,6 +891,7 @@ function SessionGroup({
 
 export function UIPendingCenter() {
   const { t } = useTranslation("chat");
+  const anchorRef = useRef<HTMLDivElement>(null);
   const allPending = useUIDialogStore((s) => s.pending);
   const panelOpen = useUIDialogStore((s) => s.panelOpen);
   const setPanelOpen = useUIDialogStore((s) => s.setPanelOpen);
@@ -879,7 +976,7 @@ export function UIPendingCenter() {
   };
 
   return (
-    <div className="relative inline-flex">
+    <div ref={anchorRef} className="relative inline-flex">
       <IconButton
         label={t("uiPending.pendingRequestsCount", { count: pendingCount })}
         size="sm"
@@ -897,13 +994,25 @@ export function UIPendingCenter() {
         )}
       </IconButton>
 
-      {panelOpen && (
+      <AnchoredPopover
+        anchorRef={anchorRef}
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        placement="bottom"
+        align="end"
+        offset={8}
+        viewportPadding={12}
+        minWidth={448}
+        maxWidth={448}
+        maxHeight={560}
+        className="overflow-hidden"
+      >
         <div
           role="dialog"
           aria-modal="false"
           data-testid="ui-pending-center-panel"
           data-ui-pending-scope="chat"
-          className="absolute right-0 top-full z-[15] mt-2 w-[min(28rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border-secondary bg-surface-code shadow-2xl shadow-black/20 ring-1 ring-border-primary/30 dark:bg-surface-dim"
+          className="max-h-[inherit] overflow-hidden rounded-xl border border-border-secondary bg-surface-code shadow-2xl shadow-black/20 ring-1 ring-border-primary/30 dark:bg-surface-dim"
         >
           <div className="flex items-center gap-2 border-b border-border-secondary px-3 py-2">
             <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-text-primary">
@@ -921,6 +1030,7 @@ export function UIPendingCenter() {
               <X className="h-3.5 w-3.5" />
             </IconButton>
           </div>
+          <BatchApprovalToolbar requests={projectPending} />
           <div className="max-h-[min(520px,70dvh)] space-y-2.5 overflow-y-auto px-3 pb-3 pt-2">
             {pendingCount === 0 ? (
               <div className="py-8 text-center text-[11px] text-text-tertiary">
@@ -943,7 +1053,7 @@ export function UIPendingCenter() {
             )}
           </div>
         </div>
-      )}
+      </AnchoredPopover>
     </div>
   );
 }
@@ -957,8 +1067,8 @@ export function ProjectRuntimePendingRequests({
 }) {
   const { t } = useTranslation("chat");
   const allPending = useUIDialogStore((s) => s.pending);
-  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
-  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject ?? {});
+  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent ?? {});
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const statusWidth = useLayoutStore((s) => s.statusWidth);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
@@ -1081,8 +1191,8 @@ export function useProjectPendingCount(): number {
   const allPending = useUIDialogStore((s) => s.pending);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const projectTabs = useSessionStore((s) => s.projectTabs);
-  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
-  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject ?? {});
+  const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent ?? {});
 
   return useMemo(() => {
     if (!activeProjectId) return 0;

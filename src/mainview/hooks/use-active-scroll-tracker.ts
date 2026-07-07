@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect, useMemo, useState } from "react";
 import type { VirtualizerHandle } from "virtua";
 import { useScrollIntent } from "./use-scroll-intent";
 
@@ -6,7 +6,7 @@ interface UseActiveScrollTrackerOptions {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   vlistRef: React.RefObject<VirtualizerHandle | null>;
   messageIds: string[];
-  activeTargets?: Array<{ key: string; messageId: string; blockId?: string }>;
+  activeTargets?: ActiveTarget[];
   sessionId: string | undefined;
   setActive: (id: string | null) => void;
   streamVersion: number;
@@ -17,7 +17,7 @@ interface UseActiveScrollTrackerOptions {
 
 const BOTTOM_THRESHOLD_PX = 80;
 const TOP_THRESHOLD_PX = 80;
-const ACTIVE_THROTTLE_MS = 16;
+const ACTIVE_THROTTLE_MS = 80;
 const SCROLL_SETTLE_MAX_ATTEMPTS = 10;
 const STREAM_SCROLL_STABLE_MAX_ATTEMPTS = 10;
 const ACTIVE_TARGET_ANCHOR_OFFSET_PX = 48;
@@ -38,6 +38,43 @@ type BottomMeasurementSnapshot = {
   scrollSize: number;
   viewportSize: number;
 };
+
+export type ActiveTarget = {
+  key: string;
+  messageId: string;
+  blockId?: string;
+};
+
+export type ActiveTargetIndex = {
+  firstKey: string | null;
+  lastKey: string | null;
+  blockToKey: Map<string, string>;
+  messageToKey: Map<string, string>;
+  targetOrder: Map<string, number>;
+};
+
+export function buildActiveTargetIndex(targets?: ActiveTarget[]): ActiveTargetIndex | null {
+  if (!targets || targets.length === 0) return null;
+  const blockToKey = new Map<string, string>();
+  const messageToKey = new Map<string, string>();
+  const targetOrder = new Map<string, number>();
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    targetOrder.set(target.key, i);
+    if (target.blockId) {
+      blockToKey.set(target.blockId, target.key);
+    } else if (!messageToKey.has(target.messageId)) {
+      messageToKey.set(target.messageId, target.key);
+    }
+  }
+  return {
+    firstKey: targets[0]?.key ?? null,
+    lastKey: targets[targets.length - 1]?.key ?? null,
+    blockToKey,
+    messageToKey,
+    targetOrder,
+  };
+}
 
 export function getActiveTargetAnchorY(containerRect: Pick<DOMRect, "top" | "height">): number {
   const offset = Math.min(
@@ -142,6 +179,9 @@ export function useActiveScrollTracker({
   messageIdsRef.current = messageIds;
   const activeTargetsRef = useRef(activeTargets);
   activeTargetsRef.current = activeTargets;
+  const activeTargetIndex = useMemo(() => buildActiveTargetIndex(activeTargets), [activeTargets]);
+  const activeTargetIndexRef = useRef(activeTargetIndex);
+  activeTargetIndexRef.current = activeTargetIndex;
 
   // Unified scroll scheduler: single rAF slot for all scroll requests.
   // Ensures at most one scrollToIndex per animation frame.
@@ -222,35 +262,22 @@ export function useActiveScrollTracker({
   }, [vlistRef]);
 
   const getFirstActiveTargetKey = useCallback(() => {
-    const targets = activeTargetsRef.current;
-    if (targets && targets.length > 0) return targets[0].key;
+    const targetIndex = activeTargetIndexRef.current;
+    if (targetIndex?.firstKey) return targetIndex.firstKey;
     return messageIdsRef.current[0] ?? null;
   }, []);
 
   const getLastActiveTargetKey = useCallback(() => {
-    const targets = activeTargetsRef.current;
-    if (targets && targets.length > 0) return targets[targets.length - 1].key;
+    const targetIndex = activeTargetIndexRef.current;
+    if (targetIndex?.lastKey) return targetIndex.lastKey;
     const ids = messageIdsRef.current;
     return ids[ids.length - 1] ?? null;
   }, []);
 
   const findVisibleActiveTargetKey = useCallback((): string | null => {
-    const targets = activeTargetsRef.current;
+    const targetIndex = activeTargetIndexRef.current;
     const container = scrollRef.current;
-    if (!targets || targets.length === 0 || !container) return null;
-
-    const blockToKey = new Map<string, string>();
-    const messageToKey = new Map<string, string>();
-    const targetOrder = new Map<string, number>();
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
-      targetOrder.set(target.key, i);
-      if (target.blockId) {
-        blockToKey.set(target.blockId, target.key);
-      } else if (!messageToKey.has(target.messageId)) {
-        messageToKey.set(target.messageId, target.key);
-      }
-    }
+    if (!targetIndex || !container) return null;
 
     const containerRect = container.getBoundingClientRect();
     const anchorY = getActiveTargetAnchorY(containerRect);
@@ -262,9 +289,9 @@ export function useActiveScrollTracker({
       const blockId = element.dataset.blockId;
       const messageId = element.dataset.msgId;
       const key = blockId
-        ? blockToKey.get(blockId)
+        ? targetIndex.blockToKey.get(blockId)
         : messageId
-          ? messageToKey.get(messageId)
+          ? targetIndex.messageToKey.get(messageId)
           : null;
       if (!key) continue;
 
@@ -279,7 +306,7 @@ export function useActiveScrollTracker({
           key,
           top: rect.top,
           bottom: rect.bottom,
-          order: targetOrder.get(key),
+          order: targetIndex.targetOrder.get(key),
         });
       }
     }
@@ -291,7 +318,7 @@ export function useActiveScrollTracker({
       scrollDirectionRef.current,
       anchorY,
       previousKey,
-      previousKey ? targetOrder.get(previousKey) : undefined,
+      previousKey ? targetIndex.targetOrder.get(previousKey) : undefined,
     );
   }, [scrollRef]);
 

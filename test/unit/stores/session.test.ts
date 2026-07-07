@@ -142,12 +142,28 @@ import { useExplorerStore } from "../../../src/mainview/stores/use-explorer-stor
 import { useGitStore } from "../../../src/mainview/stores/use-git-store";
 import { setupSubscriptions } from "../../../src/mainview/stores/session-subscriptions";
 import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
+import { useSubagentStore } from "../../../src/mainview/stores/use-subagent-store";
+import { useTierStore } from "../../../src/mainview/stores/use-tier-store";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
 
 const TAB_A: ProjectTab = { id: "tab-a", name: "Project A", path: "/project-a" };
 const TAB_B: ProjectTab = { id: "tab-b", name: "Project B", path: "/project-b" };
+const REMOTE_TAB_OFFLINE: ProjectTab = {
+  id: "remote-offline",
+  name: "jianli-node",
+  path: "/Users/me/.pi-agent-chat/remote-projects/jianli-node",
+  runtime: "ssh",
+  connected: false,
+  remote: {
+    runtime: "ssh",
+    profileId: "profile-1",
+    host: "remote-box",
+    remotePath: "/root/jianli-node",
+    localPath: "/Users/me/.pi-agent-chat/remote-projects/jianli-node",
+  },
+};
 
 function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   const sid = overrides.sessionId ?? "sess-1";
@@ -173,6 +189,12 @@ beforeEach(() => {
   chatStoreState.messagesBySession = {};
   clearAgentStarted("sess-1");
   clearAgentStarted("sess-2");
+  useTierStore.setState({
+    globalDefaults: {},
+    hasGlobalDefaults: false,
+    dataBySession: {},
+    switching: false,
+  });
   vi.mocked(useExplorerStore.getState).mockReturnValue({
     setCurrentPath: vi.fn(),
     listRootDir: vi.fn(),
@@ -209,6 +231,7 @@ beforeEach(() => {
     projectStartError: {},
     _projectVersion: 0,
   });
+  useSubagentStore.setState({ activeSubsessionId: null });
 });
 
 describe("addProjectTab", () => {
@@ -408,6 +431,26 @@ describe("setActiveProject", () => {
     expect(useSessionStore.getState().activeSessionId).toBe("new-worktree-sess");
   });
 
+  it("clears active subagent selection when switching to a cached project session", () => {
+    const targetSession = makeSession({
+      sessionId: "sess-b1",
+      projectPath: TAB_B.path,
+      sessionPath: "/sessions/sess-b1",
+    });
+    useSessionStore.setState({
+      projectTabs: [TAB_A, TAB_B],
+      activeProjectId: TAB_A.id,
+      activeSessionId: "parent-session",
+      sessionsByProject: { [TAB_B.path]: [targetSession] },
+    });
+    useSubagentStore.setState({ activeSubsessionId: "child-session" });
+
+    useSessionStore.getState().setActiveProject(TAB_B.id);
+
+    expect(useSessionStore.getState().activeSessionId).toBe("sess-b1");
+    expect(useSubagentStore.getState().activeSubsessionId).toBeNull();
+  });
+
   it("uses the remote workspace path for explorer and git operations", async () => {
     const localPath = "/Users/me/.pi-agent-chat/remote-projects/ssh-demo";
     const remotePath = "/Users/xyz/Projects/demo1";
@@ -455,6 +498,60 @@ describe("setActiveProject", () => {
 });
 
 describe("setActiveSession", () => {
+  it("clears active subagent selection when switching top-level sessions", () => {
+    useSessionStore.setState({ activeSessionId: "parent-session" });
+    useSubagentStore.setState({ activeSubsessionId: "child-session" });
+
+    useSessionStore.getState().setActiveSession("other-session", true);
+
+    expect(useSessionStore.getState().activeSessionId).toBe("other-session");
+    expect(useSubagentStore.getState().activeSubsessionId).toBeNull();
+  });
+
+  it("keeps active subagent selection when refreshing the same parent session", () => {
+    useSessionStore.setState({ activeSessionId: "parent-session" });
+    useSubagentStore.setState({ activeSubsessionId: "child-session" });
+
+    useSessionStore.getState().setActiveSession("parent-session", true);
+
+    expect(useSubagentStore.getState().activeSubsessionId).toBe("child-session");
+  });
+
+  it("blocks opening a disconnected ssh session before starting the agent", () => {
+    const session = makeSession({
+      sessionId: "sess-remote",
+      projectPath: REMOTE_TAB_OFFLINE.path,
+      sessionPath: "/sessions/sess-remote",
+    });
+
+    useSessionStore.setState({
+      projectTabs: [REMOTE_TAB_OFFLINE],
+      activeProjectId: REMOTE_TAB_OFFLINE.id,
+      activeSessionId: null,
+      sessionsByProject: { [REMOTE_TAB_OFFLINE.path]: [session] },
+      projectStartFailed: { [REMOTE_TAB_OFFLINE.id]: false },
+      projectStartError: { [REMOTE_TAB_OFFLINE.id]: "" },
+      sessionReady: {},
+      agentReady: {},
+    });
+
+    useSessionStore.getState().setActiveSession("sess-remote", true);
+
+    const state = useSessionStore.getState();
+    expect(state.sessionReady["sess-remote"]).toBe(false);
+    expect(state.agentReady["sess-remote"]).toBe(false);
+    expect(state.projectStartFailed[REMOTE_TAB_OFFLINE.id]).toBe(true);
+    expect(state.projectStartError[REMOTE_TAB_OFFLINE.id]).toContain(
+      "SSH remote project is disconnected.",
+    );
+    expect(state.projectStartError[REMOTE_TAB_OFFLINE.id]).toContain(
+      "Remote path: /root/jianli-node",
+    );
+    expect(mockedCall).not.toHaveBeenCalledWith("agent.start", expect.anything());
+    expect(chatStoreState.loadSessionMessages).not.toHaveBeenCalled();
+    expect(setupSubscriptions).not.toHaveBeenCalled();
+  });
+
   it("cold-starts by preloading messages once without a second background refresh", async () => {
     const session = makeSession({ sessionId: "sess-cold", projectPath: TAB_A.path });
     mockedCall.mockImplementation((method: string) => {
@@ -688,6 +785,29 @@ describe("loadSessionsForProject", () => {
 });
 
 describe("createNewSession", () => {
+  it("blocks creating a session for a disconnected ssh project", async () => {
+    useSessionStore.setState({
+      projectTabs: [REMOTE_TAB_OFFLINE],
+      activeProjectId: REMOTE_TAB_OFFLINE.id,
+      activeSessionId: null,
+      sessionsByProject: {},
+      projectStartFailed: { [REMOTE_TAB_OFFLINE.id]: false },
+      projectStartError: { [REMOTE_TAB_OFFLINE.id]: "" },
+    });
+
+    await expect(useSessionStore.getState().createNewSession()).rejects.toThrow(
+      "SSH remote project is disconnected.",
+    );
+
+    const state = useSessionStore.getState();
+    expect(state.projectStartFailed[REMOTE_TAB_OFFLINE.id]).toBe(true);
+    expect(state.projectStartError[REMOTE_TAB_OFFLINE.id]).toContain(
+      "Remote path: /root/jianli-node",
+    );
+    expect(mockedCall).not.toHaveBeenCalledWith("session.create", expect.anything());
+    expect(state.sessionsByProject[REMOTE_TAB_OFFLINE.path]).toBeUndefined();
+  });
+
   it("creates a session via API and adds to store", async () => {
     useSessionStore.getState().addProjectTab(TAB_A);
     useSessionStore.setState({ activeProjectId: "tab-a" });
@@ -697,12 +817,17 @@ describe("createNewSession", () => {
       sessionPath: "/sessions/new-sess",
     });
 
-    await useSessionStore.getState().createNewSession();
+    const result = await useSessionStore.getState().createNewSession();
 
     const state = useSessionStore.getState();
     const sessions = state.sessionsByProject["/project-a"];
     expect(sessions).toHaveLength(1);
     expect(sessions[0].sessionId).toBe("new-sess");
+    expect(result).toEqual({
+      status: "created",
+      sessionId: "new-sess",
+      projectPath: "/project-a",
+    });
   });
 
   it("creates a session under the explicit project path instead of the active tab path", async () => {
@@ -714,9 +839,14 @@ describe("createNewSession", () => {
       sessionPath: "/sessions/new-worktree-sess",
     });
 
-    await useSessionStore.getState().createNewSession("/worktree-a");
+    const result = await useSessionStore.getState().createNewSession("/worktree-a");
 
     expect(mockedCall).toHaveBeenCalledWith("session.create", { projectPath: "/worktree-a" });
+    expect(result).toEqual({
+      status: "created",
+      sessionId: "new-worktree-sess",
+      projectPath: "/worktree-a",
+    });
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toBeUndefined();
     expect(useSessionStore.getState().sessionsByProject["/worktree-a"]).toEqual([
       expect.objectContaining({
@@ -743,7 +873,7 @@ describe("createNewSession", () => {
     useSessionStore.setState({ activeProjectId: "tab-a" });
     mockedCall.mockRejectedValueOnce(new Error("create fail"));
 
-    await useSessionStore.getState().createNewSession();
+    await expect(useSessionStore.getState().createNewSession()).rejects.toThrow("create fail");
 
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toBeUndefined();
   });
@@ -756,11 +886,53 @@ describe("createNewSession", () => {
       sessionsByProject: { "/project-a": [blankSession] },
     });
 
-    await useSessionStore.getState().createNewSession();
+    const result = await useSessionStore.getState().createNewSession();
 
     expect(mockedCall).not.toHaveBeenCalledWith("session.create", expect.anything());
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toHaveLength(1);
     expect(useSessionStore.getState().activeSessionId).toBe("blank-1");
+    expect(result).toEqual({
+      status: "reused",
+      sessionId: "blank-1",
+      projectPath: "/project-a",
+    });
+  });
+
+  it("moves reused blank session into the visible new-session slot", async () => {
+    const pinnedSession = makeSession({
+      sessionId: "pinned-1",
+      messageCount: 2,
+      firstMessage: "important",
+      pinned: true,
+      updatedAt: 5000,
+    });
+    const usedSession = makeSession({
+      sessionId: "used-1",
+      messageCount: 3,
+      firstMessage: "used",
+      updatedAt: 6000,
+    });
+    const blankSession = makeSession({
+      sessionId: "blank-1",
+      messageCount: 0,
+      firstMessage: "",
+      updatedAt: 1000,
+    });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: "tab-a",
+      sessionsByProject: { "/project-a": [pinnedSession, usedSession, blankSession] },
+    });
+
+    const result = await useSessionStore.getState().createNewSession();
+
+    const sessions = useSessionStore.getState().sessionsByProject["/project-a"];
+    expect(mockedCall).not.toHaveBeenCalledWith("session.create", expect.anything());
+    expect(result.status).toBe("reused");
+    expect(useSessionStore.getState().activeSessionId).toBe("blank-1");
+    expect(sessions.map((session) => session.sessionId)).toEqual(["pinned-1", "blank-1", "used-1"]);
+    expect(sessions[1].updatedAt).toBeGreaterThan(1000);
   });
 
   it("creates new session when existing sessions have messages", async () => {
@@ -786,6 +958,51 @@ describe("createNewSession", () => {
       expect.objectContaining({ projectPath: "/project-a" }),
     );
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toHaveLength(2);
+  });
+
+  it("copies tier config from the active session into a newly created session without project config", async () => {
+    const sourceSession = makeSession({
+      sessionId: "source-sess",
+      messageCount: 1,
+      firstMessage: "configured task",
+      sessionPath: "/sessions/source-sess",
+    });
+    const sourceModels = {
+      fast: "source/fast",
+      pro: "source/pro",
+      max: "source/max",
+    };
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: "tab-a",
+      activeSessionId: "source-sess",
+      sessionsByProject: { "/project-a": [sourceSession] },
+    });
+    useTierStore.getState().setSessionTierModels("source-sess", "/project-a", sourceModels);
+    useTierStore.getState().setSessionCurrentTier("source-sess", "/project-a", "max");
+    mockedCall.mockImplementation(async (method: string) => {
+      if (method === "session.create") {
+        return { sessionId: "new-sess", sessionPath: "/sessions/new-sess" };
+      }
+      if (method === "agent.setTierModels") return { ok: true };
+      if (method === "session.saveTierConfig") return { ok: true };
+      if (method === "agent.switchTier") return { provider: "source", id: "max", tier: "max" };
+      return {};
+    });
+
+    await useSessionStore.getState().createNewSession();
+
+    expect(useTierStore.getState().getTierModelsForSession("new-sess", "/project-a")).toEqual(
+      sourceModels,
+    );
+    expect(useTierStore.getState().getCurrentTierForSession("new-sess", "/project-a")).toBe("max");
+    expect(mockedCall).toHaveBeenCalledWith("session.saveTierConfig", {
+      sessionPath: "/sessions/new-sess",
+      tierModels: sourceModels,
+      currentTier: "max",
+      currentModel: null,
+    });
+    expect(mockedCall).not.toHaveBeenCalledWith("project.saveTierConfig", expect.anything());
   });
 });
 
@@ -935,6 +1152,42 @@ describe("setCurrentModel / setThinkingLevel", () => {
   it("sets thinking level", () => {
     useSessionStore.getState().setThinkingLevel("high");
     expect(useSessionStore.getState().currentThinkingLevel).toBe("high");
+  });
+
+  it("stores thinking level per session and restores it when switching sessions", () => {
+    useSessionStore.setState({
+      activeSessionId: "sess-a",
+      thinkingLevelBySession: {},
+      currentThinkingLevel: "medium",
+    });
+
+    useSessionStore.getState().setThinkingLevel("high", "sess-a");
+    useSessionStore.getState().setThinkingLevel("low", "sess-b");
+
+    expect(useSessionStore.getState().currentThinkingLevel).toBe("high");
+    expect(useSessionStore.getState().thinkingLevelBySession).toMatchObject({
+      "sess-a": "high",
+      "sess-b": "low",
+    });
+
+    useSessionStore.getState().setActiveSession("sess-b", true);
+    expect(useSessionStore.getState().currentThinkingLevel).toBe("low");
+
+    useSessionStore.getState().setActiveSession("sess-a", true);
+    expect(useSessionStore.getState().currentThinkingLevel).toBe("high");
+  });
+
+  it("does not let a background session thinking update change the active selection", () => {
+    useSessionStore.setState({
+      activeSessionId: "sess-a",
+      thinkingLevelBySession: { "sess-a": "high" },
+      currentThinkingLevel: "high",
+    });
+
+    useSessionStore.getState().setThinkingLevel("low", "sess-b");
+
+    expect(useSessionStore.getState().currentThinkingLevel).toBe("high");
+    expect(useSessionStore.getState().thinkingLevelBySession["sess-b"]).toBe("low");
   });
 });
 

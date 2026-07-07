@@ -1,0 +1,26 @@
+{
+  "slug": "markdown-card",
+  "schemaVersion": 2,
+  "name": "MarkdownCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [{ "type": "content", "evidence": "Markdown file rendered preview" }],
+  "variantDimensions": [{ "name": "mode", "values": ["rendered", "source"] }],
+  "representativeVariants": [
+    {
+      "name": "Rendered",
+      "traits": { "mode": "rendered", "fileName": "README.md" },
+      "whySelected": "Rendered markdown preview",
+      "childrenDigest": "Filename badge + rendered markdown content"
+    }
+  ],
+  "anatomy": {
+    "parts": ["filename-badge", "rendered-content", "toggle-button"],
+    "structurePatterns": ["content-preview"]
+  },
+  "usageHints": { "priorityHint": 50, "context": "Markdown file preview in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Rendered markdown in card, toggle between rendered and source views"
+}

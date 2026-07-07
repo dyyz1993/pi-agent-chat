@@ -1,0 +1,107 @@
+/* pi-agent-cursor — Cursor/Windsurf 紧凑扁平工具风格设计系统 */
+/* Generated: 2026-07-05 */
+
+:root {
+  /* Background */
+  --bg-base: #0b111a;
+  --bg-sidebar: #111827;
+  --bg-surface: #121b28;
+  --bg-elevated: #1e293b;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(116, 108, 255, 0.08);
+  --bg-overlay: rgba(0, 0, 0, 0.5);
+  --bg-input: #0d1520;
+
+  /* Text */
+  --text-primary: #f2f6fb;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-muted: #475569;
+  --text-inverse: #0b111a;
+  --text-link: #746cff;
+  --text-link-hover: #8d88ff;
+
+  /* Border */
+  --border: #1e293b;
+  --border-hover: #334155;
+  --border-focus: #746cff;
+  --border-muted: #1a2332;
+
+  /* Accent */
+  --accent: #746cff;
+  --accent-hover: #8d88ff;
+  --accent-muted: rgba(116, 108, 255, 0.15);
+
+  /* Primary */
+  --primary: #246df3;
+  --primary-hover: #4b8bff;
+
+  /* Semantic Status */
+  --success: #34d399;
+  --success-muted: rgba(52, 211, 153, 0.1);
+  --warning: #fbbf24;
+  --warning-muted: rgba(251, 191, 36, 0.1);
+  --error: #f87171;
+  --error-muted: rgba(248, 113, 113, 0.1);
+  --info: #60a5fa;
+  --info-muted: rgba(96, 165, 250, 0.1);
+
+  /* Semantic Tool (深色调，贴合实际项目) */
+  --tool: #008095;
+  --tool-muted: rgba(0, 128, 149, 0.1);
+  --agent: #7f55cc;
+  --agent-muted: rgba(127, 85, 204, 0.1);
+  --memory: #1e8c71;
+  --memory-muted: rgba(30, 140, 113, 0.1);
+
+  /* Typography */
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 18px;
+  --font-size-h1: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.5;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* Radius (小圆角) */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-full: 9999px;
+
+  /* Shadows (极简，几乎不用) */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  /* Transitions */
+  --transition-fast: 80ms ease;
+  --transition-normal: 120ms ease;
+
+  /* Z-index */
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}

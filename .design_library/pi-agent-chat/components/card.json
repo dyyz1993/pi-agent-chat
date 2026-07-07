@@ -1,0 +1,46 @@
+{
+  "slug": "card",
+  "schemaVersion": 2,
+  "name": "Card",
+  "category": "layout",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "card", "evidence": "contained content block with border and shadow" }
+  ],
+  "variantDimensions": [{ "name": "variant", "values": ["default", "tool-execution"] }],
+  "representativeVariants": [
+    {
+      "name": "Default Card",
+      "traits": {
+        "variant": "default",
+        "title": "Memory Entry",
+        "description": "TypeScript strict mode configuration"
+      },
+      "whySelected": "Generic container for settings, memory entries, bookmarks",
+      "childrenDigest": "Title + description + metadata row"
+    },
+    {
+      "name": "Tool Execution Card",
+      "traits": {
+        "variant": "tool-execution",
+        "toolName": "bash",
+        "status": "done",
+        "duration": "1.2s"
+      },
+      "whySelected": "Core component for displaying AI tool invocations",
+      "childrenDigest": "Colored icon header + tool name + status badge + collapsible sections"
+    }
+  ],
+  "anatomy": {
+    "parts": ["header", "icon-wrap", "title", "status-badge", "body", "sections", "actions"],
+    "structurePatterns": ["stacked-header-content-footer"]
+  },
+  "usageHints": {
+    "priorityHint": 2,
+    "context": "Tool execution display, memory entries, bookmarks, settings sections"
+  },
+  "doNotInvent": ["draggable-card", "expandable-fullscreen-card"],
+  "unknowns": ["section collapse animation details"],
+  "keyInsightSeed": "Subtle border + shadow elevation, tool execution card with colored icon header"
+}

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sidebar — pi-agent-chat</title>
+    <link rel="stylesheet" href="../colors_and_type.css" />
+    <style>
+      /* Page scaffold — NOT extracted */
+      body {
+        margin: 0;
+        padding: var(--space-3);
+        background: var(--color-background);
+        font-family: var(--font-family-base);
+        color: var(--color-on-surface);
+      }
+      .specimen {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .story {
+        display: flex;
+        gap: var(--space-3);
+        align-items: flex-start;
+      }
+      .story-label {
+        min-width: 92px;
+        font: var(--font-weight-eyebrow) var(--font-size-eyebrow)/var(--line-height-eyebrow)
+          var(--font-family-base);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding-top: var(--space-2);
+        flex-shrink: 0;
+      }
+      .rail {
+        flex: 1;
+        display: flex;
+        gap: var(--space-4);
+        align-items: flex-start;
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid var(--color-outline);
+        margin: var(--space-3) 0;
+      }
+
+      /* @component-css-start */
+      .sidebar-icon-rail {
+        width: 52px;
+        background: var(--color-surface);
+        border-right: 1px solid var(--color-outline);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: var(--space-3) 0;
+        gap: var(--space-2);
+      }
+      .sidebar-icon-btn {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        border: none;
+        background: transparent;
+        color: var(--color-on-surface-variant);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .sidebar-icon-btn:hover {
+        background: var(--color-surface-container);
+      }
+      .sidebar-icon-btn.active {
+        background: var(--color-primary-container);
+        color: var(--color-primary);
+      }
+      .sidebar-icon-btn img {
+        width: 20px;
+        height: 20px;
+        pointer-events: none;
+      }
+      .sidebar-session-panel {
+        width: 240px;
+        background: var(--color-surface);
+        border-right: 1px solid var(--color-outline);
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-search {
+        padding: var(--space-3);
+      }
+      .sidebar-search input {
+        width: 100%;
+        height: var(--size-input-height);
+        border: 1px solid var(--color-outline);
+        border-radius: var(--radius-md);
+        padding: 0 var(--space-2);
+        font: var(--font-weight-body) var(--font-size-caption)/var(--line-height-caption)
+          var(--font-family-base);
+        color: var(--color-on-surface);
+        background: var(--color-surface-dim);
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .sidebar-search input::placeholder {
+        color: var(--color-on-surface-variant);
+      }
+      .sidebar-search input:focus {
+        border-color: var(--color-primary);
+      }
+      .sidebar-session-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 var(--space-2);
+      }
+      .sidebar-session-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .sidebar-session-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .sidebar-session-item:hover {
+        background: var(--color-surface-container);
+      }
+      .sidebar-session-item.active {
+        background: var(--color-primary-container);
+      }
+      .sidebar-session-title {
+        font: var(--font-weight-body) var(--font-size-body)/var(--line-height-body)
+          var(--font-family-base);
+        color: var(--color-on-surface);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sidebar-session-item.active .sidebar-session-title {
+        color: var(--color-primary);
+        font-weight: var(--font-weight-h4);
+      }
+      .sidebar-session-preview {
+        font: var(--font-weight-caption) var(--font-size-caption)/var(--line-height-caption)
+          var(--font-family-base);
+        color: var(--color-on-surface-variant);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* @component-css-end */
+    </style>
+  </head>
+  <body>
+    <div class="specimen">
+      <div class="stage">
+        <div class="story">
+          <span class="story-label">Icon Rail</span>
+          <div class="rail">
+            <nav class="sidebar-icon-rail">
+              <a href="#" class="sidebar-icon-btn active" aria-label="Chat"
+                ><img
+                  src="https://cdn.jsdelivr.net/npm/lucide-static@1.8.0/icons/message-square.svg"
+                  alt=""
+              /></a>
+              <a href="#" class="sidebar-icon-btn" aria-label="Search"
+                ><img
+                  src="https://cdn.jsdelivr.net/npm/lucide-static@1.8.0/icons/search.svg"
+                  alt=""
+              /></a>
+              <a href="#" class="sidebar-icon-btn" aria-label="Settings"
+                ><img
+                  src="https://cdn.jsdelivr.net/npm/lucide-static@1.8.0/icons/settings.svg"
+                  alt=""
+              /></a>
+            </nav>
+          </div>
+        </div>
+        <hr class="divider" />
+        <div class="story">
+          <span class="story-label">Session Panel</span>
+          <div class="rail">
+            <div class="sidebar-session-panel">
+              <div class="sidebar-search">
+                <input type="text" placeholder="Search sessions..." />
+              </div>
+              <div class="sidebar-session-list">
+                <a href="#" class="sidebar-session-item active">
+                  <div class="sidebar-session-body">
+                    <div class="sidebar-session-title">Session A3F2</div>
+                    <div class="sidebar-session-preview">Chat</div>
+                  </div>
+                </a>
+                <a href="#" class="sidebar-session-item">
+                  <div class="sidebar-session-body">
+                    <div class="sidebar-session-title">Session B7E1</div>
+                    <div class="sidebar-session-preview">API Debugging</div>
+                  </div>
+                </a>
+                <a href="#" class="sidebar-session-item">
+                  <div class="sidebar-session-body">
+                    <div class="sidebar-session-title">Session C4D9</div>
+                    <div class="sidebar-session-preview">Code Review</div>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

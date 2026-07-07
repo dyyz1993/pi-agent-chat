@@ -1,0 +1,42 @@
+{
+  "slug": "path-permission-card",
+  "schemaVersion": 2,
+  "name": "PathPermissionCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "permission", "evidence": "File/directory access permission request" }
+  ],
+  "variantDimensions": [{ "name": "action", "values": ["read", "write", "execute"] }],
+  "representativeVariants": [
+    {
+      "name": "Write Permission",
+      "traits": {
+        "action": "write",
+        "path": "/etc/config.json",
+        "reason": "Agent needs to update configuration"
+      },
+      "whySelected": "File write permission",
+      "childrenDigest": "Shield icon + path + reason + Allow/Deny buttons"
+    },
+    {
+      "name": "Read Permission",
+      "traits": {
+        "action": "read",
+        "path": "/secret/key.pem",
+        "reason": "Agent needs to verify key format"
+      },
+      "whySelected": "File read permission",
+      "childrenDigest": "Eye icon + path + reason + Allow/Deny buttons"
+    }
+  ],
+  "anatomy": {
+    "parts": ["shield-icon", "path", "reason", "allow-button", "deny-button"],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 38, "context": "File system permission requests" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Permission shield icon, path in mono font, reason text, prominent Allow/Deny action buttons"
+}

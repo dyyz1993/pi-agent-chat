@@ -1,0 +1,38 @@
+{
+  "slug": "confirm-card",
+  "schemaVersion": 2,
+  "name": "ConfirmCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "interaction", "evidence": "Yes/No confirmation dialog embedded in chat" }
+  ],
+  "variantDimensions": [{ "name": "style", "values": ["danger", "default"] }],
+  "representativeVariants": [
+    {
+      "name": "Danger Confirm",
+      "traits": {
+        "style": "danger",
+        "title": "Delete file?",
+        "message": "This action cannot be undone."
+      },
+      "whySelected": "Destructive action confirmation",
+      "childrenDigest": "Warning icon + title + message + Cancel/Confirm buttons"
+    },
+    {
+      "name": "Default Confirm",
+      "traits": { "style": "default", "title": "Continue?", "message": "Proceed with next step." },
+      "whySelected": "Standard confirmation",
+      "childrenDigest": "Info icon + title + message + Cancel/OK buttons"
+    }
+  ],
+  "anatomy": {
+    "parts": ["icon", "title", "message", "cancel-button", "confirm-button"],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 32, "context": "Agent confirmation requests in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Card-style confirmation (not modal), inline buttons, danger variant has red confirm button"
+}

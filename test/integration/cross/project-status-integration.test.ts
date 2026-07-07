@@ -31,13 +31,11 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
     getState: () => ({
-      getCurrentTier: vi.fn(() => null),
-      getTierModels: vi.fn(() => ({})),
-      syncTierFromModel: vi.fn(),
+      getCurrentTierForSession: vi.fn(() => null),
+      getTierModelsForSession: vi.fn(() => ({})),
+      syncTierFromModelForSession: vi.fn(),
       switchToTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
-      setProjectTierModels: vi.fn(),
-      setProjectCurrentTier: vi.fn(),
       dataBySession: {},
       globalDefaults: {},
     }),
@@ -63,11 +61,15 @@ vi.mock("../../../src/mainview/stores/use-explorer-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-git-store", () => ({
-  useGitStore: { getState: () => ({ fetchWorktrees: vi.fn(), fetchStatus: vi.fn(), fetchBranches: vi.fn() }) },
+  useGitStore: {
+    getState: () => ({ fetchWorktrees: vi.fn(), fetchStatus: vi.fn(), fetchBranches: vi.fn() }),
+  },
 }));
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
-  useStatusStore: { getState: () => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() }) },
+  useStatusStore: {
+    getState: () => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() }),
+  },
   deriveSkillScope: () => "project" as const,
   derivePluginScope: () => "project" as const,
 }));
@@ -227,20 +229,22 @@ describe("TabBar 集成验证：跨项目状态真的能拉到并写入 store", 
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string; sessionIds?: string[] }) => {
-      if (method === "project.scanSessions") {
-        if (params?.projectPath === "/project-b") return { sessions: [otherSess1, otherSess2] };
-        return { sessions: [] };
-      }
-      if (method === "agent.batchGetSessionsStatus") {
-        const statusMap: Record<string, string> = { b1: "streaming", b2: "permission" };
-        return (params?.sessionIds || []).map((id) => ({
-          sessionId: id,
-          status: statusMap[id] || "idle",
-        }));
-      }
-      return {};
-    });
+    apiCallMock.mockImplementation(
+      async (method: string, params: { projectPath?: string; sessionIds?: string[] }) => {
+        if (method === "project.scanSessions") {
+          if (params?.projectPath === "/project-b") return { sessions: [otherSess1, otherSess2] };
+          return { sessions: [] };
+        }
+        if (method === "agent.batchGetSessionsStatus") {
+          const statusMap: Record<string, string> = { b1: "streaming", b2: "permission" };
+          return (params?.sessionIds || []).map((id) => ({
+            sessionId: id,
+            status: statusMap[id] || "idle",
+          }));
+        }
+        return {};
+      },
+    );
 
     // 模拟 TabBar 3s init 末尾的真实行为：
     // 1) 先 await loadSessionsForProject 把非活跃项目列表加载进 store
@@ -249,7 +253,9 @@ describe("TabBar 集成验证：跨项目状态真的能拉到并写入 store", 
     await useSessionStore.getState().fetchAllProjectsSessionsStatus();
 
     // 关键断言 1：apiClient.call 真的发了 batchGetSessionsStatus
-    const batchCalls = apiCallMock.mock.calls.filter((c) => c[0] === "agent.batchGetSessionsStatus");
+    const batchCalls = apiCallMock.mock.calls.filter(
+      (c) => c[0] === "agent.batchGetSessionsStatus",
+    );
     expect(batchCalls).toHaveLength(1);
     // 关键断言 2：请求里只包含非活跃 session（即 b1、b2，不包含 a1）
     const requestIds = (batchCalls[0][1] as { sessionIds: string[] }).sessionIds;
@@ -292,7 +298,9 @@ describe("TabBar 集成验证：跨项目状态真的能拉到并写入 store", 
 
     await useSessionStore.getState().fetchAllProjectsSessionsStatus();
 
-    const batchCalls = apiCallMock.mock.calls.filter((c) => c[0] === "agent.batchGetSessionsStatus");
+    const batchCalls = apiCallMock.mock.calls.filter(
+      (c) => c[0] === "agent.batchGetSessionsStatus",
+    );
     expect(batchCalls).toHaveLength(1);
     const requestIds = (batchCalls[0][1] as { sessionIds: string[] }).sessionIds;
     // a1 是活跃 session，被过滤
@@ -310,7 +318,9 @@ describe("TabBar 集成验证：跨项目状态真的能拉到并写入 store", 
 
     await useSessionStore.getState().fetchAllProjectsSessionsStatus();
 
-    const batchCalls = apiCallMock.mock.calls.filter((c) => c[0] === "agent.batchGetSessionsStatus");
+    const batchCalls = apiCallMock.mock.calls.filter(
+      (c) => c[0] === "agent.batchGetSessionsStatus",
+    );
     expect(batchCalls).toHaveLength(0);
   });
 
@@ -367,21 +377,19 @@ describe("project.scanSessions 一次 RPC 同时返回 sessions 和 statuses（�
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(
-      async (method: string, params: { projectPath?: string }) => {
-        if (method === "project.scanSessions" && params?.projectPath === "/project-x") {
-          // 关键：statuses 字段与 sessions 字段同源
-          return {
-            sessions: [sess1, sess2],
-            statuses: [
-              { sessionId: "x1", status: "streaming" },
-              { sessionId: "x2", status: "permission" },
-            ],
-          };
-        }
-        return {};
-      },
-    );
+    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string }) => {
+      if (method === "project.scanSessions" && params?.projectPath === "/project-x") {
+        // 关键：statuses 字段与 sessions 字段同源
+        return {
+          sessions: [sess1, sess2],
+          statuses: [
+            { sessionId: "x1", status: "streaming" },
+            { sessionId: "x2", status: "permission" },
+          ],
+        };
+      }
+      return {};
+    });
 
     await useSessionStore.getState().loadSessionsForProject("/project-x");
 
@@ -417,14 +425,12 @@ describe("project.scanSessions 一次 RPC 同时返回 sessions 和 statuses（�
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(
-      async (method: string, params: { projectPath?: string }) => {
-        if (method === "project.scanSessions" && params?.projectPath === "/project-y") {
-          return { sessions: [sess] }; // 没有 statuses 字段
-        }
-        return {};
-      },
-    );
+    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string }) => {
+      if (method === "project.scanSessions" && params?.projectPath === "/project-y") {
+        return { sessions: [sess] }; // 没有 statuses 字段
+      }
+      return {};
+    });
 
     await useSessionStore.getState().loadSessionsForProject("/project-y");
 
@@ -449,23 +455,21 @@ describe("project.scanSessions 一次 RPC 同时返回 sessions 和 statuses（�
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(
-      async (method: string, params: { projectPath?: string }) => {
-        if (method === "project.scanSessions" && params?.projectPath === "/project-z") {
-          // 模拟「已通过 server 边界处理」的 schema 形态：status 严格是 SessionStatus，
-          // 不会出现 "stopped"（那是进程池内部状态，在 server handler 中已映射成 "idle"）。
-          return {
-            sessions: [sess],
-            statuses: [
-              { sessionId: "z1", status: "streaming" },
-              { sessionId: "z1", status: "compacting" }, // 后写覆盖前写
-              { sessionId: "z1", status: "idle" }, // 再次覆盖
-            ],
-          };
-        }
-        return {};
-      },
-    );
+    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string }) => {
+      if (method === "project.scanSessions" && params?.projectPath === "/project-z") {
+        // 模拟「已通过 server 边界处理」的 schema 形态：status 严格是 SessionStatus，
+        // 不会出现 "stopped"（那是进程池内部状态，在 server handler 中已映射成 "idle"）。
+        return {
+          sessions: [sess],
+          statuses: [
+            { sessionId: "z1", status: "streaming" },
+            { sessionId: "z1", status: "compacting" }, // 后写覆盖前写
+            { sessionId: "z1", status: "idle" }, // 再次覆盖
+          ],
+        };
+      }
+      return {};
+    });
 
     await useSessionStore.getState().loadSessionsForProject("/project-z");
 
@@ -489,21 +493,19 @@ describe("project.scanSessions 一次 RPC 同时返回 sessions 和 statuses（�
       sessionStatusMap: {},
     });
 
-    apiCallMock.mockImplementation(
-      async (method: string, params: { projectPath?: string }) => {
-        if (method === "project.scanSessions" && params?.projectPath === "/project-w") {
-          return {
-            sessions: [sess],
-            statuses: [
-              null, // 防御：实际不会发生，但 RPC 边界外仍可能传错
-              { sessionId: 123, status: "idle" }, // sessionId 不是 string
-              { sessionId: "w1", status: "permission" },
-            ],
-          };
-        }
-        return {};
-      },
-    );
+    apiCallMock.mockImplementation(async (method: string, params: { projectPath?: string }) => {
+      if (method === "project.scanSessions" && params?.projectPath === "/project-w") {
+        return {
+          sessions: [sess],
+          statuses: [
+            null, // 防御：实际不会发生，但 RPC 边界外仍可能传错
+            { sessionId: 123, status: "idle" }, // sessionId 不是 string
+            { sessionId: "w1", status: "permission" },
+          ],
+        };
+      }
+      return {};
+    });
 
     await useSessionStore.getState().loadSessionsForProject("/project-w");
 

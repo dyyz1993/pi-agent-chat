@@ -13,6 +13,7 @@ interface ToolCardHeaderProps {
   startedAt?: number;
   endedAt?: number;
   badge?: ReactNode;
+  action?: ReactNode;
   onClick?: () => void;
   mono?: boolean;
   rtl?: boolean;
@@ -44,6 +45,7 @@ export const ToolCardHeader = memo(function ToolCardHeader({
   startedAt,
   endedAt,
   badge,
+  action,
   onClick,
   mono: _mono,
   rtl: useRtl,
@@ -82,9 +84,19 @@ export const ToolCardHeader = memo(function ToolCardHeader({
         )}
       </span>
 
-      <span className="shrink-0 h-5 flex items-center gap-1.5 overflow-hidden">{badge}</span>
+      {badge && (
+        <span
+          className={`h-5 min-w-0 items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+            action ? "flex shrink max-w-[52%] sm:max-w-[60%]" : "flex shrink-0"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
 
       {displayTime}
+
+      {action && <span className="shrink-0 flex items-center">{action}</span>}
 
       {isRunning && !displayTime && !badge && (
         <span className="shrink-0 text-[10px] text-status-info animate-pulse">...</span>

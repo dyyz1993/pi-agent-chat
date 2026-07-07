@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   abortOperation,
@@ -11,6 +11,10 @@ import {
 } from "../../../src/shared/agent/agent-client-lifecycle-operations";
 
 describe("agent client lifecycle operations", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("sends prompts after ensuring a managed client", async () => {
     const managed = {
       client: { prompt: vi.fn().mockResolvedValue(undefined) },
@@ -78,14 +82,11 @@ describe("agent client lifecycle operations", () => {
       }),
     ).rejects.toThrow("provider timeout");
 
-    expect(cleanupDeadClient).toHaveBeenCalledWith(
-      "sess-1",
-      "prompt failed: provider timeout",
-    );
+    expect(cleanupDeadClient).toHaveBeenCalledWith("sess-1", "prompt failed: provider timeout");
     expect(emitAgentEnd).not.toHaveBeenCalled();
   });
 
-  it("emits agent_end after prompt rejects when the client is still alive", async () => {
+  it("emits agent_end with the prompt error after prompt rejects when the client is still alive", async () => {
     const managed = {
       client: { prompt: vi.fn().mockRejectedValue(new Error("transient")) },
       info: { status: "idle" },
@@ -105,7 +106,7 @@ describe("agent client lifecycle operations", () => {
       }),
     ).rejects.toThrow("transient");
 
-    expect(emitAgentEnd).toHaveBeenCalledWith("sess-1");
+    expect(emitAgentEnd).toHaveBeenCalledWith("sess-1", "transient");
   });
 
   it("routes steer and follow-up calls without creating a client", () => {
@@ -157,5 +158,34 @@ describe("agent client lifecycle operations", () => {
     expect(managed.lastActiveAt).toBe(456);
     expect(broadcastIdle).toHaveBeenCalledWith("sess-1");
     expect(emitAgentEvent).toHaveBeenCalledWith("sess-1", { type: "agent_end" });
+  });
+
+  it("forces local idle when abort never returns", async () => {
+    vi.useFakeTimers();
+
+    const managed = {
+      client: { abort: vi.fn(() => new Promise<void>(() => {})) },
+      info: { status: "streaming" },
+      lastActiveAt: 0,
+    };
+    const broadcastIdle = vi.fn();
+    const emitAgentEvent = vi.fn().mockResolvedValue(undefined);
+
+    const promise = abortOperation({
+      sessionId: "sess-remote",
+      getActiveManaged: () => managed,
+      broadcastIdle,
+      emitAgentEvent,
+      abortTimeoutMs: 1,
+      now: () => 789,
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(promise).resolves.toBe(true);
+
+    expect(managed.info.status).toBe("idle");
+    expect(managed.lastActiveAt).toBe(789);
+    expect(broadcastIdle).toHaveBeenCalledWith("sess-remote");
+    expect(emitAgentEvent).toHaveBeenCalledWith("sess-remote", { type: "agent_end" });
   });
 });

@@ -97,6 +97,10 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
           output: block.content,
           details: block.details,
         };
+        const normalizedToolName = execBlock.toolName.toLowerCase();
+        if (normalizedToolName === "subagent" || normalizedToolName === "subagent_resume") {
+          return <SubagentExecutionCard block={execBlock} blockId={blockId} />;
+        }
         const renderer = getToolRenderer(execBlock.toolName);
         const rendererProps = { block: execBlock, blockId, uiBlock };
         if (shouldUseToolRenderer(renderer, rendererProps)) {
@@ -108,7 +112,8 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
     case "toolExecution":
       if (!showToolCalls) return null;
       {
-        if (block.toolName.toLowerCase() === "subagent") {
+        const normalizedToolName = block.toolName.toLowerCase();
+        if (normalizedToolName === "subagent" || normalizedToolName === "subagent_resume") {
           return <SubagentExecutionCard block={block} blockId={blockId} />;
         }
         const renderer = getToolRenderer(block.toolName);
@@ -133,7 +138,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         return <SnapshotBadge data={block.data} blockId={blockId} />;
       }
       if (isBashBackgroundProcessType(block.customType)) {
-        return <BashBackgroundProcessCard data={block.data} />;
+        return <BashBackgroundProcessCard compact data={block.data} />;
       }
       if (block.customType === SUPERVISOR_CONTINUE_CUSTOM_TYPE) {
         return <SupervisorContinueCard data={block.data} />;

@@ -12,6 +12,7 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { PanelHeader } from "../primitives/PanelHeader";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
+import { ProjectRuntimePendingRequests } from "../chat/UIPendingCenter";
 import {
   type PermissionRule,
   usePermissionRulesStore,
@@ -175,6 +176,8 @@ export function PermissionsPanel() {
           )
         }
       />
+
+      <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
 
       {!activeSessionId ? (
         <EmptyState icon={KeyRound} title="No active session" />

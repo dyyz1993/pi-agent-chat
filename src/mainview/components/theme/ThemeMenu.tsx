@@ -10,6 +10,8 @@ const THEME_DOT_COLORS: Record<Theme, string> = {
   dark: "bg-[#101722] border border-border-secondary",
 };
 
+const menuIconSlot = "flex h-4 w-4 shrink-0 items-center justify-center";
+
 export function ThemeMenu() {
   const { t } = useTranslation("theme");
   const theme = useThemeStore((s) => s.theme);
@@ -52,21 +54,20 @@ export function ThemeMenu() {
   const current = THEME_OPTIONS.find((o) => o.value === theme) ?? THEME_OPTIONS[1];
   const Icon = current.icon;
   return (
-    <div className="relative" ref={ref}>
-      <Button
+    <div className="relative w-full" ref={ref}>
+      <button
         data-testid="theme-menu-toggle"
-        variant="ghost"
-        size="sm"
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full justify-start px-2 py-1.5 text-text-tertiary hover:text-text-primary"
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors whitespace-nowrap"
         aria-expanded={open}
         aria-label={t("ariaThemeSwitch")}
       >
         <Icon className="w-3 h-3 shrink-0 text-text-tertiary" />
-        <span className="truncate flex-1 text-left">
+        <span className="min-w-0 truncate flex-1 text-left">
           {t("switchLabel")} {current.label}
         </span>
-      </Button>
+      </button>
       {open && (
         <div className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated border border-border-secondary rounded-lg shadow-floating py-1">
           <div className="px-3 py-1 text-xs font-medium text-text-tertiary uppercase tracking-wider">
@@ -91,20 +92,22 @@ export function ThemeMenu() {
                   setTheme(opt.value);
                 }}
               >
-                {isActive ? (
-                  <Check className="w-3 h-3 shrink-0 text-accent-text" />
-                ) : (
-                  <span className="w-3 shrink-0" />
-                )}
-                <OptIcon className="w-3 h-3 shrink-0" />
-                <span>{opt.label}</span>
+                <span className={menuIconSlot}>
+                  {isActive && <Check className="w-3 h-3 text-accent-text" />}
+                </span>
+                <span className={menuIconSlot}>
+                  <OptIcon className="w-3.5 h-3.5" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
                 <span className={`w-2 h-2 rounded-full shrink-0 ml-auto ${dot}`} />
               </Button>
             );
           })}
           <div className="my-1 border-t border-border-secondary" />
-          <div className="px-3 py-1 text-xs font-medium text-text-tertiary uppercase tracking-wider flex items-center gap-1">
-            <Languages className="w-3 h-3" />
+          <div className="px-3 py-1 text-xs font-medium text-text-tertiary uppercase tracking-wider flex items-center gap-2">
+            <span className={menuIconSlot}>
+              <Languages className="w-3.5 h-3.5" />
+            </span>
             Language
           </div>
           {LANGUAGE_OPTIONS.map((opt) => {
@@ -126,12 +129,10 @@ export function ThemeMenu() {
                   setLanguage(opt.value);
                 }}
               >
-                {isActive ? (
-                  <Check className="w-3 h-3 shrink-0 text-accent-text" />
-                ) : (
-                  <span className="w-3 shrink-0" />
-                )}
-                <span>{opt.label}</span>
+                <span className={menuIconSlot}>
+                  {isActive && <Check className="w-3 h-3 text-accent-text" />}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
                 {isActive && (
                   <span className="ml-auto text-xs text-text-tertiary font-mono">{opt.value}</span>
                 )}

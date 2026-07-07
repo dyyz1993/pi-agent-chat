@@ -1,0 +1,156 @@
+/* pi-agent-linear — Linear/Vercel 极简精致风格设计系统 */
+/* Generated: 2026-07-05 */
+
+/* ================================
+   Color Palette
+   ================================ */
+
+/* --- Background Scale --- */
+:root {
+  --bg-base: #09090b;
+  --bg-surface: #111113;
+  --bg-elevated: #18181b;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --bg-input: #111113;
+}
+
+/* --- Foreground Scale --- */
+:root {
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-muted: #52525b;
+  --text-inverse: #09090b;
+  --text-link: #8b5cf6;
+  --text-link-hover: #a78bfa;
+}
+
+/* --- Border Scale --- */
+:root {
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-focus: rgba(139, 92, 246, 0.5);
+  --border-muted: rgba(255, 255, 255, 0.03);
+}
+
+/* --- Accent (Violet) --- */
+:root {
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-muted: rgba(139, 92, 246, 0.15);
+  --accent-subtle: rgba(139, 92, 246, 0.08);
+}
+
+/* --- Primary (Blue) --- */
+:root {
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-muted: rgba(59, 130, 246, 0.15);
+}
+
+/* --- Semantic Status Colors --- */
+:root {
+  --success: #4ade80;
+  --success-muted: rgba(74, 222, 128, 0.12);
+  --warning: #fbbf24;
+  --warning-muted: rgba(251, 191, 36, 0.12);
+  --error: #f87171;
+  --error-muted: rgba(248, 113, 113, 0.12);
+  --info: #60a5fa;
+  --info-muted: rgba(96, 165, 250, 0.12);
+}
+
+/* --- Semantic Tool Colors --- */
+:root {
+  --tool: #22d3ee;
+  --tool-muted: rgba(34, 211, 238, 0.12);
+  --agent: #a78bfa;
+  --agent-muted: rgba(167, 139, 250, 0.12);
+  --memory: #2dd4bf;
+  --memory-muted: rgba(45, 212, 191, 0.12);
+}
+
+/* ================================
+   Typography
+   ================================ */
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang SC", system-ui,
+    sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 20px;
+  --font-size-h1: 24px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-body: 1.6;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.6;
+  --letter-spacing-tight: -0.01em;
+  --letter-spacing-normal: 0.01em;
+  --letter-spacing-wide: 0.05em;
+}
+
+/* ================================
+   Spacing (4px grid) 
+   ================================ */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+}
+
+/* ================================
+   Border Radius
+   ================================ */
+:root {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+}
+
+/* ================================
+   Shadows (multi-layer, soft)
+   ================================ */
+:root {
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.15);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-4: 0 8px 16px rgba(0, 0, 0, 0.3), 0 16px 48px rgba(0, 0, 0, 0.2);
+}
+
+/* ================================
+   Transitions
+   ================================ */
+:root {
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --transition-slow: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ================================
+   Z-index layers
+   ================================ */
+:root {
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-overlay: 600;
+}

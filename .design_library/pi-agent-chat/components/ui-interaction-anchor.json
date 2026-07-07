@@ -1,0 +1,28 @@
+{
+  "slug": "ui-interaction-anchor",
+  "schemaVersion": 2,
+  "name": "UIInteractionAnchor",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "anchor", "evidence": "Anchor point linking chat interaction to UI element" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Anchor",
+      "traits": { "requestId": "req-123", "label": "Waiting for approval..." },
+      "whySelected": "Standard anchor",
+      "childrenDigest": "Anchor icon + label + connecting line"
+    }
+  ],
+  "anatomy": {
+    "parts": ["anchor-icon", "label", "connector"],
+    "structurePatterns": ["inline-status"]
+  },
+  "usageHints": { "priorityHint": 40, "context": "Visual anchor linking chat card to UI element" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Small inline indicator, connects chat interaction to notification/panel element"
+}

@@ -23,6 +23,17 @@ interface PermissionActionButtonsProps {
   onSelect: (value: string) => void;
 }
 
+export type PermissionOneTimeActionIntent = "allow" | "deny";
+
+export function findOneTimePermissionActionValue(
+  options: string[] | undefined,
+  intent: PermissionOneTimeActionIntent,
+): string | undefined {
+  const parsed = (options ?? []).map((value) => ({ value, label: cleanPermissionLabel(value) }));
+  const matcher = intent === "allow" ? isAllowOnceLabel : isDenyOnceLabel;
+  return parsed.find((option) => matcher(option.label))?.value;
+}
+
 export function PermissionActionButtons({
   options,
   rememberOptions,
@@ -87,8 +98,10 @@ function buildPermissionActions(
   rememberOptions?: PermissionRememberOption[],
 ): PermissionActionOption[] {
   const parsed = options.map((value) => ({ value, label: cleanPermissionLabel(value) }));
-  const allowOnce = parsed.find((option) => isAllowOnceLabel(option.label));
-  const denyOnce = parsed.find((option) => isDenyOnceLabel(option.label));
+  const allowOnceValue = findOneTimePermissionActionValue(options, "allow");
+  const denyOnceValue = findOneTimePermissionActionValue(options, "deny");
+  const allowOnce = parsed.find((option) => option.value === allowOnceValue);
+  const denyOnce = parsed.find((option) => option.value === denyOnceValue);
   const rememberAllow = findRememberAllowOption(parsed, rememberOptions);
 
   if (!allowOnce && !denyOnce) {

@@ -1,0 +1,46 @@
+{
+  "slug": "input",
+  "schemaVersion": 2,
+  "name": "Input",
+  "category": "form",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "input", "evidence": "text entry field for user content" },
+    { "type": "textarea", "evidence": "multiline chat input area" }
+  ],
+  "variantDimensions": [{ "name": "variant", "values": ["single", "chat-multiline"] }],
+  "representativeVariants": [
+    {
+      "name": "Single-line Input",
+      "traits": { "variant": "single", "placeholder": "Search bookmarks..." },
+      "whySelected": "Search bars, filter inputs in sidebar panels",
+      "childrenDigest": "Input field with optional search icon prefix"
+    },
+    {
+      "name": "Chat Multiline Input",
+      "traits": {
+        "variant": "chat-multiline",
+        "placeholder": "Type a message, @file, @agent, or paste..."
+      },
+      "whySelected": "Main chat input bar with compose area",
+      "childrenDigest": "Textarea with send button, token usage display"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "input-field",
+      "prefix-icon (optional)",
+      "suffix-action (optional)",
+      "token-display (optional)"
+    ],
+    "structurePatterns": ["inline-flex-input", "textarea-with-toolbar"]
+  },
+  "usageHints": {
+    "priorityHint": 3,
+    "context": "Chat input, search bars, settings fields"
+  },
+  "doNotInvent": ["rich-text-editor", "code-editor-input"],
+  "unknowns": ["paste/drop handling UI"],
+  "keyInsightSeed": "Chat-style multiline input with 16px mobile font-size, focus ring uses accent color"
+}

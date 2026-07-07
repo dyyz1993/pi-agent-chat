@@ -1,0 +1,2461 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pi-agent-chat Overlays Preview</title>
+    <link rel="stylesheet" href="../colors_and_type.css" />
+    <style>
+      /* === Base Reset & Layout === */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body.dark {
+        background: #0b111a;
+        color: #e2e8f0;
+        font-family: "Inter", sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .preview-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 32px;
+      }
+
+      h1 {
+        font-family: "Inter", sans-serif;
+        font-size: 32px;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 48px;
+        line-height: 1.25;
+      }
+
+      /* === Section === */
+      .section {
+        margin-bottom: 56px;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .section-header h2 {
+        font-family: "Inter", sans-serif;
+        font-size: 24px;
+        font-weight: 600;
+        color: #e2e8f0;
+        line-height: 1.3;
+      }
+
+      .section-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 10px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background: rgba(116, 108, 255, 0.15);
+        color: #746cff;
+        border: 1px solid rgba(116, 108, 255, 0.25);
+      }
+
+      .section-desc {
+        font-size: 14px;
+        color: #94a3b8;
+        margin-bottom: 24px;
+        line-height: 1.6;
+      }
+
+      .section-desc code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        background: rgba(116, 108, 255, 0.1);
+        color: #8e7eff;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .variant-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        margin-bottom: 16px;
+      }
+
+      .variant-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        margin-bottom: 12px;
+      }
+
+      .variant-block {
+        flex: 1;
+        min-width: 200px;
+      }
+
+      /* === 1. ModalDialog === */
+      .modal-backdrop {
+        position: relative;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-backdrop::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-conic-gradient(rgba(255, 255, 255, 0.02) 0% 25%, transparent 0% 50%) 0
+          0 / 20px 20px;
+      }
+
+      .modal-dialog {
+        position: relative;
+        z-index: 1;
+        background: #131b27;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-4);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        max-width: 90%;
+      }
+
+      .modal-sm {
+        width: 384px;
+      }
+      .modal-md {
+        width: 576px;
+      }
+      .modal-lg {
+        width: 768px;
+      }
+
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid #1e2a3a;
+      }
+
+      .modal-title {
+        font-size: 16px;
+        font-weight: 500;
+        color: #e2e8f0;
+      }
+
+      .modal-close {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: #64748b;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+
+      .modal-close:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: #e2e8f0;
+      }
+
+      .modal-body {
+        padding: 20px;
+        color: #94a3b8;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 16px 20px;
+        border-top: 1px solid #1e2a3a;
+      }
+
+      /* Code editor content */
+      .code-area {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #e2e8f0;
+        background: #0b111a;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        padding: 16px;
+        min-height: 120px;
+        overflow-x: auto;
+      }
+
+      .code-area .kw {
+        color: #8e7eff;
+      }
+      .code-area .fn {
+        color: #7da5ff;
+      }
+      .code-area .str {
+        color: #34d399;
+      }
+      .code-area .cmt {
+        color: #64748b;
+      }
+      .code-area .num {
+        color: #fbbf24;
+      }
+
+      /* Form fields */
+      .form-group {
+        margin-bottom: 16px;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #94a3b8;
+        margin-bottom: 6px;
+      }
+
+      .form-input {
+        width: 100%;
+        height: 28px;
+        padding: 0 10px;
+        background: #0b111a;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        color: #e2e8f0;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      .form-input:focus {
+        border-color: #746cff;
+      }
+
+      .form-select {
+        width: 100%;
+        height: 28px;
+        padding: 0 10px;
+        background: #0b111a;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        color: #e2e8f0;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        outline: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+      }
+
+      /* === Buttons === */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 14px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+        white-space: nowrap;
+      }
+
+      .btn-primary {
+        background: #746cff;
+        color: #fff;
+        border-color: #746cff;
+      }
+
+      .btn-primary:hover {
+        background: #8e7eff;
+        border-color: #8e7eff;
+      }
+
+      .btn-secondary {
+        background: transparent;
+        color: #94a3b8;
+        border-color: #1e2a3a;
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: #e2e8f0;
+      }
+
+      .btn-danger {
+        background: #ef4444;
+        color: #fff;
+        border-color: #ef4444;
+      }
+
+      .btn-danger:hover {
+        background: #f87171;
+        border-color: #f87171;
+      }
+
+      .btn-sm {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: #94a3b8;
+        border: none;
+      }
+
+      .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: #e2e8f0;
+      }
+
+      /* === 2. AnchoredPopover === */
+      .popover-demo {
+        position: relative;
+        display: inline-block;
+      }
+
+      .popover-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 14px;
+        background: #131b27;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        color: #e2e8f0;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .popover-trigger:hover {
+        border-color: #334155;
+      }
+
+      .popover-panel {
+        position: relative;
+        margin-top: 4px;
+        background: #131b27;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-3);
+        overflow: hidden;
+      }
+
+      .popover-panel.start {
+        width: 220px;
+      }
+      .popover-panel.stretch {
+        width: 100%;
+      }
+
+      .popover-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        font-size: 13px;
+        color: #e2e8f0;
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+
+      .popover-item:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .popover-item.selected {
+        background: rgba(116, 108, 255, 0.1);
+        color: #8e7eff;
+      }
+
+      .popover-item .check-icon {
+        margin-left: auto;
+        color: #746cff;
+      }
+
+      .popover-divider {
+        height: 1px;
+        background: #1e2a3a;
+        margin: 4px 0;
+      }
+
+      .popover-label {
+        padding: 8px 14px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+      }
+
+      /* === 3. ToastViewport === */
+      .toast-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-end;
+      }
+
+      .toast {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-radius: var(--radius-lg);
+        border: 1px solid;
+        backdrop-filter: blur(8px);
+        min-width: 300px;
+        max-width: 400px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .toast::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        height: 3px;
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+        animation: toast-progress 4s linear forwards;
+      }
+
+      @keyframes toast-progress {
+        from {
+          width: 100%;
+        }
+        to {
+          width: 0%;
+        }
+      }
+
+      .toast-info {
+        background: rgba(30, 58, 138, 0.3);
+        border-color: rgba(59, 130, 246, 0.3);
+      }
+
+      .toast-info::after {
+        background: #3b82f6;
+      }
+
+      .toast-warning {
+        background: rgba(120, 53, 15, 0.3);
+        border-color: rgba(245, 158, 11, 0.3);
+      }
+
+      .toast-warning::after {
+        background: #f59e0b;
+      }
+
+      .toast-error {
+        background: rgba(127, 29, 29, 0.3);
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+
+      .toast-error::after {
+        background: #ef4444;
+      }
+
+      .toast-icon {
+        flex-shrink: 0;
+      }
+
+      .toast-message {
+        flex: 1;
+        font-size: 13px;
+        color: #e2e8f0;
+      }
+
+      .toast-dismiss {
+        flex-shrink: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+
+      .toast-dismiss:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #e2e8f0;
+      }
+
+      /* === 4. FullscreenOverlay === */
+      .fullscreen-demo {
+        position: relative;
+        background: #0b111a;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        height: 400px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .fullscreen-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-bottom: 1px solid #1e2a3a;
+        background: #131b27;
+        flex-shrink: 0;
+      }
+
+      .fullscreen-header-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #e2e8f0;
+      }
+
+      .fullscreen-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .fullscreen-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        color: #94a3b8;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .fullscreen-body::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .fullscreen-body::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .fullscreen-body::-webkit-scrollbar-thumb {
+        background: #1e2a3a;
+        border-radius: 3px;
+      }
+
+      .fullscreen-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-top: 1px solid #1e2a3a;
+        background: #131b27;
+        flex-shrink: 0;
+      }
+
+      /* === 5. Tooltip === */
+      .tooltip-demo {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 48px;
+      }
+
+      .tooltip-group {
+        position: relative;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .tooltip-group:hover .tooltip-tip,
+      .tooltip-group:focus-within .tooltip-tip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .tooltip-group:hover .tooltip-tip.bottom,
+      .tooltip-group:focus-within .tooltip-tip.bottom {
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .tooltip-group:hover .tooltip-tip.right,
+      .tooltip-group:focus-within .tooltip-tip.right {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) translateX(0);
+      }
+
+      .tooltip-tip {
+        position: absolute;
+        z-index: 10;
+        padding: 6px 10px;
+        background: #1c2737;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-1);
+        font-size: 11px;
+        color: #e2e8f0;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.15s,
+          transform 0.15s;
+      }
+
+      .tooltip-tip.top {
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%) translateY(4px);
+      }
+
+      .tooltip-tip.bottom {
+        top: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%) translateY(-4px);
+      }
+
+      .tooltip-tip.right {
+        left: calc(100% + 8px);
+        top: 50%;
+        transform: translateY(-50%) translateX(-4px);
+      }
+
+      /* Arrows */
+      .tooltip-tip.top::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: #1e2a3a;
+      }
+
+      .tooltip-tip.bottom::after {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-bottom-color: #1e2a3a;
+      }
+
+      .tooltip-tip.right::after {
+        content: "";
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 5px solid transparent;
+        border-right-color: #1e2a3a;
+      }
+
+      /* Always-show tooltip for demo */
+      .tooltip-tip.always-show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0) !important;
+      }
+
+      .tooltip-tip.right.always-show {
+        transform: translateY(-50%) translateX(0) !important;
+      }
+
+      .tooltip-target {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        background: #131b27;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        color: #e2e8f0;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .tooltip-target-text {
+        color: #e2e8f0;
+        font-size: 14px;
+        cursor: default;
+        text-decoration: underline;
+        text-decoration-color: rgba(116, 108, 255, 0.4);
+        text-underline-offset: 3px;
+      }
+
+      /* === 6. DropdownSelect === */
+      .select-demo {
+        position: relative;
+      }
+
+      .select-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        height: 28px;
+        padding: 0 10px;
+        background: #0b111a;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        color: #e2e8f0;
+        font-size: 13px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+
+      .select-trigger:hover {
+        border-color: #334155;
+      }
+
+      .select-trigger.open {
+        border-color: #746cff;
+        box-shadow: 0 0 0 2px rgba(116, 108, 255, 0.2);
+      }
+
+      .select-trigger .chevron {
+        transition: transform 0.2s;
+      }
+
+      .select-trigger.open .chevron {
+        transform: rotate(180deg);
+      }
+
+      .select-menu {
+        margin-top: 4px;
+        background: #131b27;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-3);
+        overflow: hidden;
+      }
+
+      .select-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #e2e8f0;
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+
+      .select-option:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .select-option.focused {
+        background: rgba(116, 108, 255, 0.1);
+        outline: 1px solid rgba(116, 108, 255, 0.3);
+        outline-offset: -1px;
+        border-radius: 2px;
+      }
+
+      .select-option.selected {
+        color: #8e7eff;
+      }
+
+      .select-option.selected::after {
+        content: "";
+        margin-left: auto;
+      }
+
+      .select-option .check {
+        margin-left: auto;
+        color: #746cff;
+      }
+
+      .select-option-desc {
+        font-size: 11px;
+        color: #64748b;
+        margin-left: auto;
+      }
+
+      /* === 7. NotificationCenter === */
+      .notif-center-demo {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      .bell-trigger {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-sm);
+        color: #94a3b8;
+        cursor: pointer;
+      }
+
+      .bell-trigger:hover {
+        background: rgba(255, 255, 255, 0.04);
+        color: #e2e8f0;
+      }
+
+      .notif-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        min-width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 9999px;
+        border: 2px solid #0b111a;
+      }
+
+      .notif-panel {
+        width: 340px;
+        background: #131b27;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-3);
+        overflow: hidden;
+      }
+
+      .notif-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid #1e2a3a;
+      }
+
+      .notif-panel-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #e2e8f0;
+      }
+
+      .notif-panel-clear {
+        font-size: 12px;
+        color: #746cff;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-weight: 500;
+      }
+
+      .notif-panel-clear:hover {
+        text-decoration: underline;
+      }
+
+      .notif-list {
+        max-height: 280px;
+        overflow-y: auto;
+      }
+
+      .notif-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(30, 42, 58, 0.5);
+        transition: background 0.12s;
+        cursor: pointer;
+      }
+
+      .notif-item:hover {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .notif-item:last-child {
+        border-bottom: none;
+      }
+
+      .notif-item-icon {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        margin-top: 1px;
+      }
+
+      .notif-item-icon.info {
+        color: #3b82f6;
+      }
+      .notif-item-icon.warning {
+        color: #f59e0b;
+      }
+      .notif-item-icon.error {
+        color: #ef4444;
+      }
+
+      .notif-item-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .notif-item-msg {
+        font-size: 13px;
+        color: #e2e8f0;
+        line-height: 1.4;
+      }
+
+      .notif-item-time {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 2px;
+      }
+
+      /* === 9. TextSelectionToolbar === */
+      .text-sel-toolbar-demo {
+        position: relative;
+        padding: 20px 0;
+      }
+
+      .text-sel-demo-text {
+        font-size: 14px;
+        color: #e2e8f0;
+        line-height: 1.8;
+      }
+
+      .text-sel-demo-text .selected-text {
+        background: rgba(116, 108, 255, 0.25);
+        color: #e2e8f0;
+        padding: 1px 2px;
+        border-radius: 2px;
+      }
+
+      .text-sel-toolbar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        background: #1c2737;
+        border: 1px solid #1e2a3a;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-3);
+        width: fit-content;
+        margin: 0 auto 16px;
+      }
+
+      .text-sel-toolbar::after {
+        content: "";
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #1e2a3a;
+      }
+
+      .text-sel-toolbar::before {
+        content: "";
+        position: absolute;
+        bottom: -5px;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: #1c2737;
+        z-index: 1;
+      }
+
+      .text-sel-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          color 0.12s;
+      }
+
+      .text-sel-btn:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: #e2e8f0;
+      }
+
+      .text-sel-divider {
+        width: 1px;
+        height: 20px;
+        background: #1e2a3a;
+      }
+
+      /* === 10. RetryNotification === */
+      .retry-notif {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        background: rgba(127, 29, 29, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        border-radius: var(--radius-md);
+        width: fit-content;
+        max-width: 360px;
+      }
+
+      .retry-spinner {
+        flex-shrink: 0;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .retry-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .retry-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e8f0;
+      }
+
+      .retry-meta {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 2px;
+      }
+
+      .retry-progress-track {
+        width: 100%;
+        height: 3px;
+        background: rgba(239, 68, 68, 0.2);
+        border-radius: 2px;
+        margin-top: 6px;
+        overflow: hidden;
+      }
+
+      .retry-progress-bar {
+        height: 100%;
+        background: #ef4444;
+        border-radius: 2px;
+        animation: retry-progress 5s linear forwards;
+      }
+
+      @keyframes retry-progress {
+        from {
+          width: 60%;
+        }
+        to {
+          width: 100%;
+        }
+      }
+
+      .retry-countdown {
+        font-size: 11px;
+        color: #94a3b8;
+        flex-shrink: 0;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      /* === Utility === */
+      .flex-row {
+        display: flex;
+        align-items: center;
+      }
+      .gap-4 {
+        gap: 4px;
+      }
+      .gap-8 {
+        gap: 8px;
+      }
+      .gap-12 {
+        gap: 12px;
+      }
+      .gap-16 {
+        gap: 16px;
+      }
+      .gap-24 {
+        gap: 24px;
+      }
+      .flex-col {
+        display: flex;
+        flex-direction: column;
+      }
+      .w-full {
+        width: 100%;
+      }
+      .mt-8 {
+        margin-top: 8px;
+      }
+      .mb-8 {
+        margin-bottom: 8px;
+      }
+      .mb-16 {
+        margin-bottom: 16px;
+      }
+      .mb-24 {
+        margin-bottom: 24px;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .color-muted {
+        color: #64748b;
+      }
+      .text-sm {
+        font-size: 13px;
+      }
+      .text-xs {
+        font-size: 11px;
+      }
+      .font-mono {
+        font-family: "JetBrains Mono", monospace;
+      }
+      .opacity-60 {
+        opacity: 0.6;
+      }
+
+      /* Scrollbar for demo */
+      .demo-scroll::-webkit-scrollbar {
+        width: 6px;
+      }
+      .demo-scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .demo-scroll::-webkit-scrollbar-thumb {
+        background: #1e2a3a;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body class="dark">
+    <div class="preview-container">
+      <h1>组件预览 — 覆盖层类</h1>
+
+      <!-- ==================== 1. ModalDialog ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>ModalDialog</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          居中弹窗组件，支持 <code>sm</code> / <code>md</code> / <code>lg</code> 三种尺寸，使用
+          <code>shadow-4</code>，backdrop 半透明遮罩，Escape 可关闭。
+        </p>
+
+        <!-- Small Modal -->
+        <div class="variant-block mb-24">
+          <div class="variant-label">Small (max-w-384px) — 确认弹窗</div>
+          <div class="modal-backdrop">
+            <div class="modal-dialog modal-sm">
+              <div class="modal-header">
+                <span class="modal-title">删除项目?</span>
+              </div>
+              <div class="modal-body">此操作无法撤销。项目中的所有数据将被永久删除。</div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm">取消</button>
+                <button class="btn btn-danger btn-sm">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Medium Modal -->
+        <div class="variant-block mb-24">
+          <div class="variant-label">Medium (max-w-576px) — 设置弹窗</div>
+          <div class="modal-backdrop">
+            <div class="modal-dialog modal-md">
+              <div class="modal-header">
+                <span class="modal-title">设置</span>
+                <button class="modal-close">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <label class="form-label">模型</label>
+                  <select class="form-select">
+                    <option>GPT-4</option>
+                    <option>GPT-3.5</option>
+                    <option>Claude 3</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">API Key</label>
+                  <input class="form-input" type="text" value="sk-••••••••••••••••••••" readonly />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Temperature</label>
+                  <input class="form-input" type="text" value="0.7" />
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm">取消</button>
+                <button class="btn btn-primary btn-sm">保存设置</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Large Modal -->
+        <div class="variant-block">
+          <div class="variant-label">Large (max-w-768px) — 代码编辑器</div>
+          <div class="modal-backdrop" style="min-height: 280px">
+            <div class="modal-dialog modal-lg">
+              <div class="modal-header">
+                <span class="modal-title">编辑代码</span>
+                <button class="modal-close">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div class="modal-body">
+                <div class="code-area">
+                  <span class="kw">import</span> { <span class="fn">createAgent</span> }
+                  <span class="kw">from</span> <span class="str">'pi-agent'</span>;
+
+                  <span class="cmt">// Initialize the agent with configuration</span>
+                  <span class="kw">const</span> agent = <span class="fn">createAgent</span>({ model:
+                  <span class="str">'gpt-4'</span>, temperature: <span class="num">0.7</span>,
+                  tools: [<span class="str">'read'</span>, <span class="str">'write'</span>,
+                  <span class="str">'bash'</span>], });
+
+                  <span class="kw">export default</span> agent;
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm">取消</button>
+                <button class="btn btn-primary btn-sm">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 2. AnchoredPopover ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>AnchoredPopover</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          锚定弹窗组件，相对于触发器定位。支持 <code>top</code> / <code>bottom</code> 以及
+          <code>start</code> / <code>end</code> / <code>stretch</code> 对齐。使用
+          <code>shadow-3</code>。
+        </p>
+
+        <div class="variant-row">
+          <!-- Bottom Start -->
+          <div class="variant-block">
+            <div class="variant-label">Bottom Start — 模型选择器</div>
+            <div class="popover-demo">
+              <div class="popover-trigger">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 8V4H8" />
+                  <rect width="16" height="12" x="4" y="8" rx="2" />
+                  <path d="M2 14h2" />
+                  <path d="M20 14h2" />
+                  <path d="M15 13v2" />
+                  <path d="M9 13v2" />
+                </svg>
+                GPT-4
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+              <div class="popover-panel start">
+                <div class="popover-label">模型</div>
+                <div class="popover-item selected">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                  GPT-4
+                  <svg
+                    class="check-icon"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </div>
+                <div class="popover-item">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                  GPT-3.5 Turbo
+                </div>
+                <div class="popover-item">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                  Claude 3 Opus
+                </div>
+                <div class="popover-divider"></div>
+                <div class="popover-item">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v8" />
+                    <path d="M8 12h8" />
+                  </svg>
+                  自定义模型...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Stretch -->
+          <div class="variant-block" style="flex: 2">
+            <div class="variant-label">Bottom Stretch — 全宽下拉</div>
+            <div class="popover-demo w-full">
+              <div class="popover-trigger w-full" style="justify-content: space-between">
+                <span>选择工具...</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+              <div class="popover-panel stretch">
+                <div class="popover-item selected">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                    />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  Read (读取文件)
+                  <svg
+                    class="check-icon"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </div>
+                <div class="popover-item">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10" />
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                    <path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1-4Z" />
+                  </svg>
+                  Write (写入文件)
+                </div>
+                <div class="popover-item">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="4 17 10 11 4 5" />
+                    <line x1="12" x2="20" y1="19" y2="19" />
+                  </svg>
+                  Bash (执行命令)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 3. ToastViewport ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>ToastViewport</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          临时通知提示，从右上角堆叠显示。支持 <code>info</code> / <code>warning</code> /
+          <code>error</code> 三种级别，自动消失并带进度条。
+        </p>
+
+        <div class="toast-stack">
+          <!-- Info Toast -->
+          <div class="toast toast-info">
+            <svg
+              class="toast-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#3b82f6"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            <span class="toast-message">文件已保存</span>
+            <button class="toast-dismiss">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Warning Toast -->
+          <div class="toast toast-warning">
+            <svg
+              class="toast-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#f59e0b"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+            </svg>
+            <span class="toast-message">内存不足，请关闭不必要的标签页</span>
+            <button class="toast-dismiss">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Error Toast -->
+          <div class="toast toast-error">
+            <svg
+              class="toast-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#ef4444"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="m15 9-6 6" />
+              <path d="m9 9 6 6" />
+            </svg>
+            <span class="toast-message">连接丢失，正在尝试重新连接...</span>
+            <button class="toast-dismiss">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 4. FullscreenOverlay ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>FullscreenOverlay</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          全屏覆盖层，固定定位 <code>inset-0</code>，包含 header(bar)、scrollable body、footer
+          三部分结构。用于代码编辑器、图片查看器等全屏视图。
+        </p>
+
+        <div class="variant-label">Fullscreen — 代码编辑器视图</div>
+        <div class="fullscreen-demo">
+          <div class="fullscreen-header">
+            <div class="flex-row gap-12">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#94a3b8"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              <span class="fullscreen-header-title">编辑代码 — main.py</span>
+            </div>
+            <div class="fullscreen-header-actions">
+              <button class="btn btn-ghost btn-sm">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M3 9h18" />
+                  <path d="M9 21V9" />
+                </svg>
+                分栏
+              </button>
+              <button class="btn btn-ghost btn-sm">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="fullscreen-body demo-scroll">
+            <div
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.7;
+              "
+            >
+              <div>
+                <span style="color: #64748b"> 1</span> <span style="color: #8e7eff">import</span>
+                <span style="color: #e2e8f0">os</span>
+              </div>
+              <div>
+                <span style="color: #64748b"> 2</span> <span style="color: #8e7eff">import</span>
+                <span style="color: #e2e8f0">json</span>
+              </div>
+              <div>
+                <span style="color: #64748b"> 3</span> <span style="color: #8e7eff">from</span>
+                <span style="color: #34d399">pathlib</span>
+                <span style="color: #8e7eff">import</span> <span style="color: #e2e8f0">Path</span>
+              </div>
+              <div><span style="color: #64748b"> 4</span></div>
+              <div><span style="color: #64748b"> 5</span></div>
+              <div>
+                <span style="color: #64748b"> 6</span>
+                <span style="color: #64748b"># Load configuration from environment</span>
+              </div>
+              <div>
+                <span style="color: #64748b"> 7</span> <span style="color: #8e7eff">def</span>
+                <span style="color: #7da5ff">load_config</span
+                ><span style="color: #e2e8f0">():</span>
+              </div>
+              <div>
+                <span style="color: #64748b"> 8</span>
+                <span style="color: #e2e8f0">config_path = Path(os.getenv(</span
+                ><span style="color: #34d399">"CONFIG_PATH"</span
+                ><span style="color: #e2e8f0">, </span
+                ><span style="color: #34d399">"./config.json"</span
+                ><span style="color: #e2e8f0">))</span>
+              </div>
+              <div>
+                <span style="color: #64748b"> 9</span> <span style="color: #8e7eff">if not</span>
+                <span style="color: #e2e8f0">config_path.exists():</span>
+              </div>
+              <div>
+                <span style="color: #64748b">10</span> <span style="color: #8e7eff">raise</span>
+                <span style="color: #7da5ff">FileNotFoundError</span
+                ><span style="color: #e2e8f0">(</span
+                ><span style="color: #34d399">f"Config not found: {config_path}"</span
+                ><span style="color: #e2e8f0">)</span>
+              </div>
+              <div>
+                <span style="color: #64748b">11</span> <span style="color: #8e7eff">return</span>
+                <span style="color: #e2e8f0">json.loads(config_path.read_text())</span>
+              </div>
+              <div><span style="color: #64748b">12</span></div>
+              <div><span style="color: #64748b">13</span></div>
+              <div>
+                <span style="color: #64748b">14</span> <span style="color: #8e7eff">if</span>
+                <span style="color: #e2e8f0">__name__ == </span
+                ><span style="color: #34d399">"__main__"</span><span style="color: #e2e8f0">:</span>
+              </div>
+              <div>
+                <span style="color: #64748b">15</span> <span style="color: #e2e8f0">config = </span
+                ><span style="color: #7da5ff">load_config</span
+                ><span style="color: #e2e8f0">()</span>
+              </div>
+              <div>
+                <span style="color: #64748b">16</span> <span style="color: #7da5ff">print</span
+                ><span style="color: #e2e8f0">(f</span
+                ><span style="color: #34d399">"Loaded: {config['app_name']}"</span
+                ><span style="color: #e2e8f0">)</span>
+              </div>
+            </div>
+          </div>
+          <div class="fullscreen-footer">
+            <span
+              style="
+                font-size: 11px;
+                color: #64748b;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+              "
+              >Python 3.11 — UTF-8</span
+            >
+            <div class="flex-row gap-8">
+              <button class="btn btn-secondary btn-sm">格式化</button>
+              <button class="btn btn-primary btn-sm">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+                保存文件
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 5. Tooltip ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>Tooltip</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          悬停提示气泡，使用 <code>shadow-1</code>，<code>11px</code> 字体，<code>group-hover</code>
+          触发。支持 <code>top</code> / <code>bottom</code> / <code>left</code> /
+          <code>right</code> 四个方向。
+        </p>
+
+        <div class="variant-row" style="align-items: flex-start; gap: 48px">
+          <!-- Top Tooltip -->
+          <div class="variant-block flex-col gap-16 items-center">
+            <div class="variant-label" style="text-align: center">Top</div>
+            <div class="tooltip-group" style="padding-top: 40px">
+              <div class="tooltip-tip top always-show">复制到剪贴板</div>
+              <div class="tooltip-target">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+                复制
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Tooltip -->
+          <div class="variant-block flex-col gap-16 items-center">
+            <div class="variant-label" style="text-align: center">Bottom</div>
+            <div class="tooltip-group" style="padding-top: 20px">
+              <div class="tooltip-tip bottom always-show">快捷键: Ctrl+K</div>
+              <span class="tooltip-target-text">命令面板</span>
+            </div>
+          </div>
+
+          <!-- Right Tooltip -->
+          <div class="variant-block flex-col gap-16 items-center">
+            <div class="variant-label" style="text-align: center">Right</div>
+            <div class="tooltip-group" style="padding-top: 20px; flex-direction: row; gap: 8px">
+              <div
+                class="tooltip-target"
+                style="
+                  width: 36px;
+                  height: 36px;
+                  padding: 0;
+                  justify-content: center;
+                  border-radius: var(--radius-md);
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                  />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </div>
+              <div class="tooltip-tip right always-show">设置</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 6. DropdownSelect ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>DropdownSelect</h2>
+          <span class="section-badge">form</span>
+        </div>
+        <p class="section-desc">
+          自定义下拉选择组件，替代原生 <code>&lt;select&gt;</code>。使用
+          <code>AnchoredPopover</code> 内部实现，支持键盘导航和选中项标记。
+        </p>
+
+        <div class="variant-row" style="align-items: flex-start">
+          <!-- Closed State -->
+          <div class="variant-block" style="max-width: 240px">
+            <div class="variant-label">Closed — 默认收起</div>
+            <div class="select-demo">
+              <div class="select-trigger">
+                <span>GPT-4</span>
+                <svg
+                  class="chevron"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#64748b"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Open State -->
+          <div class="variant-block" style="max-width: 280px">
+            <div class="variant-label">Open — 展开菜单</div>
+            <div class="select-demo">
+              <div class="select-trigger open">
+                <span>GPT-4</span>
+                <svg
+                  class="chevron"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#746cff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+              <div class="select-menu">
+                <div class="select-option selected">
+                  GPT-4
+                  <svg
+                    class="check"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </div>
+                <div class="select-option focused">
+                  GPT-3.5 Turbo
+                  <span class="select-option-desc">快速</span>
+                </div>
+                <div class="select-option">
+                  Claude 3 Opus
+                  <span class="select-option-desc">强大</span>
+                </div>
+                <div class="select-option">
+                  Claude 3 Sonnet
+                  <span class="select-option-desc">均衡</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Keyboard Nav Legend -->
+          <div class="variant-block" style="max-width: 220px">
+            <div class="variant-label">键盘导航状态</div>
+            <div class="flex-col gap-8" style="padding-top: 4px">
+              <div class="flex-row gap-8 items-center">
+                <div
+                  style="
+                    width: 12px;
+                    height: 12px;
+                    border: 1px solid #1e2a3a;
+                    border-radius: 2px;
+                    background: rgba(255, 255, 255, 0.04);
+                    flex-shrink: 0;
+                  "
+                ></div>
+                <span style="font-size: 12px; color: #94a3b8">Default</span>
+              </div>
+              <div class="flex-row gap-8 items-center">
+                <div
+                  style="
+                    width: 12px;
+                    height: 12px;
+                    border: 1px solid #1e2a3a;
+                    border-radius: 2px;
+                    background: rgba(255, 255, 255, 0.04);
+                    flex-shrink: 0;
+                    box-shadow: inset 0 0 0 1px rgba(116, 108, 255, 0.3);
+                  "
+                ></div>
+                <span style="font-size: 12px; color: #94a3b8">Hover</span>
+              </div>
+              <div class="flex-row gap-8 items-center">
+                <div
+                  style="
+                    width: 12px;
+                    height: 12px;
+                    border: 1px solid #1e2a3a;
+                    border-radius: 2px;
+                    background: rgba(116, 108, 255, 0.1);
+                    flex-shrink: 0;
+                    outline: 1px solid rgba(116, 108, 255, 0.3);
+                  "
+                ></div>
+                <span style="font-size: 12px; color: #94a3b8">Focused (键盘)</span>
+              </div>
+              <div class="flex-row gap-8 items-center">
+                <div
+                  style="
+                    width: 12px;
+                    height: 12px;
+                    border: 1px solid #1e2a3a;
+                    border-radius: 2px;
+                    background: rgba(116, 108, 255, 0.1);
+                    flex-shrink: 0;
+                  "
+                ></div>
+                <span style="font-size: 12px; color: #94a3b8">Selected</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 7. NotificationCenter ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>NotificationCenter</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          通知中心，由 Bell 图标触发，显示未读计数 badge 和通知面板。支持 <code>info</code> /
+          <code>warning</code> / <code>error</code> 三种级别。
+        </p>
+
+        <div class="notif-center-demo">
+          <!-- Bell Trigger (Closed) -->
+          <div class="variant-block flex-col gap-8 items-center">
+            <div class="variant-label">Closed</div>
+            <button class="bell-trigger">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              </svg>
+              <span class="notif-badge">3</span>
+            </button>
+          </div>
+
+          <!-- Open Panel -->
+          <div class="variant-block" style="flex: 1; max-width: 380px">
+            <div class="variant-label">Open — 通知面板</div>
+            <div class="notif-panel">
+              <div class="notif-panel-header">
+                <span class="notif-panel-title">通知</span>
+                <button class="notif-panel-clear">清除所有</button>
+              </div>
+              <div class="notif-list">
+                <!-- Error -->
+                <div class="notif-item">
+                  <svg
+                    class="notif-item-icon error"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m15 9-6 6" />
+                    <path d="m9 9 6 6" />
+                  </svg>
+                  <div class="notif-item-content">
+                    <div class="notif-item-msg">构建失败: TypeScript 编译错误</div>
+                    <div class="notif-item-time">2 分钟前</div>
+                  </div>
+                </div>
+                <!-- Warning -->
+                <div class="notif-item">
+                  <svg
+                    class="notif-item-icon warning"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                    />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                  <div class="notif-item-content">
+                    <div class="notif-item-msg">内存使用率超过 85%，建议优化</div>
+                    <div class="notif-item-time">15 分钟前</div>
+                  </div>
+                </div>
+                <!-- Info -->
+                <div class="notif-item">
+                  <svg
+                    class="notif-item-icon info"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                  </svg>
+                  <div class="notif-item-content">
+                    <div class="notif-item-msg">部署完成: v2.4.1 已上线</div>
+                    <div class="notif-item-time">1 小时前</div>
+                  </div>
+                </div>
+                <!-- Info 2 -->
+                <div class="notif-item">
+                  <svg
+                    class="notif-item-icon info"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                  </svg>
+                  <div class="notif-item-content">
+                    <div class="notif-item-msg">新版本可用: pi-agent v1.8.0</div>
+                    <div class="notif-item-time">3 小时前</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 8. ConfirmDialog ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>ConfirmDialog</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          确认对话框，包裹 <code>ModalDialog</code> (size=sm)，无关闭按钮。提供
+          <code>danger</code> 和 <code>default</code> 两种变体。
+        </p>
+
+        <div class="variant-row">
+          <!-- Danger -->
+          <div class="variant-block">
+            <div class="variant-label">Danger — 删除确认</div>
+            <div class="modal-backdrop" style="min-height: 180px">
+              <div class="modal-dialog modal-sm">
+                <div class="modal-header" style="border-bottom: none; padding-bottom: 0">
+                  <span class="modal-title" style="display: flex; align-items: center; gap: 10px">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#ef4444"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m15 9-6 6" />
+                      <path d="m9 9 6 6" />
+                    </svg>
+                    删除文件?
+                  </span>
+                </div>
+                <div class="modal-body" style="padding-top: 8px">
+                  此操作无法撤销。<code>src/main.py</code> 将被永久删除。
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary btn-sm">取消</button>
+                  <button class="btn btn-danger btn-sm">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    </svg>
+                    删除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Default -->
+          <div class="variant-block">
+            <div class="variant-label">Default — 保存确认</div>
+            <div class="modal-backdrop" style="min-height: 180px">
+              <div class="modal-dialog modal-sm">
+                <div class="modal-header" style="border-bottom: none; padding-bottom: 0">
+                  <span class="modal-title" style="display: flex; align-items: center; gap: 10px">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fbbf24"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                      />
+                      <path d="M12 9v4" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                    保存更改?
+                  </span>
+                </div>
+                <div class="modal-body" style="padding-top: 8px">
+                  有未保存的更改。离开此页面将丢失这些更改。
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary btn-sm">取消</button>
+                  <button class="btn btn-primary btn-sm">确认保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 9. TextSelectionToolbar ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>TextSelectionToolbar</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          文本选择浮动工具栏，在选中文本上方弹出。包含 Copy 和 Quote 操作按钮，使用
+          <code>shadow-3</code>，紧凑 <code>36px</code> 高度。
+        </p>
+
+        <div class="text-sel-toolbar-demo">
+          <!-- Floating Toolbar -->
+          <div class="text-sel-toolbar">
+            <button class="text-sel-btn">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
+              复制
+            </button>
+            <div class="text-sel-divider"></div>
+            <button class="text-sel-btn">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.036V21"
+                />
+                <path
+                  d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3Z"
+                />
+              </svg>
+              引用
+            </button>
+          </div>
+
+          <!-- Simulated selected text -->
+          <div class="text-sel-demo-text">
+            Agent 正在分析项目结构，发现了以下配置文件：<span class="selected-text"
+              >pi-agent
+              使用模块化架构，每个工具都是一个独立的插件，可以通过配置文件动态加载和卸载。</span
+            >这种设计使得系统具有很高的可扩展性和灵活性。
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 10. RetryNotification ==================== -->
+      <div class="section">
+        <div class="section-header">
+          <h2>RetryNotification</h2>
+          <span class="section-badge">overlay</span>
+        </div>
+        <p class="section-desc">
+          自动重试通知，固定在右上角显示。包含 spinner
+          动画、重试进度条和倒计时。红色强调背景，紧凑布局。
+        </p>
+
+        <div class="variant-label">Retrying — 自动重试中</div>
+        <div class="retry-notif">
+          <!-- Spinner -->
+          <svg
+            class="retry-spinner"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#ef4444"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+          <div class="retry-content">
+            <div class="retry-label">自动重试中</div>
+            <div class="retry-meta">第 2/3 次尝试 — 连接 API 服务器</div>
+            <div class="retry-progress-track">
+              <div class="retry-progress-bar"></div>
+            </div>
+          </div>
+          <div class="retry-countdown">5s</div>
+        </div>
+
+        <!-- Additional demo: smaller variant -->
+        <div class="mt-8">
+          <div class="variant-label" style="margin-bottom: 8px">Compact — 紧凑模式</div>
+          <div class="retry-notif" style="padding: 8px 12px">
+            <svg
+              class="retry-spinner"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#ef4444"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            <div class="retry-content" style="min-width: 0">
+              <div class="retry-label" style="font-size: 12px">重试中...</div>
+              <div class="retry-progress-track" style="margin-top: 4px">
+                <div class="retry-progress-bar" style="animation-duration: 3s"></div>
+              </div>
+            </div>
+            <div class="retry-countdown" style="font-size: 10px">3s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "slug": "input-card",
+  "schemaVersion": 2,
+  "name": "InputCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "interaction", "evidence": "Text input request embedded in chat" }
+  ],
+  "variantDimensions": [{ "name": "type", "values": ["text", "textarea", "path"] }],
+  "representativeVariants": [
+    {
+      "name": "Text Input",
+      "traits": { "type": "text", "label": "Enter project name", "placeholder": "my-project" },
+      "whySelected": "Simple text input",
+      "childrenDigest": "Label + input field + submit button"
+    },
+    {
+      "name": "Path Input",
+      "traits": {
+        "type": "path",
+        "label": "Select target directory",
+        "placeholder": "/path/to/project"
+      },
+      "whySelected": "File path input",
+      "childrenDigest": "Label + path input with browse button + submit"
+    }
+  ],
+  "anatomy": {
+    "parts": ["label", "input-field", "placeholder", "browse-button", "submit-button"],
+    "structurePatterns": ["stacked-label-input-actions"]
+  },
+  "usageHints": { "priorityHint": 35, "context": "Agent requesting text/path input from user" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Chat-embedded input card, mono font for path inputs, accent-colored submit button"
+}

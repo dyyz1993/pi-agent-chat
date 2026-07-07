@@ -1,0 +1,32 @@
+{
+  "slug": "text-card",
+  "schemaVersion": 2,
+  "name": "TextCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "content", "evidence": "Plain text file preview with line numbers" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Preview",
+      "traits": {
+        "fileName": "notes.txt",
+        "lineCount": 45,
+        "preview": "First few lines of text content..."
+      },
+      "whySelected": "Text file preview",
+      "childrenDigest": "Filename + line count + text preview + expand button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["filename", "line-count", "text-preview", "expand-button"],
+    "structurePatterns": ["content-preview"]
+  },
+  "usageHints": { "priorityHint": 49, "context": "Plain text file preview" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Monospace text preview, line count badge, expand to full view"
+}

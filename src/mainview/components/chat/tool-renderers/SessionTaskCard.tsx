@@ -31,6 +31,7 @@ interface SessionTaskCardProps {
   status: ToolCardStatus;
   title: ReactNode;
   badge?: ReactNode;
+  action?: ReactNode;
   time?: ReactNode;
   startedAt?: number;
   endedAt?: number;
@@ -48,6 +49,9 @@ function shellClass(status: ToolCardStatus): string {
   }
   if (status === "error" || status === "terminated") {
     return "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
+  }
+  if (status === "background") {
+    return "border-status-warning/25 bg-status-warning/5 dark:bg-status-warning/10";
   }
   return "border-border-secondary/30 bg-surface-dim";
 }
@@ -106,6 +110,7 @@ export const SessionTaskCard = memo(function SessionTaskCard({
   status,
   title,
   badge,
+  action,
   time,
   startedAt,
   endedAt,
@@ -145,6 +150,7 @@ export const SessionTaskCard = memo(function SessionTaskCard({
         endedAt={endedAt}
         time={time}
         badge={badge}
+        action={action}
       />
 
       {!collapsed && (

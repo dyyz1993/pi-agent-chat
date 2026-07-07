@@ -36,6 +36,15 @@ function fakeSessionState() {
     currentThinkingLevel: hoisted.currentThinkingLevel,
     projectTabs: [{ id: "tab-1", path: "/fake/project" }],
     activeProjectId: "tab-1",
+    sessionsByProject: {
+      "/fake/project": [
+        {
+          sessionId: "sess_sub_test_001",
+          projectPath: "/fake/project",
+          sessionPath: "/fake/sub.jsonl",
+        },
+      ],
+    },
     sessionContextMap: {},
   };
 }
@@ -47,7 +56,9 @@ vi.mock("../../../src/mainview/stores/use-subagent-store", () => ({
         subsessionsByParent: hoisted.matchedSub
           ? { "/fake/parent.jsonl": [hoisted.matchedSub] }
           : {},
-        subagentStatusMap: hoisted.subagentStatus ? { sess_sub_test_001: hoisted.subagentStatus } : {},
+        subagentStatusMap: hoisted.subagentStatus
+          ? { sess_sub_test_001: hoisted.subagentStatus }
+          : {},
       };
       return selector(fakeState);
     }),
@@ -102,16 +113,28 @@ vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   useTierStore: Object.assign(
     vi.fn((selector: (s: unknown) => unknown) =>
       selector({
-        dataByProject: {
-          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        dataBySession: {
+          parent_session: {
+            projectPath: "/fake/project",
+            tierModels: {},
+            currentTier: hoisted.currentTier,
+          },
         },
+        getCurrentTierForSession: () => hoisted.currentTier,
+        getTierModelsForSession: () => ({}),
       }),
     ),
     {
       getState: vi.fn(() => ({
-        dataByProject: {
-          "/fake/project": { tierModels: {}, currentTier: hoisted.currentTier },
+        dataBySession: {
+          parent_session: {
+            projectPath: "/fake/project",
+            tierModels: {},
+            currentTier: hoisted.currentTier,
+          },
         },
+        getCurrentTierForSession: () => hoisted.currentTier,
+        getTierModelsForSession: () => ({}),
       })),
       subscribe: vi.fn(),
     },
@@ -166,6 +189,7 @@ vi.mock("react-i18next", () => ({
         "subagent.output": "Output",
         "subagent.view": "View",
         "subagent.moreTools": "more tools",
+        "coordinator.timeout": "Timed out",
       };
       return map[key] ?? key;
     },
@@ -660,5 +684,79 @@ describe("SubagentExecutionCard — 输出渲染", () => {
     expect(screen.getByText("Completed")).toBeTruthy();
     expect(screen.getByText("Output")).toBeTruthy();
     expect(screen.getByText("done")).toBeTruthy();
+  });
+
+  it("subagent_resume 使用同一套子任务卡片展示恢复进度和最终输出", () => {
+    hoisted.messages = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "恢复后继续检查文件" },
+          {
+            type: "toolExecution",
+            toolCallId: "resume-bash-1",
+            toolName: "bash",
+            args: "",
+            status: "done",
+          },
+        ],
+      },
+    ];
+    const block = makeBlock({
+      toolName: "subagent_resume",
+      status: "done",
+      args: JSON.stringify({
+        sessionPath: "/fake/old-sub.jsonl",
+        instruction: "继续上一次未完成的检查",
+      }),
+      output: "",
+      details: {
+        result: {
+          sessionId: "sess_sub_test_001",
+          status: "completed",
+          exitCode: 0,
+          finalText: "## 恢复完成\n\n所有步骤已完成。",
+        },
+      },
+    });
+
+    render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Resume: sess_sub_test_001")).toBeTruthy();
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.getByTitle("View")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Resume: sess_sub_test_001"));
+
+    expect(screen.getByText("Input")).toBeTruthy();
+    expect(screen.getByText("继续上一次未完成的检查")).toBeTruthy();
+    expect(screen.getByText("bash")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "恢复完成" })).toBeTruthy();
+  });
+
+  it("subagent_resume 超时时按可恢复后台态展示而不是失败", () => {
+    const block = makeBlock({
+      toolName: "subagent_resume",
+      status: "error",
+      args: JSON.stringify({
+        sessionId: "sess_sub_test_001",
+        instruction: "继续恢复但允许超时",
+      }),
+      output: "子任务等待超时，可以稍后继续恢复。",
+      details: {
+        result: {
+          sessionId: "sess_sub_test_001",
+          status: "timeout",
+          exitCode: 1,
+          finalText: "子任务等待超时，可以稍后继续恢复。",
+        },
+      },
+    });
+
+    const { container } = render(<SubagentExecutionCard block={block} />);
+
+    expect(screen.getByText("Timed out")).toBeTruthy();
+    expect(screen.queryByText("Error")).toBeNull();
+    expect(container.firstElementChild?.className).toContain("border-status-warning");
   });
 });

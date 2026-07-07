@@ -4,7 +4,10 @@ import type { AgentMessageForUI } from "../modules/agent";
 import { createLogger } from "../lib/logger";
 import {
   appendUiJsonlEntriesFromPath,
+  filterCustomEntriesToMessageWindow,
+  filterCustomEntriesToPaginatedMessages,
   filterMessagesToBranch,
+  getEntryMessageWindowAround,
   paginateEntryMessages,
   readFullJsonlAccumulatorCached,
   type UiCustomEntry,
@@ -61,6 +64,87 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
     ),
   ]);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function simplifyContentBlockForNav(block: unknown): unknown | null {
+  if (!isRecord(block) || typeof block.type !== "string") return null;
+  switch (block.type) {
+    case "text":
+      return { type: "text", text: " " };
+    case "thinking":
+      return { type: "thinking", thinking: " " };
+    case "toolCall":
+      return {
+        type: "toolCall",
+        id: typeof block.id === "string" ? block.id : "",
+        name: typeof block.name === "string" ? block.name : "tool",
+        arguments: {},
+      };
+    case "image":
+      return { type: "text", text: " " };
+    default:
+      return null;
+  }
+}
+
+function simplifyMessageForNav(message: unknown): AgentMessageForUI | null {
+  if (!isRecord(message) || typeof message.role !== "string") return null;
+  const entryId = typeof message.entryId === "string" ? message.entryId : undefined;
+  const timestamp =
+    typeof message.timestamp === "number" || typeof message.timestamp === "string"
+      ? message.timestamp
+      : Date.now();
+  const base = {
+    id: typeof message.id === "string" ? message.id : entryId,
+    entryId,
+    timestamp,
+  };
+
+  if (message.role === "user") {
+    return {
+      ...base,
+      role: "user",
+      content: [{ type: "text", text: " " }],
+    } as AgentMessageForUI;
+  }
+
+  if (message.role === "assistant") {
+    const blocks = Array.isArray(message.content)
+      ? message.content.map(simplifyContentBlockForNav).filter(Boolean)
+      : [];
+    return {
+      ...base,
+      role: "assistant",
+      content: blocks.length > 0 ? blocks : [{ type: "text", text: " " }],
+      stopReason: typeof message.stopReason === "string" ? message.stopReason : undefined,
+    } as AgentMessageForUI;
+  }
+
+  if (message.role === "toolResult") {
+    return {
+      ...base,
+      role: "toolResult",
+      toolCallId: typeof message.toolCallId === "string" ? message.toolCallId : "",
+      toolName: typeof message.toolName === "string" ? message.toolName : "tool",
+      content: [{ type: "text", text: " " }],
+      isError: message.isError === true,
+    } as AgentMessageForUI;
+  }
+
+  if (message.role === "compactionSummary") {
+    return {
+      ...base,
+      role: "compactionSummary",
+      summary: " ",
+      status: typeof message.status === "string" ? message.status : undefined,
+    } as AgentMessageForUI;
+  }
+
+  return null;
 }
 
 function messageText(message: Record<string, unknown>): string {
@@ -198,7 +282,7 @@ function isCompletedToolCallMessage(
 export async function getFullMessagesOperation<TManaged extends ManagedFullMessagesLike>(options: {
   sessionId: string;
   sessionPath?: string;
-  pagination?: { limit?: number; afterEntryId?: string };
+  pagination?: { limit?: number; afterEntryId?: string; fromStart?: boolean };
   getActiveManaged: (sessionId: string) => TManaged | null;
   resolveSessionPath: (sessionId: string) => string;
   leafIds: Map<string, string | null>;
@@ -245,9 +329,14 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
     options.leafIds.set(options.sessionId, leafId);
   }
 
-  const { filteredMessages, customEntries, leafFound } = filterMessagesToBranch({
+  const {
+    filteredMessages,
+    customEntries: branchCustomEntries,
+    leafFound,
+  } = filterMessagesToBranch({
     allMessages: accumulator.allMessages,
     allCustomEntries: accumulator.allCustomEntries,
+    allDeletionEntries: accumulator.allDeletionEntries,
     parentById: accumulator.parentById,
     leafId,
   });
@@ -262,6 +351,7 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
   let totalCount = filteredMessages.length;
   const limit = options.pagination?.limit;
   const afterEntryId = options.pagination?.afterEntryId;
+  const fromStart = options.pagination?.fromStart;
   const cursorMissing =
     afterEntryId != null && !filteredMessages.some((entry) => entry.entryId === afterEntryId);
   if (cursorMissing) {
@@ -275,6 +365,17 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
     filteredMessages,
     limit,
     afterEntryId,
+    fromStart,
+  });
+  const customEntries = filterCustomEntriesToPaginatedMessages({
+    customEntries: branchCustomEntries,
+    messages: slicedMessages,
+    allMessageEntryIds: filteredMessages.map((entry) => entry.entryId),
+    limit,
+    afterEntryId,
+    fromStart,
+    parentById: accumulator.parentById,
+    leafId,
   });
 
   const totalMs = Math.round(performance.now() - t0);
@@ -369,6 +470,160 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
     hasMore,
     totalCount,
     nextCursor,
+  };
+}
+
+export async function getMessageNavPageOperation<
+  TManaged extends ManagedFullMessagesLike,
+>(options: {
+  sessionId: string;
+  sessionPath?: string;
+  pagination?: { limit?: number; afterEntryId?: string; fromStart?: boolean };
+  getActiveManaged: (sessionId: string) => TManaged | null;
+  resolveSessionPath: (sessionId: string) => string;
+  leafIds: Map<string, string | null>;
+  readSandboxFile?: (pathToRead: string) => Promise<string>;
+  getSessionCache?: (sessionId: string, sessionPath: string) => SessionCacheHit | null;
+  setSessionCache?: (sessionId: string, sessionPath: string, data: SessionCacheData) => void;
+}): Promise<{
+  messages: AgentMessageForUI[];
+  hasMore: boolean;
+  totalCount: number;
+  nextCursor: string | null;
+}> {
+  const managed = options.getActiveManaged(options.sessionId);
+  const cachedSessionPath = options.resolveSessionPath(options.sessionId);
+  const resolvedSessionPath = managed
+    ? managed.info.sessionPath
+    : cachedSessionPath
+      ? cachedSessionPath
+      : (options.sessionPath ?? "");
+
+  const accumulator = await readFullJsonlAccumulatorCached({
+    sessionId: options.sessionId,
+    sessionPath: resolvedSessionPath,
+    readSandboxFile: options.readSandboxFile,
+    getCache: options.getSessionCache,
+    setCache: options.setSessionCache,
+  });
+
+  const jsonlLeafId = accumulator.lastJsonlLeafPointer
+    ? (accumulator.activeJsonlLeafId ?? accumulator.lastJsonlLeafPointer)
+    : null;
+  const isStreaming = managed?.info.status === "streaming";
+  const leafId =
+    jsonlLeafId ??
+    (isStreaming ? (accumulator.activeJsonlLeafId ?? null) : null) ??
+    options.leafIds.get(options.sessionId) ??
+    null;
+  if (leafId && leafId !== options.leafIds.get(options.sessionId)) {
+    options.leafIds.set(options.sessionId, leafId);
+  }
+
+  const { filteredMessages } = filterMessagesToBranch({
+    allMessages: accumulator.allMessages,
+    allCustomEntries: accumulator.allCustomEntries,
+    allDeletionEntries: accumulator.allDeletionEntries,
+    parentById: accumulator.parentById,
+    leafId,
+  });
+  const { slicedMessages, hasMore, nextCursor } = paginateEntryMessages({
+    filteredMessages,
+    limit: options.pagination?.limit,
+    afterEntryId: options.pagination?.afterEntryId,
+    fromStart: options.pagination?.fromStart,
+  });
+
+  return {
+    messages: slicedMessages.map(simplifyMessageForNav).filter((m): m is AgentMessageForUI => !!m),
+    hasMore,
+    totalCount: filteredMessages.length,
+    nextCursor,
+  };
+}
+
+export async function getFullMessagesAroundOperation<
+  TManaged extends ManagedFullMessagesLike,
+>(options: {
+  sessionId: string;
+  sessionPath?: string;
+  targetEntryId: string;
+  before?: number;
+  after?: number;
+  getActiveManaged: (sessionId: string) => TManaged | null;
+  resolveSessionPath: (sessionId: string) => string;
+  leafIds: Map<string, string | null>;
+  readSandboxFile?: (pathToRead: string) => Promise<string>;
+  getSessionCache?: (sessionId: string, sessionPath: string) => SessionCacheHit | null;
+  setSessionCache?: (sessionId: string, sessionPath: string, data: SessionCacheData) => void;
+}): Promise<{
+  messages: AgentMessageForUI[];
+  customEntries: UiCustomEntry[];
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+  beforeCursor: string | null;
+  afterCursor: string | null;
+  targetFound: boolean;
+  totalCount: number;
+}> {
+  const managed = options.getActiveManaged(options.sessionId);
+  const cachedSessionPath = options.resolveSessionPath(options.sessionId);
+  const resolvedSessionPath = managed
+    ? managed.info.sessionPath
+    : cachedSessionPath
+      ? cachedSessionPath
+      : (options.sessionPath ?? "");
+
+  const accumulator = await readFullJsonlAccumulatorCached({
+    sessionId: options.sessionId,
+    sessionPath: resolvedSessionPath,
+    readSandboxFile: options.readSandboxFile,
+    getCache: options.getSessionCache,
+    setCache: options.setSessionCache,
+  });
+
+  const jsonlLeafId = accumulator.lastJsonlLeafPointer
+    ? (accumulator.activeJsonlLeafId ?? accumulator.lastJsonlLeafPointer)
+    : null;
+  const isStreaming = managed?.info.status === "streaming";
+  const leafId =
+    jsonlLeafId ??
+    (isStreaming ? (accumulator.activeJsonlLeafId ?? null) : null) ??
+    options.leafIds.get(options.sessionId) ??
+    null;
+  if (leafId && leafId !== options.leafIds.get(options.sessionId)) {
+    options.leafIds.set(options.sessionId, leafId);
+  }
+
+  const { filteredMessages, customEntries: branchCustomEntries } = filterMessagesToBranch({
+    allMessages: accumulator.allMessages,
+    allCustomEntries: accumulator.allCustomEntries,
+    allDeletionEntries: accumulator.allDeletionEntries,
+    parentById: accumulator.parentById,
+    leafId,
+  });
+  const window = getEntryMessageWindowAround({
+    filteredMessages,
+    targetEntryId: options.targetEntryId,
+    before: options.before,
+    after: options.after,
+  });
+  const customEntries = filterCustomEntriesToMessageWindow({
+    customEntries: branchCustomEntries,
+    messages: window.slicedMessages,
+    parentById: accumulator.parentById,
+    leafId,
+  });
+
+  return {
+    messages: window.slicedMessages as AgentMessageForUI[],
+    customEntries,
+    hasMoreBefore: window.hasMoreBefore,
+    hasMoreAfter: window.hasMoreAfter,
+    beforeCursor: window.beforeCursor,
+    afterCursor: window.afterCursor,
+    targetFound: window.targetFound,
+    totalCount: filteredMessages.length,
   };
 }
 

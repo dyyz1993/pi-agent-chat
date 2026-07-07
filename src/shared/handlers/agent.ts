@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
+import { RemoteSshConfigureGuard } from "../agent/remote-ssh-config-guard";
 import { REMOTE_SSH_METHODS } from "../constants/channel-methods";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
@@ -29,6 +30,7 @@ import {
 const log = createLogger("agent");
 
 let manager: AgentProcessManager | null = null;
+const remoteSshConfigureGuard = new RemoteSshConfigureGuard();
 
 function getManager(): AgentProcessManager {
   if (!manager) {
@@ -169,19 +171,41 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         host: remoteProject.host,
         remotePath: remoteProject.remotePath,
       });
-      const remoteConfigureResult = (await withTimeout(
-        m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.CONFIGURE, {
-          enabled: true,
-          host: remoteProject.host,
-          remoteCwd: remoteProject.remotePath,
-          sshArgs: remoteProject.sshArgs,
-          shell: remoteProject.shell,
-          persist: false,
-        }),
-        15_000,
-        "remote ssh configure",
-      )) as R<"agent.remoteSshConfigure">;
-      if (!remoteConfigureResult.ok) {
+      const remoteConfigureConfig = {
+        enabled: true,
+        host: remoteProject.host,
+        remoteCwd: remoteProject.remotePath,
+        sshArgs: remoteProject.sshArgs,
+        shell: remoteProject.shell,
+        persist: false,
+      };
+      const ensureResult = await remoteSshConfigureGuard.ensure({
+        sessionId: params.sessionId,
+        config: remoteConfigureConfig,
+        force: result.status === "started",
+        configure: () =>
+          withTimeout(
+            m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.CONFIGURE, {
+              enabled: true,
+              host: remoteProject.host,
+              remoteCwd: remoteProject.remotePath,
+              sshArgs: remoteProject.sshArgs,
+              shell: remoteProject.shell,
+              persist: false,
+            }),
+            15_000,
+            "remote ssh configure",
+          ) as Promise<R<"agent.remoteSshConfigure">>,
+      });
+      if (ensureResult.skipped || ensureResult.joined) {
+        log.info("remote ssh runtime configure reused", {
+          sessionId: params.sessionId,
+          projectPath: params.projectPath,
+          skipped: ensureResult.skipped,
+          joined: ensureResult.joined,
+        });
+      }
+      if (ensureResult.result && !ensureResult.result.ok) {
         await m.stop(params.sessionId).catch((err: unknown) => {
           log.warn("failed to stop agent after remote ssh configure failure", {
             sessionId: params.sessionId,
@@ -190,7 +214,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         });
         throw new Error(
           `Failed to configure SSH remote runtime for ${remoteProject.remotePath}: ${
-            remoteConfigureResult.error ?? "unknown error"
+            ensureResult.result.error ?? "unknown error"
           }`,
         );
       }
@@ -210,6 +234,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.stop", async (params) => {
     const ok = await m.stop(params.sessionId);
+    if (ok) {
+      remoteSshConfigureGuard.invalidateSession(params.sessionId);
+    }
     return { ok };
   });
 
@@ -246,6 +273,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const result = await m.getFullMessages(params.sessionId, params.sessionPath, {
       limit: params.limit,
       afterEntryId: params.afterEntryId,
+      fromStart: params.fromStart,
     });
     return {
       messages: result.messages,
@@ -256,8 +284,43 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     } as R<"agent.getFullMessages">;
   });
 
+  r("agent.getFullMessagesAround", async (params) => {
+    const result = await m.getFullMessagesAround(params.sessionId, params.sessionPath, {
+      targetEntryId: params.targetEntryId,
+      before: params.before,
+      after: params.after,
+    });
+    return {
+      messages: result.messages,
+      customEntries: result.customEntries,
+      hasMoreBefore: result.hasMoreBefore,
+      hasMoreAfter: result.hasMoreAfter,
+      beforeCursor: result.beforeCursor,
+      afterCursor: result.afterCursor,
+      targetFound: result.targetFound,
+      totalCount: result.totalCount,
+    } as R<"agent.getFullMessagesAround">;
+  });
+
+  r("agent.getMessageNavPage", async (params) => {
+    const result = await m.getMessageNavPage(params.sessionId, params.sessionPath, {
+      limit: params.limit,
+      afterEntryId: params.afterEntryId,
+      fromStart: params.fromStart,
+    });
+    return {
+      messages: result.messages,
+      hasMore: result.hasMore,
+      totalCount: result.totalCount,
+      nextCursor: result.nextCursor,
+    } as R<"agent.getMessageNavPage">;
+  });
+
   r("agent.steer", async (params) => {
-    const ok = m.steer(params.sessionId, params.content, params.images);
+    const ok = m.steer(params.sessionId, params.content, params.images, {
+      promote: params.promote,
+      immediate: params.immediate,
+    });
     return { ok };
   });
 
@@ -281,9 +344,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.setModel", async (params) => {
-    return m.setModel(params.sessionId, params.provider, params.modelId) as Promise<
-      R<"agent.setModel">
-    >;
+    return m.setModelFromName(params.sessionId, params.model, {
+      parentSessionId: params.parentSessionId,
+      projectPath: params.projectPath,
+    }) as Promise<R<"agent.setModel">>;
   });
 
   r("agent.switchTier", async (params) => {
@@ -360,7 +424,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       R<"agent.promoteQueuedFollowUp">
     >;
   });
-
   r("agent.getExtensions", async (params) => {
     return m.getExtensions(params.sessionId) as Promise<R<"agent.getExtensions">>;
   });
@@ -486,21 +549,29 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.remoteSshConfigure", async (params) => {
     const { sessionId, ...config } = params;
-    return withTimeout(
+    const result = (await withTimeout(
       m.callChannel(sessionId, "remote-ssh", REMOTE_SSH_METHODS.CONFIGURE, config),
       15_000,
       "remote ssh configure",
-    ) as Promise<R<"agent.remoteSshConfigure">>;
+    )) as R<"agent.remoteSshConfigure">;
+    if (result.ok) {
+      remoteSshConfigureGuard.markConfigured(sessionId, config);
+    }
+    return result;
   });
 
   r("agent.remoteSshDisable", async (params) => {
-    return withTimeout(
+    const result = (await withTimeout(
       m.callChannel(params.sessionId, "remote-ssh", REMOTE_SSH_METHODS.DISABLE, {
         persist: params.persist,
       }),
       5_000,
       "remote ssh disable",
-    ) as Promise<R<"agent.remoteSshDisable">>;
+    )) as R<"agent.remoteSshDisable">;
+    if (result.ok) {
+      remoteSshConfigureGuard.invalidateSession(params.sessionId);
+    }
+    return result;
   });
 
   r("agent.remoteSshTestConnection", async (params) => {
@@ -534,6 +605,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.getForkMessages", async (params) => {
     return m.getForkMessages(params.sessionId) as Promise<R<"agent.getForkMessages">>;
+  });
+
+  r("agent.deleteEntries", async (params) => {
+    const result = await m.deleteEntries(params.sessionId, params.targetIds);
+    return { ok: true, entryId: result.entryId };
+  });
+
+  r("agent.summarizeEntries", async (params) => {
+    const result = await m.summarizeEntries(params.sessionId, params.targetIds, {
+      summary: params.summary,
+      model: params.model,
+    });
+    return { ok: true, entryId: result.entryId };
   });
 
   r("agent.fork", async (params) => {

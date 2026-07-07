@@ -7,6 +7,7 @@ import type { SessionStatus, ContextUsage, ContextUsageBreakdownId } from "../..
 
 function formatTokens(tokens: number | null | undefined): string {
   if (tokens == null || tokens <= 0) return "--";
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/u, "")}M`;
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
   return `${tokens}`;
 }
@@ -295,6 +296,13 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
 
   const isWorking =
     sessionStatus === "streaming" || sessionStatus === "compacting" || sessionStatus === "retrying";
+  const usageLabel = activeSubId ? t("tokenStatus.subagent") : t("tokenStatus.used");
+  const percentLabel = `${Math.round(percent * 100)}%`;
+  const hasContextWindow = Boolean(contextUsage?.contextWindow);
+  const compactUsageLabel = hasContextWindow ? `${used} / ${available}` : used;
+  const fullUsageLabel = hasContextWindow
+    ? `${usageLabel} ${used} / ${t("tokenStatus.available")} ${available} (${percentLabel})`
+    : `${usageLabel} ${used}`;
   const breakdown = useMemo(() => {
     const items = contextUsage?.breakdown ?? [];
     const byId = new Map(items.map((item) => [item.id, item]));
@@ -347,64 +355,77 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
     setDetailsOpen(nextOpen);
     if (nextOpen && !isRefreshing) {
       setIsRefreshing(true);
-      Promise.all([refreshSessionContext(effectiveSessionId), refreshSessionStats(effectiveSessionId)])
+      Promise.all([
+        refreshSessionContext(effectiveSessionId),
+        refreshSessionStats(effectiveSessionId),
+      ])
         .catch(() => {})
         .finally(() => setIsRefreshing(false));
     }
   };
+  const sessionStatItems = sessionStats
+    ? [
+        {
+          key: "input",
+          label: t("tokenStatus.sessionInput"),
+          value: formatStatTokens(sessionStats.tokens.input),
+        },
+        {
+          key: "output",
+          label: t("tokenStatus.sessionOutput"),
+          value: formatStatTokens(sessionStats.tokens.output),
+        },
+        {
+          key: "cache",
+          label: t("tokenStatus.sessionCache"),
+          value: formatStatTokens(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite),
+        },
+        {
+          key: "cost",
+          label: t("tokenStatus.sessionCost"),
+          value: formatCost(sessionStats.cost),
+        },
+        {
+          key: "tools",
+          label: t("tokenStatus.sessionTools"),
+          value: String(sessionStats.toolCalls),
+        },
+        {
+          key: "messages",
+          label: t("tokenStatus.sessionMessages"),
+          value: String(sessionStats.totalMessages),
+        },
+      ]
+    : [];
 
   return (
-    <div className="relative flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+    <div
+      className="relative flex min-w-0 shrink items-center gap-x-1.5 whitespace-nowrap"
+      title={fullUsageLabel}
+    >
       <ContextRing
         percent={percent}
         strokeClass={config.strokeClass}
         isWorking={isWorking}
         contextLabel={t("tokenStatus.contextUsage", { percent: Math.round(percent * 100) })}
       />
-      <span>{activeSubId ? t("tokenStatus.subagent") : t("tokenStatus.used")}</span>
-      <span className="text-text-tertiary font-medium">{used}</span>
-      {contextUsage?.contextWindow ? (
+      <span className="hidden sm:inline">{usageLabel}</span>
+      <span className="hidden font-medium text-text-tertiary sm:inline">{used}</span>
+      {hasContextWindow ? (
         <>
-          <span className="text-text-secondary">/</span>
-          <span>
+          <span className="hidden text-text-secondary sm:inline">/</span>
+          <span className="hidden sm:inline">
             {t("tokenStatus.available")} {available}
           </span>
         </>
       ) : null}
-      {sessionStats ? (
-        <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-text-tertiary">
-          <span className="text-text-secondary">·</span>
-          <span>{t("tokenStatus.cumulative")}</span>
-          <span>
-            {t("tokenStatus.sessionInput")}{" "}
-            <span className="font-medium text-text-secondary">
-              {formatStatTokens(sessionStats.tokens.input)}
-            </span>
-          </span>
-          <span>
-            {t("tokenStatus.sessionOutput")}{" "}
-            <span className="font-medium text-text-secondary">
-              {formatStatTokens(sessionStats.tokens.output)}
-            </span>
-          </span>
-          <span>
-            {t("tokenStatus.sessionCache")}{" "}
-            <span className="font-medium text-text-secondary">
-              {formatStatTokens(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite)}
-            </span>
-          </span>
-          <span className="font-medium text-text-secondary">{formatCost(sessionStats.cost)}</span>
-          <span>
-            {t("tokenStatus.sessionTools")}{" "}
-            <span className="font-medium text-text-secondary">{sessionStats.toolCalls}</span>
-          </span>
-          <span>
-            {t("tokenStatus.sessionMessages")}{" "}
-            <span className="font-medium text-text-secondary">{sessionStats.totalMessages}</span>
-          </span>
-        </span>
-      ) : null}
-      {contextUsage ? (
+      <span className="inline-flex min-w-0 items-center gap-1 font-medium text-text-tertiary max-[380px]:hidden sm:hidden">
+        {compactUsageLabel}
+      </span>
+      <span className="hidden font-medium text-text-tertiary max-[380px]:inline sm:hidden">
+        {hasContextWindow ? percentLabel : used}
+      </span>
+      {contextUsage || sessionStats ? (
         <>
           <button
             type="button"
@@ -456,6 +477,24 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
                       </div>
                     ) : null}
                   </div>
+
+                  {sessionStats ? (
+                    <div className="mb-4 overflow-hidden rounded-lg border border-border-primary bg-bg-primary">
+                      <div className="border-b border-border-primary px-4 py-3 text-sm font-semibold text-text-primary">
+                        {t("tokenStatus.cumulative")}
+                      </div>
+                      <div className="grid grid-cols-2 gap-px bg-border-primary sm:grid-cols-3">
+                        {sessionStatItems.map((item) => (
+                          <div key={item.key} className="bg-bg-primary px-4 py-3">
+                            <div className="text-xs text-text-tertiary">{item.label}</div>
+                            <div className="mt-1 text-base font-semibold text-text-primary">
+                              {item.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {breakdown.length > 0 ? (
                     <>
