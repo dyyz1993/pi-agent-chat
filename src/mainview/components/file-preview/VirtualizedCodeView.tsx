@@ -12,6 +12,9 @@ registerShellPrismLanguage(Prism);
 interface VirtualizedCodeViewProps {
   code: string;
   filename: string;
+  fontSize?: number;
+  /** When true, long lines wrap at the viewport width instead of horizontal-scrolling. */
+  wrap?: boolean;
 }
 
 /** Lines longer than this skip syntax highlighting (plain text instead) */
@@ -40,13 +43,13 @@ const CodeVirtualizerContainer = forwardRef<
   Omit<CustomContainerComponentProps, "ref">
 >(function CodeVirtualizerContainer({ style, children }, ref) {
   return (
-    <div ref={ref} className="min-w-max min-h-full" style={{ ...style, minWidth: "max-content" }}>
+    <div ref={ref} className="min-h-full" style={style}>
       {children}
     </div>
   );
 }) as ComponentType<CustomContainerComponentProps>;
 
-export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps) {
+export function VirtualizedCodeView({ code, filename, fontSize = 12, wrap = false }: VirtualizedCodeViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const language = getLanguage(filename);
 
@@ -65,12 +68,17 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
   }, [code, filename]);
 
   const lines = useMemo(() => formattedCode.split("\n"), [formattedCode]);
+
+  // For wrap mode, content fills the viewport (100%); each line wraps based on
+  // the available width, which is a function of fontSize — zoom out = more chars
+  // per line = fewer wraps. This lets users shrink until ASCII art fits un-wrapped.
+  // For non-wrap mode, content width is the longest line so horizontal scroll works.
   const contentWidth = useMemo(() => {
+    if (wrap) return undefined;
     const maxLineLength = lines.reduce((max, line) => Math.max(max, getVisualLineLength(line)), 0);
-    // The virtualizer root uses width: 100% and size containment, so horizontal scroll needs
-    // an explicit content width instead of relying on intrinsic child width.
-    return `max(100%, calc(${maxLineLength}ch + 3.5rem))`;
-  }, [lines]);
+    return "max(100%, calc(" + maxLineLength + "ch + 56px))";
+  }, [lines, wrap]);
+
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
 
@@ -83,22 +91,43 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
     NO_HIGHLIGHT_EXTS.has(ext) ||
     lines.length > MAX_HIGHLIGHT_LINES;
 
+  /** Compute line height matching the original leading-5 (20px) ratio at fontSize 12 */
+  const lineHeight = Math.round(fontSize * (20 / 12));
+
+  // Shared styling strings, branched on wrap mode
+  const scrollClassName = wrap
+    ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-bg-elevated dark:bg-surface-code"
+    : "flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code";
+  const lineDivClassName = wrap ? "flex font-mono" : "flex min-w-max font-mono";
+  const lineDivStyle = { lineHeight: lineHeight + "px" };
+  const contentSpanClassName = wrap
+    ? "flex-1 min-w-0 whitespace-pre-wrap break-words"
+    : "flex-1 whitespace-pre";
+  const innerDivStyle = wrap
+    ? { fontSize: fontSize + "px" }
+    : { width: contentWidth, fontSize: fontSize + "px", minWidth: "max-content" as const };
+
+  // itemSize is only useful as a hint in non-wrap mode (fixed line height).
+  // In wrap mode lines have variable height (wrapping), so we let virtua measure.
+  const virtualizerProps = wrap ? {} : { itemSize: lineHeight };
+
+  const gutter = (index: number) => (
+    <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
+      {index + 1}
+    </span>
+  );
+
   // --- Plain text path: no Prism tokenization ---
   if (forcePlainText) {
     return (
-      <div
-        ref={parentRef}
-        className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
-      >
-        <div className="min-h-full" style={{ width: contentWidth }}>
-          <Virtualizer as={CodeVirtualizerContainer} scrollRef={parentRef} itemSize={20}>
+      <div ref={parentRef} className={scrollClassName}>
+        <div className="min-h-full" style={innerDivStyle}>
+          <Virtualizer as={CodeVirtualizerContainer} scrollRef={parentRef} {...virtualizerProps}>
             {lines.map((line, index) => (
-              <div key={index} className="flex min-w-max text-xs leading-5 font-mono">
-                <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
-                  {index + 1}
-                </span>
+              <div key={index} className={lineDivClassName} style={lineDivStyle}>
+                {gutter(index)}
                 <span
-                  className="flex-1 text-text-primary dark:text-text-secondary whitespace-pre"
+                  className={contentSpanClassName + " text-text-primary dark:text-text-secondary"}
                   style={{ tabSize: 2 }}
                 >
                   {line}
@@ -117,30 +146,25 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
       {({ tokens, getTokenProps }) => {
         const tokensValid = tokens.length === lines.length;
         return (
-          <div
-            ref={parentRef}
-            className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
-          >
-            <div className="min-h-full" style={{ width: contentWidth }}>
-              <Virtualizer as={CodeVirtualizerContainer} scrollRef={parentRef} itemSize={20}>
+          <div ref={parentRef} className={scrollClassName}>
+            <div className="min-h-full" style={innerDivStyle}>
+              <Virtualizer as={CodeVirtualizerContainer} scrollRef={parentRef} {...virtualizerProps}>
                 {lines.map((lineText, index) => {
                   const lineTokens = tokens[index];
                   const isLongLine = (lineText?.length ?? 0) > LONG_LINE_THRESHOLD;
 
                   return (
-                    <div key={index} className="flex min-w-max text-xs leading-5 font-mono">
-                      <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
-                        {index + 1}
-                      </span>
+                    <div key={index} className={lineDivClassName} style={lineDivStyle}>
+                      {gutter(index)}
                       {isLongLine || !tokensValid ? (
                         <span
-                          className="flex-1 whitespace-pre text-text-primary dark:text-text-secondary"
+                          className={contentSpanClassName + " text-text-primary dark:text-text-secondary"}
                           style={{ tabSize: 2 }}
                         >
                           {lineText}
                         </span>
                       ) : (
-                        <span className="flex-1 whitespace-pre" style={{ tabSize: 2 }}>
+                        <span className={contentSpanClassName} style={{ tabSize: 2 }}>
                           {lineTokens.map((token, key) => {
                             const { className: _className, ...tokenProps } = getTokenProps({
                               token,

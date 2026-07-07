@@ -5,447 +5,481 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pi-agent - Chat</title>
     <style id="theme-vars">
-      /* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
-      /* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
+/* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
+/* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
 
-      /* ================================
+/* ================================
    1. Background Colors
    ================================ */
-      :root {
-        --color-bg-primary: #edf1f6;
-        --color-bg-secondary: #f8fafc;
-        --color-bg-tertiary: #e7edf4;
-        --color-bg-elevated: #ffffff;
-        --color-bg-overlay: rgba(12, 18, 28, 0.48);
-        --color-bg-input: #edf1f6;
-      }
-      .dark {
-        --color-bg-primary: #0b111a;
-        --color-bg-secondary: #111827;
-        --color-bg-tertiary: #142033;
-        --color-bg-elevated: #121b28;
-        --color-bg-overlay: rgba(0, 0, 0, 0.6);
-        --color-bg-input: #0d1520;
-      }
+:root {
+  --color-bg-primary: #edf1f6;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #e7edf4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: rgba(12, 18, 28, 0.48);
+  --color-bg-input: #edf1f6;
+}
+.dark {
+  --color-bg-primary: #0b111a;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #142033;
+  --color-bg-elevated: #121b28;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-input: #0d1520;
+}
 
-      /* ================================
+/* ================================
    2. Text Colors
    ================================ */
-      :root {
-        --color-text-primary: #17202e;
-        --color-text-secondary: #4f5f72;
-        --color-text-tertiary: #7d8a9c;
-        --color-text-inverse: #f7fafc;
-      }
-      .dark {
-        --color-text-primary: #f2f6fb;
-        --color-text-secondary: #c1cad6;
-        --color-text-tertiary: #8a96a8;
-        --color-text-inverse: #0a0c10;
-      }
+:root {
+  --color-text-primary: #17202e;
+  --color-text-secondary: #4f5f72;
+  --color-text-tertiary: #7d8a9c;
+  --color-text-inverse: #f7fafc;
+}
+.dark {
+  --color-text-primary: #f2f6fb;
+  --color-text-secondary: #c1cad6;
+  --color-text-tertiary: #8a96a8;
+  --color-text-inverse: #0a0c10;
+}
 
-      /* ================================
+/* ================================
    3. Border Colors
    ================================ */
-      :root {
-        --color-border-primary: #dce4ee;
-        --color-border-secondary: #c7d2df;
-        --color-border-focus: #246df3;
-      }
-      .dark {
-        --color-border-primary: #334155;
-        --color-border-secondary: #475569;
-        --color-border-focus: #746cff;
-      }
+:root {
+  --color-border-primary: #dce4ee;
+  --color-border-secondary: #c7d2df;
+  --color-border-focus: #246df3;
+}
+.dark {
+  --color-border-primary: #334155;
+  --color-border-secondary: #475569;
+  --color-border-focus: #746cff;
+}
 
-      /* ================================
+/* ================================
    4. Accent Colors（修正：accent 统一 violet）
    ================================ */
-      :root {
-        --color-accent: #746cff;
-        --color-accent-hover: #8d88ff;
-        --color-accent-muted: rgba(116, 108, 255, 0.12);
-        --color-accent-text: #6b4cf0;
-        --color-accent-brand: #246df3;
-        --color-accent-idle: #16845f;
-        --color-accent-agent: #7f55cc;
-      }
-      .dark {
-        --color-accent: #746cff;
-        --color-accent-hover: #8d88ff;
-        --color-accent-muted: rgba(116, 108, 255, 0.18);
-        --color-accent-text: #a8b0ff;
-        --color-accent-brand: #2db6e8;
-        --color-accent-idle: #46dd89;
-        --color-accent-agent: #ae7aff;
-      }
+:root {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.12);
+  --color-accent-text: #6b4cf0;
+  --color-accent-brand: #246df3;
+  --color-accent-idle: #16845f;
+  --color-accent-agent: #7f55cc;
+}
+.dark {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.18);
+  --color-accent-text: #a8b0ff;
+  --color-accent-brand: #2db6e8;
+  --color-accent-idle: #46dd89;
+  --color-accent-agent: #ae7aff;
+}
 
-      /* ================================
+/* ================================
    5. Status Colors
    ================================ */
-      :root {
-        --color-success: #16845f;
-        --color-warning: #b36b00;
-        --color-error: #cf3654;
-        --color-info: #246df3;
-        --color-status-success: 22 132 95;
-        --color-status-error: 207 54 84;
-        --color-status-warning: 179 107 0;
-        --color-status-info: 36 109 243;
-      }
-      .dark {
-        --color-success: #46dd89;
-        --color-warning: #eab308;
-        --color-error: #f87171;
-        --color-info: #2db6e8;
-        --color-status-success: 70 221 137;
-        --color-status-error: 248 113 113;
-        --color-status-warning: 234 179 8;
-        --color-status-info: 45 182 232;
-      }
+:root {
+  --color-success: #16845f;
+  --color-warning: #b36b00;
+  --color-error: #cf3654;
+  --color-info: #246df3;
+  --color-status-success: 22 132 95;
+  --color-status-error: 207 54 84;
+  --color-status-warning: 179 107 0;
+  --color-status-info: 36 109 243;
+}
+.dark {
+  --color-success: #46dd89;
+  --color-warning: #eab308;
+  --color-error: #f87171;
+  --color-info: #2db6e8;
+  --color-status-success: 70 221 137;
+  --color-status-error: 248 113 113;
+  --color-status-warning: 234 179 8;
+  --color-status-info: 45 182 232;
+}
 
-      /* ================================
+/* ================================
    6. Semantic Colors（工具类型）
    ================================ */
-      :root {
-        --color-semantic-agent: 127 85 204;
-        --color-semantic-tool: 0 128 149;
-        --color-semantic-memory: 30 140 113;
-        --color-semantic-notify: 186 86 36;
-        --color-semantic-media: 236 72 153;
-        --color-semantic-line: #dce4ee;
-      }
-      .dark {
-        --color-semantic-agent: 174 122 255;
-        --color-semantic-tool: 45 212 232;
-        --color-semantic-memory: 45 212 191;
-        --color-semantic-notify: 251 146 60;
-        --color-semantic-media: 244 114 182;
-        --color-semantic-line: #2b394d;
-      }
+:root {
+  --color-semantic-agent: 127 85 204;
+  --color-semantic-tool: 0 128 149;
+  --color-semantic-memory: 30 140 113;
+  --color-semantic-notify: 186 86 36;
+  --color-semantic-media: 236 72 153;
+  --color-semantic-line: #dce4ee;
+}
+.dark {
+  --color-semantic-agent: 174 122 255;
+  --color-semantic-tool: 45 212 232;
+  --color-semantic-memory: 45 212 191;
+  --color-semantic-notify: 251 146 60;
+  --color-semantic-media: 244 114 182;
+  --color-semantic-line: #2b394d;
+}
 
-      /* ================================
+/* ================================
    7. Diff Colors
    ================================ */
-      :root {
-        --diff-bg: #f4f7fb;
-        --diff-color: #17202e;
-        --diff-added-bg: #dff6ea;
-        --diff-added-color: #0e6e4e;
-        --diff-removed-bg: #ffe2e9;
-        --diff-removed-color: #b42345;
-        --diff-word-added-bg: #c4ecd5;
-        --diff-word-removed-bg: #ffc6d2;
-        --diff-gutter-bg: #e8eef6;
-        --diff-gutter-color: #69778a;
-        --diff-highlight-bg: #dce6f1;
-      }
-      .dark {
-        --diff-bg: #111b2a;
-        --diff-color: #d6deea;
-        --diff-added-bg: #102719;
-        --diff-added-color: #72df9d;
-        --diff-removed-bg: #2f151e;
-        --diff-removed-color: #ff8a9c;
-        --diff-word-added-bg: #183d28;
-        --diff-word-removed-bg: #48202b;
-        --diff-gutter-bg: #182538;
-        --diff-gutter-color: #94a3b8;
-        --diff-highlight-bg: #24344a;
-      }
+:root {
+  --diff-bg: #f4f7fb;
+  --diff-color: #17202e;
+  --diff-added-bg: #dff6ea;
+  --diff-added-color: #0e6e4e;
+  --diff-removed-bg: #ffe2e9;
+  --diff-removed-color: #b42345;
+  --diff-word-added-bg: #c4ecd5;
+  --diff-word-removed-bg: #ffc6d2;
+  --diff-gutter-bg: #e8eef6;
+  --diff-gutter-color: #69778a;
+  --diff-highlight-bg: #dce6f1;
+}
+.dark {
+  --diff-bg: #111b2a;
+  --diff-color: #d6deea;
+  --diff-added-bg: #102719;
+  --diff-added-color: #72df9d;
+  --diff-removed-bg: #2f151e;
+  --diff-removed-color: #ff8a9c;
+  --diff-word-added-bg: #183d28;
+  --diff-word-removed-bg: #48202b;
+  --diff-gutter-bg: #182538;
+  --diff-gutter-color: #94a3b8;
+  --diff-highlight-bg: #24344a;
+}
 
-      /* ================================
+/* ================================
    8. Surface Colors
    ================================ */
-      :root {
-        --surface-code: #eef4fa;
-        --surface-hover: #eef3f9;
-        --surface-dim: #f4f7fb;
-      }
-      .dark {
-        --surface-code: #0e1724;
-        --surface-hover: #1a2638;
-        --surface-dim: #121b28;
-      }
+:root {
+  --surface-code: #eef4fa;
+  --surface-hover: #eef3f9;
+  --surface-dim: #f4f7fb;
+}
+.dark {
+  --surface-code: #0e1724;
+  --surface-hover: #1a2638;
+  --surface-dim: #121b28;
+}
 
-      /* ================================
+/* ================================
    9. Typography
    ================================ */
-      :root {
-        --font-body:
-          -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
-          "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-        --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        --font-size-xs: 11px;
-        --font-size-caption: 12px;
-        --font-size-body: 13px;
-        --font-size-lead: 14px;
-        --font-size-h3: 16px;
-        --font-size-h2: 18px;
-        --font-size-h1: 22px;
-        --font-weight-normal: 400;
-        --font-weight-medium: 500;
-        --font-weight-semibold: 600;
-        --line-height-body: 1.5;
-        --line-height-heading: 1.25;
-        --line-height-mono: 1.5;
-      }
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 18px;
+  --font-size-h1: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.5;
+}
 
-      /* ================================
+/* ================================
    10. Spacing (4px grid)
    ================================ */
-      :root {
-        --spacing-xs: 4px;
-        --spacing-sm: 8px;
-        --spacing-md: 12px;
-        --spacing-base: 16px;
-        --spacing-lg: 20px;
-        --spacing-xl: 24px;
-        --spacing-2xl: 32px;
-        --spacing-3xl: 48px;
-      }
+:root {
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+}
 
-      /* ================================
+/* ================================
    11. Border Radius
    ================================ */
-      :root {
-        --radius-sm: 4px;
-        --radius-md: 6px;
-        --radius-lg: 8px;
-        --radius-xl: 10px;
-        --radius-full: 9999px;
-      }
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+}
 
-      /* ================================
+/* ================================
    12. Shadows
    ================================ */
-      :root {
-        --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-        --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
-        --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
-        --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
-        --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
-        --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
-      }
-      .dark {
-        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-        --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
-        --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-      }
+:root {
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
+  --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+  --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+}
+.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
 
-      /* ================================
+/* ================================
    13. Transitions & Z-index
    ================================ */
-      :root {
-        --transition-fast: 100ms ease;
-        --transition-normal: 150ms ease;
-        --transition-slow: 250ms ease;
-        --z-dropdown: 100;
-        --z-popover: 200;
-        --z-tooltip: 300;
-        --z-modal: 400;
-        --z-toast: 500;
-      }
+:root {
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --transition-slow: 250ms ease;
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
 
-      /* ================================
+/* ================================
    14. Consumer-Facing Aliases
    组件使用短别名引用 token，不直接引用 --color-* 变量
    ================================ */
-      :root {
-        /* Background aliases */
-        --bg: var(--color-bg-primary);
-        --bg-secondary: var(--color-bg-secondary);
-        --bg-tertiary: var(--color-bg-tertiary);
-        --bg-elevated: var(--color-bg-elevated);
-        --bg-overlay: var(--color-bg-overlay);
-        --bg-input: var(--color-bg-input);
+:root {
+  /* Background aliases */
+  --bg: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --bg-elevated: var(--color-bg-elevated);
+  --bg-overlay: var(--color-bg-overlay);
+  --bg-input: var(--color-bg-input);
 
-        /* Text aliases */
-        --text: var(--color-text-primary);
-        --text-secondary: var(--color-text-secondary);
-        --text-tertiary: var(--color-text-tertiary);
-        --text-inverse: var(--color-text-inverse);
-        --text-link: var(--color-accent);
-        --text-link-hover: var(--color-accent-hover);
+  /* Text aliases */
+  --text: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-inverse: var(--color-text-inverse);
+  --text-link: var(--color-accent);
+  --text-link-hover: var(--color-accent-hover);
 
-        /* Border aliases */
-        --rule: var(--color-border-primary);
-        --rule-secondary: var(--color-border-secondary);
-        --ring: var(--color-border-focus);
+  /* Border aliases */
+  --rule: var(--color-border-primary);
+  --rule-secondary: var(--color-border-secondary);
+  --ring: var(--color-border-focus);
 
-        /* Accent aliases */
-        --accent: var(--color-accent);
-        --accent-hover: var(--color-accent-hover);
-        --accent-muted: var(--color-accent-muted);
-        --accent-text: var(--color-accent-text);
+  /* Accent aliases */
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-muted: var(--color-accent-muted);
+  --accent-text: var(--color-accent-text);
 
-        /* Status aliases */
-        --success: var(--color-success);
-        --warning: var(--color-warning);
-        --error: var(--color-error);
-        --info: var(--color-info);
-        --success-muted: rgba(var(--color-status-success), 0.1);
-        --error-muted: rgba(var(--color-status-error), 0.1);
-        --warning-muted: rgba(var(--color-status-warning), 0.1);
-        --info-muted: rgba(var(--color-status-info), 0.1);
+  /* Status aliases */
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --error: var(--color-error);
+  --info: var(--color-info);
+  --success-muted: rgba(var(--color-status-success), 0.1);
+  --error-muted: rgba(var(--color-status-error), 0.1);
+  --warning-muted: rgba(var(--color-status-warning), 0.1);
+  --info-muted: rgba(var(--color-status-info), 0.1);
 
-        /* Semantic aliases */
-        --semantic-agent: rgb(var(--color-semantic-agent));
-        --semantic-tool: rgb(var(--color-semantic-tool));
-        --semantic-memory: rgb(var(--color-semantic-memory));
-        --semantic-notify: rgb(var(--color-semantic-notify));
-        --semantic-media: rgb(var(--color-semantic-media));
+  /* Semantic aliases */
+  --semantic-agent: rgb(var(--color-semantic-agent));
+  --semantic-tool: rgb(var(--color-semantic-tool));
+  --semantic-memory: rgb(var(--color-semantic-memory));
+  --semantic-notify: rgb(var(--color-semantic-notify));
+  --semantic-media: rgb(var(--color-semantic-media));
 
-        /* Surface aliases */
-        --surface: var(--color-bg-elevated);
-        --surface-code: var(--surface-code);
-        --surface-hover: var(--surface-hover);
+  /* Surface aliases */
+  --surface: var(--color-bg-elevated);
+  --surface-code: var(--surface-code);
+  --surface-hover: var(--surface-hover);
 
-        /* ================================
+  /* ================================
      15. Backward-Compatible Aliases
      兼容旧 .design 页面 body CSS 中的变量引用
      ================================ */
-        /* The old pages use --bg-primary, --text-primary, --border-primary naming */
-        --bg-primary: var(--color-bg-primary);
-        --bg-secondary: var(--color-bg-secondary);
-        --bg-elevated: var(--color-bg-elevated);
-        --text-primary: var(--color-text-primary);
-        --text-secondary: var(--color-text-secondary);
-        --text-tertiary: var(--color-text-tertiary);
-        --border-primary: var(--color-border-primary);
-        --border-secondary: var(--color-border-secondary);
+  /* The old pages use --bg-primary, --text-primary, --border-primary naming */
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-elevated: var(--color-bg-elevated);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --border-primary: var(--color-border-primary);
+  --border-secondary: var(--color-border-secondary);
 
-        /* Font aliases for old page body CSS */
-        --font-sans:
-          -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
-          "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-        --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Font aliases for old page body CSS */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-        /* Old semantic alias layer (for old body CSS compatibility) */
-        --color-on-primary: #ffffff;
-        --color-on-surface: var(--color-text-primary);
-        --color-surface: var(--color-bg-elevated);
-        --color-outline: var(--color-border-primary);
-        --color-border: var(--color-border-primary);
-        --color-error-container: rgba(var(--color-status-error), 0.12);
-        --color-primary-container: rgba(var(--color-status-info), 0.1);
-        --card: var(--color-bg-elevated);
+  /* Old semantic alias layer (for old body CSS compatibility) */
+  --color-on-primary: #ffffff;
+  --color-on-surface: var(--color-text-primary);
+  --color-surface: var(--color-bg-elevated);
+  --color-outline: var(--color-border-primary);
+  --color-border: var(--color-border-primary);
+  --color-error-container: rgba(var(--color-status-error), 0.12);
+  --color-primary-container: rgba(var(--color-status-info), 0.1);
+  --card: var(--color-bg-elevated);
 
-        /* Pi-scale aliases for old body CSS that references --pi-violet-400 etc. */
-        --pi-violet-400: var(--color-accent);
-        --pi-memory-50: rgba(var(--color-semantic-memory), 0.1);
-        --pi-tool-50: rgba(var(--color-semantic-tool), 0.1);
-        --pi-success-50: rgba(var(--color-status-success), 0.1);
-        --pi-blue-50: rgba(var(--color-status-info), 0.1);
-        --pi-warning-50: rgba(var(--color-status-warning), 0.1);
-        --pi-info-50: rgba(var(--color-status-info), 0.1);
-        --pi-info-500: rgb(var(--color-status-info));
-        --pi-success-500: rgb(var(--color-status-success));
-        --pi-neutral-300: #a3b0c8;
-        --primary: var(--color-accent);
+  /* Pi-scale aliases for old body CSS that references --pi-violet-400 etc. */
+  --pi-violet-400: var(--color-accent);
+  --pi-memory-50: rgba(var(--color-semantic-memory), 0.1);
+  --pi-tool-50: rgba(var(--color-semantic-tool), 0.1);
+  --pi-success-50: rgba(var(--color-status-success), 0.1);
+  --pi-blue-50: rgba(var(--color-status-info), 0.1);
+  --pi-warning-50: rgba(var(--color-status-warning), 0.1);
+  --pi-info-50: rgba(var(--color-status-info), 0.1);
+  --pi-info-500: rgb(var(--color-status-info));
+  --pi-success-500: rgb(var(--color-status-success));
+  --pi-neutral-300: #a3b0c8;
+  --primary: var(--color-accent);
 
-        /* --- Spacing aliases (--space-N → --spacing-*) --- */
-        --space-1: var(--spacing-xs);
-        --space-2: var(--spacing-sm);
-        --space-3: var(--spacing-md);
-        --space-4: var(--spacing-base);
-        --space-5: var(--spacing-xl);
+  /* --- Spacing aliases (--space-N → --spacing-*) --- */
+  --space-1: var(--spacing-xs);
+  --space-2: var(--spacing-sm);
+  --space-3: var(--spacing-md);
+  --space-4: var(--spacing-base);
+  --space-5: var(--spacing-xl);
 
-        /* --- Sizing aliases --- */
-        --size-button-height-sm: 28px;
-        --size-button-height-md: 36px;
-        --size-button-height-lg: 44px;
-        --size-icon-sm: 16px;
-        --size-icon-md: 20px;
-        --size-icon-lg: 32px;
-        --size-input-height: 36px;
+  /* --- Sizing aliases --- */
+  --size-button-height-sm: 28px;
+  --size-button-height-md: 36px;
+  --size-button-height-lg: 44px;
+  --size-icon-sm: 16px;
+  --size-icon-md: 20px;
+  --size-icon-lg: 32px;
+  --size-input-height: 36px;
 
-        /* --- Shadow aliases (--shadow-N → --shadow-*) --- */
-        --shadow-1: var(--shadow-sm);
-        --shadow-2: var(--shadow-md);
-        --shadow-3: var(--shadow-lg);
-        --shadow-4: var(--shadow-xl);
-        --shadow-5: var(--shadow-floating);
+  /* --- Shadow aliases (--shadow-N → --shadow-*) --- */
+  --shadow-1: var(--shadow-sm);
+  --shadow-2: var(--shadow-md);
+  --shadow-3: var(--shadow-lg);
+  --shadow-4: var(--shadow-xl);
+  --shadow-5: var(--shadow-floating);
 
-        /* --- Typography: font families --- */
-        --font-heading: var(--font-body);
-        --font-family-base: var(--font-body);
+  /* --- Typography: font families --- */
+  --font-heading: var(--font-body);
+  --font-family-base: var(--font-body);
 
-        /* --- Typography: font sizes --- */
-        --font-size-h4: 16px;
-        --font-size-eyebrow: var(--font-size-xs);
-        --font-size-mono: var(--font-size-caption);
-        --type-body-md: var(--font-size-body);
-        --type-body-sm: var(--font-size-caption);
+  /* --- Typography: font sizes --- */
+  --font-size-h4: 16px;
+  --font-size-eyebrow: var(--font-size-xs);
+  --font-size-mono: var(--font-size-caption);
+  --type-body-md: var(--font-size-body);
+  --type-body-sm: var(--font-size-caption);
 
-        /* --- Typography: font weights --- */
-        --font-weight-h4: var(--font-weight-medium);
-        --font-weight-eyebrow: var(--font-weight-semibold);
-        --font-weight-caption: var(--font-weight-normal);
-        --font-weight-body: var(--font-weight-normal);
+  /* --- Typography: font weights --- */
+  --font-weight-h4: var(--font-weight-medium);
+  --font-weight-eyebrow: var(--font-weight-semibold);
+  --font-weight-caption: var(--font-weight-normal);
+  --font-weight-body: var(--font-weight-normal);
 
-        /* --- Typography: line heights --- */
-        --line-height-caption: var(--line-height-body);
+  /* --- Typography: line heights --- */
+  --line-height-caption: var(--line-height-body);
 
-        /* --- Surface container tiers --- */
-        --color-surface-container-low: var(--color-bg-secondary);
-        --color-surface-container: var(--color-bg-tertiary);
-        --color-surface-dim: var(--surface-dim);
+  /* --- Surface container tiers --- */
+  --color-surface-container-low: var(--color-bg-secondary);
+  --color-surface-container: var(--color-bg-tertiary);
+  --color-surface-dim: var(--surface-dim);
 
-        /* --- Primary semantic aliases --- */
-        --color-primary: var(--color-accent);
-        --color-primary-hover: var(--color-accent-hover);
-        --primary-foreground: #ffffff;
+  /* --- Primary semantic aliases --- */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --primary-foreground: #ffffff;
 
-        /* --- On-surface / outline variants --- */
-        --color-on-surface-variant: var(--color-text-tertiary);
-        --color-outline-variant: var(--color-border-secondary);
+  /* --- On-surface / outline variants --- */
+  --color-on-surface-variant: var(--color-text-tertiary);
+  --color-outline-variant: var(--color-border-secondary);
 
-        /* --- Foreground --- */
-        --color-foreground: var(--color-text-primary);
+  /* --- Foreground --- */
+  --color-foreground: var(--color-text-primary);
 
-        /* --- Muted text --- */
-        --text-muted: var(--color-text-tertiary);
+  /* --- Muted text --- */
+  --text-muted: var(--color-text-tertiary);
 
-        /* --- Error text on error bg --- */
-        --on-error: #ffffff;
+  /* --- Error text on error bg --- */
+  --on-error: #ffffff;
 
-        /* --- Bare border alias --- */
-        --border: var(--color-border-primary);
+  /* --- Bare border alias --- */
+  --border: var(--color-border-primary);
 
-        /* --- Extra shadcn/ui standard aliases --- */
-        --background: var(--color-bg-primary);
-        --foreground: var(--color-text-primary);
-        --card-foreground: var(--color-text-primary);
-        --popover: var(--color-bg-elevated);
-        --popover-foreground: var(--color-text-primary);
-        --muted: var(--color-bg-secondary);
-        --muted-foreground: var(--color-text-tertiary);
-        --fg: var(--color-text-primary);
-        --link: var(--color-accent);
-        --link-hover: var(--color-accent-hover);
-        --inverse-surface: var(--color-text-primary);
-        --inverse-on-surface: var(--color-bg-primary);
+  /* --- Extra shadcn/ui standard aliases --- */
+  --background: var(--color-bg-primary);
+  --foreground: var(--color-text-primary);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-text-primary);
+  --muted: var(--color-bg-secondary);
+  --muted-foreground: var(--color-text-tertiary);
+  --fg: var(--color-text-primary);
+  --link: var(--color-accent);
+  --link-hover: var(--color-accent-hover);
+  --inverse-surface: var(--color-text-primary);
+  --inverse-on-surface: var(--color-bg-primary);
 
-        /* --- Direct-usable RGB color aliases (for body CSS that uses --color-status-* / --color-semantic-* without rgb() wrapper) --- */
-        --color-status-success-direct: rgb(var(--color-status-success));
-        --color-status-error-direct: rgb(var(--color-status-error));
-        --color-status-warning-direct: rgb(var(--color-status-warning));
-        --color-status-info-direct: rgb(var(--color-status-info));
-        --color-semantic-agent-direct: rgb(var(--color-semantic-agent));
-        --color-semantic-tool-direct: rgb(var(--color-semantic-tool));
-        --color-semantic-memory-direct: rgb(var(--color-semantic-memory));
-        --color-semantic-notify-direct: rgb(var(--color-semantic-notify));
-        --color-semantic-media-direct: rgb(var(--color-semantic-media));
+  /* --- Direct-usable RGB color aliases (for body CSS that uses --color-status-* / --color-semantic-* without rgb() wrapper) --- */
+  --color-status-success-direct: rgb(var(--color-status-success));
+  --color-status-error-direct: rgb(var(--color-status-error));
+  --color-status-warning-direct: rgb(var(--color-status-warning));
+  --color-status-info-direct: rgb(var(--color-status-info));
+  --color-semantic-agent-direct: rgb(var(--color-semantic-agent));
+  --color-semantic-tool-direct: rgb(var(--color-semantic-tool));
+  --color-semantic-memory-direct: rgb(var(--color-semantic-memory));
+  --color-semantic-notify-direct: rgb(var(--color-semantic-notify));
+  --color-semantic-media-direct: rgb(var(--color-semantic-media));
 
-        /* Also keep raw --color-status-* / --color-semantic-* as direct color aliases for legacy usage */
-        /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
-        /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
-        --surface-container-low: var(--color-surface-container-low);
-      }
+  /* Also keep raw --color-status-* / --color-semantic-* as direct color aliases for legacy usage */
+  /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
+  /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
+  --surface-container-low: var(--color-surface-container-low);
+
+  /* --- Tailwind-friendly hex color aliases (for @theme inline bridge + /alpha modifiers) ---
+     这些必须是合法的 hex/rgb 颜色值，不能用 RGB 分量格式，否则 Tailwind v4 的
+     bg-status-info/5、border-status-error/20 等透明度语法不生效。
+  */
+  --tw-status-info: #246df3;
+  --tw-status-success: #16845f;
+  --tw-status-error: #cf3654;
+  --tw-status-warning: #b36b00;
+  --tw-semantic-tool: #008095;
+  --tw-semantic-agent: #7f55cc;
+  --tw-semantic-memory: #1e8c71;
+  --tw-semantic-notify: #ba5624;
+  --tw-semantic-media: #ec4899;
+  --tw-surface-dim: #f4f7fb;
+  --tw-surface-hover: #eef3f9;
+  --tw-surface-code: #eef4fa;
+  --tw-accent: #746cff;
+}
+.dark {
+  --tw-status-info: #2db6e8;
+  --tw-status-success: #46dd89;
+  --tw-status-error: #f87171;
+  --tw-status-warning: #eab308;
+  --tw-semantic-tool: #2dd4e8;
+  --tw-semantic-agent: #ae7aff;
+  --tw-semantic-memory: #2dd4bf;
+  --tw-semantic-notify: #fb923c;
+  --tw-semantic-media: #f472b6;
+  --tw-surface-dim: #121b28;
+  --tw-surface-hover: #1a2638;
+  --tw-surface-code: #0e1724;
+  --tw-accent: #746cff;
+}
+
     </style>
     <style id="component-vars">
       /* ═══════════════════════════════════════════════════════════════
@@ -3850,14 +3884,20 @@
         --color-warning: var(--color-warning);
         --color-error: var(--color-error);
         --color-info: var(--color-info);
-        --color-status-success: var(--color-status-success);
-        --color-status-error: var(--color-status-error);
-        --color-status-warning: var(--color-status-warning);
-        --color-status-info: var(--color-status-info);
-        --color-semantic-agent: var(--color-semantic-agent);
-        --color-semantic-tool: var(--color-semantic-tool);
-        --color-semantic-memory: var(--color-semantic-memory);
-        --color-semantic-notify: var(--color-semantic-notify);
+        /* Hex aliases for Tailwind /alpha modifiers */
+        --color-status-info: var(--tw-status-info);
+        --color-status-success: var(--tw-status-success);
+        --color-status-error: var(--tw-status-error);
+        --color-status-warning: var(--tw-status-warning);
+        --color-semantic-tool: var(--tw-semantic-tool);
+        --color-semantic-agent: var(--tw-semantic-agent);
+        --color-semantic-memory: var(--tw-semantic-memory);
+        --color-semantic-notify: var(--tw-semantic-notify);
+        --color-semantic-media: var(--tw-semantic-media);
+        --color-surface-dim: var(--tw-surface-dim);
+        --color-surface-hover: var(--tw-surface-hover);
+        --color-surface-code: var(--tw-surface-code);
+        --color-surface: var(--tw-surface-dim);
       }
 
       @layer base {
@@ -6556,64 +6596,54 @@ JWT_REFRESH_EXPIRY=7d</code></pre>
         gap: 6px;
       }
 
-      /* ======================== TOOL CARD (FULL WIDTH) ======================== */
+      /* ======================== TOOL CARD (对齐源码 chat-layout-classes.ts) ======================== */
       .tool-card {
         border-radius: 0 !important;
         border-left: none !important;
         border-right: none !important;
-        border-top: 1px solid var(--border-primary);
-        border-bottom: 1px solid var(--border-primary);
-        background: var(--surface-dim);
+        border-top: 1px solid var(--color-border-secondary);
+        border-bottom: 1px solid var(--color-border-secondary);
+        background: var(--tw-surface-dim);
         box-shadow: none !important;
         max-width: 100% !important;
         overflow: hidden;
         margin-top: -1px;
       }
-      .tool-card:first-child {
-        margin-top: 8px;
-      }
-      .tool-card + .tool-card {
-        margin-top: 0;
-      }
+      .tool-card:first-child { margin-top: 8px; }
+      .tool-card + .tool-card { margin-top: 0; }
+
+      /* 状态色容器背景（对齐源码 CardContainer shellClass） */
+      .tool-card.state-running { border-color: color-mix(in srgb, var(--tw-status-info) 25%, transparent); background: color-mix(in srgb, var(--tw-status-info) 5%, transparent); }
+      .tool-card.state-error { border-color: color-mix(in srgb, var(--tw-status-error) 20%, transparent); background: color-mix(in srgb, var(--tw-status-error) 5%, transparent); }
+      .tool-card.state-warning { border-color: color-mix(in srgb, var(--tw-status-warning) 30%, transparent); background: color-mix(in srgb, var(--tw-status-warning) 5%, transparent); }
 
       .tool-card-header {
+        position: relative;
+        z-index: 20;
         padding: 6px 12px;
-        border-left: 3px solid var(--color-status-info-direct);
+        border-left: 3px solid transparent;
         display: flex;
         align-items: center;
         gap: 8px;
         font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        background: rgba(0, 0, 0, 0.15);
+        font-weight: 500;
+        color: var(--color-text-secondary);
         cursor: pointer;
         user-select: none;
+        overflow: hidden;
+        transition: background-color 0.15s;
       }
-      .tool-card-header:hover {
-        background: rgba(0, 0, 0, 0.25);
-      }
+      .tool-card-header:hover { background: color-mix(in srgb, var(--tw-surface-hover) 30%, transparent); }
 
-      .tool-card-header.stripe-tool {
-        border-left-color: var(--color-semantic-tool-direct);
-      }
-      .tool-card-header.stripe-info {
-        border-left-color: var(--color-status-info-direct);
-      }
-      .tool-card-header.stripe-warning {
-        border-left-color: var(--color-status-warning-direct);
-      }
-      .tool-card-header.stripe-agent {
-        border-left-color: var(--color-semantic-agent-direct);
-      }
-      .tool-card-header.stripe-memory {
-        border-left-color: var(--color-semantic-memory-direct);
-      }
-      .tool-card-header.stripe-error {
-        border-left-color: var(--color-status-error-direct);
-      }
-      .tool-card-header.stripe-success {
-        border-left-color: var(--color-status-success-direct);
-      }
+      /* Stripe 颜色 — 用 --tw-* hex alias，对齐 tool-icon-map.ts */
+      .tool-card-header.stripe-tool { border-left-color: var(--tw-semantic-tool); }
+      .tool-card-header.stripe-info { border-left-color: var(--tw-status-info); }
+      .tool-card-header.stripe-warning { border-left-color: var(--tw-status-warning); }
+      .tool-card-header.stripe-agent { border-left-color: var(--tw-semantic-agent); }
+      .tool-card-header.stripe-memory { border-left-color: var(--tw-semantic-memory); }
+      .tool-card-header.stripe-error { border-left-color: var(--tw-status-error); }
+      .tool-card-header.stripe-success { border-left-color: var(--tw-status-success); }
+      .tool-card-header.stripe-notify { border-left-color: var(--tw-semantic-notify); }
 
       .tool-card-icon {
         width: 14px;
@@ -6623,79 +6653,78 @@ JWT_REFRESH_EXPIRY=7d</code></pre>
         align-items: center;
         justify-content: center;
       }
-      .tool-card-icon svg {
-        width: 14px;
-        height: 14px;
-      }
+      .tool-card-icon svg { width: 14px; height: 14px; }
 
       .tool-card-title {
         flex: 1;
+        min-width: 0;
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 500;
+        color: var(--color-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
       .tool-card-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
         font-size: 10px;
         padding: 1px 6px;
-        border-radius: var(--radius-sm);
+        border-radius: 3px;
         font-weight: 500;
         line-height: 1.4;
-      }
-
-      .badge-success {
-        background: rgba(5, 150, 105, 0.15);
-        color: var(--color-status-success-direct);
-      }
-      .badge-error {
-        background: rgba(207, 54, 84, 0.15);
-        color: var(--color-status-error-direct);
-      }
-      .badge-info {
-        background: rgba(36, 109, 243, 0.15);
-        color: var(--color-status-info-direct);
-      }
-      .badge-warning {
-        background: rgba(179, 107, 0, 0.15);
-        color: var(--color-status-warning-direct);
-      }
-      .badge-agent {
-        background: rgba(127, 85, 204, 0.15);
-        color: var(--color-semantic-agent-direct);
-      }
-      .badge-tool {
-        background: rgba(0, 128, 149, 0.15);
-        color: var(--color-semantic-tool-direct);
-      }
-
-      .tool-card-time {
-        font-size: 11px;
-        color: var(--text-tertiary);
+        flex-shrink: 0;
         white-space: nowrap;
       }
 
-      .tool-card-body {
-        padding: 8px 12px;
-        padding-left: 12px;
-        font-size: 13px;
-        color: var(--text-primary);
-        line-height: 1.5;
+      /* Badge 色 — 用 color-mix + --tw-* hex alias（dark 模式自动切换） */
+      .badge-success { background: color-mix(in srgb, var(--tw-status-success) 12%, transparent); color: var(--tw-status-success); }
+      .badge-error { background: color-mix(in srgb, var(--tw-status-error) 12%, transparent); color: var(--tw-status-error); }
+      .badge-info { background: color-mix(in srgb, var(--tw-status-info) 12%, transparent); color: var(--tw-status-info); }
+      .badge-warning { background: color-mix(in srgb, var(--tw-status-warning) 12%, transparent); color: var(--tw-status-warning); }
+      .badge-agent { background: color-mix(in srgb, var(--tw-semantic-agent) 12%, transparent); color: var(--tw-semantic-agent); }
+      .badge-tool { background: color-mix(in srgb, var(--tw-semantic-tool) 12%, transparent); color: var(--tw-semantic-tool); }
+      .badge-memory { background: color-mix(in srgb, var(--tw-semantic-memory) 12%, transparent); color: var(--tw-semantic-memory); }
+      .badge-notify { background: color-mix(in srgb, var(--tw-semantic-notify) 12%, transparent); color: var(--tw-semantic-notify); }
+
+      .tool-card-time {
+        font-size: 10px;
+        color: color-mix(in srgb, var(--color-text-tertiary) 50%, transparent);
+        white-space: nowrap;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
       }
-      .tool-card-body.collapsed {
-        display: none;
+
+      .tool-card-body {
+        padding: 6px 12px 8px;
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        line-height: 1.6;
+        border-top: 1px solid color-mix(in srgb, var(--color-border-secondary) 30%, transparent);
+      }
+      .tool-card-body.collapsed { display: none; }
+      .tool-card-body pre {
+        background: var(--tw-surface-code);
+        border-radius: 4px;
+        padding: 6px 8px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--color-text-primary);
+        margin: 4px 0;
+        overflow-x: auto;
       }
 
       .tool-card-chevron {
         width: 14px;
         height: 14px;
-        color: var(--text-tertiary);
-        transition: transform 0.15s;
+        color: color-mix(in srgb, var(--color-text-tertiary) 40%, transparent);
+        transition: transform 0.15s ease;
         flex-shrink: 0;
       }
-      .tool-card-header.expanded .tool-card-chevron {
-        transform: rotate(90deg);
+      .tool-card-header:not(.expanded) .tool-card-chevron {
+        transform: rotate(-90deg);
       }
 
       /* ======================== CODE BLOCKS ======================== */

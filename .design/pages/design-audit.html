@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>设计系统 Token 对账 — 源码 vs 规范对照表</title>
+<style id="theme-vars">
+/* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
+/* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
+
+/* ================================
+   1. Background Colors
+   ================================ */
+:root {
+  --color-bg-primary: #edf1f6;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #e7edf4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: rgba(12, 18, 28, 0.48);
+  --color-bg-input: #edf1f6;
+}
+.dark {
+  --color-bg-primary: #0b111a;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #142033;
+  --color-bg-elevated: #121b28;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-input: #0d1520;
+}
+
+/* ================================
+   2. Text Colors
+   ================================ */
+:root {
+  --color-text-primary: #17202e;
+  --color-text-secondary: #4f5f72;
+  --color-text-tertiary: #7d8a9c;
+  --color-text-inverse: #f7fafc;
+}
+.dark {
+  --color-text-primary: #f2f6fb;
+  --color-text-secondary: #c1cad6;
+  --color-text-tertiary: #8a96a8;
+  --color-text-inverse: #0a0c10;
+}
+
+/* ================================
+   3. Border Colors
+   ================================ */
+:root {
+  --color-border-primary: #dce4ee;
+  --color-border-secondary: #c7d2df;
+  --color-border-focus: #246df3;
+}
+.dark {
+  --color-border-primary: #334155;
+  --color-border-secondary: #475569;
+  --color-border-focus: #746cff;
+}
+
+/* ================================
+   4. Accent Colors（修正：accent 统一 violet）
+   ================================ */
+:root {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.12);
+  --color-accent-text: #6b4cf0;
+  --color-accent-brand: #246df3;
+  --color-accent-idle: #16845f;
+  --color-accent-agent: #7f55cc;
+}
+.dark {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.18);
+  --color-accent-text: #a8b0ff;
+  --color-accent-brand: #2db6e8;
+  --color-accent-idle: #46dd89;
+  --color-accent-agent: #ae7aff;
+}
+
+/* ================================
+   5. Status Colors
+   ================================ */
+:root {
+  --color-success: #16845f;
+  --color-warning: #b36b00;
+  --color-error: #cf3654;
+  --color-info: #246df3;
+  --color-status-success: 22 132 95;
+  --color-status-error: 207 54 84;
+  --color-status-warning: 179 107 0;
+  --color-status-info: 36 109 243;
+}
+.dark {
+  --color-success: #46dd89;
+  --color-warning: #eab308;
+  --color-error: #f87171;
+  --color-info: #2db6e8;
+  --color-status-success: 70 221 137;
+  --color-status-error: 248 113 113;
+  --color-status-warning: 234 179 8;
+  --color-status-info: 45 182 232;
+}
+
+/* ================================
+   6. Semantic Colors（工具类型）
+   ================================ */
+:root {
+  --color-semantic-agent: 127 85 204;
+  --color-semantic-tool: 0 128 149;
+  --color-semantic-memory: 30 140 113;
+  --color-semantic-notify: 186 86 36;
+  --color-semantic-media: 236 72 153;
+  --color-semantic-line: #dce4ee;
+}
+.dark {
+  --color-semantic-agent: 174 122 255;
+  --color-semantic-tool: 45 212 232;
+  --color-semantic-memory: 45 212 191;
+  --color-semantic-notify: 251 146 60;
+  --color-semantic-media: 244 114 182;
+  --color-semantic-line: #2b394d;
+}
+
+/* ================================
+   7. Diff Colors
+   ================================ */
+:root {
+  --diff-bg: #f4f7fb;
+  --diff-color: #17202e;
+  --diff-added-bg: #dff6ea;
+  --diff-added-color: #0e6e4e;
+  --diff-removed-bg: #ffe2e9;
+  --diff-removed-color: #b42345;
+  --diff-word-added-bg: #c4ecd5;
+  --diff-word-removed-bg: #ffc6d2;
+  --diff-gutter-bg: #e8eef6;
+  --diff-gutter-color: #69778a;
+  --diff-highlight-bg: #dce6f1;
+}
+.dark {
+  --diff-bg: #111b2a;
+  --diff-color: #d6deea;
+  --diff-added-bg: #102719;
+  --diff-added-color: #72df9d;
+  --diff-removed-bg: #2f151e;
+  --diff-removed-color: #ff8a9c;
+  --diff-word-added-bg: #183d28;
+  --diff-word-removed-bg: #48202b;
+  --diff-gutter-bg: #182538;
+  --diff-gutter-color: #94a3b8;
+  --diff-highlight-bg: #24344a;
+}
+
+/* ================================
+   8. Surface Colors
+   ================================ */
+:root {
+  --surface-code: #eef4fa;
+  --surface-hover: #eef3f9;
+  --surface-dim: #f4f7fb;
+}
+.dark {
+  --surface-code: #0e1724;
+  --surface-hover: #1a2638;
+  --surface-dim: #121b28;
+}
+
+/* ================================
+   9. Typography
+   ================================ */
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 18px;
+  --font-size-h1: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.5;
+}
+
+/* ================================
+   10. Spacing (4px grid)
+   ================================ */
+:root {
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+}
+
+/* ================================
+   11. Border Radius
+   ================================ */
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+}
+
+/* ================================
+   12. Shadows
+   ================================ */
+:root {
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
+  --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+  --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+}
+.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+/* ================================
+   13. Transitions & Z-index
+   ================================ */
+:root {
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --transition-slow: 250ms ease;
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* ================================
+   14. Consumer-Facing Aliases
+   组件使用短别名引用 token，不直接引用 --color-* 变量
+   ================================ */
+:root {
+  /* Background aliases */
+  --bg: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --bg-elevated: var(--color-bg-elevated);
+  --bg-overlay: var(--color-bg-overlay);
+  --bg-input: var(--color-bg-input);
+
+  /* Text aliases */
+  --text: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-inverse: var(--color-text-inverse);
+  --text-link: var(--color-accent);
+  --text-link-hover: var(--color-accent-hover);
+
+  /* Border aliases */
+  --rule: var(--color-border-primary);
+  --rule-secondary: var(--color-border-secondary);
+  --ring: var(--color-border-focus);
+
+  /* Accent aliases */
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-muted: var(--color-accent-muted);
+  --accent-text: var(--color-accent-text);
+
+  /* Status aliases */
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --error: var(--color-error);
+  --info: var(--color-info);
+  --success-muted: rgba(var(--color-status-success), 0.1);
+  --error-muted: rgba(var(--color-status-error), 0.1);
+  --warning-muted: rgba(var(--color-status-warning), 0.1);
+  --info-muted: rgba(var(--color-status-info), 0.1);
+
+  /* Semantic aliases */
+  --semantic-agent: rgb(var(--color-semantic-agent));
+  --semantic-tool: rgb(var(--color-semantic-tool));
+  --semantic-memory: rgb(var(--color-semantic-memory));
+  --semantic-notify: rgb(var(--color-semantic-notify));
+  --semantic-media: rgb(var(--color-semantic-media));
+
+  /* Surface aliases */
+  --surface: var(--color-bg-elevated);
+  --surface-code: var(--surface-code);
+  --surface-hover: var(--surface-hover);
+
+  /* ================================
+     15. Backward-Compatible Aliases
+     兼容旧 .design 页面 body CSS 中的变量引用
+     ================================ */
+  /* The old pages use --bg-primary, --text-primary, --border-primary naming */
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-elevated: var(--color-bg-elevated);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --border-primary: var(--color-border-primary);
+  --border-secondary: var(--color-border-secondary);
+
+  /* Font aliases for old page body CSS */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Old semantic alias layer (for old body CSS compatibility) */
+  --color-on-primary: #ffffff;
+  --color-on-surface: var(--color-text-primary);
+  --color-surface: var(--color-bg-elevated);
+  --color-outline: var(--color-border-primary);
+  --color-border: var(--color-border-primary);
+  --color-error-container: rgba(var(--color-status-error), 0.12);
+  --color-primary-container: rgba(var(--color-status-info), 0.1);
+  --card: var(--color-bg-elevated);
+
+  /* Pi-scale aliases for old body CSS that references --pi-violet-400 etc. */
+  --pi-violet-400: var(--color-accent);
+  --pi-memory-50: rgba(var(--color-semantic-memory), 0.1);
+  --pi-tool-50: rgba(var(--color-semantic-tool), 0.1);
+  --pi-success-50: rgba(var(--color-status-success), 0.1);
+  --pi-blue-50: rgba(var(--color-status-info), 0.1);
+  --pi-warning-50: rgba(var(--color-status-warning), 0.1);
+  --pi-info-50: rgba(var(--color-status-info), 0.1);
+  --pi-info-500: rgb(var(--color-status-info));
+  --pi-success-500: rgb(var(--color-status-success));
+  --pi-neutral-300: #a3b0c8;
+  --primary: var(--color-accent);
+
+  /* --- Spacing aliases (--space-N → --spacing-*) --- */
+  --space-1: var(--spacing-xs);
+  --space-2: var(--spacing-sm);
+  --space-3: var(--spacing-md);
+  --space-4: var(--spacing-base);
+  --space-5: var(--spacing-xl);
+
+  /* --- Sizing aliases --- */
+  --size-button-height-sm: 28px;
+  --size-button-height-md: 36px;
+  --size-button-height-lg: 44px;
+  --size-icon-sm: 16px;
+  --size-icon-md: 20px;
+  --size-icon-lg: 32px;
+  --size-input-height: 36px;
+
+  /* --- Shadow aliases (--shadow-N → --shadow-*) --- */
+  --shadow-1: var(--shadow-sm);
+  --shadow-2: var(--shadow-md);
+  --shadow-3: var(--shadow-lg);
+  --shadow-4: var(--shadow-xl);
+  --shadow-5: var(--shadow-floating);
+
+  /* --- Typography: font families --- */
+  --font-heading: var(--font-body);
+  --font-family-base: var(--font-body);
+
+  /* --- Typography: font sizes --- */
+  --font-size-h4: 16px;
+  --font-size-eyebrow: var(--font-size-xs);
+  --font-size-mono: var(--font-size-caption);
+  --type-body-md: var(--font-size-body);
+  --type-body-sm: var(--font-size-caption);
+
+  /* --- Typography: font weights --- */
+  --font-weight-h4: var(--font-weight-medium);
+  --font-weight-eyebrow: var(--font-weight-semibold);
+  --font-weight-caption: var(--font-weight-normal);
+  --font-weight-body: var(--font-weight-normal);
+
+  /* --- Typography: line heights --- */
+  --line-height-caption: var(--line-height-body);
+
+  /* --- Surface container tiers --- */
+  --color-surface-container-low: var(--color-bg-secondary);
+  --color-surface-container: var(--color-bg-tertiary);
+  --color-surface-dim: var(--surface-dim);
+
+  /* --- Primary semantic aliases --- */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --primary-foreground: #ffffff;
+
+  /* --- On-surface / outline variants --- */
+  --color-on-surface-variant: var(--color-text-tertiary);
+  --color-outline-variant: var(--color-border-secondary);
+
+  /* --- Foreground --- */
+  --color-foreground: var(--color-text-primary);
+
+  /* --- Muted text --- */
+  --text-muted: var(--color-text-tertiary);
+
+  /* --- Error text on error bg --- */
+  --on-error: #ffffff;
+
+  /* --- Bare border alias --- */
+  --border: var(--color-border-primary);
+
+  /* --- Extra shadcn/ui standard aliases --- */
+  --background: var(--color-bg-primary);
+  --foreground: var(--color-text-primary);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-text-primary);
+  --muted: var(--color-bg-secondary);
+  --muted-foreground: var(--color-text-tertiary);
+  --fg: var(--color-text-primary);
+  --link: var(--color-accent);
+  --link-hover: var(--color-accent-hover);
+  --inverse-surface: var(--color-text-primary);
+  --inverse-on-surface: var(--color-bg-primary);
+
+  /* --- Direct-usable RGB color aliases (for body CSS that uses --color-status-* / --color-semantic-* without rgb() wrapper) --- */
+  --color-status-success-direct: rgb(var(--color-status-success));
+  --color-status-error-direct: rgb(var(--color-status-error));
+  --color-status-warning-direct: rgb(var(--color-status-warning));
+  --color-status-info-direct: rgb(var(--color-status-info));
+  --color-semantic-agent-direct: rgb(var(--color-semantic-agent));
+  --color-semantic-tool-direct: rgb(var(--color-semantic-tool));
+  --color-semantic-memory-direct: rgb(var(--color-semantic-memory));
+  --color-semantic-notify-direct: rgb(var(--color-semantic-notify));
+  --color-semantic-media-direct: rgb(var(--color-semantic-media));
+
+  /* Also keep raw --color-status-* / --color-semantic-* as direct color aliases for legacy usage */
+  /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
+  /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
+  --surface-container-low: var(--color-surface-container-low);
+
+  /* --- Tailwind-friendly hex color aliases (for @theme inline bridge + /alpha modifiers) ---
+     这些必须是合法的 hex/rgb 颜色值，不能用 RGB 分量格式，否则 Tailwind v4 的
+     bg-status-info/5、border-status-error/20 等透明度语法不生效。
+  */
+  --tw-status-info: #246df3;
+  --tw-status-success: #16845f;
+  --tw-status-error: #cf3654;
+  --tw-status-warning: #b36b00;
+  --tw-semantic-tool: #008095;
+  --tw-semantic-agent: #7f55cc;
+  --tw-semantic-memory: #1e8c71;
+  --tw-semantic-notify: #ba5624;
+  --tw-semantic-media: #ec4899;
+  --tw-surface-dim: #f4f7fb;
+  --tw-surface-hover: #eef3f9;
+  --tw-surface-code: #eef4fa;
+  --tw-accent: #746cff;
+}
+.dark {
+  --tw-status-info: #2db6e8;
+  --tw-status-success: #46dd89;
+  --tw-status-error: #f87171;
+  --tw-status-warning: #eab308;
+  --tw-semantic-tool: #2dd4e8;
+  --tw-semantic-agent: #ae7aff;
+  --tw-semantic-memory: #2dd4bf;
+  --tw-semantic-notify: #fb923c;
+  --tw-semantic-media: #f472b6;
+  --tw-surface-dim: #121b28;
+  --tw-surface-hover: #1a2638;
+  --tw-surface-code: #0e1724;
+  --tw-accent: #746cff;
+}
+
+    </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>&#35774;&#35745;&#31995;&#32479; Token &#23545;&#24080; &#8212; &#28304;&#30721; vs &#35268;&#33539;&#23545;&#29031;&#34920;</h1>
+    <p class="subtitle">pi-agent-chat Design Library | &#36880;&#39033;&#27604;&#23545; colors_and_type.css + css.json | Dark Mode</p>
+    <div class="badge-row">
+      <span class="source-badge">
+        <span class="dot"></span>
+        Design Library: .design_library/pi-agent-chat/colors_and_type.css
+      </span>
+      <span class="p0-badge">P0 &#24517;&#20462; &times;3</span>
+      <span class="p1-badge">P1 &times;2</span>
+      <span class="p2-badge">P2 &times;1</span>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 1: TokenStatusBar.tsx - bare Tailwind colors                  -->
+  <!-- ===================================================================== -->
+  <section class="section" data-dom-id="audit-1">
+    <div class="section-header">
+      <span class="num">1</span>
+      <h2>TokenStatusBar.tsx &#8212; 7 &#20010;&#35064; Tailwind &#39068;&#33394;</h2>
+      <span class="count-badge">P0 &middot; 7 issues</span>
+    </div>
+    <div class="section-body">
+      <div class="file-path">src/mainview/components/chat/TokenStatusBar.tsx : lines 37&#8211;115</div>
+      <p style="margin-bottom:16px;font-size:13px;color:var(--text-secondary);">
+        BREAKDOWN_META &#23545;&#35937;&#20013;&#30340; className &#21644; barClassName &#20351;&#29992;&#20102; bare Tailwind &#39068;&#33394;&#65288;&#22914; bg-pink-400, bg-orange-300&#65289;&#65292;&#24212;&#26367;&#25442;&#20026;&#35774;&#35745;&#31995;&#32479; CSS &#21464;&#37327;&#12290;
+      </p>
+
+      <div class="comp-grid">
+        <!-- WRONG COL -->
+        <div class="comp-col wrong">
+          <div class="comp-col-header">&#24403;&#21069;&#20195;&#30721;&#65288;&#38169;&#35823;&#65289;</div>
+          <div class="comp-col-body">
+            <div class="swatch-row">
+              <div class="swatch" style="background:#f472b6"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#f472b6</div>
+                <div class="swatch-desc">thinking &#8212; bg-pink-400</div>
+                <div class="code-line">className: "bg-pink-400",<br/>barClassName: "bg-pink-400"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#fdba74"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#fdba74</div>
+                <div class="swatch-desc">tool_inputs &#8212; bg-orange-300</div>
+                <div class="code-line">className: "bg-orange-300",<br/>barClassName: "bg-orange-300"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#5eead4"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#5eead4</div>
+                <div class="swatch-desc">tool_outputs &#8212; bg-teal-300</div>
+                <div class="code-line">className: "bg-teal-300",<br/>barClassName: "bg-teal-300"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#a78bfa"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#a78bfa</div>
+                <div class="swatch-desc">provider_system &#8212; bg-violet-400</div>
+                <div class="code-line">className: "bg-violet-400",<br/>barClassName: "bg-violet-400"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#67e8f9"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#67e8f9</div>
+                <div class="swatch-desc">provider_messages &#8212; bg-cyan-300</div>
+                <div class="code-line">className: "bg-cyan-300",<br/>barClassName: "bg-cyan-300"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#fcd34d"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#fcd34d</div>
+                <div class="swatch-desc">provider_tools &#8212; bg-amber-300</div>
+                <div class="code-line">className: "bg-amber-300",<br/>barClassName: "bg-amber-300"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#94a3b8"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#94a3b8</div>
+                <div class="swatch-desc">provider_options &#8212; bg-slate-400</div>
+                <div class="code-line">className: "bg-slate-400",<br/>barClassName: "bg-slate-400"</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CORRECT COL -->
+        <div class="comp-col correct">
+          <div class="comp-col-header">&#35774;&#35745;&#31995;&#32479; Token&#65288;&#27491;&#30830;&#65289;</div>
+          <div class="comp-col-body">
+            <div class="swatch-row">
+              <div class="swatch" style="background:#ae7aff"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#ae7aff</div>
+                <div class="swatch-token">--color-semantic-agent / --color-accent-agent</div>
+                <div class="swatch-desc">thinking &#8594; bg-[var(--color-semantic-agent)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#fb923c"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#fb923c</div>
+                <div class="swatch-token">--color-semantic-notify</div>
+                <div class="swatch-desc">tool_inputs &#8594; bg-[var(--color-semantic-notify)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#2dd4bf"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#2dd4bf</div>
+                <div class="swatch-token">--color-semantic-memory</div>
+                <div class="swatch-desc">tool_outputs &#8594; bg-[var(--color-semantic-memory)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#ae7aff"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#ae7aff</div>
+                <div class="swatch-token">--color-semantic-agent / --color-accent-agent</div>
+                <div class="swatch-desc">provider_system &#8594; bg-[var(--color-semantic-agent)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#2dd4e8"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#2dd4e8</div>
+                <div class="swatch-token">--color-semantic-tool</div>
+                <div class="swatch-desc">provider_messages &#8594; bg-[var(--color-semantic-tool)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#eab308"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#eab308</div>
+                <div class="swatch-token">--color-status-warning</div>
+                <div class="swatch-desc">provider_tools &#8594; bg-[var(--color-status-warning)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#c1cad6"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#c1cad6</div>
+                <div class="swatch-token">--color-text-secondary</div>
+                <div class="swatch-desc">provider_options &#8594; bg-[var(--color-text-secondary)]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>&#24433;&#21709;&#65306;</strong> &#36825;&#20123;&#39068;&#33394;&#22312;&#24377;&#31383;&#32454;&#20998;&#25968;&#25454;&#26588;&#12289;&#36827;&#24230;&#26465;&#12289;&#22270;&#20363;&#20013;&#20351;&#29992;&#12290;&#20219;&#20309;&#19968;&#22788;&#25913;&#21464;&#37117;&#20250;&#40784;&#25968;&#24433;&#21709;
+        <code style="background:var(--surface-code);padding:1px 4px;border-radius:3px;font-size:11px;">gridCells</code>
+        &#30340;&#39068;&#33394;&#26174;&#31034;&#65292;&#23436;&#20840;&#19981;&#19968;&#33268;&#12290;
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 2: SettingsPanel.tsx - mixed accent colors                    -->
+  <!-- ===================================================================== -->
+  <section class="section" data-dom-id="audit-2">
+    <div class="section-header">
+      <span class="num">2</span>
+      <h2>SettingsPanel.tsx &#8212; &#28151;&#29992; cyan-blue vs &#32043;&#33394; accent</h2>
+      <span class="count-badge">P0 &middot; 3 locations</span>
+    </div>
+    <div class="section-body">
+      <div class="file-path">src/mainview/components/settings/SettingsPanel.tsx : lines 303, 328, 545, 570, 601</div>
+      <p style="margin-bottom:16px;font-size:13px;color:var(--text-secondary);">
+        &#20998;&#27573;&#25353;&#38062;&#21644; Tab &#36873;&#20013;&#29366;&#24577;&#20351;&#29992;&#20102; cyan-blue&#65288;bg-semantic-accent&#65289;&#65292;&#20294;&#35774;&#35745;&#31995;&#32479; accent &#20026;&#32043;&#33394;&#31995;&#65288;#746cff&#65289;&#12290;&#24038;&#36793;&#26639;&#30340; shadow-inset-3 &#24050;&#26159;&#27491;&#30830;&#30340;&#32043;&#33394;&#65292;&#20294;&#20195;&#30721;&#20013;&#30340;&#32972;&#26223;&#33394;&#36824;&#26159; cyan-blue&#12290;
+      </p>
+
+      <div class="comp-grid">
+        <div class="comp-col wrong">
+          <div class="comp-col-header">&#24403;&#21069;&#20195;&#30721;&#65288;&#38169;&#35823;&#65289;</div>
+          <div class="comp-col-body">
+            <div class="swatch-row">
+              <div class="swatch" style="background:#2db6e8"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#2db6e8 (cyan-blue)</div>
+                <div class="swatch-desc">Line 303: &#20998;&#27573;&#25353;&#38062; developer &#36873;&#20013;</div>
+                <div class="code-line">"bg-semantic-accent text-white"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#2db6e8"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#2db6e8 (cyan-blue)</div>
+                <div class="swatch-desc">Line 328: &#23383;&#20307;&#39044;&#35774;&#25353;&#38062;&#36873;&#20013;</div>
+                <div class="code-line">"bg-semantic-accent text-white"</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:rgba(45,182,232,0.1)"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">rgba(45,182,232,0.1)</div>
+                <div class="swatch-desc">Lines 545, 570, 601: Tab &#36873;&#20013;&#32972;&#26223;</div>
+                <div class="code-line">"bg-semantic-accent/10 text-semantic-accent"</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="comp-col correct">
+          <div class="comp-col-header">&#35774;&#35745;&#31995;&#32479; Token&#65288;&#27491;&#30830;&#65289;</div>
+          <div class="comp-col-body">
+            <div class="swatch-row">
+              <div class="swatch" style="background:#746cff"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#746cff</div>
+                <div class="swatch-token">--color-accent</div>
+                <div class="swatch-desc">&#20998;&#27573;&#25353;&#38062;&#36873;&#20013; &#8594; bg-[var(--color-accent)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:rgba(116,108,255,0.18)"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">rgba(116,108,255,0.18)</div>
+                <div class="swatch-token">--color-accent-muted</div>
+                <div class="swatch-desc">Tab &#36873;&#20013;&#32972;&#26223; &#8594; bg-[var(--color-accent-muted)]</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#a8b0ff"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#a8b0ff</div>
+                <div class="swatch-token">--color-accent-text</div>
+                <div class="swatch-desc">Tab &#36873;&#20013;&#25991;&#23383; &#8594; text-[var(--color-accent-text)]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout success">
+        <strong>&#24050;&#27491;&#30830;&#30340;&#37096;&#20998;&#65306;</strong> Tab &#24038;&#36793;&#26639; shadow-[inset_3px_0_0_var(--color-accent)] &#24050;&#26159; #746cff &#32043;&#33394;&#65307; Toggle ON &#29992;&#30340;&#26159; bg-[var(--color-accent)] &#20063;&#27491;&#30830;&#65307; Primary button &#20351;&#29992; variant="primary" &#20063;&#27491;&#30830;&#12290;
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 3: UsagePanel.tsx - hardcoded hex colors                      -->
+  <!-- ===================================================================== -->
+  <section class="section" data-dom-id="audit-3">
+    <div class="section-header">
+      <span class="num">3</span>
+      <h2>UsagePanel.tsx &#8212; 6 &#20010;&#30828;&#32534;&#30721; MODEL_COLORS</h2>
+      <span class="count-badge">P0 &middot; 6 colors</span>
+    </div>
+    <div class="section-body">
+      <div class="file-path">src/mainview/components/usage-panel/UsagePanel.tsx : line 31</div>
+      <p style="margin-bottom:16px;font-size:13px;color:var(--text-secondary);">
+        MODEL_COLORS &#25968;&#32452;&#29992;&#20110; Token &#36235;&#21183;&#22270;&#12289;&#22278;&#39281;&#22270;&#12289;&#22270;&#20363;&#12290;&#36825;&#20123;&#30828;&#32534;&#30721; hex &#19982;&#35774;&#35745;&#31995;&#32479; token &#19981;&#31526;&#65292;&#24212;&#37319;&#29992;&#20020;&#26102;&#21464;&#37327;&#25110; CSS&#21464;&#37327; rgb &#20540;&#12290;
+      </p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:120px;">&#24403;&#21069;&#20195;&#30721;</th>
+            <th style="width:50px;">&#26679;&#26495;</th>
+            <th style="width:160px;">&#30446;&#26631; Token</th>
+            <th style="width:50px;">&#26679;&#26495;</th>
+            <th>&#22791;&#27880;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="value-cell">#4196f3</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#4196f3"></span></td>
+            <td><span class="token-cell">--color-info<br/>= #2db6e8</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#2db6e8"></span></td>
+            <td>&#26367;&#25442;&#20026; var(--color-info) &#25110; rgb(45,182,232)</td>
+          </tr>
+          <tr>
+            <td><span class="value-cell">#45c477</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#45c477"></span></td>
+            <td><span class="token-cell">--color-success<br/>= #46dd89</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#46dd89"></span></td>
+            <td>&#26367;&#25442;&#20026; var(--color-success)</td>
+          </tr>
+          <tr>
+            <td><span class="value-cell">#7c5ce6</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#7c5ce6"></span></td>
+            <td><span class="token-cell">--color-accent-agent<br/>= #ae7aff</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#ae7aff"></span></td>
+            <td>&#26367;&#25442;&#20026; var(--color-accent-agent) &#25110; rgb(174,122,255)</td>
+          </tr>
+          <tr>
+            <td><span class="value-cell">#ff6b6b</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#ff6b6b"></span></td>
+            <td><span class="token-cell">--color-error<br/>= #f87171</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#f87171"></span></td>
+            <td>&#26367;&#25442;&#20026; var(--color-error)</td>
+          </tr>
+          <tr>
+            <td><span class="value-cell">#ff9f43</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#ff9f43"></span></td>
+            <td><span class="token-cell">--color-semantic-notify<br/>= #fb923c</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#fb923c"></span></td>
+            <td>&#26367;&#25442;&#20026; var(--color-semantic-notify)</td>
+          </tr>
+          <tr>
+            <td><span class="value-cell">#48d1cc</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#48d1cc"></span></td>
+            <td><span class="token-cell">--color-semantic-tool<br/>= #2dd4e8</span></td>
+            <td><span class="swatch" style="display:inline-block;width:24px;height:24px;background:#2dd4e8"></span></td>
+            <td>&#26367;&#25442;&#20026; var(--color-semantic-tool)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info" style="margin-top:16px;">
+        <strong>&#24314;&#35758;&#65306;</strong> &#23558; MODEL_COLORS &#23450;&#20041;&#25913;&#20026; <code style="background:var(--surface-code);padding:1px 4px;border-radius:3px;font-size:11px;">const MODEL_COLORS = ["rgb(45,182,232)", "rgb(70,221,137)", "rgb(174,122,255)", "rgb(248,113,113)", "rgb(251,146,60)", "rgb(45,212,232)"]</code>&#65292;&#19982; Design Library &#30340; rgb &#24418;&#24335;&#19968;&#33268;&#12290;
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 4: SSH Badge + barClassName (P1)                              -->
+  <!-- ===================================================================== -->
+  <section class="section" data-dom-id="audit-4">
+    <div class="section-header">
+      <span class="num">4</span>
+      <h2>P1 &#38382;&#39064; &#8212; SSH Badge + bare barClassName</h2>
+      <span class="count-badge">P1 &middot; 2 issues</span>
+    </div>
+    <div class="section-body">
+
+      <!-- Sub-issue A -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">
+        A. SSH Badge &#38750;&#26631;&#20934;&#34013;&#33394;
+      </h3>
+      <div class="file-path">src/mainview/components/welcome/SshProjectDialog.tsx</div>
+      <p style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);">
+        SSH &#24418;&#29366;&#26631;&#31614;&#20351;&#29992;&#20102;&#38750;&#26631;&#20934;&#34013;&#33394;&#65292;&#24212;&#37319;&#29992;&#35774;&#35745;&#31995;&#32479; token &#35268;&#33539;&#30340;&#39640;&#20142;/info &#39068;&#33394;&#12290;
+      </p>
+
+      <div class="comp-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="comp-col wrong">
+          <div class="comp-col-header">&#24403;&#21069;&#20195;&#30721;</div>
+          <div class="comp-col-body">
+            <div class="swatch-row">
+              <div class="swatch" style="background:#3b82f6"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#3b82f6 (blue-500)</div>
+                <div class="swatch-desc">&#38750;&#26631;&#20934; blue</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="comp-col correct">
+          <div class="comp-col-header">&#35774;&#35745;&#31995;&#32479; Token &#35268;&#33539;</div>
+          <div class="comp-col-body">
+            <div class="swatch-row">
+              <div class="swatch" style="background:rgba(116,108,255,0.18)"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">rgba(116,108,255,0.18)</div>
+                <div class="swatch-token">--color-accent-muted</div>
+                <div class="swatch-desc">bg-[var(--color-accent-muted)]</div>
+              </div>
+            </div>
+            <div class="swatch-row" style="border-bottom:none;">
+              <div class="swatch" style="background:#746cff"></div>
+              <div class="swatch-info">
+                <div class="swatch-label">#746cff</div>
+                <div class="swatch-token">--color-accent</div>
+                <div class="swatch-desc">text-[var(--color-accent)]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-issue B -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin:20px 0 8px;">
+        B. TokenStatusBar barClassName &#20063;&#20351;&#29992; bare colors
+      </h3>
+      <div class="file-path">src/mainview/components/chat/TokenStatusBar.tsx : lines 39&#8211;115</div>
+      <p style="font-size:13px;color:var(--text-secondary);">
+        &#21516; Section 1&#65292;BREAKDOWN_META &#20013;&#27599;&#19968;&#26465;&#30340; barClassName &#19982; className &#20351;&#29992;&#23436;&#20840;&#30456;&#21516;&#30340; bare Tailwind &#39068;&#33394;&#12290;
+        &#36825;&#26159;&#19968;&#20010;&#22797;&#21046;&#31867;&#20284;&#30340; P1 &#38382;&#39064;&#65292;&#20294;&#22240;&#20026;&#38543;&#30528; className &#19968;&#36215;&#20462;&#22797;&#65292;&#19981;&#38656;&#35201;&#21333;&#29420;&#30340;&#20462;&#22797;&#21333;&#20803;&#12290;
+      </p>
+      <div class="callout warn" style="margin-top:12px;">
+        <strong>&#25552;&#31034;&#65306;</strong> className &#21644; barClassName &#22312;&#21516;&#19968;&#23545;&#35937;&#37324;&#65292;&#20462;&#22797; className &#26102;&#24212;&#21516;&#27493;&#20462;&#22797; barClassName&#12290;
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 5: Typography / Spacing / Radius / Shadow                     -->
+  <!-- ===================================================================== -->
+  <section class="section" data-dom-id="audit-5">
+    <div class="section-header">
+      <span class="num">5</span>
+      <h2>&#35774;&#35745;&#31995;&#32479; Token &#21442;&#32771;&#34920; &#8212; Typography / Spacing / Radius / Shadow</h2>
+      <span class="count-badge">&#21442;&#32771;</span>
+    </div>
+    <div class="section-body">
+
+      <!-- Typography -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">
+        Typography Tokens
+      </h3>
+      <table class="data-table" style="margin-bottom:24px;">
+        <thead>
+          <tr>
+            <th>Token</th>
+            <th>&#20540;</th>
+            <th>&#35828;&#26126;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="token-cell">--font-body</span></td><td><span class="value-cell" style="font-size:11px;">-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", ...</span></td><td>&#27491;&#25991;&#23383;&#20307;&#26632;</td></tr>
+          <tr><td><span class="token-cell">--font-mono</span></td><td><span class="value-cell" style="font-size:11px;">ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace</span></td><td>&#31561;&#23485;&#23383;&#20307;&#26632;</td></tr>
+          <tr><td><span class="token-cell">--font-size-xs</span></td><td><span class="value-cell">11px</span></td><td>&#26497;&#23567;&#21495;</td></tr>
+          <tr><td><span class="token-cell">--font-size-caption</span></td><td><span class="value-cell">12px</span></td><td>&#35828;&#26126;&#25991;&#23383;</td></tr>
+          <tr><td><span class="token-cell">--font-size-body</span></td><td><span class="value-cell">13px</span></td><td>&#27491;&#25991;</td></tr>
+          <tr><td><span class="token-cell">--font-size-lead</span></td><td><span class="value-cell">14px</span></td><td>&#23548;&#35821;</td></tr>
+          <tr><td><span class="token-cell">--font-size-h3</span></td><td><span class="value-cell">16px</span></td><td>H3 &#26631;&#39064;</td></tr>
+          <tr><td><span class="token-cell">--font-size-h2</span></td><td><span class="value-cell">18px</span></td><td>H2 &#26631;&#39064;</td></tr>
+          <tr><td><span class="token-cell">--font-size-h1</span></td><td><span class="value-cell">22px</span></td><td>H1 &#26631;&#39064;</td></tr>
+          <tr><td><span class="token-cell">--font-weight-normal</span></td><td><span class="value-cell">400</span></td><td>&#27491;&#24120;</td></tr>
+          <tr><td><span class="token-cell">--font-weight-medium</span></td><td><span class="value-cell">500</span></td><td>&#20013;&#31561;</td></tr>
+          <tr><td><span class="token-cell">--font-weight-semibold</span></td><td><span class="value-cell">600</span></td><td>&#21322;&#31895;</td></tr>
+          <tr><td><span class="token-cell">--line-height-body</span></td><td><span class="value-cell">1.5</span></td><td>&#27491;&#25991;&#34892;&#39640;</td></tr>
+          <tr><td><span class="token-cell">--line-height-heading</span></td><td><span class="value-cell">1.25</span></td><td>&#26631;&#39064;&#34892;&#39640;</td></tr>
+          <tr><td><span class="token-cell">--line-height-mono</span></td><td><span class="value-cell">1.5</span></td><td>&#31561;&#23485;&#34892;&#39640;</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+        <strong>&#22791;&#27880;&#65306;</strong> &#28304;&#30721;&#20013;&#20351;&#29992;&#20102;&#35768;&#22810;&#38750;&#26631;&#20934;&#30340;&#23383;&#20307;&#22823;&#23567;&#65292;&#22914; text-[10px], text-[9px], text-[8px] &#31561;&#65292;&#36825;&#20123;&#22312; Design Library &#20013;&#27809;&#26377;&#23545;&#24212; token&#12290;&#24314;&#35758;&#23558;&#36825;&#20123;&#38598;&#20013;&#21040; caption (12px) / xs (11px) &#33539;&#22260;&#65292;&#25110;&#32773;&#22312;&#35774;&#35745;&#31995;&#32479;&#20013;&#22686;&#21152; --font-size-xxs: 10px &#12290;
+      </p>
+
+      <!-- Spacing -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">
+        Spacing Tokens (4px &#26684;&#23376;)
+      </h3>
+      <table class="data-table" style="margin-bottom:24px;">
+        <thead>
+          <tr><th>Token</th><th>&#20540;</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="token-cell">--spacing-xs</span></td><td><span class="value-cell">4px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-sm</span></td><td><span class="value-cell">8px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-md</span></td><td><span class="value-cell">12px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-base</span></td><td><span class="value-cell">16px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-lg</span></td><td><span class="value-cell">20px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-xl</span></td><td><span class="value-cell">24px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-2xl</span></td><td><span class="value-cell">32px</span></td></tr>
+          <tr><td><span class="token-cell">--spacing-3xl</span></td><td><span class="value-cell">48px</span></td></tr>
+        </tbody>
+      </table>
+
+      <!-- Border Radius -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">
+        Border Radius Tokens
+      </h3>
+      <table class="data-table" style="margin-bottom:24px;">
+        <thead>
+          <tr><th>Token</th><th>&#20540;</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="token-cell">--radius-sm</span></td><td><span class="value-cell">4px</span></td></tr>
+          <tr><td><span class="token-cell">--radius-md</span></td><td><span class="value-cell">6px</span></td></tr>
+          <tr><td><span class="token-cell">--radius-lg</span></td><td><span class="value-cell">8px</span></td></tr>
+          <tr><td><span class="token-cell">--radius-xl</span></td><td><span class="value-cell">10px</span></td></tr>
+          <tr><td><span class="token-cell">--radius-full</span></td><td><span class="value-cell">9999px</span></td></tr>
+        </tbody>
+      </table>
+
+      <!-- Shadows (Dark) -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">
+        Shadow Tokens (Dark Mode)
+      </h3>
+      <table class="data-table">
+        <thead>
+          <tr><th>Token</th><th>&#20540;</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="token-cell">--shadow-sm</span></td><td><span class="value-cell">0 1px 2px rgba(0,0,0,0.3)</span></td></tr>
+          <tr><td><span class="token-cell">--shadow-md</span></td><td><span class="value-cell">0 4px 6px -1px rgba(0,0,0,0.4)</span></td></tr>
+          <tr><td><span class="token-cell">--shadow-lg</span></td><td><span class="value-cell">0 10px 15px -3px rgba(0,0,0,0.4)</span></td></tr>
+          <tr><td><span class="token-cell">--shadow-xl</span></td><td><span class="value-cell">0 20px 25px -5px rgba(0,0,0,0.5)</span></td></tr>
+        </tbody>
+      </table>
+
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 6: Summary Dashboard                                         -->
+  <!-- ===================================================================== -->
+  <section class="section" data-dom-id="audit-6">
+    <div class="section-header">
+      <span class="num">6</span>
+      <h2>&#27719;&#24635;&#20002;&#24037;&#26495;</h2>
+      <span class="count-badge">Token &#35206;&#30422;</span>
+    </div>
+    <div class="section-body">
+
+      <!-- Coverage stats -->
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="label">Token &#35206;&#30422;&#29575;</div>
+          <div class="value">63%</div>
+          <div class="sub">10 / 16 &#20010;&#27169;&#22359;&#37096;&#20998;&#35206;&#30422;</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">P0 &#38382;&#39064;</div>
+          <div class="value" style="color:var(--status-error);">3</div>
+          <div class="sub">7 + 5 + 6 = 18 &#20010;&#21333;&#20301;</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">P1 &#38382;&#39064;</div>
+          <div class="value" style="color:var(--status-warning);">2</div>
+          <div class="sub">SSH badge + barClassName</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">&#24050;&#31526;&#21512;</div>
+          <div class="value" style="color:var(--status-success);">6</div>
+          <div class="sub">Welcome page / Toggle / shadow-inset</div>
+        </div>
+      </div>
+
+      <!-- Token coverage detail -->
+      <table class="data-table" style="margin-bottom:24px;">
+        <thead>
+          <tr>
+            <th>Token &#31867;&#21035;</th>
+            <th>&#29366;&#24577;</th>
+            <th>&#35828;&#26126;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="token-cell">--color-*</span> Background</td>
+            <td><span style="color:var(--status-success);">&#9989; &#23436;&#20840;&#35206;&#30422;</span></td>
+            <td>bg-bg-primary, bg-bg-elevated &#31561;&#24050;&#20351;&#29992; token</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--color-*</span> Text</td>
+            <td><span style="color:var(--status-success);">&#9989; &#23436;&#20840;&#35206;&#30422;</span></td>
+            <td>text-text-primary, text-text-secondary &#31561;</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--color-*</span> Border</td>
+            <td><span style="color:var(--status-success);">&#9989; &#23436;&#20840;&#35206;&#30422;</span></td>
+            <td>border-border-primary, border-border-secondary</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--color-accent</span></td>
+            <td><span style="color:var(--status-warning);">&#9888;&#65039; &#37096;&#20998;&#35206;&#30422;</span></td>
+            <td>Toggle ON + shadow-inset &#27491;&#30830;&#65292;&#20294;&#20998;&#27573;&#25353;&#38062;/Tab &#36873;&#20013;&#29992;&#20102; cyan-blue</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--color-semantic-*</span></td>
+            <td><span style="color:var(--status-error);">&#10060; &#26410;&#20351;&#29992;</span></td>
+            <td>TokenStatusBar &#29992;&#20102; bare Tailwind &#32780;&#38750;&#36825;&#20123; token</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--color-status-*</span></td>
+            <td><span style="color:var(--status-success);">&#9989; &#23436;&#20840;&#35206;&#30422;</span></td>
+            <td>SettingsPanel, TokenStatusBar &#30340;&#29366;&#24577;&#33394;&#27491;&#30830;</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--font-size-*</span></td>
+            <td><span style="color:var(--status-warning);">&#9888;&#65039; &#37096;&#20998;&#35206;&#30422;</span></td>
+            <td>&#28304;&#30721;&#29992;&#20102;&#22823;&#37327; text-[9px], text-[8px] &#31561;&#38750;&#26631;&#20934;&#20540;</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--spacing-*</span></td>
+            <td><span style="color:var(--status-warning);">&#9888;&#65039; &#37096;&#20998;&#35206;&#30422;</span></td>
+            <td>&#28304;&#30721;&#22823;&#37327;&#20351;&#29992; p-2.5, p-3, px-2.5 &#31561; Tailwind &#20540;</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--radius-*</span></td>
+            <td><span style="color:var(--status-success);">&#9989; &#23436;&#20840;&#35206;&#30422;</span></td>
+            <td>rounded-md, rounded-lg &#24050;&#23545;&#24212;</td>
+          </tr>
+          <tr>
+            <td><span class="token-cell">--shadow-*</span></td>
+            <td><span style="color:var(--status-warning);">&#9888;&#65039; &#23569;&#37327;&#20351;&#29992;</span></td>
+            <td>shadow-floating, shadow-[...] &#23384;&#22312;&#65292;&#20294;&#19981;&#22815;&#31995;&#32479;</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Correct Dark Palette Reference -->
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">
+        &#27491;&#30830; Dark Palette &#24555;&#36895;&#21442;&#32771;
+      </h3>
+      <div class="palette-grid">
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#0b111a"></div>
+          <div class="palette-name">--bg-primary</div>
+          <div class="palette-hex">#0b111a</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#121b28"></div>
+          <div class="palette-name">--bg-elevated</div>
+          <div class="palette-hex">#121b28</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#142033"></div>
+          <div class="palette-name">--bg-tertiary</div>
+          <div class="palette-hex">#142033</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#f2f6fb"></div>
+          <div class="palette-name">--text-primary</div>
+          <div class="palette-hex">#f2f6fb</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#c1cad6"></div>
+          <div class="palette-name">--text-secondary</div>
+          <div class="palette-hex">#c1cad6</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#8a96a8"></div>
+          <div class="palette-name">--text-tertiary</div>
+          <div class="palette-hex">#8a96a8</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#746cff"></div>
+          <div class="palette-name">--accent</div>
+          <div class="palette-hex">#746cff</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#ae7aff"></div>
+          <div class="palette-name">--semantic-agent</div>
+          <div class="palette-hex">#ae7aff</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#2dd4e8"></div>
+          <div class="palette-name">--semantic-tool</div>
+          <div class="palette-hex">#2dd4e8</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#2dd4bf"></div>
+          <div class="palette-name">--semantic-memory</div>
+          <div class="palette-hex">#2dd4bf</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#fb923c"></div>
+          <div class="palette-name">--semantic-notify</div>
+          <div class="palette-hex">#fb923c</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#46dd89"></div>
+          <div class="palette-name">--status-success</div>
+          <div class="palette-hex">#46dd89</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#eab308"></div>
+          <div class="palette-name">--status-warning</div>
+          <div class="palette-hex">#eab308</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#f87171"></div>
+          <div class="palette-name">--status-error</div>
+          <div class="palette-hex">#f87171</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#2db6e8"></div>
+          <div class="palette-name">--status-info</div>
+          <div class="palette-hex">#2db6e8</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#334155"></div>
+          <div class="palette-name">--border-primary</div>
+          <div class="palette-hex">#334155</div>
+        </div>
+        <div class="palette-item">
+          <div class="palette-swatch" style="background:#475569"></div>
+          <div class="palette-name">--border-secondary</div>
+          <div class="palette-hex">#475569</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<div class="floating-note">
+  <strong>&#28304;&#30721;&#23545;&#24080;&#35760;&#24405;</strong><br/>
+  &#22522;&#20110; 2026-07-07 &#23454;&#38469;&#25195;&#25551;&#32467;&#26524;<br/>
+  Design Library: .design_library/pi-agent-chat/colors_and_type.css
+</div>
+
+<!-- Tailwind CDN + @theme inline + @layer base -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+<style type="text/tailwindcss">
+@theme inline {
+        --color-bg-primary: var(--color-bg-primary);
+        --color-bg-secondary: var(--color-bg-secondary);
+        --color-bg-tertiary: var(--color-bg-tertiary);
+        --color-bg-elevated: var(--color-bg-elevated);
+        --color-text-primary: var(--color-text-primary);
+        --color-text-secondary: var(--color-text-secondary);
+        --color-text-tertiary: var(--color-text-tertiary);
+        --color-accent: var(--color-accent);
+        --color-accent-hover: var(--color-accent-hover);
+        --color-accent-muted: var(--color-accent-muted);
+        --color-border-primary: var(--color-border-primary);
+        --color-border-secondary: var(--color-border-secondary);
+        --color-border-focus: var(--color-border-focus);
+        --color-success: var(--color-success);
+        --color-warning: var(--color-warning);
+        --color-error: var(--color-error);
+        --color-info: var(--color-info);
+        /* Hex aliases for Tailwind /alpha modifiers */
+        --color-status-info: var(--tw-status-info);
+        --color-status-success: var(--tw-status-success);
+        --color-status-error: var(--tw-status-error);
+        --color-status-warning: var(--tw-status-warning);
+        --color-semantic-tool: var(--tw-semantic-tool);
+        --color-semantic-agent: var(--tw-semantic-agent);
+        --color-semantic-memory: var(--tw-semantic-memory);
+        --color-semantic-notify: var(--tw-semantic-notify);
+        --color-semantic-media: var(--tw-semantic-media);
+        --color-surface-dim: var(--tw-surface-dim);
+        --color-surface-hover: var(--tw-surface-hover);
+        --color-surface-code: var(--tw-surface-code);
+        --color-surface: var(--tw-surface-dim);
+      }
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    background: #0b111a;
+    color: #f2f6fb;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+</style>
+</body>
+</html>

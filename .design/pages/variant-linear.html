@@ -5,397 +5,481 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pi-agent-chat — Linear Variant</title>
     <style id="theme-vars">
-      /* pi-agent-chat Design Tokens — AI-generated */
+/* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
+/* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
 
-      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+/* ================================
+   1. Background Colors
+   ================================ */
+:root {
+  --color-bg-primary: #edf1f6;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #e7edf4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: rgba(12, 18, 28, 0.48);
+  --color-bg-input: #edf1f6;
+}
+.dark {
+  --color-bg-primary: #0b111a;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #142033;
+  --color-bg-elevated: #121b28;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-input: #0d1520;
+}
 
-      /* @group-priority: primary, success, info, accent */
+/* ================================
+   2. Text Colors
+   ================================ */
+:root {
+  --color-text-primary: #17202e;
+  --color-text-secondary: #4f5f72;
+  --color-text-tertiary: #7d8a9c;
+  --color-text-inverse: #f7fafc;
+}
+.dark {
+  --color-text-primary: #f2f6fb;
+  --color-text-secondary: #c1cad6;
+  --color-text-tertiary: #8a96a8;
+  --color-text-inverse: #0a0c10;
+}
 
-      :root {
-        /* === Brand Color Scales === */
+/* ================================
+   3. Border Colors
+   ================================ */
+:root {
+  --color-border-primary: #dce4ee;
+  --color-border-secondary: #c7d2df;
+  --color-border-focus: #246df3;
+}
+.dark {
+  --color-border-primary: #334155;
+  --color-border-secondary: #475569;
+  --color-border-focus: #746cff;
+}
 
-        /* primary */
-        --pi-blue-50: #eef3ff; /* AI-generated */
-        --pi-blue-100: #dce7ff; /* AI-generated */
-        --pi-blue-200: #b3c9ff; /* AI-generated */
-        --pi-blue-300: #7da5ff; /* AI-generated */
-        --pi-blue-400: #4685ff; /* AI-generated */
-        --pi-blue-500: #246df3; /* AI-generated */ /* @primary */
-        --pi-blue-600: #1a5ce0; /* AI-generated */
-        --pi-blue-700: #1648b8; /* AI-generated */
-        --pi-blue-800: #143a8f; /* AI-generated */
-        --pi-blue-900: #122f72; /* AI-generated */
-        --primary: var(--pi-blue-500);
-        --primary-foreground: #ffffff;
+/* ================================
+   4. Accent Colors（修正：accent 统一 violet）
+   ================================ */
+:root {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.12);
+  --color-accent-text: #6b4cf0;
+  --color-accent-brand: #246df3;
+  --color-accent-idle: #16845f;
+  --color-accent-agent: #7f55cc;
+}
+.dark {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.18);
+  --color-accent-text: #a8b0ff;
+  --color-accent-brand: #2db6e8;
+  --color-accent-idle: #46dd89;
+  --color-accent-agent: #ae7aff;
+}
 
-        /* accent */
-        --pi-violet-50: #f0eeff; /* AI-generated */
-        --pi-violet-100: #ddd9ff; /* AI-generated */
-        --pi-violet-200: #b9b1ff; /* AI-generated */
-        --pi-violet-300: #8e7eff; /* AI-generated */
-        --pi-violet-400: #746cff; /* AI-generated */ /* @primary */
-        --pi-violet-500: #6b4cf0; /* AI-generated */
-        --pi-violet-600: #5e3cd4; /* AI-generated */
-        --pi-violet-700: #4e30ab; /* AI-generated */
-        --pi-violet-800: #412888; /* AI-generated */
-        --pi-violet-900: #37216d; /* AI-generated */
-        --accent: var(--pi-violet-400);
-        --accent-hover: var(--pi-violet-500);
+/* ================================
+   5. Status Colors
+   ================================ */
+:root {
+  --color-success: #16845f;
+  --color-warning: #b36b00;
+  --color-error: #cf3654;
+  --color-info: #246df3;
+  --color-status-success: 22 132 95;
+  --color-status-error: 207 54 84;
+  --color-status-warning: 179 107 0;
+  --color-status-info: 36 109 243;
+}
+.dark {
+  --color-success: #46dd89;
+  --color-warning: #eab308;
+  --color-error: #f87171;
+  --color-info: #2db6e8;
+  --color-status-success: 70 221 137;
+  --color-status-error: 248 113 113;
+  --color-status-warning: 234 179 8;
+  --color-status-info: 45 182 232;
+}
 
-        /* success */
-        --pi-success-50: #ecfdf5; /* AI-generated */
-        --pi-success-100: #d1fae5; /* AI-generated */
-        --pi-success-200: #a7f3d0; /* AI-generated */
-        --pi-success-300: #6ee7b7; /* AI-generated */
-        --pi-success-400: #34d399; /* AI-generated */
-        --pi-success-500: #10b981; /* AI-generated */
-        --pi-success-600: #059669; /* AI-generated */ /* @primary */
-        --pi-success-700: #047857; /* AI-generated */
-        --pi-success-800: #065f46; /* AI-generated */
-        --pi-success-900: #064e3b; /* AI-generated */
+/* ================================
+   6. Semantic Colors（工具类型）
+   ================================ */
+:root {
+  --color-semantic-agent: 127 85 204;
+  --color-semantic-tool: 0 128 149;
+  --color-semantic-memory: 30 140 113;
+  --color-semantic-notify: 186 86 36;
+  --color-semantic-media: 236 72 153;
+  --color-semantic-line: #dce4ee;
+}
+.dark {
+  --color-semantic-agent: 174 122 255;
+  --color-semantic-tool: 45 212 232;
+  --color-semantic-memory: 45 212 191;
+  --color-semantic-notify: 251 146 60;
+  --color-semantic-media: 244 114 182;
+  --color-semantic-line: #2b394d;
+}
 
-        /* warning */
-        --pi-warning-50: #fffbeb; /* AI-generated */
-        --pi-warning-100: #fef3c7; /* AI-generated */
-        --pi-warning-200: #fde68a; /* AI-generated */
-        --pi-warning-300: #fcd34d; /* AI-generated */
-        --pi-warning-400: #fbbf24; /* AI-generated */
-        --pi-warning-500: #f59e0b; /* AI-generated */ /* @primary */
-        --pi-warning-600: #d97706; /* AI-generated */
-        --pi-warning-700: #b45309; /* AI-generated */
-        --pi-warning-800: #92400e; /* AI-generated */
-        --pi-warning-900: #78350f; /* AI-generated */
+/* ================================
+   7. Diff Colors
+   ================================ */
+:root {
+  --diff-bg: #f4f7fb;
+  --diff-color: #17202e;
+  --diff-added-bg: #dff6ea;
+  --diff-added-color: #0e6e4e;
+  --diff-removed-bg: #ffe2e9;
+  --diff-removed-color: #b42345;
+  --diff-word-added-bg: #c4ecd5;
+  --diff-word-removed-bg: #ffc6d2;
+  --diff-gutter-bg: #e8eef6;
+  --diff-gutter-color: #69778a;
+  --diff-highlight-bg: #dce6f1;
+}
+.dark {
+  --diff-bg: #111b2a;
+  --diff-color: #d6deea;
+  --diff-added-bg: #102719;
+  --diff-added-color: #72df9d;
+  --diff-removed-bg: #2f151e;
+  --diff-removed-color: #ff8a9c;
+  --diff-word-added-bg: #183d28;
+  --diff-word-removed-bg: #48202b;
+  --diff-gutter-bg: #182538;
+  --diff-gutter-color: #94a3b8;
+  --diff-highlight-bg: #24344a;
+}
 
-        /* error */
-        --pi-error-50: #fef2f2; /* AI-generated */
-        --pi-error-100: #fee2e2; /* AI-generated */
-        --pi-error-200: #fecaca; /* AI-generated */
-        --pi-error-300: #fca5a5; /* AI-generated */
-        --pi-error-400: #f87171; /* AI-generated */
-        --pi-error-500: #ef4444; /* AI-generated */
-        --pi-error-600: #dc2626; /* AI-generated */ /* @primary */
-        --pi-error-700: #b91c1c; /* AI-generated */
-        --pi-error-800: #991b1b; /* AI-generated */
-        --pi-error-900: #7f1d1d; /* AI-generated */
-        --error: var(--pi-error-600);
-        --error-container: var(--pi-error-100);
-        --on-error: #ffffff;
-        --on-error-container: var(--pi-error-800);
+/* ================================
+   8. Surface Colors
+   ================================ */
+:root {
+  --surface-code: #eef4fa;
+  --surface-hover: #eef3f9;
+  --surface-dim: #f4f7fb;
+}
+.dark {
+  --surface-code: #0e1724;
+  --surface-hover: #1a2638;
+  --surface-dim: #121b28;
+}
 
-        /* info */
-        --pi-info-50: #eff6ff; /* AI-generated */
-        --pi-info-100: #dbeafe; /* AI-generated */
-        --pi-info-200: #bfdbfe; /* AI-generated */
-        --pi-info-300: #93c5fd; /* AI-generated */
-        --pi-info-400: #60a5fa; /* AI-generated */
-        --pi-info-500: #3b82f6; /* AI-generated */ /* @primary */
-        --pi-info-600: #2563eb; /* AI-generated */
-        --pi-info-700: #1d4ed8; /* AI-generated */
-        --pi-info-800: #1e40af; /* AI-generated */
-        --pi-info-900: #1e3a8a; /* AI-generated */
+/* ================================
+   9. Typography
+   ================================ */
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 18px;
+  --font-size-h1: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.5;
+}
 
-        /* semantic */
-        --pi-agent-50: #f5f0ff; /* AI-generated */
-        --pi-agent-500: #8b5cf6; /* AI-generated */
-        --pi-agent-600: #7c3aed; /* AI-generated */ /* @primary */
-        --pi-tool-50: #ecfeff; /* AI-generated */
-        --pi-tool-500: #06b6d4; /* AI-generated */
-        --pi-tool-600: #0891b2; /* AI-generated */
-        --pi-memory-50: #f0fdfa; /* AI-generated */
-        --pi-memory-500: #14b8a6; /* AI-generated */
-        --pi-memory-600: #0d9488; /* AI-generated */
-        --pi-notify-50: #fff7ed; /* AI-generated */
-        --pi-notify-500: #f97316; /* AI-generated */
-        --pi-notify-600: #ea580c; /* AI-generated */
+/* ================================
+   10. Spacing (4px grid)
+   ================================ */
+:root {
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+}
 
-        /* neutral */
-        --pi-neutral-50: #edf1f6; /* AI-generated */
-        --pi-neutral-100: #dde4ee; /* AI-generated */
-        --pi-neutral-200: #c5cfe0; /* AI-generated */
-        --pi-neutral-300: #a3b0c8; /* AI-generated */
-        --pi-neutral-400: #7e8da6; /* AI-generated */
-        --pi-neutral-500: #64748b; /* AI-generated */ /* @primary */
-        --pi-neutral-600: #4b5563; /* AI-generated */
-        --pi-neutral-700: #374151; /* AI-generated */
-        --pi-neutral-800: #1f2937; /* AI-generated */
-        --pi-neutral-900: #111827; /* AI-generated */
+/* ================================
+   11. Border Radius
+   ================================ */
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+}
 
-        /* === Semantic Aliases === */
-        --background: var(--pi-neutral-50);
-        --foreground: var(--pi-neutral-900);
-        --surface: #ffffff; /* AI-generated */
-        --surface-dim: #f4f6f9; /* AI-generated */
-        --surface-container-low: #e8ecf2; /* AI-generated */
-        --surface-container: #dde4ee; /* AI-generated */
-        --surface-container-high: #d0dae8; /* AI-generated */
-        --surface-container-highest: #c5cfe0; /* AI-generated */
-        --inverse-surface: var(--pi-neutral-900);
-        --inverse-on-surface: var(--pi-neutral-50);
-        --muted: var(--pi-neutral-400);
-        --muted-foreground: var(--pi-neutral-500);
-        --border: var(--pi-neutral-200);
-        --ring: var(--pi-blue-500);
-        --link: var(--pi-blue-600);
-        --rule: var(--pi-neutral-200);
-        --fg: var(--pi-neutral-900);
-        --bg: var(--pi-neutral-50);
+/* ================================
+   12. Shadows
+   ================================ */
+:root {
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
+  --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+  --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+}
+.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
 
-        /* text */
-        --text-primary: var(--pi-neutral-900);
-        --text-secondary: var(--pi-neutral-600);
-        --text-muted: var(--pi-neutral-400);
-        --text-inverse: #ffffff;
+/* ================================
+   13. Transitions & Z-index
+   ================================ */
+:root {
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --transition-slow: 250ms ease;
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
 
-        /* surface */
-        --card: var(--surface);
-        --popover: var(--surface);
-        --card-foreground: var(--foreground);
-        --popover-foreground: var(--foreground);
+/* ================================
+   14. Consumer-Facing Aliases
+   组件使用短别名引用 token，不直接引用 --color-* 变量
+   ================================ */
+:root {
+  /* Background aliases */
+  --bg: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --bg-elevated: var(--color-bg-elevated);
+  --bg-overlay: var(--color-bg-overlay);
+  --bg-input: var(--color-bg-input);
 
-        /* === Typography === */
-        --font-display: "Inter", sans-serif;
-        --font-heading: "Inter", sans-serif;
-        --font-body: "Inter", sans-serif;
-        --font-mono: "JetBrains Mono", monospace;
-        --font-size-display: 56px;
-        --font-size-h1: 32px;
-        --font-size-h2: 24px;
-        --font-size-h3: 20px;
-        --font-size-h4: 16px;
-        --font-size-body: 14px;
-        --font-size-lead: 16px;
-        --font-size-caption: 12px;
-        --font-size-eyebrow: 11px;
-        --font-size-mono: 13px;
-        --font-weight-display: 700;
-        --font-weight-h1: 600;
-        --font-weight-h2: 600;
-        --font-weight-h3: 500;
-        --font-weight-h4: 500;
-        --font-weight-body: 400;
-        --font-weight-lead: 400;
-        --font-weight-caption: 400;
-        --font-weight-eyebrow: 600;
-        --font-weight-mono: 400;
-        --line-height-display: 1.1;
-        --line-height-h1: 1.25;
-        --line-height-h2: 1.3;
-        --line-height-h3: 1.4;
-        --line-height-h4: 1.5;
-        --line-height-body: 1.6;
-        --line-height-lead: 1.7;
-        --line-height-caption: 1.5;
-        --line-height-eyebrow: 1.4;
-        --line-height-mono: 1.6;
+  /* Text aliases */
+  --text: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-inverse: var(--color-text-inverse);
+  --text-link: var(--color-accent);
+  --text-link-hover: var(--color-accent-hover);
 
-        /* === Spacing (4px base) === */
-        --space-1: 4px;
-        --space-2: 8px;
-        --space-3: 12px;
-        --space-4: 16px;
-        --space-5: 24px;
-        --space-6: 32px;
-        --space-7: 48px;
-        --space-8: 64px;
+  /* Border aliases */
+  --rule: var(--color-border-primary);
+  --rule-secondary: var(--color-border-secondary);
+  --ring: var(--color-border-focus);
 
-        /* === Sizing (compact) === */
-        --size-icon-sm: 16px;
-        --size-icon-md: 20px;
-        --size-icon-lg: 24px;
-        --size-button-height-sm: 28px;
-        --size-button-height-md: 32px;
-        --size-button-height-lg: 40px;
-        --size-input-height: 28px;
+  /* Accent aliases */
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-muted: var(--color-accent-muted);
+  --accent-text: var(--color-accent-text);
 
-        /* === Radius (sharp/compact) === */
-        --radius-sm: 8px;
-        --radius-md: 12px;
-        --radius-lg: 16px;
-        --radius-xl: 20px;
-        --radius-full: 9999px;
+  /* Status aliases */
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --error: var(--color-error);
+  --info: var(--color-info);
+  --success-muted: rgba(var(--color-status-success), 0.1);
+  --error-muted: rgba(var(--color-status-error), 0.1);
+  --warning-muted: rgba(var(--color-status-warning), 0.1);
+  --info-muted: rgba(var(--color-status-info), 0.1);
 
-        /* === Shadows === */
-        --shadow-1:
-          0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 1px rgba(17, 24, 39, 0.04); /* Tooltip */
-        --shadow-2: 0 2px 4px rgba(17, 24, 39, 0.08); /* Card */
-        --shadow-3: 0 4px 12px rgba(17, 24, 39, 0.12); /* Dropdown */
-        --shadow-4: 0 8px 24px rgba(17, 24, 39, 0.16); /* Modal */
-        --shadow-5: 0 16px 48px rgba(17, 24, 39, 0.24); /* Overlay */
+  /* Semantic aliases */
+  --semantic-agent: rgb(var(--color-semantic-agent));
+  --semantic-tool: rgb(var(--color-semantic-tool));
+  --semantic-memory: rgb(var(--color-semantic-memory));
+  --semantic-notify: rgb(var(--color-semantic-notify));
+  --semantic-media: rgb(var(--color-semantic-media));
 
-        /* ============================================
-     SEMANTIC ALIAS LAYER
-     Maps generic names → brand tokens
-     ============================================ */
-        --color-background: var(--bg);
-        --color-foreground: var(--fg);
-        --color-surface: var(--surface);
-        --color-surface-dim: var(--surface-dim);
-        --color-surface-variant: var(--surface-container-high);
-        --color-surface-container: var(--surface-container);
-        --color-surface-container-low: var(--surface-container-low);
-        --color-surface-container-high: var(--surface-container-high);
-        --color-surface-container-highest: var(--surface-container-highest);
-        --color-card: var(--surface);
-        --color-on-surface: var(--fg);
-        --color-on-surface-variant: var(--muted);
-        --color-muted-foreground: var(--muted);
-        --color-primary: var(--primary);
-        --color-primary-hover: var(--accent-hover);
-        --color-on-primary: #ffffff;
-        --color-primary-container: var(--pi-blue-50);
-        --color-on-primary-container: var(--pi-blue-900);
-        --color-secondary: var(--pi-neutral-200);
-        --color-secondary-container: var(--pi-neutral-100);
-        --color-on-secondary-container: var(--pi-neutral-800);
-        --color-error: var(--error);
-        --color-error-container: var(--error-container);
-        --color-on-error: var(--on-error);
-        --color-on-error-container: var(--on-error-container);
-        --color-outline: var(--rule);
-        --color-outline-variant: var(--pi-neutral-100);
-        --color-border: var(--rule);
-        --color-success: var(--pi-success-600);
-        --color-warning: var(--pi-warning-600);
-        --radius-sm: var(--radius-sm);
-        --radius-md: var(--radius-md);
-        --radius-lg: var(--radius-lg);
-        --radius-xl: var(--radius-xl);
-        --radius-full: var(--radius-full);
-        --type-display-sm: var(--font-size-h1);
-        --type-heading-sm: var(--font-size-h3);
-        --type-body-md: var(--font-size-body);
-        --type-body-sm: var(--font-size-caption);
-        --font-family-base: var(--font-body);
-      }
+  /* Surface aliases */
+  --surface: var(--color-bg-elevated);
+  --surface-code: var(--surface-code);
+  --surface-hover: var(--surface-hover);
 
-      .dark {
-        --pi-blue-50: #0b1a33; /* AI-generated */
-        --pi-blue-100: #0f2140; /* AI-generated */
-        --pi-blue-200: #132d55; /* AI-generated */
-        --pi-blue-300: #1a3d6e; /* AI-generated */
-        --pi-blue-400: #246df3; /* AI-generated */
-        --pi-blue-500: #4685ff; /* AI-generated */
-        --pi-blue-600: #7da5ff; /* AI-generated */
-        --pi-blue-700: #b3c9ff; /* AI-generated */
-        --pi-blue-800: #dce7ff; /* AI-generated */
-        --pi-blue-900: #eef3ff; /* AI-generated */
-        --pi-violet-50: #110e22; /* AI-generated */
-        --pi-violet-100: #1a1533; /* AI-generated */
-        --pi-violet-200: #2a2255; /* AI-generated */
-        --pi-violet-300: #3d3178; /* AI-generated */
-        --pi-violet-400: #746cff; /* AI-generated */
-        --pi-violet-500: #8e7eff; /* AI-generated */
-        --pi-violet-600: #b9b1ff; /* AI-generated */
-        --pi-violet-700: #ddd9ff; /* AI-generated */
-        --pi-violet-800: #eeecff; /* AI-generated */
-        --pi-violet-900: #f5f4ff; /* AI-generated */
-        --background: #0b111a;
-        --foreground: #e2e8f0;
-        --surface: #131b27;
-        --surface-dim: #0f1520;
-        --surface-container-low: #17212f;
-        --surface-container: #1c2737;
-        --surface-container-high: #232f42;
-        --surface-container-highest: #2a3850;
-        --inverse-surface: #e2e8f0;
-        --inverse-on-surface: #111827;
-        --border: #1e2a3a;
-        --muted: #94a3b8;
-        --muted-foreground: #94a3b8;
-        --ring: var(--pi-blue-500);
-        --link: var(--pi-blue-600);
-        --rule: #1e2a3a;
-        --fg: #e2e8f0;
-        --bg: #0b111a;
-        --text-primary: #e2e8f0;
-        --text-secondary: #94a3b8;
-        --text-muted: #64748b;
-        --text-inverse: #111827;
-        --card: var(--surface);
-        --card-foreground: #e2e8f0;
-        --popover: var(--surface);
-        --popover-foreground: #e2e8f0;
-        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2); /* Tooltip */
-        --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.3); /* Card */
-        --shadow-3: 0 4px 12px rgba(0, 0, 0, 0.4); /* Dropdown */
-        --shadow-4: 0 8px 24px rgba(0, 0, 0, 0.5); /* Modal */
-        --shadow-5: 0 16px 48px rgba(0, 0, 0, 0.6); /* Overlay */
-        --color-background: var(--bg);
-        --color-foreground: var(--fg);
-        --color-surface: var(--surface);
-        --color-card: var(--surface);
-        --color-on-surface: var(--fg);
-        --color-on-surface-variant: var(--muted);
-        --color-muted-foreground: var(--muted);
-        --color-outline: var(--rule);
-        --color-outline-variant: #1c2737;
-        --color-border: var(--rule);
-      }
+  /* ================================
+     15. Backward-Compatible Aliases
+     兼容旧 .design 页面 body CSS 中的变量引用
+     ================================ */
+  /* The old pages use --bg-primary, --text-primary, --border-primary naming */
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-elevated: var(--color-bg-elevated);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --border-primary: var(--color-border-primary);
+  --border-secondary: var(--color-border-secondary);
 
-      /* === Typography Classes === */
-      .pi-display {
-        font-family: var(--font-display);
-        font-size: 3.5rem;
-        font-weight: var(--font-weight-display);
-        line-height: var(--line-height-display);
-        letter-spacing: -0.02em;
-      }
-      .pi-h1 {
-        font-family: var(--font-heading);
-        font-size: 2rem;
-        font-weight: var(--font-weight-h1);
-        line-height: var(--line-height-h1);
-      }
-      .pi-h2 {
-        font-family: var(--font-heading);
-        font-size: 1.5rem;
-        font-weight: var(--font-weight-h2);
-        line-height: var(--line-height-h2);
-      }
-      .pi-h3 {
-        font-family: var(--font-heading);
-        font-size: 1.25rem;
-        font-weight: var(--font-weight-h3);
-        line-height: var(--line-height-h3);
-      }
-      .pi-h4 {
-        font-family: var(--font-heading);
-        font-size: 1rem;
-        font-weight: var(--font-weight-h4);
-        line-height: var(--line-height-h4);
-      }
-      .pi-body {
-        font-family: var(--font-body);
-        font-size: 0.875rem;
-        font-weight: var(--font-weight-body);
-        line-height: var(--line-height-body);
-      }
-      .pi-lead {
-        font-family: var(--font-body);
-        font-size: 1rem;
-        font-weight: var(--font-weight-lead);
-        line-height: var(--line-height-lead);
-      }
-      .pi-caption {
-        font-family: var(--font-body);
-        font-size: 0.75rem;
-        font-weight: var(--font-weight-caption);
-        line-height: var(--line-height-caption);
-      }
-      .pi-eyebrow {
-        font-family: var(--font-body);
-        font-size: 0.6875rem;
-        font-weight: var(--font-weight-eyebrow);
-        line-height: var(--line-height-eyebrow);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-      .pi-mono {
-        font-family: var(--font-mono);
-        font-size: 0.8125rem;
-        font-weight: var(--font-weight-mono);
-        line-height: var(--line-height-mono);
-      }
+  /* Font aliases for old page body CSS */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Old semantic alias layer (for old body CSS compatibility) */
+  --color-on-primary: #ffffff;
+  --color-on-surface: var(--color-text-primary);
+  --color-surface: var(--color-bg-elevated);
+  --color-outline: var(--color-border-primary);
+  --color-border: var(--color-border-primary);
+  --color-error-container: rgba(var(--color-status-error), 0.12);
+  --color-primary-container: rgba(var(--color-status-info), 0.1);
+  --card: var(--color-bg-elevated);
+
+  /* Pi-scale aliases for old body CSS that references --pi-violet-400 etc. */
+  --pi-violet-400: var(--color-accent);
+  --pi-memory-50: rgba(var(--color-semantic-memory), 0.1);
+  --pi-tool-50: rgba(var(--color-semantic-tool), 0.1);
+  --pi-success-50: rgba(var(--color-status-success), 0.1);
+  --pi-blue-50: rgba(var(--color-status-info), 0.1);
+  --pi-warning-50: rgba(var(--color-status-warning), 0.1);
+  --pi-info-50: rgba(var(--color-status-info), 0.1);
+  --pi-info-500: rgb(var(--color-status-info));
+  --pi-success-500: rgb(var(--color-status-success));
+  --pi-neutral-300: #a3b0c8;
+  --primary: var(--color-accent);
+
+  /* --- Spacing aliases (--space-N → --spacing-*) --- */
+  --space-1: var(--spacing-xs);
+  --space-2: var(--spacing-sm);
+  --space-3: var(--spacing-md);
+  --space-4: var(--spacing-base);
+  --space-5: var(--spacing-xl);
+
+  /* --- Sizing aliases --- */
+  --size-button-height-sm: 28px;
+  --size-button-height-md: 36px;
+  --size-button-height-lg: 44px;
+  --size-icon-sm: 16px;
+  --size-icon-md: 20px;
+  --size-icon-lg: 32px;
+  --size-input-height: 36px;
+
+  /* --- Shadow aliases (--shadow-N → --shadow-*) --- */
+  --shadow-1: var(--shadow-sm);
+  --shadow-2: var(--shadow-md);
+  --shadow-3: var(--shadow-lg);
+  --shadow-4: var(--shadow-xl);
+  --shadow-5: var(--shadow-floating);
+
+  /* --- Typography: font families --- */
+  --font-heading: var(--font-body);
+  --font-family-base: var(--font-body);
+
+  /* --- Typography: font sizes --- */
+  --font-size-h4: 16px;
+  --font-size-eyebrow: var(--font-size-xs);
+  --font-size-mono: var(--font-size-caption);
+  --type-body-md: var(--font-size-body);
+  --type-body-sm: var(--font-size-caption);
+
+  /* --- Typography: font weights --- */
+  --font-weight-h4: var(--font-weight-medium);
+  --font-weight-eyebrow: var(--font-weight-semibold);
+  --font-weight-caption: var(--font-weight-normal);
+  --font-weight-body: var(--font-weight-normal);
+
+  /* --- Typography: line heights --- */
+  --line-height-caption: var(--line-height-body);
+
+  /* --- Surface container tiers --- */
+  --color-surface-container-low: var(--color-bg-secondary);
+  --color-surface-container: var(--color-bg-tertiary);
+  --color-surface-dim: var(--tw-surface-dim);
+
+  /* --- Primary semantic aliases --- */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --primary-foreground: #ffffff;
+
+  /* --- On-surface / outline variants --- */
+  --color-on-surface-variant: var(--color-text-tertiary);
+  --color-outline-variant: var(--color-border-secondary);
+
+  /* --- Foreground --- */
+  --color-foreground: var(--color-text-primary);
+
+  /* --- Muted text --- */
+  --text-muted: var(--color-text-tertiary);
+
+  /* --- Error text on error bg --- */
+  --on-error: #ffffff;
+
+  /* --- Bare border alias --- */
+  --border: var(--color-border-primary);
+
+  /* --- Extra shadcn/ui standard aliases --- */
+  --background: var(--color-bg-primary);
+  --foreground: var(--color-text-primary);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-text-primary);
+  --muted: var(--color-bg-secondary);
+  --muted-foreground: var(--color-text-tertiary);
+  --fg: var(--color-text-primary);
+  --link: var(--color-accent);
+  --link-hover: var(--color-accent-hover);
+  --inverse-surface: var(--color-text-primary);
+  --inverse-on-surface: var(--color-bg-primary);
+
+  /* --- Direct-usable RGB color aliases (for body CSS that uses --color-status-* / --color-semantic-* without rgb() wrapper) --- */
+  --color-status-success-direct: rgb(var(--color-status-success));
+  --color-status-error-direct: rgb(var(--color-status-error));
+  --color-status-warning-direct: rgb(var(--color-status-warning));
+  --color-status-info-direct: rgb(var(--color-status-info));
+  --color-semantic-agent-direct: rgb(var(--color-semantic-agent));
+  --color-semantic-tool-direct: rgb(var(--color-semantic-tool));
+  --color-semantic-memory-direct: rgb(var(--color-semantic-memory));
+  --color-semantic-notify-direct: rgb(var(--color-semantic-notify));
+  --color-semantic-media-direct: rgb(var(--color-semantic-media));
+
+  /* Also keep raw --color-status-* / --color-semantic-* as direct color aliases for legacy usage */
+  /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
+  /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
+  --surface-container-low: var(--color-surface-container-low);
+
+  /* --- Tailwind-friendly hex color aliases (for @theme inline bridge + /alpha modifiers) ---
+     这些必须是合法的 hex/rgb 颜色值，不能用 RGB 分量格式，否则 Tailwind v4 的
+     bg-status-info/5、border-status-error/20 等透明度语法不生效。
+  */
+  --tw-status-info: #246df3;
+  --tw-status-success: #16845f;
+  --tw-status-error: #cf3654;
+  --tw-status-warning: #b36b00;
+  --tw-semantic-tool: #008095;
+  --tw-semantic-agent: #7f55cc;
+  --tw-semantic-memory: #1e8c71;
+  --tw-semantic-notify: #ba5624;
+  --tw-semantic-media: #ec4899;
+  --tw-surface-dim: #f4f7fb;
+  --tw-surface-hover: #eef3f9;
+  --tw-surface-code: #eef4fa;
+  --tw-accent: #746cff;
+}
+.dark {
+  --tw-status-info: #2db6e8;
+  --tw-status-success: #46dd89;
+  --tw-status-error: #f87171;
+  --tw-status-warning: #eab308;
+  --tw-semantic-tool: #2dd4e8;
+  --tw-semantic-agent: #ae7aff;
+  --tw-semantic-memory: #2dd4bf;
+  --tw-semantic-notify: #fb923c;
+  --tw-semantic-media: #f472b6;
+  --tw-surface-dim: #121b28;
+  --tw-surface-hover: #1a2638;
+  --tw-surface-code: #0e1724;
+  --tw-accent: #746cff;
+}
+
     </style>
     <style id="component-vars">
       /* ═══════════════════════════════════════════════════════════════
@@ -2323,7 +2407,7 @@
         font-family: var(--font-heading);
         font-size: var(--font-size-h4);
         font-weight: var(--font-weight-h4);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin: 0;
       }
       .modal-body {
@@ -2338,7 +2422,7 @@
       .modal-desc {
         font-size: var(--font-size-body);
         line-height: var(--line-height-body);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         margin: 0;
       }
       .seg-ctrl {
@@ -2351,7 +2435,7 @@
         padding: var(--space-2) var(--space-3);
         font-size: var(--font-size-caption);
         font-weight: var(--font-weight-body);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         cursor: pointer;
         background: transparent;
         white-space: nowrap;
@@ -2378,7 +2462,7 @@
       }
       .toggle-label {
         font-size: var(--font-size-body);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .toggle {
         width: 36px;
@@ -2425,7 +2509,7 @@
       }
       .btn-ghost {
         background: transparent;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .btn-ghost:hover {
         background: var(--surface-container-low);
@@ -3750,7 +3834,7 @@
       }
       .tag-filled-neutral {
         background: var(--color-surface-container-low);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .tag-outline-success {
         border: 1px solid var(--color-success);
@@ -3770,7 +3854,7 @@
       }
       .tag-outline-neutral {
         border: 1px solid var(--border);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .tag-filled:hover {
         filter: brightness(0.92);
@@ -3783,7 +3867,37 @@
     <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
     <style type="text/tailwindcss">
       @theme inline {
-        --color-foreground: var(--primary-foreground);
+        --color-bg-primary: var(--color-bg-primary);
+        --color-bg-secondary: var(--color-bg-secondary);
+        --color-bg-tertiary: var(--color-bg-tertiary);
+        --color-bg-elevated: var(--color-bg-elevated);
+        --color-text-primary: var(--color-text-primary);
+        --color-text-secondary: var(--color-text-secondary);
+        --color-text-tertiary: var(--color-text-tertiary);
+        --color-accent: var(--color-accent);
+        --color-accent-hover: var(--color-accent-hover);
+        --color-accent-muted: var(--color-accent-muted);
+        --color-border-primary: var(--color-border-primary);
+        --color-border-secondary: var(--color-border-secondary);
+        --color-border-focus: var(--color-border-focus);
+        --color-success: var(--color-success);
+        --color-warning: var(--color-warning);
+        --color-error: var(--color-error);
+        --color-info: var(--color-info);
+        /* Hex aliases for Tailwind /alpha modifiers */
+        --color-status-info: var(--tw-status-info);
+        --color-status-success: var(--tw-status-success);
+        --color-status-error: var(--tw-status-error);
+        --color-status-warning: var(--tw-status-warning);
+        --color-semantic-tool: var(--tw-semantic-tool);
+        --color-semantic-agent: var(--tw-semantic-agent);
+        --color-semantic-memory: var(--tw-semantic-memory);
+        --color-semantic-notify: var(--tw-semantic-notify);
+        --color-semantic-media: var(--tw-semantic-media);
+        --color-surface-dim: var(--tw-surface-dim);
+        --color-surface-hover: var(--tw-surface-hover);
+        --color-surface-code: var(--tw-surface-code);
+        --color-surface: var(--tw-surface-dim);
       }
       @layer base {
         body {
@@ -4255,7 +4369,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
                   style="
                     font-family: var(--font-mono);
                     font-size: 12px;
-                    color: var(--text-tertiary);
+                    color: var(--color-text-tertiary);
                     margin-bottom: 14px;
                     padding: 8px 10px;
                     background: rgba(0, 0, 0, 0.2);
@@ -4480,7 +4594,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
                 stroke="currentColor"
                 stroke-width="2"
                 stroke-linecap="round"
-                style="color: var(--text-tertiary); flex-shrink: 0"
+                style="color: var(--color-text-tertiary); flex-shrink: 0"
               >
                 <line x1="6" y1="3" x2="6" y2="15" />
                 <circle cx="18" cy="6" r="3" />
@@ -4827,7 +4941,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         font-size: 13px;
         line-height: 1.6;
         letter-spacing: 0.01em;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         background: var(--bg-base);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
@@ -4930,13 +5044,13 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       .session-title {
         font-size: 12.5px;
         font-weight: 500;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .session-item.active .session-title {
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
 
       .session-preview {
@@ -4958,7 +5072,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         border-radius: 6px;
         border: none;
         background: transparent;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -4969,7 +5083,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       }
       .sidebar-settings-btn:hover {
         background: var(--bg-hover);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
 
       /* --- Center Chat --- */
@@ -5019,7 +5133,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         border: 1px solid rgba(139, 92, 246, 0.18);
         border-radius: var(--radius-lg);
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         line-height: 1.6;
       }
 
@@ -5051,7 +5165,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         gap: 10px;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       }
 
@@ -5134,7 +5248,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       }
       .badge.lang {
         background: rgba(255, 255, 255, 0.06);
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         font-weight: 500;
       }
       .badge.duration {
@@ -5182,13 +5296,13 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         transition: color var(--transition);
       }
       .code-block-header button:hover {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .code-block pre {
         padding: 10px 12px;
         margin: 0;
         overflow-x: auto;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
 
       /* Syntax Highlighting */
@@ -5234,12 +5348,12 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         align-items: center;
         gap: 10px;
         font-size: 12px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         cursor: pointer;
         transition: color var(--transition);
       }
       .thinking-header:hover {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .thinking-header .icon-container.violet {
         background: rgba(139, 92, 246, 0.15);
@@ -5252,7 +5366,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       }
       .confirm-message {
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin-bottom: 12px;
       }
       .confirm-actions {
@@ -5268,7 +5382,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         font-family: var(--font-sans);
         border: 1px solid var(--border);
         background: var(--bg-hover);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         cursor: pointer;
         transition: all var(--transition);
       }
@@ -5291,7 +5405,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       }
       .ask-question {
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin-bottom: 12px;
       }
       .ask-options {
@@ -5304,7 +5418,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         border-radius: 6px;
         border: 1px solid var(--border);
         background: var(--bg-hover);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         font-size: 12px;
         font-weight: 500;
         font-family: var(--font-sans);
@@ -5315,7 +5429,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       .ask-option:hover {
         border-color: var(--border-hover);
         background: rgba(139, 92, 246, 0.08);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
 
       /* --- Memory Card --- */
@@ -5330,12 +5444,12 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         font-size: 12px;
       }
       .memory-key {
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         min-width: 100px;
         font-weight: 500;
       }
       .memory-value {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         font-family: var(--font-mono);
         font-size: 11px;
       }
@@ -5343,7 +5457,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       /* --- Markdown Text --- */
       .md-text {
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         line-height: 1.7;
       }
       .md-text p {
@@ -5353,7 +5467,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         margin-bottom: 0;
       }
       .md-text strong {
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         font-weight: 600;
       }
       .md-text code {
@@ -5367,7 +5481,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       .md-text ul {
         margin: 6px 0;
         padding-left: 20px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .md-text li {
         margin-bottom: 4px;
@@ -5403,7 +5517,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         padding: 6px 0;
         border: none;
         background: transparent;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         font-size: 12px;
         font-weight: 500;
         font-family: var(--font-sans);
@@ -5414,7 +5528,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         z-index: 1;
       }
       .tab-btn.active {
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         background: var(--bg-elevated);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       }
@@ -5453,7 +5567,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       .git-section-title {
         font-size: 11px;
         font-weight: 600;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         text-transform: uppercase;
         letter-spacing: 0.06em;
         padding: 8px 10px 6px;
@@ -5478,7 +5592,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
       .git-file-name {
         flex: 1;
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         font-family: var(--font-mono);
         white-space: nowrap;
         overflow: hidden;
@@ -5511,7 +5625,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         padding: 5px 10px;
         border-radius: 6px;
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         cursor: pointer;
         transition: background var(--transition);
       }
@@ -5522,7 +5636,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         flex-shrink: 0;
       }
       .tree-item.folder {
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
       .tree-item .indent {
         width: 16px;
@@ -5566,7 +5680,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         border-radius: 6px;
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid var(--border);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         font-size: 11px;
         font-weight: 500;
         font-family: var(--font-sans);
@@ -5585,7 +5699,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         border: none;
         outline: none;
         background: transparent;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         font-size: 13px;
         font-family: var(--font-sans);
         line-height: 1.5;
@@ -5626,7 +5740,7 @@ npm <span class="str">ERR!</span> <span class="kw">Could not resolve:</span> <sp
         gap: 4px;
         font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         background: rgba(255, 255, 255, 0.04);
         padding: 3px 8px;
         border-radius: 4px;

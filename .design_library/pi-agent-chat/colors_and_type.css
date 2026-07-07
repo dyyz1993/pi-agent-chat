@@ -438,4 +438,37 @@
   /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
   /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
   --surface-container-low: var(--color-surface-container-low);
+
+  /* --- Tailwind-friendly hex color aliases (for @theme inline bridge + /alpha modifiers) ---
+     这些必须是合法的 hex/rgb 颜色值，不能用 RGB 分量格式，否则 Tailwind v4 的
+     bg-status-info/5、border-status-error/20 等透明度语法不生效。
+  */
+  --tw-status-info: #246df3;
+  --tw-status-success: #16845f;
+  --tw-status-error: #cf3654;
+  --tw-status-warning: #b36b00;
+  --tw-semantic-tool: #008095;
+  --tw-semantic-agent: #7f55cc;
+  --tw-semantic-memory: #1e8c71;
+  --tw-semantic-notify: #ba5624;
+  --tw-semantic-media: #ec4899;
+  --tw-surface-dim: #f4f7fb;
+  --tw-surface-hover: #eef3f9;
+  --tw-surface-code: #eef4fa;
+  --tw-accent: #746cff;
+}
+.dark {
+  --tw-status-info: #2db6e8;
+  --tw-status-success: #46dd89;
+  --tw-status-error: #f87171;
+  --tw-status-warning: #eab308;
+  --tw-semantic-tool: #2dd4e8;
+  --tw-semantic-agent: #ae7aff;
+  --tw-semantic-memory: #2dd4bf;
+  --tw-semantic-notify: #fb923c;
+  --tw-semantic-media: #f472b6;
+  --tw-surface-dim: #121b28;
+  --tw-surface-hover: #1a2638;
+  --tw-surface-code: #0e1724;
+  --tw-accent: #746cff;
 }

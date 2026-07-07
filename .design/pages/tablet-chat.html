@@ -5,447 +5,481 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pi-agent - Tablet Chat</title>
     <style id="theme-vars">
-      /* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
-      /* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
+/* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
+/* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
 
-      /* ================================
+/* ================================
    1. Background Colors
    ================================ */
-      :root {
-        --color-bg-primary: #edf1f6;
-        --color-bg-secondary: #f8fafc;
-        --color-bg-tertiary: #e7edf4;
-        --color-bg-elevated: #ffffff;
-        --color-bg-overlay: rgba(12, 18, 28, 0.48);
-        --color-bg-input: #edf1f6;
-      }
-      .dark {
-        --color-bg-primary: #0b111a;
-        --color-bg-secondary: #111827;
-        --color-bg-tertiary: #142033;
-        --color-bg-elevated: #121b28;
-        --color-bg-overlay: rgba(0, 0, 0, 0.6);
-        --color-bg-input: #0d1520;
-      }
+:root {
+  --color-bg-primary: #edf1f6;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #e7edf4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: rgba(12, 18, 28, 0.48);
+  --color-bg-input: #edf1f6;
+}
+.dark {
+  --color-bg-primary: #0b111a;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #142033;
+  --color-bg-elevated: #121b28;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-input: #0d1520;
+}
 
-      /* ================================
+/* ================================
    2. Text Colors
    ================================ */
-      :root {
-        --color-text-primary: #17202e;
-        --color-text-secondary: #4f5f72;
-        --color-text-tertiary: #7d8a9c;
-        --color-text-inverse: #f7fafc;
-      }
-      .dark {
-        --color-text-primary: #f2f6fb;
-        --color-text-secondary: #c1cad6;
-        --color-text-tertiary: #8a96a8;
-        --color-text-inverse: #0a0c10;
-      }
+:root {
+  --color-text-primary: #17202e;
+  --color-text-secondary: #4f5f72;
+  --color-text-tertiary: #7d8a9c;
+  --color-text-inverse: #f7fafc;
+}
+.dark {
+  --color-text-primary: #f2f6fb;
+  --color-text-secondary: #c1cad6;
+  --color-text-tertiary: #8a96a8;
+  --color-text-inverse: #0a0c10;
+}
 
-      /* ================================
+/* ================================
    3. Border Colors
    ================================ */
-      :root {
-        --color-border-primary: #dce4ee;
-        --color-border-secondary: #c7d2df;
-        --color-border-focus: #246df3;
-      }
-      .dark {
-        --color-border-primary: #334155;
-        --color-border-secondary: #475569;
-        --color-border-focus: #746cff;
-      }
+:root {
+  --color-border-primary: #dce4ee;
+  --color-border-secondary: #c7d2df;
+  --color-border-focus: #246df3;
+}
+.dark {
+  --color-border-primary: #334155;
+  --color-border-secondary: #475569;
+  --color-border-focus: #746cff;
+}
 
-      /* ================================
+/* ================================
    4. Accent Colors（修正：accent 统一 violet）
    ================================ */
-      :root {
-        --color-accent: #746cff;
-        --color-accent-hover: #8d88ff;
-        --color-accent-muted: rgba(116, 108, 255, 0.12);
-        --color-accent-text: #6b4cf0;
-        --color-accent-brand: #246df3;
-        --color-accent-idle: #16845f;
-        --color-accent-agent: #7f55cc;
-      }
-      .dark {
-        --color-accent: #746cff;
-        --color-accent-hover: #8d88ff;
-        --color-accent-muted: rgba(116, 108, 255, 0.18);
-        --color-accent-text: #a8b0ff;
-        --color-accent-brand: #2db6e8;
-        --color-accent-idle: #46dd89;
-        --color-accent-agent: #ae7aff;
-      }
+:root {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.12);
+  --color-accent-text: #6b4cf0;
+  --color-accent-brand: #246df3;
+  --color-accent-idle: #16845f;
+  --color-accent-agent: #7f55cc;
+}
+.dark {
+  --color-accent: #746cff;
+  --color-accent-hover: #8d88ff;
+  --color-accent-muted: rgba(116, 108, 255, 0.18);
+  --color-accent-text: #a8b0ff;
+  --color-accent-brand: #2db6e8;
+  --color-accent-idle: #46dd89;
+  --color-accent-agent: #ae7aff;
+}
 
-      /* ================================
+/* ================================
    5. Status Colors
    ================================ */
-      :root {
-        --color-success: #16845f;
-        --color-warning: #b36b00;
-        --color-error: #cf3654;
-        --color-info: #246df3;
-        --color-status-success: 22 132 95;
-        --color-status-error: 207 54 84;
-        --color-status-warning: 179 107 0;
-        --color-status-info: 36 109 243;
-      }
-      .dark {
-        --color-success: #46dd89;
-        --color-warning: #eab308;
-        --color-error: #f87171;
-        --color-info: #2db6e8;
-        --color-status-success: 70 221 137;
-        --color-status-error: 248 113 113;
-        --color-status-warning: 234 179 8;
-        --color-status-info: 45 182 232;
-      }
+:root {
+  --color-success: #16845f;
+  --color-warning: #b36b00;
+  --color-error: #cf3654;
+  --color-info: #246df3;
+  --color-status-success: 22 132 95;
+  --color-status-error: 207 54 84;
+  --color-status-warning: 179 107 0;
+  --color-status-info: 36 109 243;
+}
+.dark {
+  --color-success: #46dd89;
+  --color-warning: #eab308;
+  --color-error: #f87171;
+  --color-info: #2db6e8;
+  --color-status-success: 70 221 137;
+  --color-status-error: 248 113 113;
+  --color-status-warning: 234 179 8;
+  --color-status-info: 45 182 232;
+}
 
-      /* ================================
+/* ================================
    6. Semantic Colors（工具类型）
    ================================ */
-      :root {
-        --color-semantic-agent: 127 85 204;
-        --color-semantic-tool: 0 128 149;
-        --color-semantic-memory: 30 140 113;
-        --color-semantic-notify: 186 86 36;
-        --color-semantic-media: 236 72 153;
-        --color-semantic-line: #dce4ee;
-      }
-      .dark {
-        --color-semantic-agent: 174 122 255;
-        --color-semantic-tool: 45 212 232;
-        --color-semantic-memory: 45 212 191;
-        --color-semantic-notify: 251 146 60;
-        --color-semantic-media: 244 114 182;
-        --color-semantic-line: #2b394d;
-      }
+:root {
+  --color-semantic-agent: 127 85 204;
+  --color-semantic-tool: 0 128 149;
+  --color-semantic-memory: 30 140 113;
+  --color-semantic-notify: 186 86 36;
+  --color-semantic-media: 236 72 153;
+  --color-semantic-line: #dce4ee;
+}
+.dark {
+  --color-semantic-agent: 174 122 255;
+  --color-semantic-tool: 45 212 232;
+  --color-semantic-memory: 45 212 191;
+  --color-semantic-notify: 251 146 60;
+  --color-semantic-media: 244 114 182;
+  --color-semantic-line: #2b394d;
+}
 
-      /* ================================
+/* ================================
    7. Diff Colors
    ================================ */
-      :root {
-        --diff-bg: #f4f7fb;
-        --diff-color: #17202e;
-        --diff-added-bg: #dff6ea;
-        --diff-added-color: #0e6e4e;
-        --diff-removed-bg: #ffe2e9;
-        --diff-removed-color: #b42345;
-        --diff-word-added-bg: #c4ecd5;
-        --diff-word-removed-bg: #ffc6d2;
-        --diff-gutter-bg: #e8eef6;
-        --diff-gutter-color: #69778a;
-        --diff-highlight-bg: #dce6f1;
-      }
-      .dark {
-        --diff-bg: #111b2a;
-        --diff-color: #d6deea;
-        --diff-added-bg: #102719;
-        --diff-added-color: #72df9d;
-        --diff-removed-bg: #2f151e;
-        --diff-removed-color: #ff8a9c;
-        --diff-word-added-bg: #183d28;
-        --diff-word-removed-bg: #48202b;
-        --diff-gutter-bg: #182538;
-        --diff-gutter-color: #94a3b8;
-        --diff-highlight-bg: #24344a;
-      }
+:root {
+  --diff-bg: #f4f7fb;
+  --diff-color: #17202e;
+  --diff-added-bg: #dff6ea;
+  --diff-added-color: #0e6e4e;
+  --diff-removed-bg: #ffe2e9;
+  --diff-removed-color: #b42345;
+  --diff-word-added-bg: #c4ecd5;
+  --diff-word-removed-bg: #ffc6d2;
+  --diff-gutter-bg: #e8eef6;
+  --diff-gutter-color: #69778a;
+  --diff-highlight-bg: #dce6f1;
+}
+.dark {
+  --diff-bg: #111b2a;
+  --diff-color: #d6deea;
+  --diff-added-bg: #102719;
+  --diff-added-color: #72df9d;
+  --diff-removed-bg: #2f151e;
+  --diff-removed-color: #ff8a9c;
+  --diff-word-added-bg: #183d28;
+  --diff-word-removed-bg: #48202b;
+  --diff-gutter-bg: #182538;
+  --diff-gutter-color: #94a3b8;
+  --diff-highlight-bg: #24344a;
+}
 
-      /* ================================
+/* ================================
    8. Surface Colors
    ================================ */
-      :root {
-        --surface-code: #eef4fa;
-        --surface-hover: #eef3f9;
-        --surface-dim: #f4f7fb;
-      }
-      .dark {
-        --surface-code: #0e1724;
-        --surface-hover: #1a2638;
-        --surface-dim: #121b28;
-      }
+:root {
+  --surface-code: #eef4fa;
+  --surface-hover: #eef3f9;
+  --surface-dim: #f4f7fb;
+}
+.dark {
+  --surface-code: #0e1724;
+  --surface-hover: #1a2638;
+  --surface-dim: #121b28;
+}
 
-      /* ================================
+/* ================================
    9. Typography
    ================================ */
-      :root {
-        --font-body:
-          -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
-          "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-        --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        --font-size-xs: 11px;
-        --font-size-caption: 12px;
-        --font-size-body: 13px;
-        --font-size-lead: 14px;
-        --font-size-h3: 16px;
-        --font-size-h2: 18px;
-        --font-size-h1: 22px;
-        --font-weight-normal: 400;
-        --font-weight-medium: 500;
-        --font-weight-semibold: 600;
-        --line-height-body: 1.5;
-        --line-height-heading: 1.25;
-        --line-height-mono: 1.5;
-      }
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 18px;
+  --font-size-h1: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.5;
+}
 
-      /* ================================
+/* ================================
    10. Spacing (4px grid)
    ================================ */
-      :root {
-        --spacing-xs: 4px;
-        --spacing-sm: 8px;
-        --spacing-md: 12px;
-        --spacing-base: 16px;
-        --spacing-lg: 20px;
-        --spacing-xl: 24px;
-        --spacing-2xl: 32px;
-        --spacing-3xl: 48px;
-      }
+:root {
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+}
 
-      /* ================================
+/* ================================
    11. Border Radius
    ================================ */
-      :root {
-        --radius-sm: 4px;
-        --radius-md: 6px;
-        --radius-lg: 8px;
-        --radius-xl: 10px;
-        --radius-full: 9999px;
-      }
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+}
 
-      /* ================================
+/* ================================
    12. Shadows
    ================================ */
-      :root {
-        --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-        --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
-        --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
-        --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
-        --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
-        --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
-      }
-      .dark {
-        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-        --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
-        --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-      }
+:root {
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
+  --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+  --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+}
+.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
 
-      /* ================================
+/* ================================
    13. Transitions & Z-index
    ================================ */
-      :root {
-        --transition-fast: 100ms ease;
-        --transition-normal: 150ms ease;
-        --transition-slow: 250ms ease;
-        --z-dropdown: 100;
-        --z-popover: 200;
-        --z-tooltip: 300;
-        --z-modal: 400;
-        --z-toast: 500;
-      }
+:root {
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --transition-slow: 250ms ease;
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-tooltip: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
 
-      /* ================================
+/* ================================
    14. Consumer-Facing Aliases
    组件使用短别名引用 token，不直接引用 --color-* 变量
    ================================ */
-      :root {
-        /* Background aliases */
-        --bg: var(--color-bg-primary);
-        --bg-secondary: var(--color-bg-secondary);
-        --bg-tertiary: var(--color-bg-tertiary);
-        --bg-elevated: var(--color-bg-elevated);
-        --bg-overlay: var(--color-bg-overlay);
-        --bg-input: var(--color-bg-input);
+:root {
+  /* Background aliases */
+  --bg: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --bg-elevated: var(--color-bg-elevated);
+  --bg-overlay: var(--color-bg-overlay);
+  --bg-input: var(--color-bg-input);
 
-        /* Text aliases */
-        --text: var(--color-text-primary);
-        --text-secondary: var(--color-text-secondary);
-        --text-tertiary: var(--color-text-tertiary);
-        --text-inverse: var(--color-text-inverse);
-        --text-link: var(--color-accent);
-        --text-link-hover: var(--color-accent-hover);
+  /* Text aliases */
+  --text: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-inverse: var(--color-text-inverse);
+  --text-link: var(--color-accent);
+  --text-link-hover: var(--color-accent-hover);
 
-        /* Border aliases */
-        --rule: var(--color-border-primary);
-        --rule-secondary: var(--color-border-secondary);
-        --ring: var(--color-border-focus);
+  /* Border aliases */
+  --rule: var(--color-border-primary);
+  --rule-secondary: var(--color-border-secondary);
+  --ring: var(--color-border-focus);
 
-        /* Accent aliases */
-        --accent: var(--color-accent);
-        --accent-hover: var(--color-accent-hover);
-        --accent-muted: var(--color-accent-muted);
-        --accent-text: var(--color-accent-text);
+  /* Accent aliases */
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-muted: var(--color-accent-muted);
+  --accent-text: var(--color-accent-text);
 
-        /* Status aliases */
-        --success: var(--color-success);
-        --warning: var(--color-warning);
-        --error: var(--color-error);
-        --info: var(--color-info);
-        --success-muted: rgba(var(--color-status-success), 0.1);
-        --error-muted: rgba(var(--color-status-error), 0.1);
-        --warning-muted: rgba(var(--color-status-warning), 0.1);
-        --info-muted: rgba(var(--color-status-info), 0.1);
+  /* Status aliases */
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --error: var(--color-error);
+  --info: var(--color-info);
+  --success-muted: rgba(var(--color-status-success), 0.1);
+  --error-muted: rgba(var(--color-status-error), 0.1);
+  --warning-muted: rgba(var(--color-status-warning), 0.1);
+  --info-muted: rgba(var(--color-status-info), 0.1);
 
-        /* Semantic aliases */
-        --semantic-agent: rgb(var(--color-semantic-agent));
-        --semantic-tool: rgb(var(--color-semantic-tool));
-        --semantic-memory: rgb(var(--color-semantic-memory));
-        --semantic-notify: rgb(var(--color-semantic-notify));
-        --semantic-media: rgb(var(--color-semantic-media));
+  /* Semantic aliases */
+  --semantic-agent: rgb(var(--color-semantic-agent));
+  --semantic-tool: rgb(var(--color-semantic-tool));
+  --semantic-memory: rgb(var(--color-semantic-memory));
+  --semantic-notify: rgb(var(--color-semantic-notify));
+  --semantic-media: rgb(var(--color-semantic-media));
 
-        /* Surface aliases */
-        --surface: var(--color-bg-elevated);
-        --surface-code: var(--surface-code);
-        --surface-hover: var(--surface-hover);
+  /* Surface aliases */
+  --surface: var(--color-bg-elevated);
+  --surface-code: var(--surface-code);
+  --surface-hover: var(--surface-hover);
 
-        /* ================================
+  /* ================================
      15. Backward-Compatible Aliases
      兼容旧 .design 页面 body CSS 中的变量引用
      ================================ */
-        /* The old pages use --bg-primary, --text-primary, --border-primary naming */
-        --bg-primary: var(--color-bg-primary);
-        --bg-secondary: var(--color-bg-secondary);
-        --bg-elevated: var(--color-bg-elevated);
-        --text-primary: var(--color-text-primary);
-        --text-secondary: var(--color-text-secondary);
-        --text-tertiary: var(--color-text-tertiary);
-        --border-primary: var(--color-border-primary);
-        --border-secondary: var(--color-border-secondary);
+  /* The old pages use --bg-primary, --text-primary, --border-primary naming */
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-elevated: var(--color-bg-elevated);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --border-primary: var(--color-border-primary);
+  --border-secondary: var(--color-border-secondary);
 
-        /* Font aliases for old page body CSS */
-        --font-sans:
-          -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
-          "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-        --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Font aliases for old page body CSS */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-        /* Old semantic alias layer (for old body CSS compatibility) */
-        --color-on-primary: #ffffff;
-        --color-on-surface: var(--color-text-primary);
-        --color-surface: var(--color-bg-elevated);
-        --color-outline: var(--color-border-primary);
-        --color-border: var(--color-border-primary);
-        --color-error-container: rgba(var(--color-status-error), 0.12);
-        --color-primary-container: rgba(var(--color-status-info), 0.1);
-        --card: var(--color-bg-elevated);
+  /* Old semantic alias layer (for old body CSS compatibility) */
+  --color-on-primary: #ffffff;
+  --color-on-surface: var(--color-text-primary);
+  --color-surface: var(--color-bg-elevated);
+  --color-outline: var(--color-border-primary);
+  --color-border: var(--color-border-primary);
+  --color-error-container: rgba(var(--color-status-error), 0.12);
+  --color-primary-container: rgba(var(--color-status-info), 0.1);
+  --card: var(--color-bg-elevated);
 
-        /* Pi-scale aliases for old body CSS that references --pi-violet-400 etc. */
-        --pi-violet-400: var(--color-accent);
-        --pi-memory-50: rgba(var(--color-semantic-memory), 0.1);
-        --pi-tool-50: rgba(var(--color-semantic-tool), 0.1);
-        --pi-success-50: rgba(var(--color-status-success), 0.1);
-        --pi-blue-50: rgba(var(--color-status-info), 0.1);
-        --pi-warning-50: rgba(var(--color-status-warning), 0.1);
-        --pi-info-50: rgba(var(--color-status-info), 0.1);
-        --pi-info-500: rgb(var(--color-status-info));
-        --pi-success-500: rgb(var(--color-status-success));
-        --pi-neutral-300: #a3b0c8;
-        --primary: var(--color-accent);
+  /* Pi-scale aliases for old body CSS that references --pi-violet-400 etc. */
+  --pi-violet-400: var(--color-accent);
+  --pi-memory-50: rgba(var(--color-semantic-memory), 0.1);
+  --pi-tool-50: rgba(var(--color-semantic-tool), 0.1);
+  --pi-success-50: rgba(var(--color-status-success), 0.1);
+  --pi-blue-50: rgba(var(--color-status-info), 0.1);
+  --pi-warning-50: rgba(var(--color-status-warning), 0.1);
+  --pi-info-50: rgba(var(--color-status-info), 0.1);
+  --pi-info-500: rgb(var(--color-status-info));
+  --pi-success-500: rgb(var(--color-status-success));
+  --pi-neutral-300: #a3b0c8;
+  --primary: var(--color-accent);
 
-        /* --- Spacing aliases (--space-N → --spacing-*) --- */
-        --space-1: var(--spacing-xs);
-        --space-2: var(--spacing-sm);
-        --space-3: var(--spacing-md);
-        --space-4: var(--spacing-base);
-        --space-5: var(--spacing-xl);
+  /* --- Spacing aliases (--space-N → --spacing-*) --- */
+  --space-1: var(--spacing-xs);
+  --space-2: var(--spacing-sm);
+  --space-3: var(--spacing-md);
+  --space-4: var(--spacing-base);
+  --space-5: var(--spacing-xl);
 
-        /* --- Sizing aliases --- */
-        --size-button-height-sm: 28px;
-        --size-button-height-md: 36px;
-        --size-button-height-lg: 44px;
-        --size-icon-sm: 16px;
-        --size-icon-md: 20px;
-        --size-icon-lg: 32px;
-        --size-input-height: 36px;
+  /* --- Sizing aliases --- */
+  --size-button-height-sm: 28px;
+  --size-button-height-md: 36px;
+  --size-button-height-lg: 44px;
+  --size-icon-sm: 16px;
+  --size-icon-md: 20px;
+  --size-icon-lg: 32px;
+  --size-input-height: 36px;
 
-        /* --- Shadow aliases (--shadow-N → --shadow-*) --- */
-        --shadow-1: var(--shadow-sm);
-        --shadow-2: var(--shadow-md);
-        --shadow-3: var(--shadow-lg);
-        --shadow-4: var(--shadow-xl);
-        --shadow-5: var(--shadow-floating);
+  /* --- Shadow aliases (--shadow-N → --shadow-*) --- */
+  --shadow-1: var(--shadow-sm);
+  --shadow-2: var(--shadow-md);
+  --shadow-3: var(--shadow-lg);
+  --shadow-4: var(--shadow-xl);
+  --shadow-5: var(--shadow-floating);
 
-        /* --- Typography: font families --- */
-        --font-heading: var(--font-body);
-        --font-family-base: var(--font-body);
+  /* --- Typography: font families --- */
+  --font-heading: var(--font-body);
+  --font-family-base: var(--font-body);
 
-        /* --- Typography: font sizes --- */
-        --font-size-h4: 16px;
-        --font-size-eyebrow: var(--font-size-xs);
-        --font-size-mono: var(--font-size-caption);
-        --type-body-md: var(--font-size-body);
-        --type-body-sm: var(--font-size-caption);
+  /* --- Typography: font sizes --- */
+  --font-size-h4: 16px;
+  --font-size-eyebrow: var(--font-size-xs);
+  --font-size-mono: var(--font-size-caption);
+  --type-body-md: var(--font-size-body);
+  --type-body-sm: var(--font-size-caption);
 
-        /* --- Typography: font weights --- */
-        --font-weight-h4: var(--font-weight-medium);
-        --font-weight-eyebrow: var(--font-weight-semibold);
-        --font-weight-caption: var(--font-weight-normal);
-        --font-weight-body: var(--font-weight-normal);
+  /* --- Typography: font weights --- */
+  --font-weight-h4: var(--font-weight-medium);
+  --font-weight-eyebrow: var(--font-weight-semibold);
+  --font-weight-caption: var(--font-weight-normal);
+  --font-weight-body: var(--font-weight-normal);
 
-        /* --- Typography: line heights --- */
-        --line-height-caption: var(--line-height-body);
+  /* --- Typography: line heights --- */
+  --line-height-caption: var(--line-height-body);
 
-        /* --- Surface container tiers --- */
-        --color-surface-container-low: var(--color-bg-secondary);
-        --color-surface-container: var(--color-bg-tertiary);
-        --color-surface-dim: var(--surface-dim);
+  /* --- Surface container tiers --- */
+  --color-surface-container-low: var(--color-bg-secondary);
+  --color-surface-container: var(--color-bg-tertiary);
+  --color-surface-dim: var(--tw-surface-dim);
 
-        /* --- Primary semantic aliases --- */
-        --color-primary: var(--color-accent);
-        --color-primary-hover: var(--color-accent-hover);
-        --primary-foreground: #ffffff;
+  /* --- Primary semantic aliases --- */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --primary-foreground: #ffffff;
 
-        /* --- On-surface / outline variants --- */
-        --color-on-surface-variant: var(--color-text-tertiary);
-        --color-outline-variant: var(--color-border-secondary);
+  /* --- On-surface / outline variants --- */
+  --color-on-surface-variant: var(--color-text-tertiary);
+  --color-outline-variant: var(--color-border-secondary);
 
-        /* --- Foreground --- */
-        --color-foreground: var(--color-text-primary);
+  /* --- Foreground --- */
+  --color-foreground: var(--color-text-primary);
 
-        /* --- Muted text --- */
-        --text-muted: var(--color-text-tertiary);
+  /* --- Muted text --- */
+  --text-muted: var(--color-text-tertiary);
 
-        /* --- Error text on error bg --- */
-        --on-error: #ffffff;
+  /* --- Error text on error bg --- */
+  --on-error: #ffffff;
 
-        /* --- Bare border alias --- */
-        --border: var(--color-border-primary);
+  /* --- Bare border alias --- */
+  --border: var(--color-border-primary);
 
-        /* --- Extra shadcn/ui standard aliases --- */
-        --background: var(--color-bg-primary);
-        --foreground: var(--color-text-primary);
-        --card-foreground: var(--color-text-primary);
-        --popover: var(--color-bg-elevated);
-        --popover-foreground: var(--color-text-primary);
-        --muted: var(--color-bg-secondary);
-        --muted-foreground: var(--color-text-tertiary);
-        --fg: var(--color-text-primary);
-        --link: var(--color-accent);
-        --link-hover: var(--color-accent-hover);
-        --inverse-surface: var(--color-text-primary);
-        --inverse-on-surface: var(--color-bg-primary);
+  /* --- Extra shadcn/ui standard aliases --- */
+  --background: var(--color-bg-primary);
+  --foreground: var(--color-text-primary);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-text-primary);
+  --muted: var(--color-bg-secondary);
+  --muted-foreground: var(--color-text-tertiary);
+  --fg: var(--color-text-primary);
+  --link: var(--color-accent);
+  --link-hover: var(--color-accent-hover);
+  --inverse-surface: var(--color-text-primary);
+  --inverse-on-surface: var(--color-bg-primary);
 
-        /* --- Direct-usable RGB color aliases (for body CSS that uses --color-status-* / --color-semantic-* without rgb() wrapper) --- */
-        --color-status-success-direct: rgb(var(--color-status-success));
-        --color-status-error-direct: rgb(var(--color-status-error));
-        --color-status-warning-direct: rgb(var(--color-status-warning));
-        --color-status-info-direct: rgb(var(--color-status-info));
-        --color-semantic-agent-direct: rgb(var(--color-semantic-agent));
-        --color-semantic-tool-direct: rgb(var(--color-semantic-tool));
-        --color-semantic-memory-direct: rgb(var(--color-semantic-memory));
-        --color-semantic-notify-direct: rgb(var(--color-semantic-notify));
-        --color-semantic-media-direct: rgb(var(--color-semantic-media));
+  /* --- Direct-usable RGB color aliases (for body CSS that uses --color-status-* / --color-semantic-* without rgb() wrapper) --- */
+  --color-status-success-direct: rgb(var(--color-status-success));
+  --color-status-error-direct: rgb(var(--color-status-error));
+  --color-status-warning-direct: rgb(var(--color-status-warning));
+  --color-status-info-direct: rgb(var(--color-status-info));
+  --color-semantic-agent-direct: rgb(var(--color-semantic-agent));
+  --color-semantic-tool-direct: rgb(var(--color-semantic-tool));
+  --color-semantic-memory-direct: rgb(var(--color-semantic-memory));
+  --color-semantic-notify-direct: rgb(var(--color-semantic-notify));
+  --color-semantic-media-direct: rgb(var(--color-semantic-media));
 
-        /* Also keep raw --color-status-* / --color-semantic-* as direct color aliases for legacy usage */
-        /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
-        /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
-        --surface-container-low: var(--color-surface-container-low);
-      }
+  /* Also keep raw --color-status-* / --color-semantic-* as direct color aliases for legacy usage */
+  /* Note: this overrides the RGB-component format in sections 5/6 with direct color values */
+  /* Use the --success/--error/--warning/--info and --semantic-* aliases instead */
+  --surface-container-low: var(--color-surface-container-low);
+
+  /* --- Tailwind-friendly hex color aliases (for @theme inline bridge + /alpha modifiers) ---
+     这些必须是合法的 hex/rgb 颜色值，不能用 RGB 分量格式，否则 Tailwind v4 的
+     bg-status-info/5、border-status-error/20 等透明度语法不生效。
+  */
+  --tw-status-info: #246df3;
+  --tw-status-success: #16845f;
+  --tw-status-error: #cf3654;
+  --tw-status-warning: #b36b00;
+  --tw-semantic-tool: #008095;
+  --tw-semantic-agent: #7f55cc;
+  --tw-semantic-memory: #1e8c71;
+  --tw-semantic-notify: #ba5624;
+  --tw-semantic-media: #ec4899;
+  --tw-surface-dim: #f4f7fb;
+  --tw-surface-hover: #eef3f9;
+  --tw-surface-code: #eef4fa;
+  --tw-accent: #746cff;
+}
+.dark {
+  --tw-status-info: #2db6e8;
+  --tw-status-success: #46dd89;
+  --tw-status-error: #f87171;
+  --tw-status-warning: #eab308;
+  --tw-semantic-tool: #2dd4e8;
+  --tw-semantic-agent: #ae7aff;
+  --tw-semantic-memory: #2dd4bf;
+  --tw-semantic-notify: #fb923c;
+  --tw-semantic-media: #f472b6;
+  --tw-surface-dim: #121b28;
+  --tw-surface-hover: #1a2638;
+  --tw-surface-code: #0e1724;
+  --tw-accent: #746cff;
+}
+
     </style>
     <style id="component-vars">
       /* ═══════════════════════════════════════════════════════════════
@@ -2373,7 +2407,7 @@
         font-family: var(--font-heading);
         font-size: var(--font-size-h4);
         font-weight: var(--font-weight-h4);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin: 0;
       }
       .modal-body {
@@ -2388,7 +2422,7 @@
       .modal-desc {
         font-size: var(--font-size-body);
         line-height: var(--line-height-body);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         margin: 0;
       }
       .seg-ctrl {
@@ -2401,7 +2435,7 @@
         padding: var(--space-2) var(--space-3);
         font-size: var(--font-size-caption);
         font-weight: var(--font-weight-body);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         cursor: pointer;
         background: transparent;
         white-space: nowrap;
@@ -2428,7 +2462,7 @@
       }
       .toggle-label {
         font-size: var(--font-size-body);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .toggle {
         width: 36px;
@@ -2475,7 +2509,7 @@
       }
       .btn-ghost {
         background: transparent;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .btn-ghost:hover {
         background: var(--surface-container-low);
@@ -3800,7 +3834,7 @@
       }
       .tag-filled-neutral {
         background: var(--color-surface-container-low);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .tag-outline-success {
         border: 1px solid var(--color-success);
@@ -3820,7 +3854,7 @@
       }
       .tag-outline-neutral {
         border: 1px solid var(--border);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .tag-filled:hover {
         filter: brightness(0.92);
@@ -3850,14 +3884,20 @@
         --color-warning: var(--color-warning);
         --color-error: var(--color-error);
         --color-info: var(--color-info);
-        --color-status-success: var(--color-status-success);
-        --color-status-error: var(--color-status-error);
-        --color-status-warning: var(--color-status-warning);
-        --color-status-info: var(--color-status-info);
-        --color-semantic-agent: var(--color-semantic-agent);
-        --color-semantic-tool: var(--color-semantic-tool);
-        --color-semantic-memory: var(--color-semantic-memory);
-        --color-semantic-notify: var(--color-semantic-notify);
+        /* Hex aliases for Tailwind /alpha modifiers */
+        --color-status-info: var(--tw-status-info);
+        --color-status-success: var(--tw-status-success);
+        --color-status-error: var(--tw-status-error);
+        --color-status-warning: var(--tw-status-warning);
+        --color-semantic-tool: var(--tw-semantic-tool);
+        --color-semantic-agent: var(--tw-semantic-agent);
+        --color-semantic-memory: var(--tw-semantic-memory);
+        --color-semantic-notify: var(--tw-semantic-notify);
+        --color-semantic-media: var(--tw-semantic-media);
+        --color-surface-dim: var(--tw-surface-dim);
+        --color-surface-hover: var(--tw-surface-hover);
+        --color-surface-code: var(--tw-surface-code);
+        --color-surface: var(--tw-surface-dim);
       }
 
       @layer base {
@@ -5351,8 +5391,8 @@
         font-family: var(--font-sans);
         font-size: 13px;
         line-height: 1.5;
-        color: var(--text-primary);
-        background: var(--bg-primary);
+        color: var(--color-text-primary);
+        background: var(--color-bg-primary);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         overflow: hidden;
@@ -5390,7 +5430,7 @@
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: var(--text-tertiary);
+        background: var(--color-text-tertiary);
       }
 
       /* ======================== TABLET SHELL ======================== */
@@ -5401,7 +5441,7 @@
         width: 100%;
         max-width: 1024px;
         margin: 0 auto;
-        background: var(--bg-primary);
+        background: var(--color-bg-primary);
         position: relative;
         overflow: hidden;
       }
@@ -5413,7 +5453,7 @@
         gap: 8px;
         padding: 8px 12px;
         background: var(--surface);
-        border-bottom: 1px solid var(--border-primary);
+        border-bottom: 1px solid var(--color-border-secondary);
         min-height: 48px;
         flex-shrink: 0;
         z-index: 10;
@@ -5426,13 +5466,13 @@
         align-items: center;
         justify-content: center;
         border-radius: var(--radius-md);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         transition: all 0.15s;
         flex-shrink: 0;
       }
       .toolbar-btn:hover {
         background: var(--bg-elevated);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .toolbar-btn svg {
         width: 20px;
@@ -5443,7 +5483,7 @@
         flex: 1;
         font-size: 14px;
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         text-align: center;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -5488,7 +5528,7 @@
         padding: 10px 14px;
         font-size: 13px;
         line-height: 1.5;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         max-width: 80%;
         word-break: break-word;
       }
@@ -5519,7 +5559,7 @@
       .assistant-label {
         font-size: 12px;
         font-weight: 600;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         margin-bottom: 8px;
         display: flex;
         align-items: center;
@@ -5531,9 +5571,9 @@
         border-radius: 0 !important;
         border-left: none !important;
         border-right: none !important;
-        border-top: 1px solid var(--border-primary);
-        border-bottom: 1px solid var(--border-primary);
-        background: var(--surface-dim);
+        border-top: 1px solid var(--color-border-secondary);
+        border-bottom: 1px solid var(--color-border-secondary);
+        background: var(--tw-surface-dim);
         box-shadow: none !important;
         max-width: 100% !important;
         overflow: hidden;
@@ -5554,7 +5594,7 @@
         gap: 8px;
         font-size: 12px;
         font-weight: 600;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         background: rgba(0, 0, 0, 0.15);
         cursor: pointer;
         user-select: none;
@@ -5642,14 +5682,14 @@
 
       .tool-card-time {
         font-size: 11px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         white-space: nowrap;
       }
 
       .tool-card-body {
         padding: 8px 12px;
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         line-height: 1.5;
       }
       .tool-card-body.collapsed {
@@ -5659,7 +5699,7 @@
       .tool-card-chevron {
         width: 14px;
         height: 14px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         transition: transform 0.15s;
         flex-shrink: 0;
       }
@@ -5669,8 +5709,8 @@
 
       /* ======================== CODE BLOCKS ======================== */
       .code-block {
-        background: var(--bg-primary);
-        border: 1px solid var(--border-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-sm);
         overflow: hidden;
         margin: 4px 0;
@@ -5682,20 +5722,20 @@
         align-items: center;
         justify-content: space-between;
         font-size: 11px;
-        color: var(--text-tertiary);
-        border-bottom: 1px solid var(--border-primary);
+        color: var(--color-text-tertiary);
+        border-bottom: 1px solid var(--color-border-secondary);
       }
       .code-block-lang {
         font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
       .code-block-content {
         padding: 8px 10px;
         font-family: var(--font-mono);
         font-size: 13px;
         line-height: 1.5;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         overflow-x: auto;
         white-space: pre;
       }
@@ -5709,7 +5749,7 @@
         align-items: center;
         gap: 6px;
         font-size: 12px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
       .thinking-card .thinking-dots span {
         display: inline-block;
@@ -5746,12 +5786,12 @@
       }
       .memory-key {
         font-size: 12px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         font-weight: 500;
       }
       .memory-value {
         font-size: 12px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         font-family: var(--font-mono);
       }
 
@@ -5760,10 +5800,10 @@
         font-family: var(--font-mono);
         font-size: 13px;
         padding: 6px 10px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-sm);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin-bottom: 4px;
         word-break: break-all;
       }
@@ -5794,7 +5834,7 @@
       .file-path-label {
         font-family: var(--font-mono);
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         padding: 4px 0;
       }
 
@@ -5803,10 +5843,10 @@
         font-family: var(--font-mono);
         font-size: 12px;
         line-height: 1.5;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         padding: 6px 10px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-sm);
         overflow-x: auto;
         white-space: pre;
@@ -5827,7 +5867,7 @@
         gap: 8px;
         padding: 4px 0;
         font-size: 12px;
-        border-bottom: 1px solid var(--border-primary);
+        border-bottom: 1px solid var(--color-border-secondary);
       }
       .search-result-item:last-child {
         border-bottom: none;
@@ -5838,7 +5878,7 @@
         white-space: nowrap;
       }
       .search-result-text {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -5857,8 +5897,8 @@
         gap: 8px;
         padding: 6px 0;
         font-size: 12px;
-        border-bottom: 1px solid var(--border-primary);
-        color: var(--text-secondary);
+        border-bottom: 1px solid var(--color-border-secondary);
+        color: var(--color-text-secondary);
       }
       .queue-item:last-child {
         border-bottom: none;
@@ -5878,7 +5918,7 @@
         border-left-color: var(--color-status-error-direct);
       }
       .error-card .tool-card-body {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .error-title {
         font-weight: 600;
@@ -5888,12 +5928,12 @@
       }
       .error-message {
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         margin-bottom: 6px;
       }
       .stack-toggle {
         font-size: 11px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -5901,18 +5941,18 @@
         padding: 2px 0;
       }
       .stack-toggle:hover {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .stack-trace {
         display: none;
         margin-top: 6px;
         font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--text-tertiary);
-        background: var(--bg-primary);
+        color: var(--color-text-tertiary);
+        background: var(--color-bg-primary);
         padding: 8px 10px;
         border-radius: var(--radius-sm);
-        border: 1px solid var(--border-primary);
+        border: 1px solid var(--color-border-secondary);
         line-height: 1.6;
       }
       .stack-trace.visible {
@@ -5925,7 +5965,7 @@
       }
       .ui-card-body .confirm-text {
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin-bottom: 10px;
       }
       .ui-card-body .options-list {
@@ -5946,12 +5986,12 @@
         border-radius: var(--radius-md);
         background: var(--bg-elevated);
         border: 1px solid var(--border-secondary);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         transition: all 0.15s;
       }
       .btn-secondary:hover {
         background: var(--border-secondary);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
 
       .btn-danger {
@@ -5973,13 +6013,13 @@
         border-radius: var(--radius-md);
         background: var(--bg-elevated);
         border: 1px solid var(--border-secondary);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         text-align: left;
         transition: all 0.15s;
       }
       .btn-option:hover {
         border-color: var(--color-accent);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
 
       /* Permission Card */
@@ -6006,7 +6046,7 @@
       .permission-path {
         font-family: var(--font-mono);
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         flex: 1;
         word-break: break-all;
       }
@@ -6049,7 +6089,7 @@
         display: inline-block;
         border-radius: var(--radius-sm);
         overflow: hidden;
-        border: 1px solid var(--border-primary);
+        border: 1px solid var(--color-border-secondary);
       }
       .image-preview-container img {
         display: block;
@@ -6061,7 +6101,7 @@
         bottom: 6px;
         right: 6px;
         background: rgba(0, 0, 0, 0.7);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         font-size: 10px;
         padding: 2px 6px;
         border-radius: var(--radius-sm);
@@ -6070,7 +6110,7 @@
 
       /* HTML Preview */
       .html-preview-container {
-        border: 1px solid var(--border-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-sm);
         overflow: hidden;
         background: #fff;
@@ -6083,7 +6123,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         font-size: 12px;
         gap: 6px;
       }
@@ -6105,7 +6145,7 @@
         align-items: center;
         justify-content: center;
         font-size: 10px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
       .url-preview-text {
         flex: 1;
@@ -6119,7 +6159,7 @@
       }
       .url-preview-desc {
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         line-height: 1.4;
       }
 
@@ -6149,11 +6189,11 @@
       .subagent-result {
         margin-top: 4px;
         padding: 6px 10px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-sm);
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
 
       /* ======================== WRITE FILE META ======================== */
@@ -6179,17 +6219,17 @@
         color: var(--color-status-warning-direct);
       }
       .write-file-lines {
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         font-family: var(--font-mono);
       }
 
       /* ======================== COMPACTION CARD ======================== */
       .compaction-card .tool-card-header {
-        border-left-color: var(--text-tertiary);
+        border-left-color: var(--color-text-tertiary);
       }
       .compaction-summary {
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         line-height: 1.5;
       }
 
@@ -6197,7 +6237,7 @@
       .markdown-body {
         font-size: 13px;
         line-height: 1.5;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .markdown-body p {
         margin: 8px 0;
@@ -6210,7 +6250,7 @@
       }
       .markdown-body strong {
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .markdown-body code {
         font-family: var(--font-mono);
@@ -6218,11 +6258,11 @@
         background: var(--bg-elevated);
         padding: 1px 5px;
         border-radius: var(--radius-sm);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .markdown-body pre {
-        background: var(--bg-primary);
-        border: 1px solid var(--border-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-sm);
         padding: 8px 10px;
         margin: 8px 0;
@@ -6232,7 +6272,7 @@
         background: none;
         padding: 0;
         font-size: 13px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .markdown-body ul,
       .markdown-body ol {
@@ -6253,7 +6293,7 @@
       .markdown-body h2,
       .markdown-body h3 {
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         margin: 12px 0 6px;
       }
       .markdown-body h1 {
@@ -6269,11 +6309,11 @@
         border-left: 3px solid var(--border-secondary);
         padding-left: 10px;
         margin: 8px 0;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .markdown-body hr {
         border: none;
-        border-top: 1px solid var(--border-primary);
+        border-top: 1px solid var(--color-border-secondary);
         margin: 12px 0;
       }
 
@@ -6290,8 +6330,8 @@
       /* ======================== CHAT INPUT AREA ======================== */
       .chat-input-area {
         padding: 12px 16px 16px;
-        border-top: 1px solid var(--border-primary);
-        background: var(--bg-primary);
+        border-top: 1px solid var(--color-border-secondary);
+        background: var(--color-bg-primary);
         flex-shrink: 0;
       }
 
@@ -6300,7 +6340,7 @@
         align-items: flex-end;
         gap: 8px;
         background: var(--surface);
-        border: 1px solid var(--border-primary);
+        border: 1px solid var(--color-border-secondary);
         border-radius: var(--radius-lg);
         padding: 6px 8px 6px 12px;
         transition: border-color 0.15s;
@@ -6322,7 +6362,7 @@
         padding: 4px 8px;
         font-size: 12px;
         font-family: var(--font-mono);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         border-radius: var(--radius-sm);
         transition: all 0.15s;
         white-space: nowrap;
@@ -6330,7 +6370,7 @@
       }
       .model-selector-btn:hover {
         background: var(--bg-elevated);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .model-selector-btn svg {
         width: 12px;
@@ -6342,7 +6382,7 @@
         background: none;
         border: none;
         outline: none;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         font-size: 13px;
         line-height: 1.5;
         resize: none;
@@ -6351,7 +6391,7 @@
         padding: 4px 0;
       }
       .chat-input::placeholder {
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
 
       .input-right {
@@ -6387,13 +6427,13 @@
         align-items: center;
         justify-content: center;
         border-radius: var(--radius-md);
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         transition: all 0.15s;
         flex-shrink: 0;
       }
       .attach-btn:hover {
         background: var(--bg-elevated);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .attach-btn svg {
         width: 14px;
@@ -6426,7 +6466,7 @@
         width: 280px;
         height: 100vh;
         background: var(--bg-secondary);
-        border-right: 1px solid var(--border-primary);
+        border-right: 1px solid var(--color-border-secondary);
         z-index: 60;
         display: flex;
         flex-direction: column;
@@ -6439,7 +6479,7 @@
 
       .drawer-header {
         padding: 12px;
-        border-bottom: 1px solid var(--border-primary);
+        border-bottom: 1px solid var(--color-border-secondary);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -6448,7 +6488,7 @@
       .drawer-header h3 {
         font-size: 14px;
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -6466,12 +6506,12 @@
         align-items: center;
         justify-content: center;
         border-radius: var(--radius-md);
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         transition: all 0.15s;
       }
       .drawer-close-btn:hover {
         background: var(--bg-elevated);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .drawer-close-btn svg {
         width: 16px;
@@ -6483,7 +6523,7 @@
         align-items: center;
         gap: 8px;
         padding: 12px;
-        border-bottom: 1px solid var(--border-primary);
+        border-bottom: 1px solid var(--color-border-secondary);
         flex-shrink: 0;
       }
       .drawer-logo svg {
@@ -6494,7 +6534,7 @@
       .drawer-logo span {
         font-weight: 600;
         font-size: 14px;
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
 
       .drawer-new-chat-btn {
@@ -6506,14 +6546,14 @@
         margin: 8px 12px;
         border-radius: var(--radius-md);
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         transition: all 0.15s;
-        border: 1px solid var(--border-primary);
+        border: 1px solid var(--color-border-secondary);
         flex-shrink: 0;
       }
       .drawer-new-chat-btn:hover {
         background: var(--bg-elevated);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .drawer-new-chat-btn svg {
         width: 14px;
@@ -6529,7 +6569,7 @@
       .session-item {
         padding: 8px 16px;
         font-size: 13px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         cursor: pointer;
         border-radius: 0;
         transition: background 0.15s;
@@ -6539,7 +6579,7 @@
       }
       .session-item.active {
         background: rgba(116, 108, 255, 0.08);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .session-item.active .session-title {
         color: var(--color-accent);
@@ -6553,14 +6593,14 @@
       }
       .session-time {
         font-size: 11px;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         margin-top: 2px;
         display: block;
       }
 
       .drawer-footer {
         padding: 8px 12px;
-        border-top: 1px solid var(--border-primary);
+        border-top: 1px solid var(--color-border-secondary);
         flex-shrink: 0;
       }
       .settings-btn {
@@ -6570,12 +6610,12 @@
         align-items: center;
         justify-content: center;
         border-radius: var(--radius-md);
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         transition: all 0.15s;
       }
       .settings-btn:hover {
         background: var(--bg-elevated);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .settings-btn svg {
         width: 16px;
@@ -6590,7 +6630,7 @@
         width: 320px;
         height: 100vh;
         background: var(--bg-secondary);
-        border-left: 1px solid var(--border-primary);
+        border-left: 1px solid var(--color-border-secondary);
         z-index: 60;
         display: flex;
         flex-direction: column;
@@ -6615,7 +6655,7 @@
       /* Right Panel Tabs */
       .panel-tabs {
         display: flex;
-        border-bottom: 1px solid var(--border-primary);
+        border-bottom: 1px solid var(--color-border-secondary);
         flex-shrink: 0;
       }
 
@@ -6623,17 +6663,17 @@
         padding: 8px 12px;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         border-bottom: 2px solid transparent;
         transition: all 0.15s;
         flex: 1;
         text-align: center;
       }
       .panel-tab-btn:hover {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .panel-tab-btn.active {
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         border-bottom-color: var(--color-accent);
       }
 
@@ -6651,8 +6691,8 @@
         padding: 8px 12px;
         font-size: 12px;
         font-family: var(--font-mono);
-        color: var(--text-secondary);
-        border-bottom: 1px solid var(--border-primary);
+        color: var(--color-text-secondary);
+        border-bottom: 1px solid var(--color-border-secondary);
       }
       .git-branch svg {
         width: 14px;
@@ -6670,7 +6710,7 @@
         padding: 4px 12px;
         font-size: 11px;
         font-weight: 600;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
@@ -6682,7 +6722,7 @@
         padding: 4px 12px;
         font-size: 12px;
         font-family: var(--font-mono);
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .git-file-item:hover {
         background: var(--bg-elevated);
@@ -6720,12 +6760,12 @@
         gap: 6px;
         padding: 3px 12px;
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
         cursor: pointer;
       }
       .file-tree-item:hover {
         background: var(--bg-elevated);
-        color: var(--text-primary);
+        color: var(--color-text-primary);
       }
       .file-tree-item svg {
         width: 14px;
@@ -6733,7 +6773,7 @@
         flex-shrink: 0;
       }
       .file-tree-item.folder {
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         font-weight: 500;
       }
       .file-tree-indent {
@@ -6744,7 +6784,7 @@
       /* Status Panel */
       .status-section {
         padding: 8px 12px;
-        border-bottom: 1px solid var(--border-primary);
+        border-bottom: 1px solid var(--color-border-secondary);
       }
       .status-section:last-child {
         border-bottom: none;
@@ -6752,7 +6792,7 @@
       .status-label {
         font-size: 11px;
         font-weight: 600;
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 6px;
@@ -6764,10 +6804,10 @@
         padding: 2px 0;
       }
       .status-key {
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
       .status-value {
-        color: var(--text-primary);
+        color: var(--color-text-primary);
         font-family: var(--font-mono);
         font-size: 11px;
       }
@@ -6804,10 +6844,10 @@
         font-size: 12px;
       }
       .text-tertiary {
-        color: var(--text-tertiary);
+        color: var(--color-text-tertiary);
       }
       .text-secondary {
-        color: var(--text-secondary);
+        color: var(--color-text-secondary);
       }
       .font-semibold {
         font-weight: 600;

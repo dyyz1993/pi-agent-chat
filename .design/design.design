@@ -65,7 +65,7 @@
       "createdAt": 1783038400000,
       "canvasData": {
         "x": 0,
-        "y": 377,
+        "y": 611,
         "group": 1
       },
       "devMetadata": {
@@ -100,7 +100,7 @@
       "createdAt": 1783038400000,
       "canvasData": {
         "x": 620,
-        "y": 377,
+        "y": 611,
         "group": 2
       },
       "devMetadata": {
@@ -141,7 +141,7 @@
       "createdAt": 1783041000000,
       "canvasData": {
         "x": 1240,
-        "y": 377,
+        "y": 611,
         "group": 3
       },
       "devMetadata": {
@@ -157,7 +157,7 @@
       "createdAt": 1783041000000,
       "canvasData": {
         "x": 1860,
-        "y": 377,
+        "y": 611,
         "group": 3
       },
       "devMetadata": {
@@ -173,7 +173,7 @@
       "createdAt": 1783182392162,
       "canvasData": {
         "x": 2480,
-        "y": 377,
+        "y": 611,
         "group": 0
       },
       "devMetadata": {
@@ -188,7 +188,7 @@
       "createdAt": 1783182392162,
       "canvasData": {
         "x": 3100,
-        "y": 377,
+        "y": 611,
         "group": 0
       },
       "devMetadata": {
@@ -203,7 +203,7 @@
       "createdAt": 1783182392162,
       "canvasData": {
         "x": 3720,
-        "y": 377,
+        "y": 611,
         "group": 0
       },
       "devMetadata": {
@@ -218,7 +218,7 @@
       "createdAt": 1783330572000,
       "canvasData": {
         "x": 4340,
-        "y": 377,
+        "y": 611,
         "group": 9
       },
       "devMetadata": {
@@ -234,7 +234,7 @@
       "createdAt": 1783384418000,
       "canvasData": {
         "x": 4960,
-        "y": 377,
+        "y": 611,
         "group": 10
       },
       "devMetadata": {
@@ -243,18 +243,18 @@
       }
     },
     {
-      "id": "page-color-audit-checklist",
-      "title": "卡片类型颜色对比审计",
+      "id": "page-design-audit",
+      "title": "设计系统 Token 对账 — 源码 vs 规范",
       "type": "page",
       "version": 1,
-      "createdAt": 1783482000000,
+      "createdAt": 1783485000000,
       "canvasData": {
         "x": 5580,
-        "y": 377,
+        "y": 611,
         "group": 11
       },
       "devMetadata": {
-        "htmlSrc": "pages/color-audit-checklist.html",
+        "htmlSrc": "pages/design-audit.html",
         "interactions": []
       }
     }

@@ -22,25 +22,29 @@ export const ErrorMessageCard = memo(function ErrorMessageCard({
   stopReason?: string | null;
 }) {
   const { copied, copy } = useClipboard(2000);
-  const hasDetail = detail.length > 0;
+  const normalizedDetail = detail.trim();
+  const hasDetail = normalizedDetail.length > 0;
   const [expanded, setExpanded] = useState(false);
   const providerRequest = message.providerRequest;
-  const suspectedContextError = isSuspectedContextProviderError(detail, providerRequest);
+  const suspectedContextError = isSuspectedContextProviderError(normalizedDetail, providerRequest);
   const messageCount = getProviderRequestSection(providerRequest, "messages")?.count;
   const toolCount = getProviderRequestSection(providerRequest, "tools")?.count;
   const providerRequestSummary = providerRequest ? summarizeProviderRequest(providerRequest) : "";
+  const detailPreview = hasDetail
+    ? normalizedDetail.replace(/\s+/gu, " ").slice(0, 180)
+    : "未收到 provider 原始错误详情，可能是上游只返回了错误分类或响应体为空。";
 
   const handleCopy = useCallback(() => {
     const copyText = [
       title,
-      detail,
+      normalizedDetail,
       stopReason ? `stopReason: ${stopReason}` : "",
       providerRequestSummary ? `providerRequest: ${providerRequestSummary}` : "",
     ]
       .filter(Boolean)
       .join("\n");
     copy(copyText);
-  }, [title, detail, stopReason, providerRequestSummary, copy]);
+  }, [title, normalizedDetail, stopReason, providerRequestSummary, copy]);
 
   return (
     <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
@@ -61,6 +65,10 @@ export const ErrorMessageCard = memo(function ErrorMessageCard({
                     {stopReason}
                   </span>
                 )}
+              </div>
+              <div className="mt-0.5 truncate text-xs text-status-error/70">
+                {detailPreview}
+                {hasDetail && normalizedDetail.length > 180 ? "..." : ""}
               </div>
             </div>
             {hasDetail && (
@@ -101,8 +109,11 @@ export const ErrorMessageCard = memo(function ErrorMessageCard({
                 </div>
               </div>
             )}
-            <pre className="max-h-40 overflow-y-auto rounded bg-status-error/5 px-2 py-1.5 text-xs text-status-error/80 whitespace-pre-wrap break-all">
-              {detail}
+            <pre
+              data-testid="llm-error-detail"
+              className="max-h-40 overflow-y-auto rounded bg-status-error/5 px-2 py-1.5 text-xs text-status-error/80 whitespace-pre-wrap break-all"
+            >
+              {normalizedDetail}
             </pre>
           </div>
         )}

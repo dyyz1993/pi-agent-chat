@@ -127,19 +127,38 @@ describe("ErrorMessageCard", () => {
 
     expect(screen.queryByText("查看详情")).not.toBeInTheDocument();
     expect(screen.queryByText("收起详情")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("400 Error from provider (Console Go): Upstream request failed"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("400 Error from provider (Console Go): Upstream request failed")).toBeInTheDocument();
+    expect(screen.queryByTestId("llm-error-detail")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { expanded: false }));
 
-    expect(
-      screen.getByText("400 Error from provider (Console Go): Upstream request failed"),
-    ).toBeInTheDocument();
-
-    const text = document.body.textContent ?? "";
-    expect(text.indexOf("疑似上下文过大")).toBeLessThan(
-      text.indexOf("400 Error from provider"),
+    expect(screen.getByTestId("llm-error-detail")).toHaveTextContent(
+      "400 Error from provider (Console Go): Upstream request failed",
     );
+
+    expect(screen.getByText(/疑似上下文过大/)).toBeInTheDocument();
+  });
+
+  it("shows a fallback detail preview when the provider response detail is missing", () => {
+    const message: ChatMessage = {
+      id: "error-no-detail",
+      role: "error",
+      content: [{ type: "text", text: "模型额度或账单异常" }],
+      timestamp: Date.now(),
+      stopReason: "error",
+    };
+
+    render(
+      <ErrorMessageCard
+        message={message}
+        title="模型额度或账单异常"
+        detail=""
+        stopReason="error"
+      />,
+    );
+
+    expect(screen.getByText("模型额度或账单异常")).toBeInTheDocument();
+    expect(screen.getByText(/未收到 provider 原始错误详情/)).toBeInTheDocument();
+    expect(screen.queryByTestId("llm-error-detail")).not.toBeInTheDocument();
   });
 });
