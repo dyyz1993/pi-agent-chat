@@ -37,7 +37,7 @@ describe("ChatPanel top-load scroll anchor", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
     const restoreEffectSection = source.slice(
       source.indexOf("useLayoutEffect(() => {"),
-      source.indexOf("const handleScrollToEdge"),
+      source.indexOf("const seekToAbsoluteTop"),
     );
 
     expect(restoreEffectSection).toContain("computeTopLoadRestoredScrollTop");

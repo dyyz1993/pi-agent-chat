@@ -1038,10 +1038,7 @@ export function ChatPanel() {
       }
       scrollToEdge(edge);
       setTimeout(() => {
-        const iconId =
-          edge === "top"
-            ? sideNavRef.current?.getFirstIconId()
-            : sideNavRef.current?.getLastIconId();
+        const iconId = sideNavRef.current?.getLastIconId();
         if (iconId) {
           lastSetNavIdRef.current = iconId;
           setNavId(iconId);

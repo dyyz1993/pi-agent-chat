@@ -812,8 +812,7 @@ export const useSessionStore = create<SessionState>()(
         if (existingPromise) {
           await existingPromise;
         } else {
-          const promise = apiClient
-            .call("agent.getAvailableModels", { sessionId })
+          const promise = Promise.resolve(apiClient.call("agent.getAvailableModels", { sessionId }))
             .then((modelsResult) => {
               if (Array.isArray(modelsResult)) {
                 set((s) => ({

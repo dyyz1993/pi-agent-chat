@@ -139,6 +139,7 @@ function simplifyMessageForNav(message: unknown): AgentMessageForUI | null {
     return {
       ...base,
       role: "compactionSummary",
+      content: [{ type: "text", text: " " }],
       summary: " ",
       status: typeof message.status === "string" ? message.status : undefined,
     } as AgentMessageForUI;

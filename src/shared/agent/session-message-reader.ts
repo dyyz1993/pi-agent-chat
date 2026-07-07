@@ -113,7 +113,7 @@ export class SessionMessageReader {
       // on-disk leaf_pointer is only written by branch()/resetLeaf(), NOT by
       // normal message appends, so it can lag behind. activeJsonlLeafId is the
       // true current leaf (mirrors CLI _buildIndex "deepest descendant").
-      activeJsonlLeafId?: string | null;
+      activeJsonlLeafId: string | null;
       byteOffset: number;
     }
   >();
@@ -155,7 +155,7 @@ export class SessionMessageReader {
     parentById: Map<string, string | null>;
     lineCount: number;
     lastJsonlLeafPointer: string | null;
-    activeJsonlLeafId?: string | null;
+    activeJsonlLeafId: string | null;
     byteOffset: number;
     needsIncremental: boolean;
   } | null {
@@ -167,13 +167,13 @@ export class SessionMessageReader {
         // Exact match — file unchanged
         this.sessionMsgCache.delete(sessionId);
         this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: false };
+        return { ...cached, activeJsonlLeafId: cached.activeJsonlLeafId ?? null, needsIncremental: false };
       }
       if (st.size > cached.fileSize) {
         // File grew — can do incremental append
         this.sessionMsgCache.delete(sessionId);
         this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: true };
+        return { ...cached, activeJsonlLeafId: cached.activeJsonlLeafId ?? null, needsIncremental: true };
       }
       // File shrunk or changed drastically — invalidate
     } catch {
@@ -204,7 +204,7 @@ export class SessionMessageReader {
       parentById: Map<string, string | null>;
       lineCount: number;
       lastJsonlLeafPointer: string | null;
-      activeJsonlLeafId?: string | null;
+      activeJsonlLeafId: string | null;
       byteOffset?: number;
     },
   ): void {

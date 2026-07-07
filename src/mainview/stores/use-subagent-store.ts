@@ -196,7 +196,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
     if (get().loadingByParent[parentSessionPath]) return Promise.resolve([]);
 
-    const loadPromise = (async () => {
+    let loadPromise: Promise<SubagentSessionInfo[]> = Promise.resolve([]);
+    loadPromise = (async () => {
       set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
       try {
         const result = await apiClient.call("subagent.listBySession", {

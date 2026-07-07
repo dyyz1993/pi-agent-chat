@@ -806,6 +806,7 @@ export class AgentProcessManager {
     parentById: Map<string, string | null>;
     lineCount: number;
     lastJsonlLeafPointer: string | null;
+    activeJsonlLeafId: string | null;
     byteOffset: number;
     needsIncremental: boolean;
   } | null {
@@ -833,6 +834,7 @@ export class AgentProcessManager {
       parentById: Map<string, string | null>;
       lineCount: number;
       lastJsonlLeafPointer: string | null;
+      activeJsonlLeafId: string | null;
       byteOffset?: number;
     },
   ): void {
@@ -1198,7 +1200,38 @@ export class AgentProcessManager {
       images,
       promote: options?.promote,
       immediate: options?.immediate,
-      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      getActiveManaged: (sid) => {
+        const managed = this.getActiveManaged(sid);
+        if (!managed) return null;
+        return {
+          client: {
+            steer: (
+              value:
+                | string
+                | {
+                    text?: string;
+                    images?: ImageContent[];
+                    promote?: number;
+                    immediate?: boolean;
+                  },
+              valueImages?: ImageContent[],
+            ) => {
+              const steer = managed.client.steer as unknown as (
+                arg:
+                  | string
+                  | {
+                      text?: string;
+                      images?: ImageContent[];
+                      promote?: number;
+                      immediate?: boolean;
+                    },
+                images?: ImageContent[],
+              ) => Promise<void>;
+              return typeof value === "string" ? steer(value, valueImages) : steer(value);
+            },
+          },
+        };
+      },
     });
   }
 
