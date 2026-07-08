@@ -53,7 +53,12 @@ async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedRevi
     crlfDelay: Infinity,
   });
 
-  let currentMaxTurn = -1;
+  // Per-file latest turn index at the time of each scan, mirroring the
+  // file-review extension's in-memory replay (index.ts session_start).
+  // This is what maxTurnIndexAtLastApproval must capture per-file so that
+  // approvals are compared against the file's own turn progression, not the
+  // global max turn across unrelated files.
+  const pathLatestTurnIndex = new Map<string, number>();
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -71,7 +76,31 @@ async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedRevi
           | undefined;
         if (!data) continue;
         turns.push({ turnIndex: data.turnIndex, timestamp: data.timestamp, changes: data.changes });
-        if (data.turnIndex > currentMaxTurn) currentMaxTurn = data.turnIndex;
+
+        for (const change of data.changes) {
+          // Track this file's own latest turnIndex
+          const prevFileTurn = pathLatestTurnIndex.get(change.path) ?? -1;
+          if (data.turnIndex > prevFileTurn) {
+            pathLatestTurnIndex.set(change.path, data.turnIndex);
+          }
+
+          // Approval reset: if a file was approved/rejected but is modified
+          // again in a later turn (timestamp >= approval timestamp AND the
+          // approval had a snapshot), reset to pending. This mirrors the
+          // file-review extension's replay logic so the JSONL fallback path
+          // agrees with the in-memory extension state.
+          const existingApproval = approvals.get(change.path);
+          if (
+            existingApproval &&
+            (existingApproval.status === "approved" ||
+              existingApproval.status === "rejected") &&
+            !!existingApproval.snapshotEntryId &&
+            data.timestamp >= existingApproval.timestamp
+          ) {
+            existingApproval.status = "pending";
+            existingApproval.timestamp = data.timestamp;
+          }
+        }
       } else if (entry.customType === "file-approval") {
         const data = entry.data as
           | {
@@ -91,7 +120,10 @@ async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedRevi
           snapshotTreeHash: data.snapshotTreeHash,
         });
         if (data.status === "approved") everApproved.add(data.path);
-        maxTurnIndexAtLastApproval.set(data.path, currentMaxTurn);
+        // Capture this file's own latest turn index, not the global max.
+        // Without this, approvals for files changed early get inflated by
+        // later turns on unrelated files and filter them out incorrectly.
+        maxTurnIndexAtLastApproval.set(data.path, pathLatestTurnIndex.get(data.path) ?? -1);
       }
     } catch {}
   }

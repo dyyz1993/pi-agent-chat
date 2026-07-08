@@ -571,7 +571,7 @@ describe("promoteQueuedFollowUp — 行为验证", () => {
 });
 
 describe("insertQueuedMessageNow — 行为验证", () => {
-  it("通过 steer promote/immediate 立即插入一条 followUp 并乐观移出本地队列", async () => {
+  it("点击 followUp 项 ↑：clearQueue 移除 + steer(text, immediate) 立即注入，乐观移出本地队列", async () => {
     useSessionQueueStore.setState({
       queueBySession: {
         [SID]: {
@@ -587,18 +587,25 @@ describe("insertQueuedMessageNow — 行为验证", () => {
       text: "稍后 A",
     });
 
+    // 第一步：clearQueue 从 CLI 队列移除该项
+    expect(apiClient.call).toHaveBeenCalledWith("agent.clearQueue", {
+      sessionId: SID,
+      item: { type: "followUp", index: 0, text: "稍后 A" },
+    });
+    // 第二步：steer(text, immediate) 作为打断注入
     expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
       sessionId: SID,
-      promote: 0,
+      content: "稍后 A",
       immediate: true,
     });
+    // UI 乐观移除（两种类型都生效）
     expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
       steering: ["转向 A"],
       followUp: ["稍后 B"],
     });
   });
 
-  it("对 steering 队列触发 immediate，让后端按既有队列顺序尽快消费", async () => {
+  it("点击 steering 项 ↑：同样 clearQueue + steer(text, immediate)，UI 乐观移除 steering 项", async () => {
     useSessionQueueStore.setState({
       queueBySession: {
         [SID]: {
@@ -614,13 +621,18 @@ describe("insertQueuedMessageNow — 行为验证", () => {
       text: "转向 A",
     });
 
+    expect(apiClient.call).toHaveBeenCalledWith("agent.clearQueue", {
+      sessionId: SID,
+      item: { type: "steering", index: 0, text: "转向 A" },
+    });
     expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
       sessionId: SID,
-      promote: undefined,
+      content: "转向 A",
       immediate: true,
     });
+    // 修复前 steering 项点 ↑ UI 不移除；修复后两种类型都乐观移除
     expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
-      steering: ["转向 A", "转向 B"],
+      steering: ["转向 B"],
       followUp: ["稍后 A"],
     });
   });

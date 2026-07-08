@@ -85,6 +85,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: Set<string>;
   syncDelegateLastText: Map<string, string>;
+  syncDelegateTimedOut: Set<string>;
   getActiveManaged: (sessionId: string) => TManaged | null;
   start: (
     sessionId: string,
@@ -215,6 +216,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         syncDelegateResolvers: deps.syncDelegateResolvers,
         subagentSyncChildren: deps.subagentSyncChildren,
         syncDelegateLastText: deps.syncDelegateLastText,
+        syncDelegateTimedOut: deps.syncDelegateTimedOut,
       });
     },
     handleDelegateSend(sourceSessionId, msg) {

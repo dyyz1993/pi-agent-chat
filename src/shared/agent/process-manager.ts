@@ -1200,38 +1200,12 @@ export class AgentProcessManager {
       images,
       promote: options?.promote,
       immediate: options?.immediate,
-      getActiveManaged: (sid) => {
-        const managed = this.getActiveManaged(sid);
-        if (!managed) return null;
-        return {
-          client: {
-            steer: (
-              value:
-                | string
-                | {
-                    text?: string;
-                    images?: ImageContent[];
-                    promote?: number;
-                    immediate?: boolean;
-                  },
-              valueImages?: ImageContent[],
-            ) => {
-              const steer = managed.client.steer as unknown as (
-                arg:
-                  | string
-                  | {
-                      text?: string;
-                      images?: ImageContent[];
-                      promote?: number;
-                      immediate?: boolean;
-                    },
-                images?: ImageContent[],
-              ) => Promise<void>;
-              return typeof value === "string" ? steer(value, valueImages) : steer(value);
-            },
-          },
-        };
-      },
+      // Pass the managed client directly. RpcClientAPI already satisfies
+      // SteeringClientLike (it has both steer(string, images?) and
+      // steer({text,images,promote,immediate}) overloads). Wrapping it in
+      // an adapter object loses the `this` binding on RpcClient.steer(),
+      // which calls this.send() internally — see commit 05d9bec7 regression.
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
@@ -1290,6 +1264,7 @@ export class AgentProcessManager {
       syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers,
       subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,
       syncDelegateLastText: this.coordinatorHandler.syncDelegateLastText,
+      syncDelegateTimedOut: this.coordinatorHandler.syncDelegateTimedOut,
       leafIds: this.leafIds,
       getPoolKey: (cwd, userId) => this.getPoolKey(cwd, userId),
       removeFromPool: (k, m) => this.removeFromPool(k, m),
@@ -2048,31 +2023,19 @@ export class AgentProcessManager {
   async getAgentDetail(sessionId: string, agentName: string) {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return (
-      managed.client as unknown as {
-        getAgentDetail: (name: string) => Promise<unknown>;
-      }
-    ).getAgentDetail(agentName);
+    return managed.client.getAgentDetail(agentName);
   }
 
   async getAllTools(sessionId: string) {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return (
-      managed.client as unknown as {
-        getAllTools: () => Promise<unknown>;
-      }
-    ).getAllTools();
+    return managed.client.getAllTools();
   }
 
   async getSystemPrompt(sessionId: string) {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error(`No client for session ${sessionId}`);
-    return (
-      managed.client as unknown as {
-        getSystemPrompt: () => Promise<unknown>;
-      }
-    ).getSystemPrompt();
+    return managed.client.getSystemPrompt();
   }
 
   async getLatestAgentChange(sessionId: string) {

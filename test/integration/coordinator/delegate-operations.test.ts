@@ -1030,9 +1030,136 @@ describe("coordinator delegate operations", () => {
       }),
     ).resolves.toEqual({ delivered: true, targetStatus: "active" });
 
-    expect(start).toHaveBeenCalledWith("child", dir, sessionPath);
-    expect(steer).toHaveBeenCalledWith("child", expect.stringContaining("hello"));
-  });
+	    expect(start).toHaveBeenCalledWith("child", dir, sessionPath);
+	    expect(steer).toHaveBeenCalledWith("child", expect.stringContaining("hello"));
+	  });
+
+	  // ── B 组: Delivery mode verification ──
+	  // Verifies that handleCoordinatorDelegateSendOperation selects the
+	  // correct delivery method (steer/followUp/send) based on:
+	  //   msg.mode, delegateReplyMode, and target streaming status.
+	  // If steer is broken, default-mode delegate sends silently fail.
+
+	  it("delivers via steer in default interrupt mode when target is streaming", async () => {
+	    const steer = vi.fn();
+	    const followUp = vi.fn();
+
+	    await handleCoordinatorDelegateSendOperation({
+	      sourceSessionId: "parent",
+	      msg: { __call: "session_delegate_send", targetSessionId: "child", message: "urgent" },
+	      clients: new Map([
+	        ["parent", makeManaged("idle", "/tmp/parent.jsonl")],
+	        ["child", makeManaged("streaming", "/tmp/child.jsonl")],
+	      ]),
+	      sessionPaths: new Map(),
+	      sessionProjectPaths: new Map(),
+	      delegateReplyCount: new Map(),
+	      delegateCreatedAt: new Map([["child", 1000]]),
+	      parentChildMap: new Map([["parent", new Set(["child"])]]),
+	      start: vi.fn(),
+	      send: vi.fn(),
+	      steer,
+	      followUp,
+	      now: () => 3000,
+	    });
+
+	    expect(steer).toHaveBeenCalledWith("child", expect.stringContaining("urgent"));
+	    expect(followUp).not.toHaveBeenCalled();
+	  });
+
+	  it("delivers via steer when msg.mode is explicitly steer", async () => {
+	    const steer = vi.fn();
+	    const followUp = vi.fn();
+
+	    await handleCoordinatorDelegateSendOperation({
+	      sourceSessionId: "parent",
+	      msg: {
+	        __call: "session_delegate_send",
+	        targetSessionId: "child",
+	        message: "steer explicitly",
+	        mode: "steer",
+	      },
+	      clients: new Map([
+	        ["parent", makeManaged("idle", "/tmp/parent.jsonl")],
+	        ["child", makeManaged("idle", "/tmp/child.jsonl")],
+	      ]),
+	      sessionPaths: new Map(),
+	      sessionProjectPaths: new Map(),
+	      delegateReplyCount: new Map(),
+	      delegateCreatedAt: new Map([["child", 1000]]),
+	      parentChildMap: new Map([["parent", new Set(["child"])]]),
+	      start: vi.fn(),
+	      send: vi.fn(),
+	      steer,
+	      followUp,
+	      now: () => 3000,
+	    });
+
+	    expect(steer).toHaveBeenCalledWith("child", expect.stringContaining("steer explicitly"));
+	    expect(followUp).not.toHaveBeenCalled();
+	  });
+
+	  it("delivers via followUp when msg.mode is explicitly followUp", async () => {
+	    const steer = vi.fn();
+	    const followUp = vi.fn();
+
+	    await handleCoordinatorDelegateSendOperation({
+	      sourceSessionId: "parent",
+	      msg: {
+	        __call: "session_delegate_send",
+	        targetSessionId: "child",
+	        message: "follow-up explicitly",
+	        mode: "followUp",
+	      },
+	      clients: new Map([
+	        ["parent", makeManaged("idle", "/tmp/parent.jsonl")],
+	        ["child", makeManaged("idle", "/tmp/child.jsonl")],
+	      ]),
+	      sessionPaths: new Map(),
+	      sessionProjectPaths: new Map(),
+	      delegateReplyCount: new Map(),
+	      delegateCreatedAt: new Map([["child", 1000]]),
+	      parentChildMap: new Map([["parent", new Set(["child"])]]),
+	      start: vi.fn(),
+	      send: vi.fn(),
+	      steer,
+	      followUp,
+	      now: () => 3000,
+	    });
+
+	    expect(followUp).toHaveBeenCalledWith("child", expect.stringContaining("follow-up explicitly"));
+	    expect(steer).not.toHaveBeenCalled();
+	  });
+
+	  it("delivers via send when target is idle and replyMode is auto", async () => {
+	    const send = vi.fn();
+	    const steer = vi.fn();
+	    const followUp = vi.fn();
+
+	    await handleCoordinatorDelegateSendOperation({
+	      sourceSessionId: "parent",
+	      msg: { __call: "session_delegate_send", targetSessionId: "child", message: "idle send" },
+	      clients: new Map([
+	        ["parent", makeManaged("idle", "/tmp/parent.jsonl")],
+	        ["child", makeManaged("idle", "/tmp/child.jsonl")],
+	      ]),
+	      sessionPaths: new Map(),
+	      sessionProjectPaths: new Map(),
+	      delegateReplyCount: new Map(),
+	      delegateCreatedAt: new Map([["child", 1000]]),
+	      delegateReplyMode: new Map([["parent", "auto"]]),
+	      parentChildMap: new Map([["parent", new Set(["child"])]]),
+	      start: vi.fn(),
+	      send,
+	      steer,
+	      followUp,
+	      now: () => 3000,
+	    });
+
+	    expect(send).toHaveBeenCalledWith("child", expect.stringContaining("idle send"));
+	    expect(steer).not.toHaveBeenCalled();
+	    expect(followUp).not.toHaveBeenCalled();
+	  });
 
   it("reports stopped versus not-found delegate status using persisted records", async () => {
     const parentChildMap = new Map([["parent", new Set(["child"])]]);
@@ -1104,6 +1231,50 @@ describe("coordinator delegate operations", () => {
         sessionPaths: new Map([["child", "/tmp/child.jsonl"]]),
         sessionProjectPaths: new Map([["child", "/tmp"]]),
         getStatus: () => ({ status: "idle" as const }),
+        getState: vi.fn(),
+        getContextUsage: vi.fn(),
+      }),
+    ).resolves.toMatchObject({ status: "not_found" });
+  });
+
+  // Regression: #151 P2 — session_delegate_status must agree with
+  // session_delegate_send on existence. When the parent-child link was
+  // cleared (e.g. sync subagent timeout orphan) but the session file still
+  // exists on disk, send can still deliver; status must NOT report
+  // not_found.
+  it("reports stopped (not not_found) when session file exists even if parent-child link is cleared", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "delegate-status-fallback-"));
+    const sessionPath = join(dir, "child.jsonl");
+    writeFileSync(sessionPath, JSON.stringify({ type: "session", id: "child" }) + "\n");
+
+    try {
+      await expect(
+        handleCoordinatorDelegateStatusOperation({
+          parentSessionId: "parent",
+          msg: { __call: "session_delegate_status", sessionId: "child" },
+          // parent-child link cleared — child not in the set
+          parentChildMap: new Map([["parent", new Set()]]),
+          sessionPaths: new Map([["child", sessionPath]]),
+          sessionProjectPaths: new Map([["child", dir]]),
+          getStatus: () => ({ status: "stopped" as const }),
+          getState: vi.fn(),
+          getContextUsage: vi.fn(),
+        }),
+      ).resolves.toMatchObject({ status: "stopped" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports not_found when neither parent-child link nor session file exists", async () => {
+    await expect(
+      handleCoordinatorDelegateStatusOperation({
+        parentSessionId: "parent",
+        msg: { __call: "session_delegate_status", sessionId: "child" },
+        parentChildMap: new Map([["parent", new Set()]]),
+        sessionPaths: new Map([["child", "/definitely/does/not/exist/child.jsonl"]]),
+        sessionProjectPaths: new Map(),
+        getStatus: () => ({ status: "stopped" as const }),
         getState: vi.fn(),
         getContextUsage: vi.fn(),
       }),
@@ -1184,6 +1355,7 @@ describe("coordinator delegate operations", () => {
       syncDelegateResolvers,
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
+      syncDelegateTimedOut: new Set(),
       now: () => 1000,
       sessionIdFactory: () => "child-sync",
     });
@@ -1265,6 +1437,7 @@ describe("coordinator delegate operations", () => {
       syncDelegateResolvers,
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
+      syncDelegateTimedOut: new Set(),
       sessionIdFactory: () => "child-agent-sync",
     });
 
@@ -1328,6 +1501,7 @@ describe("coordinator delegate operations", () => {
       syncDelegateResolvers,
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
+      syncDelegateTimedOut: new Set(),
       sessionIdFactory: () => "child-model-sync",
     });
 
@@ -1387,6 +1561,7 @@ describe("coordinator delegate operations", () => {
       syncDelegateResolvers,
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
+      syncDelegateTimedOut: new Set(),
       sessionIdFactory: () => "child-model-alias-sync",
     });
 
@@ -1421,6 +1596,7 @@ describe("coordinator delegate operations", () => {
     const syncDelegateResolvers = new Map();
     const subagentSyncChildren = new Set<string>();
     const syncDelegateLastText = new Map([["child-sync", "partial"]]);
+    const syncDelegateTimedOut = new Set<string>();
     const parentChildMap = new Map<string, Set<string>>();
     const stop = vi.fn().mockResolvedValue(true);
 
@@ -1445,6 +1621,7 @@ describe("coordinator delegate operations", () => {
       syncDelegateResolvers,
       subagentSyncChildren,
       syncDelegateLastText,
+      syncDelegateTimedOut,
       sessionIdFactory: () => "child-sync",
     });
 
@@ -1461,6 +1638,10 @@ describe("coordinator delegate operations", () => {
     expect(syncDelegateResolvers.has("child-sync")).toBe(false);
     expect(subagentSyncChildren.has("child-sync")).toBe(false);
     expect(syncDelegateLastText.has("child-sync")).toBe(false);
+    // Regression #151 P1: timed-out session is marked so downstream logic
+    // (fallback reply, status) can distinguish "timed out then finished"
+    // from normal completion.
+    expect(syncDelegateTimedOut.has("child-sync")).toBe(true);
     expect(stop).not.toHaveBeenCalled();
     expect(parentChildMap.get("parent")?.has("child-sync")).toBe(true);
   });

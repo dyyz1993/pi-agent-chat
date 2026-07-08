@@ -313,6 +313,119 @@ describe("change-review handler", () => {
 
         expect(result).toEqual([]);
       });
+
+      // Regression: #162 — JSONL fallback must reset approval to pending
+      // when a file is modified again after being approved (mirrors the
+      // file-review extension's session_start replay logic).
+      it("should reset approval to pending when file is modified after approval (with snapshot)", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
+
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }], "root");
+        const turn0Obj = JSON.parse(turn0);
+        const approval = JSON.stringify({
+          type: "custom",
+          customType: "file-approval",
+          data: {
+            path: "src/a.ts",
+            status: "approved",
+            timestamp: Date.now() + 1000,
+            snapshotEntryId: "snap-1",
+          },
+          id: "approval-1",
+          parentId: turn0Obj.id,
+          timestamp: new Date().toISOString(),
+        });
+        const approvalObj = JSON.parse(approval);
+        const turn2 = makeReviewTurnEntry(
+          2,
+          [{ path: "src/a.ts", status: "modified" }],
+          approvalObj.id,
+        );
+        // turn2 timestamp must be >= approval timestamp for reset to fire
+        const turn2Obj = JSON.parse(turn2);
+        turn2Obj.data.timestamp = Date.now() + 2000;
+        const turn2Line = JSON.stringify(turn2Obj);
+
+        await writeFile(jsonlPath, turn0 + "\n" + approval + "\n" + turn2Line + "\n");
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        })) as Array<{ path: string; fileStatus: string; status: string }>;
+
+        expect(result).toHaveLength(1);
+        expect(result[0].path).toBe("src/a.ts");
+        expect(result[0].status).toBe("pending");
+      });
+
+      // Regression: #162 — approvalTurn must be per-file, not the global
+      // max turnIndex. Without this, approving file A after file B's later
+      // turn would incorrectly filter out file A.
+      it("should use per-file approvalTurn, not global max turnIndex", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
+
+        const jsonlPath = join(tempDir, "session.jsonl");
+        // File A changed in turn 0, file B changed in turn 5
+        const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }], "root");
+        const turn0Obj = JSON.parse(turn0);
+        const turn5 = makeReviewTurnEntry(
+          5,
+          [{ path: "src/b.ts", status: "added" }],
+          turn0Obj.id,
+        );
+        const turn5Obj = JSON.parse(turn5);
+        // Approval for A comes after turn 5 in the JSONL
+        const approvalA = makeApprovalEntry("src/a.ts", "approved", turn5Obj.id);
+
+        await writeFile(jsonlPath, turn0 + "\n" + turn5 + "\n" + approvalA + "\n");
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        })) as Array<{ path: string }>;
+
+        // A was approved at its own turn 0 (latestTurnIndex=0 <= approvalTurn=0) → filtered
+        // B was never approved → should appear as pending
+        const paths = result.map((r) => r.path);
+        expect(paths).not.toContain("src/a.ts");
+        expect(paths).toContain("src/b.ts");
+      });
+
+      // Regression: #162 — approveAll scenario. When every file is approved
+      // and none are re-modified, the panel should be empty (not filter
+      // incorrectly based on global turnIndex).
+      it("should show empty panel after approveAll when no files are re-modified", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
+
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turn0 = makeReviewTurnEntry(
+          0,
+          [
+            { path: "src/a.ts", status: "modified" },
+            { path: "src/b.ts", status: "added" },
+          ],
+          "root",
+        );
+        const turn0Obj = JSON.parse(turn0);
+        const approvalA = makeApprovalEntry("src/a.ts", "approved", turn0Obj.id);
+        const approvalB = makeApprovalEntry("src/b.ts", "approved", turn0Obj.id);
+
+        await writeFile(
+          jsonlPath,
+          turn0 + "\n" + approvalA + "\n" + approvalB + "\n",
+        );
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        });
+
+        expect(result).toEqual([]);
+      });
     });
   });
 

@@ -1181,13 +1181,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!sessionId) return;
     const queueStore = useSessionQueueStore.getState();
     const previous = queueStore.queueBySession[sessionId];
-    if (item.type === "followUp") {
-      queueStore.removeQueuedMessage(sessionId, item);
-    }
+    // Optimistically remove the item from the UI queue for BOTH types.
+    // The previous code only removed followUp items, leaving steering items
+    // stuck in the UI until the next queue_update event arrived.
+    queueStore.removeQueuedMessage(sessionId, item);
     try {
+      // Two-step delivery so the message is both removed from the CLI queue
+      // and re-injected as an immediate interrupting steer:
+      //   1. clearQueue(item) removes it from the CLI's steering/followUp
+      //      queue and emits a queue_update event.
+      //   2. steer(text, immediate:true) injects it as a fresh steering
+      //      message that interrupts the current run.
+      // The previous code used steer({promote, immediate}) which is a no-op
+      // for steering items and silently fails to promote followUp items in
+      // the current runtime.
+      await apiClient.call("agent.clearQueue", { sessionId, item });
       await apiClient.call("agent.steer", {
         sessionId,
-        promote: item.type === "followUp" ? item.index : undefined,
+        content: item.text,
         immediate: true,
       });
     } catch (err) {

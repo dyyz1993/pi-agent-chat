@@ -677,6 +677,10 @@ export async function handleCoordinatorDelegateSyncOperation<
   >;
   subagentSyncChildren: Set<string>;
   syncDelegateLastText: Map<string, string>;
+  // Sessions that timed out on the sync wait but were kept alive (#151 P1).
+  // Added to when the sync timeout fires, so downstream logic (fallback reply,
+  // status) can tell "timed out then completed" from "normal completion".
+  syncDelegateTimedOut: Set<string>;
   now?: () => number;
   sessionIdFactory?: () => string;
 }): Promise<DelegateSyncResult> {
@@ -795,6 +799,11 @@ export async function handleCoordinatorDelegateSyncOperation<
       options.syncDelegateResolvers.delete(session.sessionId);
       options.subagentSyncChildren.delete(session.sessionId);
       options.syncDelegateLastText.delete(session.sessionId);
+      // Mark the session as "timed out but kept alive" so the eventual
+      // agent_end fallback reply and status queries can distinguish this
+      // from a normal completion. The session stays in parentChildMap and
+      // the process keeps running (see #151 P1).
+      options.syncDelegateTimedOut.add(session.sessionId);
       resolve({
         sessionId: session.sessionId,
         status: "timeout",
@@ -1018,7 +1027,18 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
 }): Promise<DelegateStatusExt> {
   const { sessionId: targetSessionId } = options.msg;
   const parentChildren = options.parentChildMap.get(options.parentSessionId);
-  if (!parentChildren?.has(targetSessionId)) {
+  const isDelegateChild = parentChildren?.has(targetSessionId) ?? false;
+
+  // Fallback: even when the parent-child relation was cleared (e.g. after a
+  // sync subagent timeout leaves orphan tracking, or cleanup ran), the session
+  // may still exist on disk and be sendable. Mirror the send handler's check
+  // (hasKnownDelegateSendTarget) so status and send agree on existence.
+  // Without this, status returns "not_found" while session_delegate_send
+  // succeeds — see issue #151.
+  const sessionPath = options.sessionPaths.get(targetSessionId) ?? "";
+  const sessionFileExists = Boolean(sessionPath && existsSync(sessionPath));
+
+  if (!isDelegateChild && !sessionFileExists) {
     return {
       task: null,
       status: "not_found",
@@ -1029,15 +1049,21 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   }
 
   const status = options.getStatus(targetSessionId);
-  const sessionPath = options.sessionPaths.get(targetSessionId);
   if (status.status === "stopped") {
     const hasRecord =
       options.sessionPaths.has(targetSessionId) || options.sessionProjectPaths.has(targetSessionId);
-    const resolvedStatus = hasRecord ? "stopped" : "not_found";
+    // Three cases:
+    //  - delegate child + record: "stopped" (resumable)
+    //  - non-child but session file exists on disk: "stopped" (send handler
+    //    can still restart it — see hasKnownDelegateSendTarget). Keeps
+    //    status/send consistent per issue #151.
+    //  - everything else: "not_found"
+    const resolvedStatus =
+      hasRecord || (!isDelegateChild && sessionFileExists) ? "stopped" : "not_found";
     return {
       task: null,
       status: resolvedStatus,
-      detail: buildDelegateStatusDetail(resolvedStatus, sessionPath, false),
+      detail: buildDelegateStatusDetail(resolvedStatus, sessionPath || undefined, false),
       isCompacting: false,
       contextUsage: { tokens: null, contextWindow: 0, percent: null },
     };
@@ -1048,14 +1074,14 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   const isCompacting = state?.isCompacting ?? false;
   const resolvedStatus = state?.isStreaming
     ? "streaming"
-    : hasAssistantMessage(sessionPath)
+    : hasAssistantMessage(sessionPath || undefined)
       ? "completed"
       : "idle";
 
   return {
     task: null,
     status: resolvedStatus,
-    detail: buildDelegateStatusDetail(resolvedStatus, sessionPath, isCompacting),
+    detail: buildDelegateStatusDetail(resolvedStatus, sessionPath || undefined, isCompacting),
     isCompacting,
     contextUsage,
   };

@@ -44,6 +44,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: Set<string>;
   syncDelegateLastText: Map<string, string>;
+  syncDelegateTimedOut?: Set<string>;
   leafIds: Map<string, string | null>;
   getPoolKey: (cwd: string, userId?: string) => string;
   removeFromPool: (poolKey: string, managed: TManaged) => void;
@@ -83,6 +84,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
     syncDelegateResolvers: options.syncDelegateResolvers,
     subagentSyncChildren: options.subagentSyncChildren,
     syncDelegateLastText: options.syncDelegateLastText,
+    syncDelegateTimedOut: options.syncDelegateTimedOut,
   });
   for (const childId of stopCleanup.childSessionIds) {
     void options.stopChild(childId);

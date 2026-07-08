@@ -109,6 +109,11 @@ export class CoordinatorHandler {
   public syncDelegateResolvers = new Map<string, SyncDelegateResolver>();
   public subagentSyncChildren = new Set<string>();
   public syncDelegateLastText = new Map<string, string>();
+  // Sessions that timed out on the sync wait but were intentionally kept
+  // alive (see handleCoordinatorDelegateSyncOperation). Used to distinguish
+  // "timed out, then finished on its own" from "normal completion" so the
+  // fallback reply and status queries report the right thing. See #151 P1.
+  public syncDelegateTimedOut = new Set<string>();
   private delegateTimeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
   private delegateTimeoutMs = new Map<string, number>();
   private delegateTimeoutAt = new Map<string, number>();
@@ -341,6 +346,7 @@ export class CoordinatorHandler {
       syncDelegateResolvers: this.syncDelegateResolvers,
       subagentSyncChildren: this.subagentSyncChildren,
       syncDelegateLastText: this.syncDelegateLastText,
+      syncDelegateTimedOut: this.syncDelegateTimedOut,
     });
   }
 
@@ -449,6 +455,7 @@ export class CoordinatorHandler {
       syncDelegateResolvers: this.syncDelegateResolvers,
       subagentSyncChildren: this.subagentSyncChildren,
       syncDelegateLastText: this.syncDelegateLastText,
+      syncDelegateTimedOut: this.syncDelegateTimedOut,
     });
   }
 
@@ -471,11 +478,20 @@ export class CoordinatorHandler {
 
     const child = this.deps.getActiveManaged(childSessionId);
     const title = child?.info.sessionName ?? childSessionId;
-    const message = [
-      `委派任务「${title}」已结束，但子会话没有主动回传最终结果。`,
-      ``,
-      `这是一条系统兜底回执，不代表任务成功或失败。请点击本卡片的跳转入口查看子会话详情。`,
-    ].join("\n");
+    // Distinguish "timed out on the sync wait, then finished on its own"
+    // from a normal completion so the parent gets accurate context (#151 P1).
+    const timedOut = this.syncDelegateTimedOut.has(childSessionId);
+    const message = timedOut
+      ? [
+          `委派任务「${title}」此前等待超时，子会话在后台继续运行后现已结束。`,
+          ``,
+          `这是一条系统兜底回执。请点击本卡片的跳转入口查看子会话的最终输出。`,
+        ].join("\n")
+      : [
+          `委派任务「${title}」已结束，但子会话没有主动回传最终结果。`,
+          ``,
+          `这是一条系统兜底回执，不代表任务成功或失败。请点击本卡片的跳转入口查看子会话详情。`,
+        ].join("\n");
 
     const result = await this.handleCoordinatorDelegateSend(childSessionId, {
       __call: "session_delegate_send",
