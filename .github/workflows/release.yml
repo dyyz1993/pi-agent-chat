@@ -8,10 +8,18 @@ on:
 permissions:
   contents: write
 
+env:
+  # Update server for auto-update (Electrobun Updater)
+  UPDATE_BASE_URL: https://github.com/dyyz1993/pi-agent-chat/releases/latest/download
+  # Channel used in version.json and artifact naming
+  BUILD_CHANNEL: stable
+  APP_NAME: PiAgentChat
+
 jobs:
-  build-macos:
-    name: Build macOS
-    runs-on: macos-latest
+  # ── macOS ARM64 ──
+  build-macos-arm64:
+    name: Build macOS (ARM64)
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +36,7 @@ jobs:
         run: bun run build
 
       - name: Build Electrobun desktop app
-        run: bunx electrobun build
+        run: bunx electrobun build --env=${{ env.BUILD_CHANNEL }}
         env:
           CI: true
         timeout-minutes: 5
@@ -41,39 +49,195 @@ jobs:
             echo "No .app found in build/"
             exit 1
           fi
-          APP_NAME=$(basename "$APP_PATH" .app)
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
-          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Generate update artifacts (tar.zst + update.json + patch version.json)
+        run: |
+          bash scripts/ci-generate-update-artifacts.sh \
+            --app-path "${{ steps.locate.outputs.app_path }}" \
+            --platform macos \
+            --arch arm64 \
+            --version "${GITHUB_REF_NAME#v}" \
+            --app-name "${{ env.APP_NAME }}" \
+            --channel "${{ env.BUILD_CHANNEL }}" \
+            --base-url "${{ env.UPDATE_BASE_URL }}" \
+            --output-dir artifacts
 
       - name: Ad-hoc sign and create DMG
-        id: dmg
         run: |
           APP_PATH="${{ steps.locate.outputs.app_path }}"
-          APP_NAME="${{ steps.locate.outputs.app_name }}"
-          DMG_NAME="PiAgentChat-${GITHUB_REF_NAME}-macos-arm64.dmg"
+          APP_NAME=$(basename "$APP_PATH" .app)
+          DMG_NAME="${{ env.APP_NAME }}-${GITHUB_REF_NAME}-macos-arm64.dmg"
 
-          # Ad-hoc sign the app (removes "damaged" error on download)
+          # Ad-hoc sign (removes "damaged" error on download, no paid cert needed)
           codesign --force --deep --sign - "$APP_PATH"
 
-          # Create a temporary DMG folder
+          # Create DMG
           mkdir -p dmg-staging
           cp -R "$APP_PATH" dmg-staging/
-
-          # Create DMG
           hdiutil create -volname "$APP_NAME" -srcfolder dmg-staging -ov -format UDZO "$DMG_NAME"
-
-          echo "dmg_path=$DMG_NAME" >> "$GITHUB_OUTPUT"
-
-          # Cleanup
           rm -rf dmg-staging
 
-      - name: Upload DMG artifact
+          # Move DMG to artifacts
+          mv "$DMG_NAME" artifacts/
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PiAgentChat-macos-arm64
-          path: ${{ steps.dmg.outputs.dmg_path }}
+          name: release-macos-arm64
+          path: artifacts/
           retention-days: 5
 
+  # ── macOS x64 ──
+  build-macos-x64:
+    name: Build macOS (x64)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install dependencies
+        run: |
+          node scripts/ci-hydrate-yalc.mjs
+          rm -f bun.lockb && bun install
+
+      - name: Build Vite frontend
+        run: bun run build
+
+      - name: Build Electrobun desktop app
+        run: bunx electrobun build --env=${{ env.BUILD_CHANNEL }}
+        env:
+          CI: true
+        timeout-minutes: 5
+
+      - name: Locate .app bundle
+        id: locate
+        run: |
+          APP_PATH=$(find build -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found in build/"
+            exit 1
+          fi
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Generate update artifacts
+        run: |
+          bash scripts/ci-generate-update-artifacts.sh \
+            --app-path "${{ steps.locate.outputs.app_path }}" \
+            --platform macos \
+            --arch x64 \
+            --version "${GITHUB_REF_NAME#v}" \
+            --app-name "${{ env.APP_NAME }}" \
+            --channel "${{ env.BUILD_CHANNEL }}" \
+            --base-url "${{ env.UPDATE_BASE_URL }}" \
+            --output-dir artifacts
+
+      - name: Ad-hoc sign and create DMG
+        run: |
+          APP_PATH="${{ steps.locate.outputs.app_path }}"
+          APP_NAME=$(basename "$APP_PATH" .app)
+          DMG_NAME="${{ env.APP_NAME }}-${GITHUB_REF_NAME}-macos-x64.dmg"
+
+          codesign --force --deep --sign - "$APP_PATH"
+          mkdir -p dmg-staging
+          cp -R "$APP_PATH" dmg-staging/
+          hdiutil create -volname "$APP_NAME" -srcfolder dmg-staging -ov -format UDZO "$DMG_NAME"
+          rm -rf dmg-staging
+
+          mv "$DMG_NAME" artifacts/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-x64
+          path: artifacts/
+          retention-days: 5
+
+  # ── Linux x64 ──
+  build-linux:
+    name: Build Linux (x64)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            zstd
+
+      - name: Install project dependencies
+        run: |
+          node scripts/ci-hydrate-yalc.mjs
+          rm -f bun.lockb && bun install
+
+      - name: Build Vite frontend
+        run: bun run build
+
+      - name: Build Electrobun desktop app (native renderer)
+        run: |
+          PI_ELECTROBUN_RENDERER=native \
+          bunx electrobun build --env=${{ env.BUILD_CHANNEL }}
+        env:
+          CI: true
+        timeout-minutes: 10
+
+      - name: Locate build output
+        id: locate
+        run: |
+          # Find the build output directory (not .app, just a dir bundle)
+          BUILD_DIR=$(find build -maxdepth 2 -type d -name "${{ env.APP_NAME }}*" ! -name "*.app" 2>/dev/null | head -1)
+          if [ -z "$BUILD_DIR" ]; then
+            # Try to find any directory in build that looks like the app
+            BUILD_DIR=$(find build -maxdepth 2 -type d | tail -1)
+          fi
+          if [ -z "$BUILD_DIR" ] || [ ! -d "$BUILD_DIR" ]; then
+            echo "Build output not found in build/"
+            ls -la build/
+            exit 1
+          fi
+          echo "app_path=$BUILD_DIR" >> "$GITHUB_OUTPUT"
+          echo "Found build output: $BUILD_DIR"
+
+      - name: Generate update artifacts (tar.zst + update.json)
+        run: |
+          bash scripts/ci-generate-update-artifacts.sh \
+            --app-path "${{ steps.locate.outputs.app_path }}" \
+            --platform linux \
+            --arch x64 \
+            --version "${GITHUB_REF_NAME#v}" \
+            --app-name "${{ env.APP_NAME }}" \
+            --channel "${{ env.BUILD_CHANNEL }}" \
+            --base-url "${{ env.UPDATE_BASE_URL }}" \
+            --output-dir artifacts
+
+      - name: Create Linux launcher script
+        run: |
+          cp scripts/pi-agent-chat-linux-launcher.sh \
+            artifacts/${{ env.APP_NAME }}-${GITHUB_REF_NAME}-linux-x64.sh
+          chmod +x artifacts/${{ env.APP_NAME }}-${GITHUB_REF_NAME}-linux-x64.sh
+          echo "Created Linux launcher script"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-x64
+          path: artifacts/
+          retention-days: 5
+
+  # ── Windows (existing) ──
   build-windows:
     name: Build Windows
     runs-on: windows-latest
@@ -102,35 +266,33 @@ jobs:
       - name: Locate and zip exe
         shell: bash
         run: |
+          mkdir -p artifacts
           EXE_PATH=$(find build -name "*.exe" -type f | head -1)
           if [ -z "$EXE_PATH" ]; then
-            # Electrobun may produce a folder instead of .exe
             BUILD_DIR=$(find build -maxdepth 1 -type d | tail -1)
             if [ -d "$BUILD_DIR" ]; then
               cd "$(dirname "$BUILD_DIR")"
-              7z a -tzip "PiAgentChat-${GITHUB_REF_NAME}-windows-x64.zip" "$(basename "$BUILD_DIR")"
+              7z a -tzip "artifacts/${{ env.APP_NAME }}-${GITHUB_REF_NAME}-windows-x64.zip" "$(basename "$BUILD_DIR")"
               cd "$GITHUB_WORKSPACE"
             else
               echo "No build output found"
               exit 1
             fi
           else
-            cp "$EXE_PATH" "PiAgentChat-${GITHUB_REF_NAME}-windows-x64.exe"
+            cp "$EXE_PATH" "artifacts/${{ env.APP_NAME }}-${GITHUB_REF_NAME}-windows-x64.exe"
           fi
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiAgentChat-windows-x64
-          path: |
-            PiAgentChat-${{ github.ref_name }}-windows-x64.zip
-            PiAgentChat-${{ github.ref_name }}-windows-x64.exe
-          if-no-files-found: ignore
+          name: release-windows-x64
+          path: artifacts/
           retention-days: 5
 
+  # ── Publish to GitHub Releases ──
   release:
     name: Publish Release
-    needs: [build-macos, build-windows]
+    needs: [build-macos-arm64, build-macos-x64, build-linux, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +305,13 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f | sort
 
+      - name: Flatten artifacts for release upload
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -exec cp {} release-assets/ \;
+          echo "=== Release assets ==="
+          ls -lh release-assets/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -152,6 +321,4 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.exe
-            artifacts/**/*.zip
+            release-assets/**

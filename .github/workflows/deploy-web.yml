@@ -1,0 +1,115 @@
+name: Deploy Web Server
+
+on:
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境'
+        type: choice
+        options:
+          - production
+          - staging
+        default: production
+
+  # 推送到 main 时自动部署生产
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'scripts/build-server.sh'
+      - 'bun.lockb'
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'production' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install dependencies
+        run: |
+          node scripts/ci-hydrate-yalc.mjs
+          bun install
+
+      - name: Build server bundle
+        run: bash scripts/build-server.sh
+
+      - name: Compress build output
+        run: |
+          tar czf dist-bundle.tar.gz \
+            dist-server/ \
+            dist/ \
+            package.json \
+            ecosystem.config.js
+
+      - name: Deploy to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/root/pi-chat' }}
+        run: |
+          # Write SSH key
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Upload bundle
+          scp -P "$DEPLOY_PORT" -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            dist-bundle.tar.gz \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/"
+
+          # Remote: extract, install, restart
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd ${DEPLOY_PATH} && \
+             tar xzf dist-bundle.tar.gz && \
+             rm -f dist-bundle.tar.gz && \
+             bun install --omit=dev && \
+             pm2 restart pi-chat 2>/dev/null || pm2 start ecosystem.config.js --name pi-chat"
+
+      - name: Verify deployment
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          APP_PORT: ${{ secrets.APP_PORT || '3100' }}
+        run: |
+          # Wait for server to start
+          sleep 5
+
+          # Check health endpoint
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+              "https://${DEPLOY_HOST}:${APP_PORT}/health" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Health check passed (HTTP 200)"
+              break
+            fi
+            echo "  Attempt $i: HTTP $STATUS, waiting..."
+            sleep 3
+          done
+
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Health check failed after 5 attempts"
+            # Fetch remote logs for debugging
+            ssh -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              "tail -50 ${DEPLOY_PATH}/logs/*.log 2>/dev/null || echo 'No logs found'"
+            exit 1
+          fi
+
+          echo "✅ Deployment verified successfully!"
