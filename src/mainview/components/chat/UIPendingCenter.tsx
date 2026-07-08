@@ -868,7 +868,7 @@ function SessionGroup({
                 )}
                 <button
                   onClick={() => onGotoSession(sessionId, req.requestId)}
-                  className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-semantic-accent transition-colors hover:bg-semantic-accent/10"
+                  className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-accent transition-colors hover:bg-accent/10"
                   title={t("uiPending.gotoSession")}
                 >
                   {t("uiPending.gotoSession")}

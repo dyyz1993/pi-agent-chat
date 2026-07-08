@@ -287,7 +287,7 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
         {subBars.map((v, i) => (
           <div
             key={i}
-            className={`flex-1 rounded-t-sm ${i === subBars.length - 1 ? "bg-semantic-accent" : "bg-text-secondary"}`}
+            className={`flex-1 rounded-t-sm ${i === subBars.length - 1 ? "bg-accent" : "bg-text-secondary"}`}
             style={{ height: `${(v / maxSubs) * 100}%` }}
             title={`${v} subs`}
           />
@@ -371,7 +371,7 @@ export function DiagnosticPanel() {
       className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded-lg shadow-2xl z-popover flex flex-col overflow-hidden"
     >
       <div className="flex items-center justify-between px-3 py-2 bg-surface-dim border-b border-border-secondary flex-shrink-0">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-semantic-accent">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-accent">
           <Activity className="w-3.5 h-3.5" />
           Session Diagnostic
         </div>
@@ -453,7 +453,7 @@ export function DiagnosticPanel() {
                 </div>
                 <div className="h-1.5 bg-surface-hover rounded mt-1">
                   <div
-                    className="h-full bg-semantic-accent rounded"
+                    className="h-full bg-accent rounded"
                     style={{ width: `${(snapshot.jsHeapUsed / snapshot.jsHeapTotal) * 100}%` }}
                   />
                 </div>

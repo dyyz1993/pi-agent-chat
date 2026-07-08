@@ -66,7 +66,7 @@ function TierBadge({ tier }: { tier: string }) {
       Icon: Zap,
     },
     pro: {
-      style: "bg-semantic-accent/[0.12] text-semantic-accent border-semantic-accent/25",
+      style: "bg-accent/[0.12] text-accent border-accent/25",
       Icon: Target,
     },
     max: {

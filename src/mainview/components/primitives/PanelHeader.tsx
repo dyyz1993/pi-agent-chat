@@ -14,7 +14,7 @@ export function PanelHeader({ icon: Icon, iconCls, title, trailing, className }:
     <div
       className={`flex items-center gap-2 px-2.5 py-2 border-b border-border-secondary dark:border-surface-code shrink-0 ${className ?? ""}`}
     >
-      <Icon className={`w-3.5 h-3.5 shrink-0 ${iconCls ?? "text-semantic-accent"}`} />
+      <Icon className={`w-3.5 h-3.5 shrink-0 ${iconCls ?? "text-accent"}`} />
       <span className="text-[11px] font-medium text-text-secondary">{title}</span>
       {trailing && <div className="ml-auto flex items-center gap-1">{trailing}</div>}
     </div>

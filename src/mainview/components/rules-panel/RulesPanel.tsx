@@ -121,7 +121,7 @@ function RuleCard({
             {!rule.isUnconditional && rule.globs.length > 0 && (
               <>
                 <span className="text-text-secondary dark:text-text-tertiary mx-1">·</span>
-                <code className="text-[9px] text-semantic-accent/70 truncate">
+                <code className="text-[9px] text-accent/70 truncate">
                   {rule.globs.join(", ")}
                 </code>
               </>
@@ -146,7 +146,7 @@ function RuleCard({
           {!rule.isUnconditional && rule.globs.length > 0 && (
             <div className="text-[10px] text-text-tertiary dark:text-text-secondary">
               {t("globPattern")}{" "}
-              <code className="text-[9px] text-semantic-accent/70">{rule.globs.join(", ")}</code>
+              <code className="text-[9px] text-accent/70">{rule.globs.join(", ")}</code>
             </div>
           )}
           {loading && (
@@ -185,7 +185,7 @@ function MatchRecordCard({ record }: { record: MatchRecord }) {
       {details.map((d) => (
         <div key={d.name} className="flex items-center gap-1 pl-5">
           <span className="text-text-tertiary truncate">{d.title || d.name}</span>
-          <code className="text-[9px] text-semantic-accent/70 truncate">{d.matchedGlob}</code>
+          <code className="text-[9px] text-accent/70 truncate">{d.matchedGlob}</code>
         </div>
       ))}
     </div>
@@ -223,7 +223,7 @@ function LifecycleEntryCard({ entry }: { entry: LifecycleEntry }) {
                 </span>
               </div>
               {d.ruleNames.length > 0 && (
-                <div className="pl-3 text-[9px] text-semantic-accent/70 truncate">
+                <div className="pl-3 text-[9px] text-accent/70 truncate">
                   {d.ruleNames.join(", ")}
                 </div>
               )}
@@ -278,7 +278,7 @@ export function RulesPanel() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border-secondary dark:border-surface-code shrink-0">
-        <Shield className="w-3.5 h-3.5 text-semantic-accent" />
+        <Shield className="w-3.5 h-3.5 text-accent" />
         <span className="text-[11px] font-medium text-text-secondary">{t("rulesEngine")}</span>
         <span className="text-[9px] text-text-tertiary ml-auto">
           {t("totalRules", { count: totalRules })}
@@ -302,7 +302,7 @@ export function RulesPanel() {
                   collapsed={!showSource}
                   onToggle={() => toggleSection("source")}
                   icon={FolderOpen}
-                  iconCls="text-semantic-accent"
+                  iconCls="text-accent"
                   label={t("loadingSource")}
                   badge={lifecycleLog.length}
                 />

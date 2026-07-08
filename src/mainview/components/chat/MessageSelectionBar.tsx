@@ -63,7 +63,7 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
   return (
     <div className="mx-auto w-fit max-w-[calc(100vw-2rem)] flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-surface-dim/90 border border-border-secondary/60 shadow-lg backdrop-blur-sm">
       <span
-        className="inline-flex items-center gap-1 rounded-full bg-semantic-accent/10 px-2 py-1 text-[11px] font-medium text-accent-text tabular-nums leading-none"
+        className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent-text tabular-nums leading-none"
         title={t("selection.selectedCountTitle")}
       >
         <span className="text-text-tertiary">{t("selection.selectedShort")}</span>

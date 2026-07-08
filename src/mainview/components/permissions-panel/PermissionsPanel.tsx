@@ -75,7 +75,7 @@ function PermissionRuleRow({
             <code className="truncate text-xs text-text-secondary">{rule.subject}</code>
           </div>
           <code
-            className="mt-1.5 block truncate rounded-md bg-surface-code px-2 py-1 text-xs leading-5 text-semantic-accent/80 dark:bg-surface-dim/50"
+            className="mt-1.5 block truncate rounded-md bg-surface-code px-2 py-1 text-xs leading-5 text-accent/80 dark:bg-surface-dim/50"
             title={rule.pattern}
           >
             {rule.pattern}
@@ -201,7 +201,7 @@ export function PermissionsPanel() {
                   key={provider}
                   className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
                     activeProvider === provider
-                      ? "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent"
+                      ? "border-accent/30 bg-accent/10 text-accent"
                       : "border-border-secondary text-text-secondary hover:bg-surface-hover"
                   }`}
                   onClick={() => setActiveProvider(provider)}

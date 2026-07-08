@@ -112,10 +112,10 @@ export function ModelPickerButton({
             onClick={() => !disabled && setOpen(!open)}
             disabled={disabled}
             className={`w-full flex items-center gap-1.5 h-7 px-2 rounded-md border text-[12px] transition-colors
-              ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-semantic-accent"}
+              ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-accent"}
               ${
                 open
-                  ? "border-semantic-accent ring-1 ring-semantic-accent/30"
+                  ? "border-accent ring-1 ring-accent/25"
                   : "border-border-secondary"
               }
                bg-bg-elevated dark:bg-surface-dim text-text-secondary dark:text-text-secondary`}
@@ -163,12 +163,12 @@ export function ModelPickerButton({
               onClick={() => setShowFavoritesOnly((v) => !v)}
               className={`p-0.5 rounded transition-colors shrink-0 ${
                 showFavoritesOnly
-                  ? "text-status-warning"
+                  ? "text-accent"
                   : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
               }`}
               title={showFavoritesOnly ? "显示全部" : "仅显示收藏"}
             >
-              <Star className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-status-warning" : ""}`} />
+              <Star className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-accent" : ""}`} />
             </button>
           </div>
         </div>
@@ -191,7 +191,7 @@ export function ModelPickerButton({
                   key={key}
                   className={`flex items-center px-2 py-1.5 transition-colors ${
                     isSelected
-                      ? "bg-semantic-accent/15 text-semantic-accent"
+                      ? "bg-accent/10"
                       : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                   }`}
                 >
@@ -204,20 +204,20 @@ export function ModelPickerButton({
                     className="flex-1 flex items-center gap-2 min-w-0 text-left"
                   >
                     {isSelected ? (
-                      <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
+                      <Check className="w-3 h-3 shrink-0 text-accent" />
                     ) : (
                       <span className="w-3 shrink-0" />
                     )}
                     <div className="flex flex-col min-w-0">
-                      <span className="truncate text-xs">{m.name ?? formatModelName(m.id)}</span>
-                      <span className="text-[10px] text-semantic-tool/60 font-mono truncate">
+                      <span className={`truncate text-xs ${isSelected ? "text-accent font-medium" : ""}`}>{m.name ?? formatModelName(m.id)}</span>
+                      <span className="text-[10px] text-text-tertiary font-mono truncate">
                         {m.provider} · {m.id}
                       </span>
                     </div>
                   </button>
                   {m.input?.includes("image") && (
                     <span title="支持图片输入">
-                      <ImageIcon className="w-3 h-3 text-status-info shrink-0" />
+                      <ImageIcon className="w-3 h-3 text-text-tertiary shrink-0" />
                     </span>
                   )}
                   <button
@@ -230,7 +230,7 @@ export function ModelPickerButton({
                     title={isFav ? "取消收藏" : "收藏"}
                   >
                     <Star
-                      className={`w-3 h-3 ${isFav ? "fill-status-warning text-status-warning" : "text-text-tertiary"}`}
+                      className={`w-3 h-3 ${isFav ? "fill-accent text-accent" : "text-text-tertiary hover:text-text-secondary"}`}
                     />
                   </button>
                 </div>

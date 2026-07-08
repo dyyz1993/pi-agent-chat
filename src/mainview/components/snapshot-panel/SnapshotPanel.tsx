@@ -331,13 +331,13 @@ const SnapshotCard = memo(function SnapshotCard({
               {snap.rolledBack ? (
                 <RotateCcw className="w-3 h-3 text-status-warning shrink-0" />
               ) : (
-                <Camera className="w-3 h-3 text-semantic-accent shrink-0" />
+                <Camera className="w-3 h-3 text-accent shrink-0" />
               )}
               <span className="text-xs text-text-secondary font-medium">
                 Step #{snap.stepIndex}
               </span>
               {isLatest && !snap.rolledBack && (
-                <span className="text-[9px] bg-semantic-accent/15 text-semantic-accent px-1 py-0.5 rounded font-medium">
+                <span className="text-[9px] bg-accent/15 text-accent px-1 py-0.5 rounded font-medium">
                   {t("latest")}
                 </span>
               )}
@@ -480,7 +480,7 @@ const ExpandedFileList = memo(function ExpandedFileList({
               onClick={() => handleFileClick(file.path)}
               className={`w-full flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] transition-colors text-left ${
                 isSelected
-                  ? "bg-semantic-accent/10 text-semantic-accent"
+                  ? "bg-accent/10 text-accent"
                   : "text-text-tertiary hover:bg-surface-hover/30 dark:hover:bg-surface-dim/30 hover:text-text-secondary"
               }`}
             >

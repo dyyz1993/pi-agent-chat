@@ -14,10 +14,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-accent)] text-text-inverse hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent-hover)] shadow-sm shadow-black/10",
+    "bg-[var(--color-accent)] text-text-inverse hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent-hover)] shadow-sm shadow-black/20",
   secondary:
-    "border border-border-secondary bg-bg-elevated text-text-secondary hover:bg-surface-hover hover:text-text-primary shadow-subtle",
-  ghost: "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+    "border border-border-secondary bg-bg-elevated text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface-hover shadow-subtle",
+  ghost: "text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface-hover",
   danger:
     "bg-status-error text-white hover:bg-status-error/90 active:bg-status-error/85 shadow-sm shadow-status-error/15",
 };

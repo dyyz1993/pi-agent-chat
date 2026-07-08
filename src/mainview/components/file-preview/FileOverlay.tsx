@@ -183,7 +183,7 @@ export function FileOverlay({
     if (loading || svgLoading) {
       return (
         <div className="flex items-center justify-center h-full text-text-tertiary text-sm">
-          <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
+          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin mr-2" />
           {t("loading")}
         </div>
       );
@@ -294,7 +294,7 @@ export function FileOverlay({
               onClick={() => setHtmlSourceMode((v) => !v)}
               className={
                 htmlSourceMode
-                  ? actionsDivBtnBase + " text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
+                  ? actionsDivBtnBase + " text-accent bg-accent/10 hover:bg-accent/20"
                   : actionsDivBtnBase + " text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
               }
               title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
@@ -322,7 +322,7 @@ export function FileOverlay({
                   ? actionsDivBtnBase + " bg-status-success/80 text-white hover:bg-status-success/80"
                   : saveState === "error"
                     ? actionsDivBtnBase + " bg-status-error/80 text-white hover:bg-status-error/80"
-                    : actionsDivBtnBase + " bg-semantic-accent text-white hover:bg-semantic-accent/85 disabled:opacity-70"
+                    : actionsDivBtnBase + " bg-accent text-white hover:bg-accent/85 disabled:opacity-70"
               }
               title={saveState === "saving" ? t("saving") : t("save") + " (Ctrl+Enter)"}
             >

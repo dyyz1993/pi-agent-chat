@@ -1,85 +1,85 @@
-/* pi-agent-linear — Linear/Vercel 极简精致风格设计系统 */
-/* Generated: 2026-07-05 */
+/* pi-agent-linear — Linear/Vercel 极简精致风格设计系统
+ * Generated: 2026-07-08
+ * 命名 schema: 同 pi-agent-chat/colors_and_type.css
+ */
 
 /* ================================
-   Color Palette
+   1. Background Colors
    ================================ */
-
-/* --- Background Scale --- */
 :root {
-  --bg-base: #09090b;
-  --bg-surface: #111113;
+  --bg-primary: #09090b;
+  --bg-secondary: #111113;
+  --bg-tertiary: #18181b;
   --bg-elevated: #18181b;
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.08);
   --bg-overlay: rgba(0, 0, 0, 0.6);
   --bg-input: #111113;
 }
 
-/* --- Foreground Scale --- */
+/* ================================
+   2. Text Colors
+   ================================ */
 :root {
   --text-primary: #fafafa;
   --text-secondary: #a1a1aa;
   --text-tertiary: #71717a;
   --text-muted: #52525b;
   --text-inverse: #09090b;
-  --text-link: #8b5cf6;
-  --text-link-hover: #a78bfa;
 }
 
-/* --- Border Scale --- */
+/* ================================
+   3. Border Colors
+   ================================ */
 :root {
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-primary: rgba(255, 255, 255, 0.06);
+  --border-secondary: rgba(255, 255, 255, 0.12);
   --border-focus: rgba(139, 92, 246, 0.5);
   --border-muted: rgba(255, 255, 255, 0.03);
 }
 
-/* --- Accent (Violet) --- */
+/* ================================
+   4. Accent Colors (Violet)
+   ================================ */
 :root {
   --accent: #8b5cf6;
   --accent-hover: #a78bfa;
   --accent-muted: rgba(139, 92, 246, 0.15);
-  --accent-subtle: rgba(139, 92, 246, 0.08);
-}
-
-/* --- Primary (Blue) --- */
-:root {
-  --primary: #3b82f6;
-  --primary-hover: #60a5fa;
-  --primary-muted: rgba(59, 130, 246, 0.15);
-}
-
-/* --- Semantic Status Colors --- */
-:root {
-  --success: #4ade80;
-  --success-muted: rgba(74, 222, 128, 0.12);
-  --warning: #fbbf24;
-  --warning-muted: rgba(251, 191, 36, 0.12);
-  --error: #f87171;
-  --error-muted: rgba(248, 113, 113, 0.12);
-  --info: #60a5fa;
-  --info-muted: rgba(96, 165, 250, 0.12);
-}
-
-/* --- Semantic Tool Colors --- */
-:root {
-  --tool: #22d3ee;
-  --tool-muted: rgba(34, 211, 238, 0.12);
-  --agent: #a78bfa;
-  --agent-muted: rgba(167, 139, 250, 0.12);
-  --memory: #2dd4bf;
-  --memory-muted: rgba(45, 212, 191, 0.12);
+  --accent-text: #8b5cf6;
+  --accent-brand: #3b82f6;
+  --accent-idle: #4ade80;
+  --accent-agent: #a78bfa;
 }
 
 /* ================================
-   Typography
+   5. Status Colors (RGB 三元组格式)
+   ================================ */
+:root {
+  --status-success: 74 222 128;
+  --status-warning: 251 191 36;
+  --status-error: 248 113 113;
+  --status-info: 96 165 250;
+}
+
+/* ================================
+   6. Semantic Colors (RGB 三元组格式)
+   ================================ */
+:root {
+  --semantic-agent: 167 139 250;
+  --semantic-tool: 34 211 238;
+  --semantic-memory: 45 212 191;
+  --semantic-notify: 251 146 60;
+  --semantic-media: 236 72 153;
+  --semantic-line: rgba(255, 255, 255, 0.06);
+}
+
+/* ================================
+   7. Typography
    ================================ */
 :root {
   --font-body:
     -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang SC", system-ui,
     sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+
   --font-size-xs: 11px;
   --font-size-caption: 12px;
   --font-size-body: 13px;
@@ -87,20 +87,23 @@
   --font-size-h3: 16px;
   --font-size-h2: 20px;
   --font-size-h1: 24px;
+
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
+
   --line-height-body: 1.6;
   --line-height-heading: 1.25;
   --line-height-mono: 1.6;
+
   --letter-spacing-tight: -0.01em;
   --letter-spacing-normal: 0.01em;
   --letter-spacing-wide: 0.05em;
 }
 
 /* ================================
-   Spacing (4px grid) 
+   8. Spacing (4px grid)
    ================================ */
 :root {
   --space-1: 4px;
@@ -111,10 +114,14 @@
   --space-6: 24px;
   --space-7: 32px;
   --space-8: 48px;
+
+  --spacing-indent: 24px;
+  --input-font-size: 16px;
+  --touch-target-min: 44px;
 }
 
 /* ================================
-   Border Radius
+   9. Border Radius
    ================================ */
 :root {
   --radius-sm: 6px;
@@ -125,17 +132,19 @@
 }
 
 /* ================================
-   Shadows (multi-layer, soft)
+   10. Shadows (multi-layer, soft)
    ================================ */
 :root {
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.15);
-  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
-  --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
-  --shadow-4: 0 8px 16px rgba(0, 0, 0, 0.3), 0 16px 48px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.3), 0 16px 48px rgba(0, 0, 0, 0.2);
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-floating: 0 4px 8px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 /* ================================
-   Transitions
+   11. Transitions
    ================================ */
 :root {
   --transition-fast: 100ms ease;
@@ -144,13 +153,27 @@
 }
 
 /* ================================
-   Z-index layers
+   12. Z-Index
    ================================ */
 :root {
-  --z-dropdown: 100;
-  --z-popover: 200;
-  --z-tooltip: 300;
-  --z-modal: 400;
-  --z-toast: 500;
-  --z-overlay: 600;
+  --z-base: 0;
+  --z-float: 10;
+  --z-header: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
+  --z-fullscreen: 200;
+  --z-system: 300;
+}
+
+/* ================================
+   13. Safe Area
+   ================================ */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }

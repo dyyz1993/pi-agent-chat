@@ -96,7 +96,7 @@ const FileItem = memo(function FileItem({
                 <Icon className="w-3 h-3" />
               </span>
               <span
-                className="text-[11px] font-mono text-semantic-accent truncate"
+                className="text-[11px] font-mono text-accent truncate"
                 title={filePath}
               >
                 {formatFilePath(filePath)}

@@ -39,7 +39,7 @@ const CONTEXT_TAG_REGEX =
   /<((?:skill)|(?:lsp)|(?:system-reminder)|(?:memory(?:-[\w-]+)?))((?:\s+[\w-]+="[^"]*")*)\s*>([\s\S]*?)<\/\1>/g;
 
 const KIND_META = {
-  rule: { label: "Rules", rowLabel: "Rule", Icon: Shield, color: "text-semantic-accent" },
+  rule: { label: "Rules", rowLabel: "Rule", Icon: Shield, color: "text-accent" },
   lsp: { label: "LSP", rowLabel: "LSP", Icon: FileCode, color: "text-status-warning" },
   memory: { label: "Memory", rowLabel: "Memory", Icon: Brain, color: "text-status-info" },
   skill: { label: "Skills", rowLabel: "Skill", Icon: BookOpen, color: "text-semantic-tool" },
@@ -285,7 +285,7 @@ export const ContextReferenceCard = memo(function ContextReferenceCard({
     >
       <summary className="flex min-h-7 cursor-pointer select-none items-center gap-1.5 px-3 py-1 text-[11px] text-text-secondary hover:bg-surface-hover/30 list-none">
         <ChevronRight className="h-3 w-3 shrink-0 text-text-tertiary transition-transform group-open:rotate-90" />
-        <Zap className="h-3 w-3 shrink-0 text-semantic-accent" />
+        <Zap className="h-3 w-3 shrink-0 text-accent" />
         <span className="font-medium text-text-primary">Context</span>
         <span className="min-w-0 truncate text-text-tertiary">{countByKind(references)}</span>
       </summary>

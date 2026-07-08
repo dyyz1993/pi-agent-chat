@@ -16,7 +16,7 @@ const log = createLogger("memory");
 
 const TYPE_BADGES: Record<string, { labelKey: string; cls: string }> = {
   project: { labelKey: "typeProject", cls: "bg-status-success/15 text-status-success" },
-  user: { labelKey: "typeUser", cls: "bg-semantic-accent/15 text-semantic-accent" },
+  user: { labelKey: "typeUser", cls: "bg-accent/15 text-accent" },
   feedback: { labelKey: "typeFeedback", cls: "bg-status-warning/15 text-status-warning" },
   reference: { labelKey: "typeReference", cls: "bg-status-info/15 text-status-info" },
 };
@@ -67,7 +67,7 @@ function FileContentPreview({ filePath }: { filePath: string }) {
   if (loading) {
     return (
       <div className="px-3 py-1.5 text-[10px] text-text-tertiary flex items-center gap-1.5">
-        <div className="w-3 h-3 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin" />
+        <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
         {t("loading")}
       </div>
     );

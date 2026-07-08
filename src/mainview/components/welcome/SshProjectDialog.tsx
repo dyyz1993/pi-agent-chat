@@ -80,14 +80,18 @@ function RuntimeMethodIcon({
   tone,
 }: {
   children: ReactNode;
-  tone: "info" | "warning" | "muted";
+  tone: "ssh" | "sandbox" | "docker" | "warning" | "muted";
 }) {
   const toneClass =
-    tone === "info"
-      ? "border-status-info/45 bg-status-info/10 text-status-info"
-      : tone === "warning"
-        ? "border-status-warning/45 bg-status-warning/10 text-status-warning"
-        : "border-border-secondary bg-surface-hover/40 text-text-tertiary";
+    tone === "ssh"
+      ? "border-runtime-ssh/45 bg-runtime-ssh/10 text-runtime-ssh"
+      : tone === "sandbox"
+      ? "border-runtime-sandbox/45 bg-runtime-sandbox/10 text-runtime-sandbox"
+      : tone === "docker"
+        ? "border-runtime-docker/30 bg-runtime-docker/8 text-runtime-docker/60"
+        : tone === "warning"
+          ? "border-status-warning/45 bg-status-warning/10 text-status-warning"
+          : "border-border-secondary bg-surface-hover/40 text-text-tertiary";
 
   return (
     <span className={`flex h-10 w-10 items-center justify-center rounded-md border ${toneClass}`}>
@@ -532,20 +536,24 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-modal bg-bg-primary text-text-primary">
-      <div className="flex h-full flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-modal flex flex-col overflow-hidden bg-bg-elevated text-text-primary dark:bg-surface-code"
+    >
         <header
-          className="flex items-start justify-between border-b border-border-secondary bg-bg-elevated px-6 py-5"
-          style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}
+          className="surface-header-safe-top flex shrink-0 items-center gap-3 border-b border-border-secondary bg-surface-dim px-4 py-2 dark:bg-surface-code sm:px-5"
         >
-          <div>
-            <h2 className="text-xl font-semibold leading-7">{t("welcome.remoteConfigTitle")}</h2>
-            <p className="mt-1 text-sm leading-5 text-text-secondary">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold text-text-primary">
+              {t("welcome.remoteConfigTitle")}
+            </h2>
+            <p className="truncate text-xs text-text-tertiary">
               {t("welcome.remoteConfigSubtitle")}
             </p>
           </div>
-          <IconButton label={t("close")} size="md" onClick={onClose}>
-            <X className="h-5 w-5" />
+          <IconButton label={t("close")} size="sm" onClick={onClose} className="rounded-md">
+            <X className="h-4 w-4" />
           </IconButton>
         </header>
 
@@ -606,9 +614,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                           setSshRuntimeKind("remote-agent-child");
                           setStep("config");
                         }}
-                        className="min-h-44 rounded-lg border border-status-info/50 bg-status-info/10 p-5 text-left transition hover:border-status-info"
+                        className="min-h-44 rounded-lg border border-runtime-ssh/50 bg-runtime-ssh/10 p-5 text-left transition hover:border-runtime-ssh"
                       >
-                        <RuntimeMethodIcon tone="info">
+                        <RuntimeMethodIcon tone="ssh">
                           <CloudCog className="h-5 w-5 stroke-[1.8]" />
                         </RuntimeMethodIcon>
                         <div className="mt-6 text-xl font-semibold text-text-primary">
@@ -624,9 +632,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                           setSshRuntimeKind("ssh-command");
                           setStep("config");
                         }}
-                        className="min-h-44 rounded-lg border border-border-secondary bg-bg-primary/60 p-5 text-left transition hover:border-status-warning/70 hover:bg-status-warning/5"
+                        className="min-h-44 rounded-lg border border-border-secondary bg-bg-primary/60 p-5 text-left transition hover:border-runtime-sandbox/70 hover:bg-runtime-sandbox/5"
                       >
-                        <RuntimeMethodIcon tone="warning">
+                        <RuntimeMethodIcon tone="sandbox">
                           <Cable className="h-5 w-5 stroke-[1.8]" />
                         </RuntimeMethodIcon>
                         <div className="mt-6 text-xl font-semibold text-text-primary">
@@ -641,7 +649,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         disabled
                         className="min-h-44 rounded-lg border border-border-secondary bg-bg-primary/50 p-5 text-left opacity-60"
                       >
-                        <RuntimeMethodIcon tone="muted">
+                        <RuntimeMethodIcon tone="docker">
                           <UploadCloud className="h-5 w-5 stroke-[1.8]" />
                         </RuntimeMethodIcon>
                         <div className="mt-6 text-xl font-semibold text-text-secondary">Docker</div>
@@ -659,8 +667,8 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                       <span
                         className={`flex h-9 w-9 items-center justify-center rounded-md border ${
                           sshRuntimeKind === "ssh-command"
-                            ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                            : "border-status-info/30 bg-status-info/10 text-status-info"
+                            ? "border-runtime-sandbox/40 bg-runtime-sandbox/10 text-runtime-sandbox"
+                            : "border-runtime-ssh/40 bg-runtime-ssh/10 text-runtime-ssh"
                         }`}
                       >
                         {sshRuntimeKind === "ssh-command" ? (
@@ -681,7 +689,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
 
                     <label className="block">
                       <span className="mb-2 flex items-center gap-2 text-sm font-medium text-text-secondary">
-                        <Search className="h-4 w-4 text-status-info" />
+                        <Search className="h-4 w-4 text-runtime-ssh" />
                         {t("welcome.remoteConnectionAlias")}
                       </span>
                       <DropdownSelect
@@ -726,7 +734,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                                 : t("welcome.remoteManualDetail")}
                           </div>
                         </div>
-                        <span className="rounded bg-status-info/10 px-2 py-1 text-xs font-medium text-status-info">
+                        <span className="rounded bg-runtime-ssh/10 px-2 py-1 text-xs font-medium text-runtime-ssh">
                           SSH
                         </span>
                       </div>
@@ -744,7 +752,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                     <button
                       type="button"
                       onClick={() => setAdvancedOpen((value) => !value)}
-                      className="mt-4 inline-flex items-center gap-2 rounded-md px-1 py-1 text-sm font-medium text-status-info hover:text-status-info/80"
+                      className="mt-4 inline-flex items-center gap-2 rounded-md px-1 py-1 text-sm font-medium text-runtime-ssh hover:text-runtime-ssh/80"
                     >
                       <Settings2 className="h-4 w-4" />
                       {advancedOpen
@@ -854,7 +862,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                             type="checkbox"
                             checked={syncResourcesEnabled}
                             onChange={(event) => setSyncResourcesEnabled(event.target.checked)}
-                            className="mt-1 h-4 w-4 rounded border-border-secondary bg-bg-primary accent-semantic-accent"
+                            className="mt-1 h-4 w-4 rounded border-border-secondary bg-bg-primary accent-accent"
                           />
                           <span className="min-w-0">
                             <span className="block text-sm font-semibold text-text-primary">
@@ -884,7 +892,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                                       ? "cursor-pointer bg-bg-elevated hover:border-border-focus hover:bg-surface-hover/25"
                                       : "cursor-not-allowed bg-bg-primary/50",
                                     selected && syncResourcesEnabled
-                                      ? "border-[var(--color-accent)] bg-[var(--color-accent)]/8"
+                                      ? "border-accent bg-accent/10"
                                       : "border-border-secondary",
                                   )}
                                 >
@@ -893,7 +901,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                                     checked={selected}
                                     disabled={!syncResourcesEnabled}
                                     onChange={() => toggleSyncResourceType(resource.type)}
-                                    className="mt-0.5 h-4 w-4 rounded border-border-secondary bg-bg-primary accent-semantic-accent"
+                                    className="mt-0.5 h-4 w-4 rounded border-border-secondary bg-bg-primary accent-accent"
                                   />
                                   <span className="min-w-0 flex-1">
                                     <span className="block text-sm font-medium text-text-primary">
@@ -1108,8 +1116,8 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
         </div>
 
         <footer
-          className="flex flex-col gap-3 border-t border-border-secondary bg-bg-elevated px-6 py-4 sm:flex-row sm:items-start sm:justify-between"
-          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+          className="flex flex-col gap-3 border-t border-border-secondary bg-surface-dim px-4 py-3 dark:bg-surface-code sm:flex-row sm:items-center sm:justify-between"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="min-h-10 min-w-0 flex-1">
             {message && (
@@ -1201,7 +1209,6 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
             )}
           </div>
         </footer>
-      </div>
     </div>
   );
 }

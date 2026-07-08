@@ -43,7 +43,7 @@ export const SnapshotBadge = memo(function SnapshotBadge({ data, blockId }: Snap
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className={`${CHAT_COMPACT_ROW_BUTTON_BASE_CLASS} text-semantic-accent/80 hover:bg-surface-hover/15`}
+        className={`${CHAT_COMPACT_ROW_BUTTON_BASE_CLASS} text-accent/80 hover:bg-surface-hover/15`}
         aria-expanded={expanded}
       >
         <Camera className="w-3 h-3 shrink-0" />

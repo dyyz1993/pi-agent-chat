@@ -85,7 +85,7 @@ export function ThemeMenu() {
                 size="sm"
                 className={`w-full justify-start rounded-none px-3 py-1.5 text-left ${
                   isActive
-                    ? "bg-semantic-accent/10 text-accent-text"
+                    ? "bg-accent/10 text-accent-text"
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 }`}
                 onClick={() => {
@@ -120,7 +120,7 @@ export function ThemeMenu() {
                 size="sm"
                 className={`w-full justify-start rounded-none px-3 py-1.5 text-left ${
                   isActive
-                    ? "bg-semantic-accent/10 text-accent-text"
+                    ? "bg-accent/10 text-accent-text"
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 }`}
                 onClick={(e) => {

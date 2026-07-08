@@ -58,8 +58,8 @@ function TreeNodeItemInner({
     <li role="treeitem" aria-expanded={isDir ? node.expanded : undefined}>
       <div
         tabIndex={0}
-        className={`flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors outline-none focus:ring-1 focus:ring-semantic-accent/50 ${
-          isSelected ? "bg-semantic-accent/30 text-white" : "hover:bg-surface-hover"
+        className={`flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors outline-none focus:ring-1 focus:ring-accent/50 ${
+          isSelected ? "bg-accent/30 text-white" : "hover:bg-surface-hover"
         }`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => (isDir ? onToggle(node.path) : onOpenFile(node))}

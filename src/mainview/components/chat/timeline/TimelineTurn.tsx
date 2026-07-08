@@ -242,7 +242,7 @@ export const TimelineTurn = memo(function TimelineTurn({
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
       {/* ── Left Timeline Line & Dots ── */}
-      <div className="absolute left-[11px] top-6 bottom-0 w-px bg-gradient-to-b from-semantic-accent/40 via-status-success/30 to-transparent" />
+      <div className="absolute left-[11px] top-6 bottom-0 w-px bg-gradient-to-b from-accent/40 via-status-success/30 to-transparent" />
 
       {/* ── Turn Header ── */}
       <div className="flex items-start gap-3 mb-1">
@@ -386,7 +386,7 @@ export const TimelineTurn = memo(function TimelineTurn({
                   disabled={isSessionBusy}
                 />
               </div>
-              <div className="max-w-[80%] px-3 py-2 rounded-lg bg-semantic-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-semantic-accent/30 select-text">
+              <div className="max-w-[80%] px-3 py-2 rounded-lg bg-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-accent/30 select-text">
                 {turn.userText}
               </div>
             </div>
@@ -451,7 +451,7 @@ function TimelineItemRenderer({
         <div className="group/item relative">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <div className="px-3 py-2 rounded-lg bg-surface-code/60 dark:bg-surface-dim/60 text-sm text-text-secondary font-mono">
-            <span className="text-semantic-accent">{item.toolName}</span>
+            <span className="text-accent">{item.toolName}</span>
             {item.args && <span className="text-text-tertiary ml-1">{item.args.slice(0, 80)}</span>}
           </div>
         </div>
@@ -489,7 +489,7 @@ function ItemCheckbox({ checked, onChange }: { checked: boolean; onChange: () =>
       }}
       className={`absolute -left-[26px] top-2 w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
         checked
-          ? "bg-semantic-accent border-semantic-accent text-white"
+          ? "bg-accent border-accent text-white"
           : "border-border-secondary hover:border-border-secondary bg-transparent"
       }`}
     >
@@ -506,7 +506,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
     return (
       <div className="px-3 py-2 rounded-lg bg-surface-hover/60 text-sm text-text-primary whitespace-pre-wrap break-words select-text">
         {text}
-        <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-0.5 align-text-bottom" />
+        <span className="inline-block w-1.5 h-4 bg-accent animate-pulse ml-0.5 align-text-bottom" />
       </div>
     );
   }
@@ -554,7 +554,7 @@ function TurnActionButton({
         ? "text-status-info/70 hover:text-status-info hover:bg-status-info/10"
         : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim";
 
-  const activeClass = active ? "!bg-semantic-accent/20 !text-semantic-accent" : "";
+  const activeClass = active ? "!bg-accent/20 !text-accent" : "";
 
   return (
     <button

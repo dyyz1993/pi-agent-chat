@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design Token Schema · 5 Variant 对比预览</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        background: #1a1a1a;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        color: #e4e4e7;
+        padding: 24px;
+        line-height: 1.5;
+      }
+
+      /* ── Variant 切换 ── */
+      .variant-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #1a1a1a;
+        padding: 12px 0 20px;
+        border-bottom: 1px solid #333;
+        margin-bottom: 24px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .variant-bar h1 {
+        font-size: 14px;
+        color: #71717a;
+        font-weight: 500;
+        margin-right: 12px;
+        letter-spacing: 0.02em;
+      }
+      .variant-btn {
+        padding: 6px 14px;
+        border: 1px solid #3f3f46;
+        background: #27272a;
+        color: #a1a1aa;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-family: inherit;
+        transition: all 120ms ease;
+      }
+      .variant-btn:hover {
+        border-color: #52525b;
+        color: #e4e4e7;
+      }
+      .variant-btn.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #fff;
+      }
+      .variant-note {
+        margin-left: auto;
+        font-size: 12px;
+        color: #71717a;
+      }
+
+      /* ── 预览容器：根据 data-variant 切换 css 引用 ── */
+      .preview-root {
+        display: none;
+      }
+      .preview-root.active {
+        display: block;
+      }
+
+      /* ── 区块标题 ── */
+      .section {
+        margin-bottom: 48px;
+      }
+      .section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #71717a;
+        margin-bottom: 16px;
+        font-weight: 600;
+        border-bottom: 1px solid #27272a;
+        padding-bottom: 8px;
+      }
+      .section-title small {
+        text-transform: none;
+        letter-spacing: 0;
+        color: #52525b;
+        font-weight: 400;
+        margin-left: 8px;
+      }
+
+      /* ── 色板网格 ── */
+      .swatch-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 12px;
+      }
+      .swatch {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: #18181b;
+      }
+      .swatch-chip {
+        height: 72px;
+        display: flex;
+        align-items: flex-end;
+        padding: 8px 10px;
+        font-size: 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .swatch-meta {
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+      .swatch-name {
+        color: #e4e4e7;
+        font-weight: 500;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        margin-bottom: 2px;
+      }
+      .swatch-value {
+        color: #71717a;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 10px;
+        word-break: break-all;
+      }
+
+      /* ── 间距展示 ── */
+      .spacing-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 8px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
+        color: #a1a1aa;
+      }
+      .spacing-name {
+        width: 100px;
+        color: #e4e4e7;
+      }
+      .spacing-bar {
+        background: #3b82f6;
+        height: 12px;
+        border-radius: 2px;
+      }
+      .spacing-value {
+        color: #71717a;
+      }
+
+      /* ── 圆角展示 ── */
+      .radius-grid {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .radius-item {
+        text-align: center;
+      }
+      .radius-box {
+        width: 72px;
+        height: 72px;
+        background: var(--accent, #3b82f6);
+        margin-bottom: 8px;
+      }
+      .radius-name {
+        font-size: 11px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        color: #e4e4e7;
+      }
+      .radius-value {
+        font-size: 10px;
+        color: #71717a;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+
+      /* ── 阴影展示 ── */
+      .shadow-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 24px;
+      }
+      .shadow-item {
+        background: #18181b;
+        padding: 24px;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .shadow-name {
+        font-size: 11px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        color: #e4e4e7;
+        margin-top: 16px;
+      }
+
+      /* ── 字体展示 ── */
+      .type-sample {
+        background: #18181b;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        border: 1px solid #27272a;
+      }
+      .type-label {
+        font-size: 10px;
+        color: #71717a;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        margin-bottom: 4px;
+      }
+      .type-content {
+        color: #e4e4e7;
+      }
+
+      /* ── 状态色 (RGB) 展示 ── */
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+      }
+      .status-item {
+        background: #18181b;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .status-bar {
+        height: 40px;
+      }
+      .status-alpha {
+        height: 24px;
+      }
+      .status-meta {
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+      .status-name {
+        color: #e4e4e7;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        margin-bottom: 2px;
+      }
+      .status-value {
+        color: #71717a;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 10px;
+      }
+    </style>
+
+    <!-- 5 个 variant 的 CSS, 通过 data-variant 属性切换 active -->
+    <link rel="stylesheet" href="pi-agent-chat/colors_and_type.css" data-variant-css="chat" disabled />
+    <link rel="stylesheet" href="pi-agent-apple/colors_and_type.css" data-variant-css="apple" disabled />
+    <link rel="stylesheet" href="pi-agent-copilot/colors_and_type.css" data-variant-css="copilot" disabled />
+    <link rel="stylesheet" href="pi-agent-cursor/colors_and_type.css" data-variant-css="cursor" disabled />
+    <link rel="stylesheet" href="pi-agent-linear/colors_and_type.css" data-variant-css="linear" disabled />
+
+    <style id="dark-scope">
+      /* 所有 variant 的 :root token 在预览页里都以 dark 模式显示,
+         通过 .dark 类作用域激活 */
+      .preview-root.dark {
+        /* token 在 css 文件里定义在 :root, 这里直接继承 */
+      }
+    </style>
+  </head>
+  <body>
+    <div class="variant-bar">
+      <h1>Design Token Schema</h1>
+      <button class="variant-btn active" data-variant="chat">pi-agent-chat</button>
+      <button class="variant-btn" data-variant="apple">pi-agent-apple</button>
+      <button class="variant-btn" data-variant="copilot">pi-agent-copilot</button>
+      <button class="variant-btn" data-variant="cursor">pi-agent-cursor</button>
+      <button class="variant-btn" data-variant="linear">pi-agent-linear</button>
+      <span class="variant-note">统一命名 schema · 5 variant 对比</span>
+    </div>
+
+    <!-- 5 个预览根, 切换显示 -->
+    <div class="preview-root active dark" data-variant-root="chat"></div>
+    <div class="preview-root dark" data-variant-root="apple"></div>
+    <div class="preview-root dark" data-variant-root="copilot"></div>
+    <div class="preview-root dark" data-variant-root="cursor"></div>
+    <div class="preview-root dark" data-variant-root="linear"></div>
+
+    <!-- 预览内容模板 (JS 动态填充到 active root) -->
+    <template id="content-template">
+      <!-- 背景色 -->
+      <div class="section">
+        <div class="section-title">Background <small>--bg-*</small></div>
+        <div class="swatch-grid" data-token-group="bg"></div>
+      </div>
+
+      <!-- 文字色 -->
+      <div class="section">
+        <div class="section-title">Text <small>--text-*</small></div>
+        <div class="swatch-grid" data-token-group="text"></div>
+      </div>
+
+      <!-- 边框色 -->
+      <div class="section">
+        <div class="section-title">Border <small>--border-*</small></div>
+        <div class="swatch-grid" data-token-group="border"></div>
+      </div>
+
+      <!-- 强调色 -->
+      <div class="section">
+        <div class="section-title">Accent <small>--accent-*</small></div>
+        <div class="swatch-grid" data-token-group="accent"></div>
+      </div>
+
+      <!-- 状态色 (RGB) -->
+      <div class="section">
+        <div class="section-title">
+          Status (RGB 三元组)
+          <small>--status-* · Tailwind: rgb(var(--status-success) / 0.1)</small>
+        </div>
+        <div class="status-grid" data-token-group="status"></div>
+      </div>
+
+      <!-- 语义色 (RGB) -->
+      <div class="section">
+        <div class="section-title">Semantic <small>--semantic-*</small></div>
+        <div class="status-grid" data-token-group="semantic"></div>
+      </div>
+
+      <!-- 间距 -->
+      <div class="section">
+        <div class="section-title">Spacing <small>--space-1~8 (4px grid)</small></div>
+        <div data-token-group="spacing"></div>
+      </div>
+
+      <!-- 圆角 -->
+      <div class="section">
+        <div class="section-title">Radius <small>--radius-*</small></div>
+        <div class="radius-grid" data-token-group="radius"></div>
+      </div>
+
+      <!-- 阴影 -->
+      <div class="section">
+        <div class="section-title">Shadow <small>--shadow-*</small></div>
+        <div class="shadow-grid" data-token-group="shadow"></div>
+      </div>
+
+      <!-- 字体 -->
+      <div class="section">
+        <div class="section-title">Typography <small>--font-* · --font-size-*</small></div>
+        <div data-token-group="type"></div>
+      </div>
+    </template>
+
+    <script>
+      const variantTokens = {
+        chat: {
+          bg: [
+            ["bg-primary", "#edf1f6"],
+            ["bg-secondary", "#f8fafc"],
+            ["bg-tertiary", "#e7edf4"],
+            ["bg-elevated", "#ffffff"],
+            ["bg-overlay", "rgba(12,18,28,0.48)"],
+            ["bg-input", "#edf1f6"],
+          ],
+          text: [
+            ["text-primary", "#17202e"],
+            ["text-secondary", "#4f5f72"],
+            ["text-tertiary", "#7d8a9c"],
+            ["text-muted", "#7d8a9c"],
+            ["text-inverse", "#f7fafc"],
+          ],
+          border: [
+            ["border-primary", "#dce4ee"],
+            ["border-secondary", "#c7d2df"],
+            ["border-focus", "#246df3"],
+            ["border-muted", "#eef2f8"],
+          ],
+          accent: [
+            ["accent", "#746cff"],
+            ["accent-hover", "#8d88ff"],
+            ["accent-muted", "rgba(116,108,255,0.12)"],
+            ["accent-text", "#6b4cf0"],
+            ["accent-brand", "#246df3"],
+            ["accent-idle", "#16845f"],
+            ["accent-agent", "#7f55cc"],
+          ],
+          status: [
+            ["status-success", "22 132 95"],
+            ["status-warning", "179 107 0"],
+            ["status-error", "207 54 84"],
+            ["status-info", "36 109 243"],
+          ],
+          semantic: [
+            ["semantic-agent", "127 85 204"],
+            ["semantic-tool", "0 128 149"],
+            ["semantic-memory", "30 140 113"],
+            ["semantic-notify", "186 86 36"],
+            ["semantic-media", "236 72 153"],
+          ],
+        },
+        apple: {
+          bg: [
+            ["bg-primary", "#1c1c1e"],
+            ["bg-secondary", "rgba(30,30,30,0.85)"],
+            ["bg-tertiary", "rgba(44,44,46,0.7)"],
+            ["bg-elevated", "rgba(58,58,60,0.6)"],
+            ["bg-overlay", "rgba(0,0,0,0.4)"],
+            ["bg-input", "rgba(0,0,0,0.25)"],
+          ],
+          text: [
+            ["text-primary", "#ffffff"],
+            ["text-secondary", "rgba(255,255,255,0.55)"],
+            ["text-tertiary", "rgba(255,255,255,0.35)"],
+            ["text-muted", "rgba(255,255,255,0.2)"],
+            ["text-inverse", "#1c1c1e"],
+          ],
+          border: [
+            ["border-primary", "rgba(255,255,255,0.08)"],
+            ["border-secondary", "rgba(255,255,255,0.15)"],
+            ["border-focus", "rgba(10,132,255,0.5)"],
+            ["border-muted", "rgba(255,255,255,0.04)"],
+          ],
+          accent: [
+            ["accent", "#0a84ff"],
+            ["accent-hover", "#409cff"],
+            ["accent-muted", "rgba(10,132,255,0.15)"],
+            ["accent-text", "#0a84ff"],
+            ["accent-brand", "#0a84ff"],
+            ["accent-idle", "#30d158"],
+            ["accent-agent", "#bf5af2"],
+          ],
+          status: [
+            ["status-success", "48 209 88"],
+            ["status-warning", "255 214 10"],
+            ["status-error", "255 69 58"],
+            ["status-info", "100 210 255"],
+          ],
+          semantic: [
+            ["semantic-agent", "191 90 242"],
+            ["semantic-tool", "90 200 250"],
+            ["semantic-memory", "102 212 207"],
+            ["semantic-notify", "255 159 10"],
+            ["semantic-media", "255 55 95"],
+          ],
+        },
+        copilot: {
+          bg: [
+            ["bg-primary", "#0d1117"],
+            ["bg-secondary", "#161b22"],
+            ["bg-tertiary", "#161b22"],
+            ["bg-elevated", "#1c2128"],
+            ["bg-overlay", "rgba(0,0,0,0.5)"],
+            ["bg-input", "#0d1117"],
+          ],
+          text: [
+            ["text-primary", "#e6edf3"],
+            ["text-secondary", "#8b949e"],
+            ["text-tertiary", "#6e7681"],
+            ["text-muted", "#484f58"],
+            ["text-inverse", "#0d1117"],
+          ],
+          border: [
+            ["border-primary", "#30363d"],
+            ["border-secondary", "#484f58"],
+            ["border-focus", "#388bfd"],
+            ["border-muted", "#21262d"],
+          ],
+          accent: [
+            ["accent", "#58a6ff"],
+            ["accent-hover", "#79c0ff"],
+            ["accent-muted", "rgba(88,166,255,0.1)"],
+            ["accent-text", "#58a6ff"],
+            ["accent-brand", "#58a6ff"],
+            ["accent-idle", "#3fb950"],
+            ["accent-agent", "#bc8cff"],
+          ],
+          status: [
+            ["status-success", "63 185 80"],
+            ["status-warning", "210 153 34"],
+            ["status-error", "248 81 73"],
+            ["status-info", "88 166 255"],
+          ],
+          semantic: [
+            ["semantic-agent", "188 140 255"],
+            ["semantic-tool", "57 211 83"],
+            ["semantic-memory", "57 211 83"],
+            ["semantic-notify", "210 153 34"],
+            ["semantic-media", "248 81 73"],
+          ],
+        },
+        cursor: {
+          bg: [
+            ["bg-primary", "#0b111a"],
+            ["bg-secondary", "#111827"],
+            ["bg-tertiary", "#121b28"],
+            ["bg-elevated", "#1e293b"],
+            ["bg-overlay", "rgba(0,0,0,0.5)"],
+            ["bg-input", "#0d1520"],
+          ],
+          text: [
+            ["text-primary", "#f2f6fb"],
+            ["text-secondary", "#94a3b8"],
+            ["text-tertiary", "#64748b"],
+            ["text-muted", "#475569"],
+            ["text-inverse", "#0b111a"],
+          ],
+          border: [
+            ["border-primary", "#1e293b"],
+            ["border-secondary", "#334155"],
+            ["border-focus", "#746cff"],
+            ["border-muted", "#1a2332"],
+          ],
+          accent: [
+            ["accent", "#746cff"],
+            ["accent-hover", "#8d88ff"],
+            ["accent-muted", "rgba(116,108,255,0.15)"],
+            ["accent-text", "#746cff"],
+            ["accent-brand", "#246df3"],
+            ["accent-idle", "#34d399"],
+            ["accent-agent", "#7f55cc"],
+          ],
+          status: [
+            ["status-success", "52 211 153"],
+            ["status-warning", "251 191 36"],
+            ["status-error", "248 113 113"],
+            ["status-info", "96 165 250"],
+          ],
+          semantic: [
+            ["semantic-agent", "127 85 204"],
+            ["semantic-tool", "0 128 149"],
+            ["semantic-memory", "30 140 113"],
+            ["semantic-notify", "251 146 60"],
+            ["semantic-media", "236 72 153"],
+          ],
+        },
+        linear: {
+          bg: [
+            ["bg-primary", "#09090b"],
+            ["bg-secondary", "#111113"],
+            ["bg-tertiary", "#18181b"],
+            ["bg-elevated", "#18181b"],
+            ["bg-overlay", "rgba(0,0,0,0.6)"],
+            ["bg-input", "#111113"],
+          ],
+          text: [
+            ["text-primary", "#fafafa"],
+            ["text-secondary", "#a1a1aa"],
+            ["text-tertiary", "#71717a"],
+            ["text-muted", "#52525b"],
+            ["text-inverse", "#09090b"],
+          ],
+          border: [
+            ["border-primary", "rgba(255,255,255,0.06)"],
+            ["border-secondary", "rgba(255,255,255,0.12)"],
+            ["border-focus", "rgba(139,92,246,0.5)"],
+            ["border-muted", "rgba(255,255,255,0.03)"],
+          ],
+          accent: [
+            ["accent", "#8b5cf6"],
+            ["accent-hover", "#a78bfa"],
+            ["accent-muted", "rgba(139,92,246,0.15)"],
+            ["accent-text", "#8b5cf6"],
+            ["accent-brand", "#3b82f6"],
+            ["accent-idle", "#4ade80"],
+            ["accent-agent", "#a78bfa"],
+          ],
+          status: [
+            ["status-success", "74 222 128"],
+            ["status-warning", "251 191 36"],
+            ["status-error", "248 113 113"],
+            ["status-info", "96 165 250"],
+          ],
+          semantic: [
+            ["semantic-agent", "167 139 250"],
+            ["semantic-tool", "34 211 238"],
+            ["semantic-memory", "45 212 191"],
+            ["semantic-notify", "251 146 60"],
+            ["semantic-media", "236 72 153"],
+          ],
+        },
+      };
+
+      const spacingTokens = [
+        ["space-1", "4px"],
+        ["space-2", "8px"],
+        ["space-3", "12px"],
+        ["space-4", "16px"],
+        ["space-5", "20px"],
+        ["space-6", "24px"],
+        ["space-7", "32px"],
+        ["space-8", "48px"],
+      ];
+
+      const radiusTokens = {
+        chat: { sm: "4px", md: "6px", lg: "8px", xl: "10px" },
+        apple: { sm: "6px", md: "8px", lg: "10px", xl: "12px" },
+        copilot: { sm: "6px", md: "8px", lg: "10px", xl: "12px" },
+        cursor: { sm: "2px", md: "4px", lg: "6px", xl: "8px" },
+        linear: { sm: "6px", md: "8px", lg: "10px", xl: "12px" },
+      };
+
+      const shadowNames = [
+        "shadow-sm",
+        "shadow-md",
+        "shadow-lg",
+        "shadow-xl",
+        "shadow-subtle",
+        "shadow-floating",
+      ];
+
+      const typeSamples = [
+        { name: "font-size-h1", size: "22px", text: "Design Token 系统" },
+        { name: "font-size-h2", size: "18px", text: "统一命名 Schema" },
+        { name: "font-size-h3", size: "16px", text: "5 Variant 对比预览" },
+        { name: "font-size-body", size: "13px", text: "这是正文字号,用于主要文本内容展示。" },
+        { name: "font-size-caption", size: "12px", text: "说明文字/次要信息" },
+        { name: "font-size-xs", size: "11px", text: "标签/徽章/辅助信息" },
+      ];
+
+      function rgbToCss(rgbStr) {
+        const parts = rgbStr.split(" ").map(Number);
+        return `rgb(${parts.join(",")})`;
+      }
+
+      function renderVariant(variant) {
+        const root = document.querySelector(`[data-variant-root="${variant}"]`);
+        const tokens = variantTokens[variant];
+        const template = document.getElementById("content-template").content.cloneNode(true);
+
+        // 背景色
+        const bgGrid = template.querySelector('[data-token-group="bg"]');
+        tokens.bg.forEach(([name, value]) => {
+          bgGrid.appendChild(createSwatch(name, value, value));
+        });
+
+        // 文字色
+        const textGrid = template.querySelector('[data-token-group="text"]');
+        tokens.text.forEach(([name, value]) => {
+          textGrid.appendChild(createSwatch(name, value, value));
+        });
+
+        // 边框
+        const borderGrid = template.querySelector('[data-token-group="border"]');
+        tokens.border.forEach(([name, value]) => {
+          borderGrid.appendChild(createSwatch(name, value, value));
+        });
+
+        // 强调色
+        const accentGrid = template.querySelector('[data-token-group="accent"]');
+        tokens.accent.forEach(([name, value]) => {
+          accentGrid.appendChild(createSwatch(name, value, value));
+        });
+
+        // 状态色 (RGB)
+        const statusGrid = template.querySelector('[data-token-group="status"]');
+        tokens.status.forEach(([name, rgb]) => {
+          statusGrid.appendChild(createStatusItem(name, rgb));
+        });
+
+        // 语义色 (RGB)
+        const semanticGrid = template.querySelector('[data-token-group="semantic"]');
+        tokens.semantic.forEach(([name, rgb]) => {
+          semanticGrid.appendChild(createStatusItem(name, rgb));
+        });
+
+        // 间距
+        const spacingContainer = template.querySelector('[data-token-group="spacing"]');
+        spacingTokens.forEach(([name, value]) => {
+          spacingContainer.appendChild(createSpacingRow(name, value));
+        });
+
+        // 圆角
+        const radiusGrid = template.querySelector('[data-token-group="radius"]');
+        const radii = radiusTokens[variant];
+        Object.entries(radii).forEach(([name, value]) => {
+          radiusGrid.appendChild(createRadiusItem(`radius-${name}`, value));
+        });
+
+        // 阴影
+        const shadowGrid = template.querySelector('[data-token-group="shadow"]');
+        shadowNames.forEach((name) => {
+          shadowGrid.appendChild(createShadowItem(name));
+        });
+
+        // 字体
+        const typeContainer = template.querySelector('[data-token-group="type"]');
+        typeSamples.forEach((sample) => {
+          typeContainer.appendChild(createTypeSample(sample));
+        });
+
+        root.innerHTML = "";
+        root.appendChild(template);
+      }
+
+      function createSwatch(name, chipColor, valueText) {
+        const div = document.createElement("div");
+        div.className = "swatch";
+        div.innerHTML = `
+          <div class="swatch-chip" style="background:${chipColor}"></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">--${name}</div>
+            <div class="swatch-value">${valueText}</div>
+          </div>
+        `;
+        return div;
+      }
+
+      function createStatusItem(name, rgb) {
+        const css = rgbToCss(rgb);
+        const div = document.createElement("div");
+        div.className = "status-item";
+        div.innerHTML = `
+          <div class="status-bar" style="background:${css}"></div>
+          <div class="status-alpha" style="background:rgb(${rgb.split(" ").join(",")} / 0.15)"></div>
+          <div class="status-meta">
+            <div class="status-name">--${name}</div>
+            <div class="status-value">${rgb} → rgb(${rgb.split(" ").join(",")} / α)</div>
+          </div>
+        `;
+        return div;
+      }
+
+      function createSpacingRow(name, value) {
+        const div = document.createElement("div");
+        div.className = "spacing-row";
+        const px = parseInt(value);
+        div.innerHTML = `
+          <span class="spacing-name">--${name}</span>
+          <div class="spacing-bar" style="width:${px * 2}px"></div>
+          <span class="spacing-value">${value}</span>
+        `;
+        return div;
+      }
+
+      function createRadiusItem(name, value) {
+        const div = document.createElement("div");
+        div.className = "radius-item";
+        div.innerHTML = `
+          <div class="radius-box" style="border-radius:${value};background:var(--accent)"></div>
+          <div class="radius-name">--${name}</div>
+          <div class="radius-value">${value}</div>
+        `;
+        return div;
+      }
+
+      function createShadowItem(name) {
+        const div = document.createElement("div");
+        div.className = "shadow-item";
+        div.innerHTML = `
+          <div style="width:48px;height:48px;background:#27272a;border-radius:8px;margin:0 auto;box-shadow:var(${name})"></div>
+          <div class="shadow-name">--${name}</div>
+        `;
+        return div;
+      }
+
+      function createTypeSample(sample) {
+        const div = document.createElement("div");
+        div.className = "type-sample";
+        div.innerHTML = `
+          <div class="type-label">--${sample.name} (${sample.size})</div>
+          <div class="type-content" style="font-size:${sample.size}">${sample.text}</div>
+        `;
+        return div;
+      }
+
+      // 切换 variant
+      function switchVariant(variant) {
+        document.querySelectorAll(".variant-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.variant === variant);
+        });
+        document.querySelectorAll(".preview-root").forEach((root) => {
+          root.classList.toggle("active", root.dataset.variantRoot === variant);
+        });
+
+        // 启用/禁用对应 css
+        document.querySelectorAll("[data-variant-css]").forEach((link) => {
+          link.disabled = link.dataset.variantCss !== variant;
+        });
+
+        // 重新渲染 (确保 css 已加载)
+        requestAnimationFrame(() => renderVariant(variant));
+      }
+
+      // 初始渲染所有 variant
+      Object.keys(variantTokens).forEach((v) => renderVariant(v));
+
+      // 绑定按钮
+      document.querySelectorAll(".variant-btn").forEach((btn) => {
+        btn.addEventListener("click", () => switchVariant(btn.dataset.variant));
+      });
+
+      // 默认激活 chat
+      switchVariant("chat");
+    </script>
+  </body>
+</html>

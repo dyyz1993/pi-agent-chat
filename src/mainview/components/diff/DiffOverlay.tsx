@@ -28,7 +28,7 @@ const viewToggleClass = (selected: boolean) =>
   cx(
     "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
     selected
-      ? "bg-semantic-accent/15 text-semantic-accent ring-1 ring-semantic-accent/25"
+      ? "bg-accent/15 text-accent ring-1 ring-accent/25"
       : "text-text-tertiary hover:bg-surface-hover/70 hover:text-text-primary dark:hover:text-text-primary",
   );
 
@@ -205,7 +205,7 @@ export function DiffOverlay() {
     >
       {loadingDiff ? (
         <div className="flex items-center justify-center h-full text-text-tertiary text-sm">
-          <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
+          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin mr-2" />
           {t("loadingDiff")}
         </div>
       ) : currentDiff ? (

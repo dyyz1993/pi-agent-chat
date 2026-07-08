@@ -31,8 +31,8 @@ const BREAKDOWN_META: Record<
 > = {
   conversation: {
     labelKey: "conversation",
-    className: "bg-semantic-accent",
-    barClassName: "bg-semantic-accent",
+    className: "bg-accent",
+    barClassName: "bg-accent",
   },
   thinking: {
     labelKey: "thinking",
@@ -447,7 +447,7 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
                   style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
                 >
                   <div className="flex min-w-0 items-center gap-2 text-base font-semibold text-text-primary sm:text-lg">
-                    <BarChart3 className="h-5 w-5 text-semantic-accent" />
+                    <BarChart3 className="h-5 w-5 text-accent" />
                     <span className="truncate">{t("tokenStatus.capacityTitle")}</span>
                   </div>
                   <button
@@ -528,7 +528,7 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
                                 </div>
                                 <div className="order-4 col-span-3 h-1.5 overflow-hidden rounded-full bg-bg-tertiary sm:order-none sm:col-span-1">
                                   <div
-                                    className="h-full rounded-full bg-semantic-accent"
+                                    className="h-full rounded-full bg-accent"
                                     style={{ width: `${Math.min(100, groupPercent)}%` }}
                                   />
                                 </div>

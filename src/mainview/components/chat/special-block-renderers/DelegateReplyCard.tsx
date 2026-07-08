@@ -130,7 +130,7 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
             <button
               type="button"
               onClick={() => setShowFull((value) => !value)}
-              className="text-[10px] font-medium text-semantic-accent hover:text-semantic-accent transition-colors"
+              className="text-[10px] font-medium text-accent hover:text-accent transition-colors"
             >
               {showFull ? "Collapse reply" : "View full reply"}
             </button>

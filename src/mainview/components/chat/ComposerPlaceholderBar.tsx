@@ -29,7 +29,7 @@ export function ComposerPlaceholderBar() {
         >
           <div className="flex min-h-8 max-w-full items-center gap-1.5 px-2">
             {placeholder.type === "sessionRef" ? (
-              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />
+              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-accent" />
             ) : placeholder.type === "longContent" ? (
               <FileText className="h-3.5 w-3.5 shrink-0 text-status-info" />
             ) : (

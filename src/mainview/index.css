@@ -234,12 +234,12 @@ button {
 
   --color-border-primary: #dce4ee;
   --color-border-secondary: #c7d2df;
-  --color-border-focus: #246df3;
+  --color-border-focus: #746cff;
 
-  --color-accent: #246df3;
-  --color-accent-hover: #1958c9;
-  --color-accent-muted: rgba(36, 109, 243, 0.11);
-  --color-accent-text: #1d58c8;
+  --color-accent: #746cff;
+  --color-accent-hover: #6358e0;
+  --color-accent-muted: rgba(116, 108, 255, 0.12);
+  --color-accent-text: #5b47d4;
 
   --color-success: #16845f;
   --color-warning: #b36b00;
@@ -254,7 +254,7 @@ button {
   --color-semantic-agent: 127 85 204;
   --color-semantic-tool: 0 128 149;
   --color-semantic-memory: 30 140 113;
-  --color-semantic-accent: 36 109 243;
+  --color-semantic-accent: 116 108 255;
   --color-semantic-notify: 186 86 36;
 
   --safe-area-top: env(safe-area-inset-top, 0px);
@@ -337,6 +337,11 @@ button {
   --color-accent-agent: #7f55cc;
   --color-semantic-line: #dce4ee;
 
+  --runtime-ssh: 45 182 232;
+  --runtime-sandbox: 245 158 11;
+  --runtime-docker: 36 150 237;
+  --runtime-local: 202 138 4;
+
   --spacing-indent-base: 1.5rem;
   --input-font-size: 16px;
 
@@ -361,7 +366,7 @@ html[data-theme="dark"] {
   --color-text-primary: #f2f6fb;
   --color-text-secondary: #c1cad6;
   --color-text-tertiary: #8a96a8;
-  --color-text-inverse: #0a0c10;
+  --color-text-inverse: #f7fafc;
 
   --color-border-primary: #334155;
   --color-border-secondary: #475569;
@@ -385,7 +390,7 @@ html[data-theme="dark"] {
   --color-semantic-agent: 174 122 255;
   --color-semantic-tool: 45 212 232;
   --color-semantic-memory: 45 212 191;
-  --color-semantic-accent: 45 182 232;
+  --color-semantic-accent: 116 108 255;
   --color-semantic-notify: 251 146 60;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -415,6 +420,11 @@ html[data-theme="dark"] {
   --color-accent-idle: #46dd89;
   --color-accent-agent: #ae7aff;
   --color-semantic-line: #2b394d;
+
+  --runtime-ssh: 45 182 232;
+  --runtime-sandbox: 245 158 11;
+  --runtime-docker: 36 150 237;
+  --runtime-local: 212 168 83;
 
   --app-bg-texture:
     linear-gradient(180deg, rgba(116, 108, 255, 0.045), rgba(116, 108, 255, 0) 24rem),
