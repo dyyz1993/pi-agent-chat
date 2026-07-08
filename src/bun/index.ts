@@ -8,6 +8,12 @@ import { configureLogDir, writeLogLine } from "../shared/lib/logger.node";
 import { resolveDesktopDevServerUrl } from "../shared/lib/desktop-dev-server-url";
 import { setOpenFolderFn } from "../shared/lib/native-dialog";
 import {
+  setCheckForUpdateFn,
+  setDownloadUpdateFn,
+  setApplyUpdateFn,
+  setGetUpdateStatusFn,
+} from "../shared/lib/desktop-updater";
+import {
   setReadClipboardImageFn,
   setReadClipboardTextFn,
   setWriteClipboardTextFn,
@@ -160,6 +166,106 @@ mainWindow.on("resize", (event: { data?: { width?: number; height?: number } }) 
 transport.setBrowserView(mainWindow.webview as Parameters<typeof transport.setBrowserView>[0]);
 
 log.info("PiAgentChat desktop app started!");
+
+// ── 自动更新设置 ──
+const updater = Updater as unknown as {
+  checkForUpdate: () => Promise<{
+    version: string;
+    hash: string;
+    updateAvailable: boolean;
+    updateReady: boolean;
+    error: string;
+  }>;
+  downloadUpdate: () => Promise<void>;
+  applyUpdate: () => Promise<void>;
+  getStatusHistory: () => Array<{
+    status: string;
+    message: string;
+    timestamp: number;
+    details?: Record<string, unknown>;
+  }>;
+  onStatusChange: (callback: (entry: { status: string; message: string; timestamp: number; details?: Record<string, unknown> }) => void) => void;
+};
+setCheckForUpdateFn(async () => {
+  const info = await updater.checkForUpdate();
+  return {
+    version: info?.version ?? "",
+    hash: info?.hash ?? "",
+    updateAvailable: info?.updateAvailable ?? false,
+    updateReady: info?.updateReady ?? false,
+    error: info?.error ?? "",
+  };
+});
+
+setDownloadUpdateFn(async () => {
+  try {
+    await updater.downloadUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+setApplyUpdateFn(async () => {
+  try {
+    await updater.applyUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+setGetUpdateStatusFn(async () => {
+  const history = updater.getStatusHistory();
+  return {
+    entries: history.map((entry) => ({
+      status: entry.status,
+      message: entry.message,
+      timestamp: entry.timestamp,
+      details: entry.details as Record<string, unknown> | undefined,
+    })),
+  };
+});
+
+// 启动后静默检查更新
+setTimeout(async () => {
+  try {
+    const info = await updater.checkForUpdate();
+    if (info?.updateAvailable) {
+      log.info(`Update available: ${info.version}`);
+      const msg = JSON.stringify({
+        type: "__pi_update_available",
+        version: info.version,
+        hash: info.hash,
+      });
+      mainWindow.webview.executeJavascript(
+        `(() => { try { window.__piAgentUpdateAvailable?.(${msg}); } catch(e) {} })()`,
+      );
+    } else {
+      log.info("No update available");
+    }
+  } catch {
+    // 静默失败 - 不影响启动
+    log.info("Update check skipped (not critical)");
+  }
+}, 5000);
+
+// 监听更新进度
+updater.onStatusChange((entry) => {
+  try {
+    const msg = JSON.stringify({
+      type: "__pi_update_status",
+      status: entry.status,
+      message: entry.message,
+      timestamp: entry.timestamp,
+    });
+    mainWindow.webview.executeJavascript(
+      `(() => { try { window.__piAgentUpdateStatus?.(${msg}); } catch(e) {} })()`,
+    );
+  } catch {
+    // Ignore executeJavascript errors
+  }
+});
 
 desktopApplicationMenu.on("application-menu-clicked", (event: unknown) => {
   const data = (event as { data?: { action?: string } }).data;
