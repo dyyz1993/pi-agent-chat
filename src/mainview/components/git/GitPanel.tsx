@@ -136,7 +136,7 @@ const FileItem = memo(function FileItem({
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-semantic-accent/30 text-white"
+          ? "bg-accent/30 text-white"
           : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-secondary"
       }`}
       onClick={() => onClick(path, isStaged)}
@@ -196,7 +196,7 @@ const UntrackedItem = memo(function UntrackedItem({
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-semantic-accent/30 text-white"
+          ? "bg-accent/30 text-white"
           : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
       }`}
       onClick={() => onClick(path)}
@@ -242,7 +242,7 @@ const CommitFileItem = memo(function CommitFileItem({
     <div
       className={`flex items-center gap-1.5 pl-7 pr-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-semantic-accent/30 text-white"
+          ? "bg-accent/30 text-white"
           : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
       }`}
       onClick={onClick}
@@ -298,7 +298,7 @@ const CommitItem = memo(function CommitItem({
         <div className="flex-1 min-w-0">
           <div className="text-text-secondary truncate">{commit.message}</div>
           <div className="text-text-tertiary text-[10px] flex items-center gap-1.5 mt-0.5">
-            <span className="text-semantic-accent font-mono">{commit.shortHash}</span>
+            <span className="text-accent font-mono">{commit.shortHash}</span>
             <span>{commit.author}</span>
             <span>{relativeTime(commit.date)}</span>
           </div>
@@ -574,7 +574,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
         <span className="ml-auto flex items-center gap-1">
           {totalChanges > 0 && (
-            <span className="bg-semantic-accent text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
+            <span className="bg-accent text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
               {totalChanges}
             </span>
           )}
@@ -769,7 +769,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div
               key={wt.path}
               className={`px-3 py-1.5 text-xs flex items-center gap-2 ${
-                wt.path === currentPath ? "text-semantic-accent" : "text-text-secondary"
+                wt.path === currentPath ? "text-accent" : "text-text-secondary"
               }`}
             >
               <FolderTree className="w-3 h-3 shrink-0" />

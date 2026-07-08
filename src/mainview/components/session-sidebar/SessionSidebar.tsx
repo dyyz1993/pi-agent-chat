@@ -144,8 +144,8 @@ export function groupSessions(
         const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
         if (isWorkingSession(sess)) return 0;
         if (sess.pinned) return 1;
-        if (isEmpty) return 2; // 空占位会话排在工作会话和固定会话之后，方便直接创建新对话
-        return 3;
+        if (isEmpty) return 3; // 空占位会话不应压过最近聊过的普通会话
+        return 2;
       };
       const priorityA = getPriority(a);
       const priorityB = getPriority(b);
@@ -423,10 +423,11 @@ export function SessionSidebar(_props: SessionSidebarProps) {
           <button
             key={type}
             onClick={() => setFilterType(type)}
-            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors whitespace-nowrap ${filterType === type
-                ? "bg-semantic-accent/15 text-accent-text"
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors whitespace-nowrap ${
+              filterType === type
+                ? "bg-accent/15 text-accent-text"
                 : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary"
-              }`}
+            }`}
           >
             {type === "main"
               ? t("sidebar:filterMain", "主会话")
@@ -812,7 +813,7 @@ function DelegateChildItem({ session }: { session: SessionMeta }) {
       session={session}
       isActive={session.sessionId === activeSessionId}
       isExpanded={false}
-      onToggleExpand={() => { }}
+      onToggleExpand={() => {}}
       isChild
       badgeStatus={badgeStatus}
     />
@@ -957,18 +958,20 @@ function SessionItem({
       <div
         data-testid={`session-item-${session.sessionId}`}
         data-session-id={session.sessionId}
-        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${isActive
-            ? "bg-semantic-accent/10 text-accent-text shadow-sm border border-semantic-accent/20 border-l-2 border-l-semantic-accent/50"
+        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
+          isActive
+            ? "bg-accent/10 text-accent-text shadow-sm border border-accent/20 border-l-2 border-l-accent/50"
             : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-primary border border-transparent hover:border-border-primary/80"
-          } ${isActive ? "ring-1 ring-semantic-accent/20" : ""}`}
+        } ${isActive ? "ring-1 ring-accent/20" : ""}`}
         onClick={handleClick}
       >
         <div className="flex items-center gap-1.5">
           <div
-            className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${isActive
-                ? "bg-semantic-accent/20 text-accent-text"
+            className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
+              isActive
+                ? "bg-accent/20 text-accent-text"
                 : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover"
-              }`}
+            }`}
             style={
               currentAgentColor
                 ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
@@ -998,7 +1001,7 @@ function SessionItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-bg-elevated border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary outline-none"
+                className="flex-1 bg-bg-elevated border border-accent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}
@@ -1015,7 +1018,7 @@ function SessionItem({
             </div>
           ) : (
             <>
-              {session.pinned && <Pin className="w-3 h-3 shrink-0 text-semantic-accent" />}
+              {session.pinned && <Pin className="w-3 h-3 shrink-0 text-accent" />}
               <span
                 className={`truncate font-medium leading-tight flex-1 min-w-0 ${isActive ? "text-accent-text" : ""}`}
               >
@@ -1023,7 +1026,7 @@ function SessionItem({
               </span>
               {currentAgentName && (
                 <span
-                  className="max-w-[4.5rem] truncate whitespace-nowrap text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
+                  className="max-w-[4.5rem] truncate whitespace-nowrap text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-accent/10 text-accent-text"
                   title={t("sidebar:currentAgent", "Current Agent")}
                   style={
                     currentAgentColor
@@ -1074,7 +1077,7 @@ function SessionItem({
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleTogglePin}
-                className={`p-1 rounded-md hover:bg-surface-hover/60 transition-colors ${session.pinned ? "text-semantic-accent" : "text-text-secondary hover:text-text-primary"}`}
+                className={`p-1 rounded-md hover:bg-surface-hover/60 transition-colors ${session.pinned ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
                 title={session.pinned ? t("sidebar:unpin") : t("sidebar:pin")}
               >
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
@@ -1289,19 +1292,21 @@ function SubagentItem({
     <div className="py-1 first:pt-0.5 last:pb-0.5">
       <div
         data-testid={`subagent-item-${sub.sessionId}`}
-        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${isActive
-            ? "border-l-2 border-l-semantic-accent/40 bg-semantic-accent/10 text-accent-text"
+        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
+          isActive
+            ? "border-l-2 border-l-accent/40 bg-accent/10 text-accent-text"
             : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary border border-transparent hover:border-border-primary/80"
-          }`}
+        }`}
         onClick={handleClick}
       >
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-1 shrink-0">
             <div
-              className={`flex items-center justify-center w-5 h-5 rounded-md transition-colors ${isActive
-                  ? "bg-semantic-accent/20 text-accent-text"
+              className={`flex items-center justify-center w-5 h-5 rounded-md transition-colors ${
+                isActive
+                  ? "bg-accent/20 text-accent-text"
                   : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover group-hover:text-text-tertiary"
-                }`}
+              }`}
             >
               <Bot className="w-3 h-3" />
             </div>
@@ -1346,7 +1351,7 @@ function SubagentItem({
               </span>
               {sub.agent && (
                 <span
-                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
+                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-accent/10 text-accent-text"
                   title={sub.agent}
                 >
                   {sub.agent}

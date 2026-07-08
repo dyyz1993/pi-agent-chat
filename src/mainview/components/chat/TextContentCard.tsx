@@ -147,7 +147,7 @@ export const TextContentCard = memo(function TextContentCard({
                 visibleText,
               )
             }
-            className="p-1 rounded text-text-tertiary hover:text-semantic-accent hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 transition-colors"
+            className="p-1 rounded text-text-tertiary hover:text-accent hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 transition-colors"
             title={t("expandFullText")}
           >
             <Maximize2 className="w-3.5 h-3.5" />

@@ -165,7 +165,7 @@ export function NotificationCenter() {
             <div className="px-3 py-2 border-t border-border-secondary">
               <button
                 onClick={handleEnablePwa}
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] text-semantic-accent hover:text-semantic-accent transition-colors py-1"
+                className="w-full flex items-center justify-center gap-1.5 text-[11px] text-accent hover:text-accent transition-colors py-1"
               >
                 <BellRing className="w-3 h-3" />
                 {t("notification.enableSystemNotifications")}

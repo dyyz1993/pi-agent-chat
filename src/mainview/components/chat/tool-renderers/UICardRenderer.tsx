@@ -649,14 +649,14 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
                       }
                       className={`w-full rounded-md px-3 py-2.5 text-left text-xs leading-5 transition-colors ${
                         isActive
-                          ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
+                          ? "bg-surface-hover text-text-primary ring-1 ring-accent/35"
                           : "text-text-secondary hover:bg-surface-hover/55"
                       }`}
                     >
                       <span className="flex items-start gap-2.5">
                         <Icon
                           className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                            isActive ? "text-semantic-accent" : "text-text-tertiary"
+                            isActive ? "text-accent" : "text-text-tertiary"
                           }`}
                         />
                         <span className="min-w-0">
@@ -689,13 +689,13 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
                     <label
                       className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-xs transition-colors ${
                         customText
-                          ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
+                          ? "bg-surface-hover text-text-primary ring-1 ring-accent/35"
                           : "text-text-secondary hover:bg-surface-hover/55"
                       }`}
                     >
                       <CustomIcon
                         className={`h-3.5 w-3.5 shrink-0 ${
-                          customText ? "text-semantic-accent" : "text-text-tertiary"
+                          customText ? "text-accent" : "text-text-tertiary"
                         }`}
                       />
                       <input
@@ -727,7 +727,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
             <div className="shrink-0 border-t border-border-secondary/50 px-3.5 py-3 sm:px-4">
               <div className="flex flex-wrap items-center gap-2">
                 {autoAdvance ? (
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-semantic-accent">
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-accent">
                     {t("uiCard.selectionSaved", { value: autoAdvance.label })}
                   </span>
                 ) : block.message ? (
@@ -751,7 +751,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
                     <button
                       onClick={goNext}
                       disabled={!canAdvance || autoAdvanceActive}
-                      className="rounded-md bg-semantic-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-md bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <span className="inline-flex items-center justify-center gap-1">
                         {t("common:next")}
@@ -764,7 +764,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
                       disabled={
                         questions.length > 0 ? !allAnswered || autoAdvanceActive : !canSubmit
                       }
-                      className="rounded-md bg-semantic-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-md bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {t("common:submit")}
                     </button>

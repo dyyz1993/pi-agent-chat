@@ -135,7 +135,7 @@ export function CommandPopup({
                   onClick={() => onSetAtTab(tab.key)}
                   className={`px-2.5 py-0.5 rounded text-xs transition-colors whitespace-nowrap ${
                     atTab === tab.key
-                      ? "bg-semantic-accent/30 text-semantic-accent"
+                      ? "bg-accent/30 text-accent"
                       : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                   }`}
                 >
@@ -171,7 +171,7 @@ export function CommandPopup({
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border-secondary/40 text-xs overflow-x-auto">
           <button
             onClick={() => onBreadcrumb(-1)}
-            className="text-semantic-accent hover:text-semantic-accent shrink-0"
+            className="text-accent hover:text-accent shrink-0"
           >
             {t("quickAction.rootDir")}
           </button>
@@ -183,7 +183,7 @@ export function CommandPopup({
                 className={`${
                   i === fileBreadcrumbs.length - 1
                     ? "text-text-secondary"
-                    : "text-semantic-accent hover:text-semantic-accent"
+                    : "text-accent hover:text-accent"
                 }`}
               >
                 {bc.label}

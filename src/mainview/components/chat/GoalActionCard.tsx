@@ -74,8 +74,8 @@ function getGoalTone(status: GoalCardState): {
   }
   return {
     icon: Loader2,
-    className: "border-semantic-accent/40 bg-semantic-accent/10",
-    iconClassName: "text-semantic-accent",
+    className: "border-accent/40 bg-accent/10",
+    iconClassName: "text-accent",
   };
 }
 
@@ -94,7 +94,7 @@ function checklistStatusClass(
     case "blocked":
       return "text-status-warning";
     case "in_progress":
-      return "text-semantic-accent";
+      return "text-accent";
     default:
       return "text-text-tertiary";
   }
@@ -235,7 +235,7 @@ export function GoalActionCard({
             <button
               type="button"
               onClick={() => setDetailsExpanded((v) => !v)}
-              className="inline-flex items-center gap-0.5 text-[11px] text-semantic-accent hover:underline"
+              className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
               aria-expanded={detailsExpanded}
             >
               {detailsExpanded ? (

@@ -192,7 +192,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               }}
               className={`relative w-10 h-10 flex items-center justify-center rounded transition-colors ${
                 activePanelTab === tab.id
-                  ? "text-semantic-accent bg-semantic-accent/10"
+                  ? "text-accent bg-accent/10"
                   : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
               }`}
               title={tab.label}
@@ -261,7 +261,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               }}
               className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 border-b-2 ${
                 activePanelTab === tab.id
-                  ? "text-semantic-accent border-semantic-accent"
+                  ? "text-accent border-accent"
                   : "text-text-tertiary border-transparent hover:text-text-primary hover:bg-surface-hover/60"
               }`}
             >

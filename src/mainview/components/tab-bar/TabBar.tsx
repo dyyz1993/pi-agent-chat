@@ -59,8 +59,8 @@ function remoteConnectionClass(status: RemoteConnectionStatus | undefined, kind:
     return "border-status-error/30 bg-status-error/10 text-status-error";
   }
   return kind === "ssh-command"
-    ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
-    : "border-status-info/30 bg-status-info/10 text-status-info";
+    ? "border-runtime-sandbox/30 bg-runtime-sandbox/10 text-runtime-sandbox"
+    : "border-runtime-ssh/30 bg-runtime-ssh/10 text-runtime-ssh";
 }
 
 function sessionIdentityClass(identity: SessionIdentity): string {
@@ -68,7 +68,7 @@ function sessionIdentityClass(identity: SessionIdentity): string {
     return "border-status-info/30 bg-status-info/10 text-status-info";
   }
   if (identity.kind === "fork") {
-    return "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent";
+    return "border-accent/30 bg-accent/10 text-accent";
   }
   return "border-status-warning/30 bg-status-warning/10 text-status-warning";
 }
@@ -461,12 +461,12 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                   : "text-text-secondary hover:text-text-primary hover:bg-surface-hover/60"
               } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
                 isDragSource
-                  ? "scale-105 shadow-lg ring-2 ring-semantic-accent/50 bg-semantic-accent/10 dark:bg-semantic-accent/5 z-10"
+                  ? "scale-105 shadow-lg ring-2 ring-accent/50 bg-accent/10 dark:bg-accent/5 z-10"
                   : ""
               }`}
             >
               {showLeftIndicator && (
-                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
+                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-accent rounded-full" />
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
               {hasPermissionPending(knowledge, sessions, sessionStatusMap) && (
@@ -528,7 +528,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <X className="w-3 h-3" />
               </button>
               {(showRightIndicator || isLastDropTarget) && (
-                <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
+                <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-accent rounded-full" />
               )}
             </div>
           );

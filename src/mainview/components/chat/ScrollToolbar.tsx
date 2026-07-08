@@ -30,7 +30,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
         onClick={onToggleAutoScroll}
         className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${
           autoScrollEnabled
-            ? "border-semantic-accent/40 text-semantic-accent hover:text-semantic-accent hover:border-semantic-accent/50"
+            ? "border-accent/40 text-accent hover:text-accent hover:border-accent/50"
             : "border-border-secondary/30 text-text-tertiary hover:text-text-primary hover:border-border-secondary/40"
         }`}
         title={autoScrollEnabled ? t("scroll.stopAutoScroll") : t("scroll.startAutoScroll")}
@@ -44,7 +44,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
             <button
               onClick={onScrollToTop}
               disabled={isSeekingTop}
-              className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-accent hover:border-accent/40 flex items-center justify-center transition-colors"
               title={t("scroll.scrollToTop")}
               aria-label={t("scroll.scrollToTop")}
             >
@@ -59,7 +59,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
             <button
               data-testid="scroll-to-bottom-btn"
               onClick={onScrollToBottom}
-              className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-accent hover:border-accent/40 flex items-center justify-center transition-colors"
               title={t("scroll.scrollToBottom")}
               aria-label={t("scroll.scrollToBottom")}
             >

@@ -1,65 +1,86 @@
-/* pi-agent-copilot — GitHub Copilot 简洁折叠风格设计系统 */
-/* Generated: 2026-07-05 */
+/* pi-agent-copilot — GitHub Copilot 简洁折叠风格设计系统
+ * Generated: 2026-07-08
+ * 命名 schema: 同 pi-agent-chat/colors_and_type.css
+ */
 
+/* ================================
+   1. Background Colors (GitHub Dark 灰阶)
+   ================================ */
 :root {
-  /* Background (GitHub Dark 灰阶) */
-  --bg-base: #0d1117;
-  --bg-sidebar: #161b22;
-  --bg-surface: #161b22;
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #161b22;
   --bg-elevated: #1c2128;
-  --bg-hover: rgba(255, 255, 255, 0.04);
-  --bg-active: rgba(56, 139, 253, 0.08);
   --bg-overlay: rgba(0, 0, 0, 0.5);
   --bg-input: #0d1117;
+}
 
-  /* Text */
+/* ================================
+   2. Text Colors
+   ================================ */
+:root {
   --text-primary: #e6edf3;
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
   --text-muted: #484f58;
   --text-inverse: #0d1117;
-  --text-link: #58a6ff;
-  --text-link-hover: #79c0ff;
+}
 
-  /* Border */
-  --border: #30363d;
-  --border-hover: #484f58;
+/* ================================
+   3. Border Colors
+   ================================ */
+:root {
+  --border-primary: #30363d;
+  --border-secondary: #484f58;
   --border-focus: #388bfd;
   --border-muted: #21262d;
+}
 
-  /* Accent (GitHub Blue) */
+/* ================================
+   4. Accent Colors (GitHub Blue)
+   ================================ */
+:root {
   --accent: #58a6ff;
   --accent-hover: #79c0ff;
   --accent-muted: rgba(88, 166, 255, 0.1);
+  --accent-text: #58a6ff;
+  --accent-brand: #58a6ff;
+  --accent-idle: #3fb950;
+  --accent-agent: #bc8cff;
+}
 
-  /* Primary */
-  --primary: #58a6ff;
-  --primary-hover: #79c0ff;
+/* ================================
+   5. Status Colors (RGB 三元组格式, GitHub 风格)
+   ================================ */
+:root {
+  --status-success: 63 185 80;
+  --status-warning: 210 153 34;
+  --status-error: 248 81 73;
+  --status-info: 88 166 255;
+}
 
-  /* Semantic Status (GitHub 风格) */
-  --success: #3fb950;
-  --success-muted: rgba(63, 185, 80, 0.1);
-  --warning: #d29922;
-  --warning-muted: rgba(210, 153, 34, 0.1);
-  --error: #f85149;
-  --error-muted: rgba(248, 81, 73, 0.1);
-  --info: #58a6ff;
-  --info-muted: rgba(88, 166, 255, 0.1);
+/* ================================
+   6. Semantic Colors (RGB 三元组格式)
+   ================================ */
+:root {
+  --semantic-agent: 188 140 255;
+  --semantic-tool: 57 211 83;
+  --semantic-memory: 57 211 83;
+  --semantic-notify: 210 153 34;
+  --semantic-media: 248 81 73;
+  --semantic-line: #21262d;
+}
 
-  /* Semantic Tool */
-  --tool: #39d353;
-  --tool-muted: rgba(57, 211, 83, 0.08);
-  --agent: #bc8cff;
-  --agent-muted: rgba(188, 140, 255, 0.1);
-  --memory: #39d353;
-  --memory-muted: rgba(57, 211, 83, 0.08);
-
-  /* Typography (GitHub 字体栈) */
+/* ================================
+   7. Typography (GitHub 字体栈)
+   ================================ */
+:root {
   --font-body:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Monaco, Consolas,
     monospace;
+
   --font-size-xs: 11px;
   --font-size-caption: 12px;
   --font-size-body: 14px;
@@ -67,14 +88,20 @@
   --font-size-h3: 16px;
   --font-size-h2: 20px;
   --font-size-h1: 24px;
+
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
+
   --line-height-body: 1.5;
   --line-height-heading: 1.25;
   --line-height-mono: 1.5;
+}
 
-  /* Spacing */
+/* ================================
+   8. Spacing (4px grid)
+   ================================ */
+:root {
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -84,25 +111,65 @@
   --space-7: 32px;
   --space-8: 48px;
 
-  /* Radius */
+  --spacing-indent: 24px;
+  --input-font-size: 16px;
+  --touch-target-min: 44px;
+}
+
+/* ================================
+   9. Border Radius
+   ================================ */
+:root {
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
   --radius-xl: 12px;
   --radius-full: 9999px;
+}
 
-  /* Shadows */
-  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 3px 6px rgba(0, 0, 0, 0.2);
+/* ================================
+   10. Shadows
+   ================================ */
+:root {
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 3px 6px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 3px 6px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 3px 6px rgba(0, 0, 0, 0.2);
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-floating: 0 3px 6px rgba(0, 0, 0, 0.2);
+}
 
-  /* Transitions */
+/* ================================
+   11. Transitions
+   ================================ */
+:root {
   --transition-fast: 120ms ease;
   --transition-normal: 200ms ease;
+  --transition-slow: 250ms ease;
+}
 
-  /* Z-index */
-  --z-dropdown: 100;
-  --z-popover: 200;
-  --z-tooltip: 300;
-  --z-modal: 400;
-  --z-toast: 500;
+/* ================================
+   12. Z-Index
+   ================================ */
+:root {
+  --z-base: 0;
+  --z-float: 10;
+  --z-header: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
+  --z-fullscreen: 200;
+  --z-system: 300;
+}
+
+/* ================================
+   13. Safe Area
+   ================================ */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }

@@ -39,7 +39,7 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
         return "border-l-semantic-memory/50 dark:border-l-semantic-memory/60";
       if (ct === "memory_failed") return "border-l-status-error/50 dark:border-l-status-error/60";
       if (ct === "step_snapshot")
-        return "border-l-semantic-accent/50 dark:border-l-semantic-accent/60";
+        return "border-l-accent/50 dark:border-l-accent/60";
       if (isBashBackgroundProcessType(ct))
         return "border-l-semantic-tool/50 dark:border-l-semantic-tool/60";
       return roleDefault;

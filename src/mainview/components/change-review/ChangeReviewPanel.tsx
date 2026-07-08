@@ -109,7 +109,7 @@ export function ChangeReviewPanel() {
             <button
               onClick={handleApproveAll}
               disabled={pendingCount === 0}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-semantic-accent/15 text-semantic-accent hover:bg-semantic-accent/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title={t("approveAll")}
             >
               <CheckSquare className="w-3 h-3" />

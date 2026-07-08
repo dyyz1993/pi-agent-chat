@@ -62,7 +62,7 @@ export function ChatReloadButton({
       disabled={isReloading}
       className={`p-1 rounded transition-colors ${
         isReloading
-          ? "text-semantic-accent cursor-wait"
+          ? "text-accent cursor-wait"
           : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
       }`}
       title={t("reloadTitle")}

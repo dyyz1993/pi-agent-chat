@@ -142,7 +142,7 @@ export function DropdownSelect({
                     onClick={() => commitValue(option.value)}
                     className={cx(
                       "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50",
-                      selectedOption && "bg-semantic-accent/10 text-text-primary",
+                      selectedOption && "bg-accent/10 text-text-primary",
                       optionClassName,
                     )}
                   >
@@ -155,7 +155,7 @@ export function DropdownSelect({
                       )}
                     </span>
                     {selectedOption && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />
+                      <Check className="h-3.5 w-3.5 shrink-0 text-accent" />
                     )}
                   </button>
                 </div>

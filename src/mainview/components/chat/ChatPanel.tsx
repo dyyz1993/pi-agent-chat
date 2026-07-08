@@ -157,7 +157,7 @@ function sessionIdentityClass(identity: SessionIdentity): string {
     return "border-status-info/30 bg-status-info/10 text-status-info";
   }
   if (identity.kind === "fork") {
-    return "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent";
+    return "border-accent/30 bg-accent/10 text-accent";
   }
   return "border-status-warning/30 bg-status-warning/10 text-status-warning";
 }
@@ -299,7 +299,7 @@ function RefineGoalOverlay({ step }: { step: number }) {
   ];
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 px-4 bg-bg-secondary/90 backdrop-blur-sm rounded">
-      <Loader2 className="w-4 h-4 text-semantic-accent animate-spin shrink-0" />
+      <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" />
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {steps.map((s, i) => {
           const isActive = i + 1 === step;
@@ -312,7 +312,7 @@ function RefineGoalOverlay({ step }: { step: number }) {
                 isDone
                   ? "text-status-success"
                   : isActive
-                    ? "text-semantic-accent font-medium"
+                    ? "text-accent font-medium"
                     : "text-text-tertiary/50"
               }`}
             >
@@ -1483,7 +1483,7 @@ export function ChatPanel() {
                     )}
                     <button
                       onClick={retryActiveProject}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-semantic-accent text-white text-xs hover:bg-semantic-accent transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs hover:bg-accent-hover transition-colors"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       {t("retry")}
@@ -1559,7 +1559,7 @@ export function ChatPanel() {
         )}
 
         <div
-          className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
+          className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-accent/50 bg-accent/5" : ""}`}
           style={
             isMobileOrTablet
               ? undefined
@@ -1662,7 +1662,7 @@ export function ChatPanel() {
                       <button
                         onClick={() => void handleRefineGoal()}
                         disabled={isCreatingGoal || isRefiningGoal || !inputText.trim()}
-                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-semantic-accent/20 text-semantic-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-semantic-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-accent/20 text-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
                         title={t("goal.refine")}
                         aria-label={t("goal.refine")}
                       >
@@ -1710,7 +1710,7 @@ export function ChatPanel() {
                         goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
                       }
                       disabled={sendDisabled}
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!sendDisabled ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!sendDisabled ? (goalMode ? "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                       title={
                         isPermissionPending
                           ? t("waitPermission")
@@ -1758,8 +1758,8 @@ export function ChatPanel() {
               <button
                 onClick={handleSubagentFork}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
-                bg-semantic-accent/15 text-semantic-accent hover:bg-semantic-accent/25 hover:text-semantic-accent
-                border border-semantic-accent/20 transition-colors"
+                bg-accent/15 text-accent hover:bg-accent/25 hover:text-accent
+                border border-accent/20 transition-colors"
                 title={t("enterChat", "进入聊天")}
               >
                 <GitFork className="w-3 h-3" />
@@ -1909,7 +1909,7 @@ function SessionToggleIcon() {
           showSession();
         }
       }}
-      className={`p-1 rounded transition-colors max-sm:-ml-1 ${isVisible ? "text-semantic-accent hover:text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+      className={`p-1 rounded transition-colors max-sm:-ml-1 ${isVisible ? "text-accent hover:text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isVisible ? t("closeSessionPanel") : t("openSessionPanel")}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -1940,7 +1940,7 @@ function StatusToggleIcon() {
           showStatus();
         }
       }}
-      className={`p-1 rounded transition-colors max-sm:-mr-1 ${isVisible ? "text-semantic-accent hover:text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+      className={`p-1 rounded transition-colors max-sm:-mr-1 ${isVisible ? "text-accent hover:text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />

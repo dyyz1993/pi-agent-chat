@@ -1,64 +1,85 @@
-/* pi-agent-cursor — Cursor/Windsurf 紧凑扁平工具风格设计系统 */
-/* Generated: 2026-07-05 */
+/* pi-agent-cursor — Cursor/Windsurf 紧凑扁平工具风格设计系统
+ * Generated: 2026-07-08
+ * 命名 schema: 同 pi-agent-chat/colors_and_type.css
+ */
 
+/* ================================
+   1. Background Colors
+   ================================ */
 :root {
-  /* Background */
-  --bg-base: #0b111a;
-  --bg-sidebar: #111827;
-  --bg-surface: #121b28;
+  --bg-primary: #0b111a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #121b28;
   --bg-elevated: #1e293b;
-  --bg-hover: rgba(255, 255, 255, 0.04);
-  --bg-active: rgba(116, 108, 255, 0.08);
   --bg-overlay: rgba(0, 0, 0, 0.5);
   --bg-input: #0d1520;
+}
 
-  /* Text */
+/* ================================
+   2. Text Colors
+   ================================ */
+:root {
   --text-primary: #f2f6fb;
   --text-secondary: #94a3b8;
   --text-tertiary: #64748b;
   --text-muted: #475569;
   --text-inverse: #0b111a;
-  --text-link: #746cff;
-  --text-link-hover: #8d88ff;
+}
 
-  /* Border */
-  --border: #1e293b;
-  --border-hover: #334155;
+/* ================================
+   3. Border Colors
+   ================================ */
+:root {
+  --border-primary: #1e293b;
+  --border-secondary: #334155;
   --border-focus: #746cff;
   --border-muted: #1a2332;
+}
 
-  /* Accent */
+/* ================================
+   4. Accent Colors
+   ================================ */
+:root {
   --accent: #746cff;
   --accent-hover: #8d88ff;
   --accent-muted: rgba(116, 108, 255, 0.15);
+  --accent-text: #746cff;
+  --accent-brand: #246df3;
+  --accent-idle: #34d399;
+  --accent-agent: #7f55cc;
+}
 
-  /* Primary */
-  --primary: #246df3;
-  --primary-hover: #4b8bff;
+/* ================================
+   5. Status Colors (RGB 三元组格式)
+   ================================ */
+:root {
+  --status-success: 52 211 153;
+  --status-warning: 251 191 36;
+  --status-error: 248 113 113;
+  --status-info: 96 165 250;
+}
 
-  /* Semantic Status */
-  --success: #34d399;
-  --success-muted: rgba(52, 211, 153, 0.1);
-  --warning: #fbbf24;
-  --warning-muted: rgba(251, 191, 36, 0.1);
-  --error: #f87171;
-  --error-muted: rgba(248, 113, 113, 0.1);
-  --info: #60a5fa;
-  --info-muted: rgba(96, 165, 250, 0.1);
+/* ================================
+   6. Semantic Colors (RGB 三元组格式)
+   ================================ */
+:root {
+  --semantic-agent: 127 85 204;
+  --semantic-tool: 0 128 149;
+  --semantic-memory: 30 140 113;
+  --semantic-notify: 251 146 60;
+  --semantic-media: 236 72 153;
+  --semantic-line: #1a2332;
+}
 
-  /* Semantic Tool (深色调，贴合实际项目) */
-  --tool: #008095;
-  --tool-muted: rgba(0, 128, 149, 0.1);
-  --agent: #7f55cc;
-  --agent-muted: rgba(127, 85, 204, 0.1);
-  --memory: #1e8c71;
-  --memory-muted: rgba(30, 140, 113, 0.1);
-
-  /* Typography */
+/* ================================
+   7. Typography
+   ================================ */
+:root {
   --font-body:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
     ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
   --font-size-xs: 11px;
   --font-size-caption: 12px;
   --font-size-body: 13px;
@@ -66,14 +87,20 @@
   --font-size-h3: 16px;
   --font-size-h2: 18px;
   --font-size-h1: 22px;
+
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
+
   --line-height-body: 1.5;
   --line-height-heading: 1.25;
   --line-height-mono: 1.5;
+}
 
-  /* Spacing */
+/* ================================
+   8. Spacing (4px grid)
+   ================================ */
+:root {
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -83,25 +110,65 @@
   --space-7: 32px;
   --space-8: 48px;
 
-  /* Radius (小圆角) */
+  --spacing-indent: 24px;
+  --input-font-size: 16px;
+  --touch-target-min: 44px;
+}
+
+/* ================================
+   9. Border Radius (小圆角)
+   ================================ */
+:root {
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 6px;
   --radius-xl: 8px;
   --radius-full: 9999px;
+}
 
-  /* Shadows (极简，几乎不用) */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2);
+/* ================================
+   10. Shadows (极简)
+   ================================ */
+:root {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-subtle: 0 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow-floating: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
 
-  /* Transitions */
+/* ================================
+   11. Transitions
+   ================================ */
+:root {
   --transition-fast: 80ms ease;
   --transition-normal: 120ms ease;
+  --transition-slow: 200ms ease;
+}
 
-  /* Z-index */
-  --z-dropdown: 100;
-  --z-popover: 200;
-  --z-tooltip: 300;
-  --z-modal: 400;
-  --z-toast: 500;
+/* ================================
+   12. Z-Index
+   ================================ */
+:root {
+  --z-base: 0;
+  --z-float: 10;
+  --z-header: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
+  --z-fullscreen: 200;
+  --z-system: 300;
+}
+
+/* ================================
+   13. Safe Area
+   ================================ */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }

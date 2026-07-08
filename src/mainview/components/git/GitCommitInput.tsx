@@ -40,7 +40,7 @@ export function GitCommitInput() {
   return (
     <div className="p-2 border-b border-border-secondary">
       <textarea
-        className="w-full bg-surface-dim border border-border-secondary rounded px-2 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary resize-none outline-none focus:border-semantic-accent transition-colors"
+        className="w-full bg-surface-dim border border-border-secondary rounded px-2 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary resize-none outline-none focus:border-accent transition-colors"
         rows={3}
         placeholder="Commit message (Ctrl+Enter to commit)"
         value={message}
@@ -49,7 +49,7 @@ export function GitCommitInput() {
         disabled={isCommitting}
       />
       <button
-        className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-semantic-accent hover:bg-semantic-accent/80 text-white"
+        className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-accent hover:bg-accent/80 text-white"
         onClick={handleSubmit}
         disabled={!message.trim() || isCommitting}
       >

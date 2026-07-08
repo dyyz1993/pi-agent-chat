@@ -37,9 +37,9 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
       <div className="w-full max-w-sm mx-4">
         <div className="bg-bg-elevated dark:bg-surface-code rounded-2xl shadow-lg dark:shadow-surface-code/50 border border-border-secondary p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-semantic-accent/10 dark:bg-semantic-accent/5 mb-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/10 dark:bg-accent/5 mb-4">
               <svg
-                className="w-7 h-7 text-semantic-accent"
+                className="w-7 h-7 text-accent"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -76,7 +76,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   placeholder="请输入 Token"
-                  className="flex-1 px-3 py-2 rounded-lg border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-semantic-accent focus:border-transparent text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-sm"
                   autoFocus
                 />
                 {token && (
@@ -95,7 +95,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
             <button
               type="submit"
               disabled={!token.trim()}
-              className="w-full py-2 px-4 rounded-lg bg-semantic-accent hover:bg-semantic-accent/80 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 px-4 rounded-lg bg-accent hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
               {loginError ? "重试" : "连接"}
             </button>

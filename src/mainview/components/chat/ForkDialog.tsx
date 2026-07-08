@@ -20,7 +20,7 @@ const log = createLogger("fork-dialog");
 const TIER_ICONS: Record<TierKey, typeof Zap> = { fast: Zap, pro: Sparkles, max: Brain };
 const TIER_COLORS: Record<TierKey, string> = {
   fast: "text-status-info",
-  pro: "text-semantic-accent",
+  pro: "text-accent",
   max: "text-semantic-agent",
 };
 
@@ -159,7 +159,7 @@ export const ForkDialog = memo(function ForkDialog() {
   return (
     <FullscreenOverlay
       title={t("forkDialog.title")}
-      icon={<GitFork className="w-4 h-4 text-semantic-accent shrink-0" />}
+      icon={<GitFork className="w-4 h-4 text-accent shrink-0" />}
       onClose={closeDialog}
       closeLabel={t("forkDialog.cancel")}
       footer={
@@ -194,7 +194,7 @@ export const ForkDialog = memo(function ForkDialog() {
                   onClick={() => setSelectedAgent(agent.name)}
                   className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 transition-colors ${
                     isSelected
-                      ? "border-semantic-accent bg-semantic-accent/10 text-text-primary"
+                      ? "border-accent bg-accent/10 text-text-primary"
                       : "border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover"
                   }`}
                   style={
@@ -239,7 +239,7 @@ export const ForkDialog = memo(function ForkDialog() {
                   onClick={() => setSelectedTier(tier)}
                   className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 transition-colors ${
                     isSelected
-                      ? "border-semantic-accent bg-semantic-accent/10 text-text-primary"
+                      ? "border-accent bg-accent/10 text-text-primary"
                       : "border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover"
                   }`}
                 >

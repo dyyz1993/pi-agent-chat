@@ -359,7 +359,7 @@ export function buildFlatItems(
         key: id,
         navId: id,
         icon: User,
-        color: "text-semantic-accent",
+        color: "text-accent",
       });
       continue;
     }
@@ -726,10 +726,10 @@ function getSelectedTone(color: string): { bar: string; scrollBar: string } {
         bar: "bg-pink-400 opacity-100 ",
         scrollBar: "bg-pink-400/60 opacity-100 ",
       };
-    case "text-semantic-accent":
+    case "text-accent":
       return {
-        bar: "bg-semantic-accent opacity-100 ",
-        scrollBar: "bg-semantic-accent/60 opacity-100 ",
+        bar: "bg-accent opacity-100 ",
+        scrollBar: "bg-accent/60 opacity-100 ",
       };
     default:
       return {

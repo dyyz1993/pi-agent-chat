@@ -522,9 +522,9 @@ function ShareCard({ stats }: { stats: UsageShareStats }) {
 
   return (
     <div className="space-y-2.5 pb-16">
-      <div className="overflow-hidden rounded-md border border-semantic-accent/25 bg-semantic-accent/10">
+      <div className="overflow-hidden rounded-md border border-accent/25 bg-accent/10">
         <div className="flex items-center gap-2 px-3 py-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-semantic-accent text-bg-primary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-bg-primary">
             <Trophy className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
@@ -532,18 +532,18 @@ function ShareCard({ stats }: { stats: UsageShareStats }) {
             <div className="truncate text-[10px] text-text-tertiary">{stats.range.label}</div>
           </div>
         </div>
-        <div className="grid grid-cols-2 border-t border-semantic-accent/20 sm:grid-cols-4">
-          <div className="border-r border-b border-semantic-accent/20 sm:border-b-0">
+        <div className="grid grid-cols-2 border-t border-accent/20 sm:grid-cols-4">
+          <div className="border-r border-b border-accent/20 sm:border-b-0">
             <MetricCell
               label="Token 消耗"
               value={compactNumber(stats.totals.tokens)}
               icon={Flame}
             />
           </div>
-          <div className="border-b border-semantic-accent/20 sm:border-r sm:border-b-0">
+          <div className="border-b border-accent/20 sm:border-r sm:border-b-0">
             <MetricCell label="活跃天数" value={`${stats.totals.activeDays} 天`} icon={Activity} />
           </div>
-          <div className="border-r border-semantic-accent/20">
+          <div className="border-r border-accent/20">
             <MetricCell
               label="最长任务"
               value={durationLabel(stats.totals.longestTaskMs)}
@@ -642,7 +642,7 @@ export function UsagePanel({
         }`}
       >
         <div className="flex items-center gap-2">
-          <Trophy className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />
+          <Trophy className="h-3.5 w-3.5 shrink-0 text-accent" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-text-secondary">战绩</div>
             <div className="truncate text-[9px] text-text-tertiary">{subtitle}</div>
