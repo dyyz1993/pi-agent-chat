@@ -29,6 +29,7 @@ import { HooksPanel } from "../hooks-panel/HooksPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
 import { ChangeReviewPanel } from "../change-review/ChangeReviewPanel";
+import { useProjectPendingCount } from "../chat/UIPendingCenter";
 import { PanelPinButton } from "../primitives/PanelPinButton";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -84,6 +85,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const isPinned = statusPanel === "pinned";
   const pendingChanges = useChangeReviewStore((s) => s.changes);
   const pendingCount = pendingChanges.filter((c) => c.status === "pending").length;
+  const runtimePendingCount = useProjectPendingCount();
   const hideStatus = useLayoutStore((s) => s.hideStatus);
   const refreshAll = useGitStore((s) => s.refreshAll);
   const prevPanelVisible = useRef(statusPanel !== "hidden");
@@ -201,6 +203,11 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
                   {pendingCount > 9 ? "9+" : pendingCount}
                 </span>
               )}
+              {tab.id === "permissions" && runtimePendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-status-error text-white text-[9px] min-w-[16px] h-[16px] flex items-center justify-center rounded-full font-bold">
+                  {runtimePendingCount > 9 ? "9+" : runtimePendingCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -262,6 +269,11 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               {tab.id === "changeReview" && pendingCount > 0 && (
                 <span className="bg-status-warning/20 text-status-warning text-[10px] px-1.5 py-0.5 rounded-full font-medium ml-1">
                   {pendingCount}
+                </span>
+              )}
+              {tab.id === "permissions" && runtimePendingCount > 0 && (
+                <span className="bg-status-error/15 text-status-error text-[10px] px-1.5 py-0.5 rounded-full font-medium ml-1">
+                  {runtimePendingCount}
                 </span>
               )}
             </button>

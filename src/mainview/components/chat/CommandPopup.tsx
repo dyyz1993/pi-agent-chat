@@ -1,5 +1,4 @@
-import { useRef, useEffect, useState, useMemo, useCallback, useLayoutEffect, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useEffect, useState, useMemo } from "react";
 import {
   Wrench,
   File,
@@ -83,40 +82,8 @@ export function CommandPopup({
 }: CommandPopupProps): JSX.Element | null {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
-  const anchorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [searchText, setSearchText] = useState("");
-  const [popupStyle, setPopupStyle] = useState<CSSProperties>({});
-
-  const updatePosition = useCallback(() => {
-    if (!anchorRef.current) return;
-    const parent = anchorRef.current.parentElement;
-    if (!parent) return;
-    const rect = parent.getBoundingClientRect();
-    setPopupStyle({
-      position: "fixed",
-      left: rect.left,
-      width: rect.width,
-      bottom: window.innerHeight - rect.top + 8,
-      maxHeight: Math.max(80, rect.top - 16),
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!popupMode) {
-      setPopupStyle({});
-      return;
-    }
-    updatePosition();
-    const onResize = () => updatePosition();
-    const onScroll = () => updatePosition();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [popupMode, updatePosition]);
 
   useEffect(() => {
     if (!popupMode) return;
@@ -154,14 +121,10 @@ export function CommandPopup({
   if (!popupMode) return null;
 
   return (
-    <>
-      <div ref={anchorRef} aria-hidden style={{ position: "absolute", pointerEvents: "none", width: 0, height: 0 }} />
-      {createPortal(
-        <div
-          ref={panelRef}
-          className="max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-[90]"
-          style={popupStyle}
-        >
+    <div
+      ref={panelRef}
+      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-popover"
+    >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {popupMode === "at" ? (
@@ -230,7 +193,7 @@ export function CommandPopup({
         </div>
       )}
 
-      <div className="max-h-[240px] min-h-[80px] overflow-y-auto overflow-x-hidden" role="listbox">
+      <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
         {filteredItems.length === 0 && !loading && (
           <div className="px-3 py-6 text-center text-xs text-text-tertiary">
             {searchText || query ? t("quickAction.noMatchResults") : t("common:noData")}
@@ -262,9 +225,6 @@ export function CommandPopup({
           </button>
         ))}
       </div>
-    </div>,
-      document.body,
-      )}
-    </>
+    </div>
   );
 }
