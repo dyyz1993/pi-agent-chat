@@ -158,12 +158,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     return null;
   });
 
-  const tierModels = useTierStore((s) =>
-    projectPath ? s.dataByProject[projectPath]?.tierModels : undefined,
-  );
-  const globalDefaults = useTierStore((s) => s.globalDefaults);
-  const effectiveTierModels = tierModels ?? globalDefaults;
+  const effectiveTierModels = useTierStore((s) => s.globalDefaults);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
+  const setGlobalDefaults = useTierStore((s) => s.setGlobalDefaults);
   const [localTierModels, setLocalTierModels] = useState<Record<string, string>>({});
   const [tierSaving, setTierSaving] = useState(false);
   const [tierSaveMessage, setTierSaveMessage] = useState<TierSaveMessage | null>(null);
@@ -198,28 +195,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
     setTierSaving(true);
     try {
-      await apiClient.call("agent.setTierModels", {
-        sessionId,
-        models: localTierModels,
-      });
-      if (projectPath) {
-        useTierStore.getState().setProjectTierModels(projectPath, localTierModels);
-      }
-      await fetchTierConfig(sessionId, { force: true });
-      if (projectPath) {
-        const { dataByProject, globalDefaults } = useTierStore.getState();
-        const projectData = dataByProject[projectPath];
-        const activeTier = projectData?.currentTier ?? null;
-        const updatedModels = projectData?.tierModels ?? globalDefaults;
-        if (activeTier && updatedModels[activeTier]) {
-          await useTierStore.getState().switchToTier(activeTier, sessionId);
-        }
-      }
-      if (!projectPath) {
-        setTierSaveMessage({ type: "error", text: "配置已应用到后端，但无法关联到项目。请尝试刷新页面。" });
-      } else {
-        setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
-      }
+      void projectPath;
+      setGlobalDefaults(localTierModels);
+      setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
     } catch (err) {
       log.warn("save tier config failed", {
         error: err instanceof Error ? err.message : String(err),
@@ -228,7 +206,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     } finally {
       setTierSaving(false);
     }
-  }, [sessionId, projectPath, localTierModels, fetchTierConfig, t]);
+  }, [sessionId, projectPath, localTierModels, setGlobalDefaults, t]);
 
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
   const [proxyStatusLoading, setProxyStatusLoading] = useState(false);
