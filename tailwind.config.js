@@ -57,6 +57,13 @@ export default {
           notify: "rgb(var(--color-semantic-notify) / <alpha-value>)",
           line: tokenColor("--color-semantic-line"),
         },
+        /* Runtime/connection type colors (fixed, theme-independent) */
+        runtime: {
+          ssh: "rgb(var(--runtime-ssh) / <alpha-value>)",
+          sandbox: "rgb(var(--runtime-sandbox) / <alpha-value>)",
+          docker: "rgb(var(--runtime-docker) / <alpha-value>)",
+          local: "rgb(var(--runtime-local) / <alpha-value>)",
+        },
         /* Surface colors */
         surface: {
           code: tokenColor("--surface-code"),
