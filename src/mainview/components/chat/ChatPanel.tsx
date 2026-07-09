@@ -1116,21 +1116,23 @@ export function ChatPanel() {
                     onPopupArrowUp={commandPopup.navigateUp}
                     onPopupArrowDown={commandPopup.navigateDown}
                   />
-                  <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5">
-                    <AttachmentButtons
-                      layout="compact"
-                      mode={goalMode ? "goal" : "normal"}
-                      onGoalClick={() => startGoalMode()}
-                      onExitGoalMode={() => startGoalMode()}
-                    />
-                    {!goalMode && (
-                      <div className="hidden text-[11px] text-text-tertiary sm:block">
-                        {attachmentCount > 0
-                          ? t("fileAttachment.count", { count: attachmentCount })
-                          : t("composerActionsHint")}
-                      </div>
-                    )}
-                  </div>
+                  {(!isMobileOrTablet || goalMode) && (
+                    <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5 max-lg:min-h-8 max-lg:py-1">
+                      <AttachmentButtons
+                        layout="compact"
+                        mode={goalMode ? "goal" : "normal"}
+                        onGoalClick={() => startGoalMode()}
+                        onExitGoalMode={() => startGoalMode()}
+                      />
+                      {!goalMode && (
+                        <div className="hidden text-[11px] text-text-tertiary sm:block">
+                          {attachmentCount > 0
+                            ? t("fileAttachment.count", { count: attachmentCount })
+                            : t("composerActionsHint")}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex shrink-0 flex-col justify-end gap-1.5 py-1">
