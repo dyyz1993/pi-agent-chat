@@ -268,4 +268,44 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(m.clients.has(sessionId)).toBe(true);
     rmSync(projectPath, { recursive: true, force: true });
   });
+
+  it("auto-fallbacks to steer when agent is already streaming", async () => {
+    const sessionId = "sess-streaming-auto-fallback";
+    const projectPath = "/fake/project";
+    const sessionPath = "/fake/sessions/sess-streaming-auto-fallback.jsonl";
+    const m = internals(manager);
+    m.sessionProjectPaths.set(sessionId, projectPath);
+    m.sessionPaths.set(sessionId, sessionPath);
+
+    const steerFn = vi.fn().mockResolvedValue(undefined);
+    const managed = makeManaged(sessionId, projectPath, sessionPath);
+    managed.client = { ...managed.client, steer: steerFn };
+    managed.info.status = "streaming";
+    m.clients.set(sessionId, managed);
+
+    const ok = await manager.send(sessionId, "interrupt me");
+
+    // Should succeed via steer fallback instead of throwing "Agent is streaming"
+    expect(ok).toBe(true);
+    expect(steerFn).toHaveBeenCalledWith("interrupt me", undefined);
+    expect(managed.client.prompt).not.toHaveBeenCalled();
+  });
+
+  it("still uses prompt when agent is idle despite streaming guard path", async () => {
+    const sessionId = "sess-idle-send";
+    const projectPath = "/fake/project";
+    const sessionPath = "/fake/sessions/sess-idle-send.jsonl";
+    const m = internals(manager);
+    m.sessionProjectPaths.set(sessionId, projectPath);
+    m.sessionPaths.set(sessionId, sessionPath);
+
+    const managed = makeManaged(sessionId, projectPath, sessionPath);
+    managed.info.status = "idle";
+    m.clients.set(sessionId, managed);
+
+    const ok = await manager.send(sessionId, "normal message");
+
+    expect(ok).toBe(true);
+    expect(managed.client.prompt).toHaveBeenCalledWith("normal message", undefined);
+  });
 });
