@@ -210,6 +210,11 @@ export function useActiveScrollTracker({
     );
   }, []);
 
+  const completeInitialScroll = useCallback(() => {
+    didInitRef.current = true;
+    onInitComplete?.();
+  }, [onInitComplete]);
+
   const findVisibleIndex = useCallback((): number => {
     const handle = vlistRef.current;
     if (!handle) return -1;
@@ -371,8 +376,20 @@ export function useActiveScrollTracker({
 
     const tryScroll = () => {
       const handle = vlistRef.current;
-      if (!handle || attempts >= SCROLL_SETTLE_MAX_ATTEMPTS) {
+      if (!handle) {
+        attempts++;
+        if (attempts < SCROLL_SETTLE_MAX_ATTEMPTS) {
+          scrollRafRef.current = requestAnimationFrame(tryScroll);
+          return;
+        }
         scrollRafRef.current = 0;
+        completeInitialScroll();
+        return;
+      }
+
+      if (attempts >= SCROLL_SETTLE_MAX_ATTEMPTS) {
+        scrollRafRef.current = 0;
+        completeInitialScroll();
         return;
       }
 
@@ -382,17 +399,16 @@ export function useActiveScrollTracker({
 
       const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
       if (isAtBottom) {
-        didInitRef.current = true;
         setActive(getLastActiveTargetKey());
         scrollRafRef.current = 0;
         // Notify ChatPanel that initial scroll is done so it can sync navId
-        onInitComplete?.();
+        completeInitialScroll();
       } else if (attempts < SCROLL_SETTLE_MAX_ATTEMPTS) {
         scrollRafRef.current = requestAnimationFrame(tryScroll);
       } else {
         scrollRafRef.current = 0;
         // Max attempts reached — still call onInitComplete so navId sync starts
-        onInitComplete?.();
+        completeInitialScroll();
       }
     };
 

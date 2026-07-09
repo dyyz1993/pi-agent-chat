@@ -7,6 +7,7 @@ import type { SessionStatus, ContextUsage, ContextUsageBreakdownId } from "../..
 
 function formatTokens(tokens: number | null | undefined): string {
   if (tokens == null || tokens <= 0) return "--";
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/u, "")}M`;
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
   return `${tokens}`;
 }
