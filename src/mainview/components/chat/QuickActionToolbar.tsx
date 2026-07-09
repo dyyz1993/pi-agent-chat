@@ -125,7 +125,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
       return "text-status-warning border border-status-warning/40 bg-status-warning/10";
     }
     if (supervisorStatus.goal) {
-      return "text-accent border border-accent/40 bg-accent/10";
+      return "text-semantic-accent border border-semantic-accent/40 bg-semantic-accent/10";
     }
     return "text-text-tertiary border border-transparent";
   })();
@@ -606,7 +606,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             aria-label={t("quickAction.atMention")}
             className={`${toolbarButtonClass} whitespace-nowrap ${
               popupMode === "at"
-                ? "bg-accent/30 text-accent border border-accent/50"
+                ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
                 : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
             }`}
             title={t("quickAction.atMention")}
@@ -687,7 +687,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                       }}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
-                          ? "bg-accent/30 text-accent"
+                          ? "bg-semantic-accent/30 text-semantic-accent"
                           : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                       }`}
                     >
@@ -727,7 +727,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             <div className="flex items-center gap-1 px-3 py-1 border-b border-border-secondary/40 text-[11px] overflow-x-auto">
               <button
                 onClick={() => handleBreadcrumb(-1)}
-                className="text-accent hover:text-accent shrink-0"
+                className="text-semantic-accent hover:text-semantic-accent shrink-0"
               >
                 {t("quickAction.rootDir")}
               </button>
@@ -736,7 +736,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                   <ChevronRight className="w-3 h-3 text-text-tertiary" />
                   <button
                     onClick={() => handleBreadcrumb(i)}
-                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-accent hover:text-accent"}`}
+                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-semantic-accent hover:text-semantic-accent"}`}
                   >
                     {bc.label}
                   </button>
