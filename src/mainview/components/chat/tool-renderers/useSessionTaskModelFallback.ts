@@ -4,13 +4,13 @@ import { useTierStore } from "../../../stores/use-tier-store";
 import type { SessionTaskModelInfo } from "./SessionTaskModelBadges";
 
 export function useSessionTaskModelFallback(): SessionTaskModelInfo {
-  const activeProjectPath = useSessionStore((s) =>
-    s.projectTabs.find((tab) => tab.id === s.activeProjectId)?.path,
+  const activeProjectPath = useSessionStore(
+    (s) => s.projectTabs.find((tab) => tab.id === s.activeProjectId)?.path,
   );
   const currentModel = useSessionStore((s) => s.currentModel);
   const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
   const currentTier = useTierStore((s) =>
-    activeProjectPath ? (s.dataByProject[activeProjectPath]?.currentTier ?? null) : null,
+    activeProjectPath ? s.getCurrentTier(activeProjectPath) : null,
   );
 
   return useMemo(
@@ -20,6 +20,12 @@ export function useSessionTaskModelFallback(): SessionTaskModelInfo {
       provider: currentModel?.provider,
       thinkingLevel: currentModel?.reasoning ? currentThinkingLevel : undefined,
     }),
-    [currentModel?.id, currentModel?.provider, currentModel?.reasoning, currentThinkingLevel, currentTier],
+    [
+      currentModel?.id,
+      currentModel?.provider,
+      currentModel?.reasoning,
+      currentThinkingLevel,
+      currentTier,
+    ],
   );
 }

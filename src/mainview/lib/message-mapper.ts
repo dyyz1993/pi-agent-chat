@@ -1,4 +1,4 @@
-import type { ChatMessage, ContentBlock, TokenUsage } from "../types";
+import type { ChatMessage, ContentBlock, ProviderRequestContextUsage, TokenUsage } from "../types";
 import type {
   Message,
   AssistantMessage,
@@ -10,6 +10,7 @@ import type {
   ImageContent,
   Usage,
 } from "@dyyz1993/pi-ai";
+import { providerRequestFromMessage } from "./provider-error-diagnostics";
 
 function extractTokenUsage(usage: Usage | undefined): TokenUsage | undefined {
   if (!usage) return undefined;
@@ -144,6 +145,7 @@ export function messageToChatMessage(
   message: Message,
   id?: string,
   toolCallNameMap?: Record<string, string>,
+  providerRequest?: ProviderRequestContextUsage,
 ): ChatMessage | null {
   if (!message || typeof message !== "object" || !("role" in message)) return null;
 
@@ -168,9 +170,10 @@ export function messageToChatMessage(
     };
   }
 
-  if (role === "compactionSummary") {
+  if (role === "compactionSummary" || role === "branchSummary") {
     const raw = message as unknown as {
       summary?: string;
+      fromId?: string;
       tokensBefore?: number;
       status?: "running" | "completed" | "failed" | "aborted";
       reason?: string;
@@ -184,8 +187,9 @@ export function messageToChatMessage(
           type: "compactionSummary" as const,
           summary,
           tokensBefore: raw.tokensBefore,
-          status: raw.status,
-          reason: raw.reason,
+          status: role === "branchSummary" ? (raw.status ?? "completed") : raw.status,
+          reason:
+            raw.reason ?? (role === "branchSummary" ? `segment:${raw.fromId ?? ""}` : undefined),
         },
       ],
       timestamp: extractTimestamp(message),
@@ -224,6 +228,7 @@ export function messageToChatMessage(
 
   const asstMsg = message as AssistantMessage;
   const content = extractContent(asstMsg);
+  const effectiveProviderRequest = providerRequest ?? providerRequestFromMessage(message);
   if (content.length === 0) {
     if (asstMsg.stopReason === "error") {
       const errorMessage = getAssistantErrorMessage(asstMsg) ?? "LLM 返回了错误响应";
@@ -238,6 +243,7 @@ export function messageToChatMessage(
 
       if (asstMsg.provider) msg.provider = asstMsg.provider;
       if (asstMsg.model) msg.model = asstMsg.model;
+      if (effectiveProviderRequest) msg.providerRequest = effectiveProviderRequest;
 
       const usage = extractTokenUsage(asstMsg.usage);
       if (usage) msg.tokenUsage = usage;
@@ -258,6 +264,7 @@ export function messageToChatMessage(
   if (asstMsg.provider) msg.provider = asstMsg.provider;
   if (asstMsg.model) msg.model = asstMsg.model;
   if (asstMsg.stopReason) msg.stopReason = asstMsg.stopReason;
+  if (effectiveProviderRequest) msg.providerRequest = effectiveProviderRequest;
 
   const usage = extractTokenUsage(asstMsg.usage);
   if (usage) msg.tokenUsage = usage;

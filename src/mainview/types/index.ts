@@ -182,6 +182,7 @@ export type ChatMessage = {
   provider?: string;
   model?: string;
   stopReason?: string | null;
+  providerRequest?: ProviderRequestContextUsage;
   isStreaming?: boolean;
   tokenUsage?: TokenUsage;
   entryId?: string;
