@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import { formatFilePath } from "../../lib/format-path";
 import {
@@ -18,6 +19,7 @@ import {
   Brain,
   BookOpen,
   Target,
+  Repeat2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -60,6 +62,25 @@ interface PopupItem {
   folderPath?: string;
 }
 
+const LOCAL_SLASH_COMMANDS: PopupItem[] = [
+  {
+    id: "local-command-compact",
+    label: "compact",
+    description: "手动压缩当前会话上下文",
+    icon: "filetext",
+    accentColor: "text-semantic-notify",
+    insertText: "/compact",
+  },
+  {
+    id: "local-command-compact-force",
+    label: "compact-force",
+    description: "兼容旧入口：手动触发上下文压缩",
+    icon: "filetext",
+    accentColor: "text-semantic-notify",
+    insertText: "/compact-force",
+  },
+];
+
 interface FileBreadcrumb {
   path: string;
   label: string;
@@ -85,11 +106,16 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
   const panelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [popupStyle, setPopupStyle] = useState<CSSProperties>({});
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
   const goalStatus = supervisorStatus?.goal?.status;
+  const supervisorRunning =
+    supervisorStatus?.enabled === true &&
+    (supervisorStatus.state === "checking" || supervisorStatus.state === "continuing");
   const goalButtonClass = (() => {
     if (!supervisorStatus?.goal) return "text-text-tertiary border border-transparent";
     if (goalStatus === "complete") {
@@ -99,10 +125,13 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
       return "text-status-warning border border-status-warning/40 bg-status-warning/10";
     }
     if (supervisorStatus.goal) {
-      return "text-semantic-accent border border-semantic-accent/40 bg-semantic-accent/10";
+      return "text-accent border border-accent/40 bg-accent/10";
     }
     return "text-text-tertiary border border-transparent";
   })();
+  const supervisorButtonClass = supervisorRunning
+    ? "text-status-info border border-status-info/40 bg-status-info/10"
+    : "text-text-tertiary border border-transparent";
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -169,6 +198,34 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
     setCachedItems([]);
     setItems([]);
   }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setPopupStyle({
+      position: "fixed",
+      left: rect.left + 12,
+      width: rect.width - 24,
+      bottom: window.innerHeight - rect.top + 4,
+      maxHeight: Math.max(80, rect.top - 16),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!popupMode) {
+      setPopupStyle({});
+      return;
+    }
+    updatePosition();
+    const onResize = () => updatePosition();
+    const onScroll = () => updatePosition();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [popupMode, updatePosition]);
 
   const fetchAtAgents = useCallback(() => {
     if (!activeSessionId) return;
@@ -308,6 +365,11 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
           accentColor: "text-semantic-notify",
           insertText: `/${cmd.name}`,
         });
+      }
+      for (const command of LOCAL_SLASH_COMMANDS) {
+        if (!result.some((item) => item.label === command.label)) {
+          result.push(command);
+        }
       }
     } catch (e) {
       logger.warn("Failed to fetch slash commands", { error: String(e) });
@@ -468,6 +530,10 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
 
   if (!isMobileOrTablet) return null;
 
+  const toolbarButtonClass =
+    "inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-xs font-medium transition-colors hover:bg-surface-dim dark:hover:bg-surface-dim";
+  const toolbarIconClass = "h-3.5 w-3.5";
+
   const atTabs: { key: AtTab; label: string }[] = [
     { key: "agents", label: t("quickAction.agents") },
     { key: "files", label: t("quickAction.files") },
@@ -496,8 +562,8 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   };
 
   return (
-    <div className="relative px-3 pt-1" data-testid="quick-action-toolbar">
-      <div className="flex items-center gap-1 min-h-[40px]">
+    <div ref={containerRef} className="relative px-2.5 pt-0.5" data-testid="quick-action-toolbar">
+      <div className="flex min-h-8 items-center gap-1">
         <div className="flex items-center gap-0.5">
           <input
             ref={fileInputRef}
@@ -508,10 +574,10 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
+            className={`${toolbarButtonClass} text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary`}
             title={t("quickAction.attachment")}
           >
-            <Paperclip className="w-4 h-4" />
+            <Paperclip className={toolbarIconClass} />
           </button>
           {supportsVision && (
             <input
@@ -526,10 +592,10 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
           {supportsVision && (
             <button
               onClick={() => imageInputRef.current?.click()}
-              className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
+              className={`${toolbarButtonClass} text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary`}
               title={t("quickAction.image")}
             >
-              <ImageIcon className="w-4 h-4" />
+              <ImageIcon className={toolbarIconClass} />
             </button>
           )}
         </div>
@@ -538,22 +604,22 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
           <button
             onClick={handleOpenAt}
             aria-label={t("quickAction.atMention")}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+            className={`${toolbarButtonClass} whitespace-nowrap ${
               popupMode === "at"
-                ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
+                ? "bg-accent/30 text-accent border border-accent/50"
                 : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
             }`}
             title={t("quickAction.atMention")}
           >
             <div className="flex items-center gap-1 whitespace-nowrap">
-              <AtSign className="w-3.5 h-3.5" />
+              <AtSign className={toolbarIconClass} />
               <span>@</span>
             </div>
           </button>
           <button
             onClick={handleOpenSlash}
             aria-label={`/${t("quickAction.commandsAndSkills")}`}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+            className={`${toolbarButtonClass} ${
               popupMode === "slash"
                 ? "bg-semantic-notify/30 text-semantic-notify border border-semantic-notify/50"
                 : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
@@ -561,8 +627,21 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             title={t("quickAction.commandsAndSkills")}
           >
             <div className="flex items-center gap-1">
-              <Slash className="w-3.5 h-3.5" />
+              <Slash className={toolbarIconClass} />
               <span>/</span>
+            </div>
+          </button>
+          <button
+            onClick={() => openStatusPanel("supervisor")}
+            className={`${toolbarButtonClass} whitespace-nowrap ${supervisorButtonClass}`}
+            title={t("composerState.loopTitle")}
+            aria-label={t("composerState.loopTitle")}
+          >
+            <div className="flex items-center gap-1 whitespace-nowrap">
+              <Repeat2
+                className={`${toolbarIconClass} ${supervisorRunning ? "animate-pulse" : ""}`}
+              />
+              <span className="max-sm:sr-only">{t("composerState.loopShort", "Loop")}</span>
             </div>
           </button>
           <button
@@ -573,25 +652,24 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
               }
               openStatusPanel("supervisor");
             }}
-            className={`px-2 py-1 rounded-md text-xs font-medium hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors whitespace-nowrap ${
-              goalButtonClass
-            }`}
+            className={`${toolbarButtonClass} whitespace-nowrap ${goalButtonClass}`}
             title={t("goal.entry")}
             aria-label={t("goal.entry")}
           >
             <div className="flex items-center gap-1 whitespace-nowrap">
-              <Target className="w-3.5 h-3.5" />
-              <span>Goal</span>
+              <Target className={toolbarIconClass} />
+              <span className="max-sm:sr-only">Goal</span>
             </div>
           </button>
         </div>
       </div>
 
-      {popupMode && (
+      {popupMode && createPortal(
         <div
           ref={panelRef}
           data-testid={popupMode === "at" ? "mention-popup" : "command-popup"}
-          className="absolute left-3 right-3 bottom-full mb-1 bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-popover"
+          className="bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-[90]"
+          style={popupStyle}
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
             <div className="flex items-center gap-2 min-w-0">
@@ -609,7 +687,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                       }}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
-                          ? "bg-semantic-accent/30 text-semantic-accent"
+                          ? "bg-accent/30 text-accent"
                           : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                       }`}
                     >
@@ -649,7 +727,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             <div className="flex items-center gap-1 px-3 py-1 border-b border-border-secondary/40 text-[11px] overflow-x-auto">
               <button
                 onClick={() => handleBreadcrumb(-1)}
-                className="text-semantic-accent hover:text-semantic-accent shrink-0"
+                className="text-accent hover:text-accent shrink-0"
               >
                 {t("quickAction.rootDir")}
               </button>
@@ -658,7 +736,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                   <ChevronRight className="w-3 h-3 text-text-tertiary" />
                   <button
                     onClick={() => handleBreadcrumb(i)}
-                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-semantic-accent hover:text-semantic-accent"}`}
+                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-accent hover:text-accent"}`}
                   >
                     {bc.label}
                   </button>
@@ -667,7 +745,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             </div>
           )}
 
-          <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
+          <div className="max-h-[240px] min-h-[80px] overflow-y-auto overflow-x-hidden" role="listbox">
             {items.length === 0 && !loading && (
               <div className="px-3 py-6 text-center text-xs text-text-tertiary">
                 {query ? t("quickAction.noMatchResults") : t("common:noData")}
@@ -702,7 +780,8 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
