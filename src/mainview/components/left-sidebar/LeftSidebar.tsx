@@ -2,7 +2,6 @@ import { Plus, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { useGitStore } from "../../stores/use-git-store";
 import { SessionSidebar } from "../session-sidebar/SessionSidebar";
 import { SidebarBottomControls } from "./SidebarBottomControls";
 import { PanelPinButton } from "../primitives/PanelPinButton";
@@ -21,6 +20,9 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
   const isPinned = sessionPanel === "pinned";
   const hideSession = useLayoutStore((s) => s.hideSession);
 
+  const [successToastKey, setSuccessToastKey] = useState<"sessionCreated" | "sessionReused">(
+    "sessionCreated",
+  );
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [showErrorToast, setShowErrorToast] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -51,18 +53,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
               setIsCreating(true);
               const state = useSessionStore.getState();
-              const worktrees = useGitStore.getState().worktrees;
-              const activeSession = state.activeSessionId
-                ? Object.values(state.sessionsByProject)
-                    .flat()
-                    .find((s) => s.sessionId === state.activeSessionId)
-                : null;
-              const workspace = activeSession
-                ? worktrees.find((wt) => activeSession.projectPath.startsWith(wt.path))
-                : null;
 
               try {
-                await state.createNewSession(workspace?.path);
+                await state.createNewSession();
+                setSuccessToastKey("sessionCreated");
                 setShowSuccessToast(true);
                 setTimeout(() => setShowSuccessToast(false), 2000);
               } catch (error) {
@@ -124,7 +118,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         <div className="fixed bottom-16 left-4 z-toast bg-status-success/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-white" />
-            <span className="text-sm">{t("sessionCreated")}</span>
+            <span className="text-sm">{t(successToastKey)}</span>
           </div>
         </div>
       )}
