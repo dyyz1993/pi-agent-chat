@@ -40,7 +40,7 @@ const TAB_NAME_BOUNDARY_RE = /[-_.\s/]/;
 const logger = createLogger("session");
 
 function isRemoteProjectLocalPath(projectPath: string): boolean {
-  return /\/(?:\.pi-agent-chat|\.pi\/chat)\/remote-projects\/ssh-[^/]+$/.test(projectPath);
+  return /\/(?:\.pi-agent-chat|\.pi\/chat)\/remote-projects\/ssh-[^/]+(?:\/|$)/.test(projectPath);
 }
 
 type RemoteConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
@@ -377,9 +377,12 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             ? sessions.find((session) => session.sessionId === visibleSessionId)
             : undefined;
           const sessionIdentity = getSessionIdentity(visibleSession);
-          const remoteRuntime = visibleSessionId
-            ? remoteRuntimeBySession[visibleSessionId]
-            : undefined;
+          const isRemoteProject =
+            tab.runtime === "ssh" || Boolean(tab.remote) || isRemoteProjectLocalPath(tab.path);
+          const remoteRuntime =
+            isRemoteProject && visibleSessionId
+              ? remoteRuntimeBySession[visibleSessionId]
+              : undefined;
           const remoteConnectionStatus = remoteRuntime?.status;
           const dotClass =
             remoteConnectionDotClass(remoteConnectionStatus) ??
@@ -390,11 +393,6 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             typeof remoteRuntime?.remoteCwd === "string"
               ? remoteRuntime.remoteCwd
               : (tab.remote?.remotePath ?? "");
-          const isRemoteProject =
-            tab.runtime === "ssh" ||
-            Boolean(tab.remote) ||
-            Boolean(remoteRuntime?.enabled) ||
-            isRemoteProjectLocalPath(tab.path);
           const remoteRuntimeKind =
             tab.remote?.sshRuntimeKind ??
             (remoteRuntime?.enabled ? "ssh-command" : "remote-agent-child");

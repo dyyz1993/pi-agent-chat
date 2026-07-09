@@ -1,7 +1,8 @@
 import { useCallback, memo, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { ImageViewerOverlay } from "../primitives";
 import { CopyButton } from "./CopyButton";
-import type { ChatMessage, ContentBlock } from "../../types";
+import type { ChatMessage, ContentBlock, UIInteractionBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -20,6 +21,8 @@ import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./ls
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
 import { SUPERVISOR_CONTINUE_CUSTOM_TYPE } from "./SupervisorContinueCard";
+
+export const TOOL_BLOCK_RENDER_WINDOW_SIZE = 50;
 
 // Re-exports for backward compatibility
 export { ThinkingCard } from "./ThinkingCard";
@@ -65,6 +68,155 @@ function renderUserTextWithLinks(text: string, keyPrefix: number | string) {
   );
 }
 
+type ToolLikeContentBlock = Extract<
+  ContentBlock,
+  { type: "toolCall" } | { type: "toolResult" } | { type: "toolExecution" }
+>;
+
+type AssistantRenderItem =
+  | { kind: "block"; block: ContentBlock; index: number }
+  | { kind: "collapsed-tools"; key: string; blocks: ToolLikeContentBlock[] };
+
+function isToolLikeBlock(block: ContentBlock): block is ToolLikeContentBlock {
+  return block.type === "toolCall" || block.type === "toolResult" || block.type === "toolExecution";
+}
+
+function getToolLikeBlockId(block: ToolLikeContentBlock): string | undefined {
+  if (block.type === "toolExecution") return block.toolCallId;
+  if (block.type === "toolCall") return block.id;
+  return block.toolCallId;
+}
+
+function isForcedVisibleToolBlock(
+  block: ToolLikeContentBlock,
+  uiBlockMap: Map<string, UIInteractionBlock>,
+): boolean {
+  if (block.type === "toolExecution") {
+    if (block.status === "running" || block.status === "error") return true;
+  }
+  if (block.type === "toolResult" && block.isError) return true;
+  const toolId = getToolLikeBlockId(block);
+  const uiBlock = toolId ? uiBlockMap.get(toolId) : undefined;
+  return uiBlock?.status === "pending";
+}
+
+function isToolBlockVisibleBySettings({
+  block,
+  showToolCalls,
+  showToolResults,
+}: {
+  block: ToolLikeContentBlock;
+  showToolCalls: boolean;
+  showToolResults: boolean;
+}): boolean {
+  if (block.type === "toolResult") return showToolResults;
+  return showToolCalls;
+}
+
+function compactToolName(block: ToolLikeContentBlock): string {
+  if (block.type === "toolCall") return block.name;
+  return block.toolName;
+}
+
+export function buildAssistantRenderItems({
+  content,
+  uiBlockMap,
+  visibleOlderToolCount = 0,
+  windowSize = TOOL_BLOCK_RENDER_WINDOW_SIZE,
+  showToolCalls = true,
+  showToolResults = true,
+}: {
+  content: ContentBlock[];
+  uiBlockMap: Map<string, UIInteractionBlock>;
+  visibleOlderToolCount?: number;
+  windowSize?: number;
+  showToolCalls?: boolean;
+  showToolResults?: boolean;
+}): AssistantRenderItem[] {
+  const foldableToolIndexes: number[] = [];
+  content.forEach((block, index) => {
+    if (
+      isToolLikeBlock(block) &&
+      isToolBlockVisibleBySettings({ block, showToolCalls, showToolResults }) &&
+      !isForcedVisibleToolBlock(block, uiBlockMap)
+    ) {
+      foldableToolIndexes.push(index);
+    }
+  });
+
+  const visibleToolStart = Math.max(
+    0,
+    foldableToolIndexes.length - windowSize - visibleOlderToolCount,
+  );
+  const hiddenToolIndexes = new Set(foldableToolIndexes.slice(0, visibleToolStart));
+  const items: AssistantRenderItem[] = [];
+  let collapsedBlocks: ToolLikeContentBlock[] = [];
+  let collapsedStartIndex: number | null = null;
+
+  const flushCollapsed = () => {
+    if (collapsedBlocks.length === 0 || collapsedStartIndex == null) return;
+    items.push({
+      kind: "collapsed-tools",
+      key: `collapsed-tools-${collapsedStartIndex}-${collapsedBlocks.length}`,
+      blocks: collapsedBlocks,
+    });
+    collapsedBlocks = [];
+    collapsedStartIndex = null;
+  };
+
+  content.forEach((block, index) => {
+    if (hiddenToolIndexes.has(index) && isToolLikeBlock(block)) {
+      collapsedStartIndex ??= index;
+      collapsedBlocks.push(block);
+      return;
+    }
+    flushCollapsed();
+    items.push({ kind: "block", block, index });
+  });
+  flushCollapsed();
+
+  return items;
+}
+
+function CollapsedToolBlockGroup({
+  blocks,
+  onShowMore,
+}: {
+  blocks: ToolLikeContentBlock[];
+  onShowMore: () => void;
+}) {
+  const names = Array.from(new Set(blocks.map(compactToolName).filter(Boolean))).slice(0, 4);
+  const errorCount = blocks.filter(
+    (block) =>
+      (block.type === "toolExecution" && block.status === "error") ||
+      (block.type === "toolResult" && block.isError),
+  ).length;
+  const suffix =
+    blocks.length > TOOL_BLOCK_RENDER_WINDOW_SIZE ? `+${TOOL_BLOCK_RENDER_WINDOW_SIZE}` : "all";
+
+  return (
+    <div className="border-l-[3px] border-l-border-secondary/60">
+      <div className="my-0.5 flex min-h-8 items-center gap-2 bg-surface-dim/40 px-3 py-1.5 text-[11px] text-text-secondary">
+        <span className="shrink-0 rounded border border-border-secondary/60 bg-bg-secondary/70 px-1.5 py-0.5 font-medium text-text-tertiary">
+          {blocks.length} older tools
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {names.length > 0 ? names.join(", ") : "Tool calls collapsed"}
+          {errorCount > 0 ? ` · ${errorCount} errors` : ""}
+        </span>
+        <button
+          type="button"
+          onClick={onShowMore}
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-border-secondary/70 px-2 py-0.5 text-status-info hover:border-status-info/60 hover:bg-status-info/10"
+        >
+          <ChevronDown className="h-3 w-3" />
+          Show {suffix}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export interface MessageBubbleProps {
   message: ChatMessage;
   mergedResultData?: unknown;
@@ -78,7 +230,10 @@ export const MessageBubble = memo(function MessageBubble({
 
   const isUser = message.role === "user";
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [visibleOlderToolCount, setVisibleOlderToolCount] = useState(0);
   const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
+  const showToolCalls = useSettingsStore((s) => s.showToolCalls);
+  const showToolResults = useSettingsStore((s) => s.showToolResults);
   const isActive = useChatNavStore(
     useCallback(
       (s) => (sessionId ? (s.activeIdBySession[sessionId] ?? null) === message.id : false),
@@ -102,6 +257,24 @@ export const MessageBubble = memo(function MessageBubble({
     }
     return { bg, isUser };
   }, [isSelected, isActive, isUser]);
+
+  const assistantRenderItems = useMemo(
+    () =>
+      isUser
+        ? []
+        : buildAssistantRenderItems({
+            content: message.content,
+            uiBlockMap,
+            visibleOlderToolCount,
+            showToolCalls,
+            showToolResults,
+          }),
+    [isUser, message.content, showToolCalls, showToolResults, uiBlockMap, visibleOlderToolCount],
+  );
+
+  const showMoreOlderTools = useCallback(() => {
+    setVisibleOlderToolCount((count) => count + TOOL_BLOCK_RENDER_WINDOW_SIZE);
+  }, []);
 
   const contentRef = useRef(message.content);
   contentRef.current = message.content;
@@ -195,7 +368,17 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       ) : (
         <div className={`w-full text-text-primary transition-colors ${styleMemo.bg} min-w-0`}>
-          {message.content.map((block, i) => {
+          {assistantRenderItems.map((item) => {
+            if (item.kind === "collapsed-tools") {
+              return (
+                <CollapsedToolBlockGroup
+                  key={item.key}
+                  blocks={item.blocks}
+                  onShowMore={showMoreOlderTools}
+                />
+              );
+            }
+            const { block, index: i } = item;
             const role = message.role as "user" | "assistant";
             const isEntryMsg = message.content.some((b) => b.type === "custom");
             if (block.type === "custom" && MEMORY_HIDDEN_IN_CHAT.has(block.customType)) {
