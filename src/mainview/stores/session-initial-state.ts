@@ -73,10 +73,14 @@ interface AgentStateResult {
 interface InitialStateSessionState {
   activeProjectId: string | null;
   activeSessionId: string | null;
-  currentModel: { provider: string; id: string; name?: string } | null;
-  modelBySession: Record<string, { provider: string; id: string; name?: string }>;
+  currentModel: { provider: string; id: string; name?: string; reasoning?: boolean } | null;
+  modelBySession: Record<
+    string,
+    { provider: string; id: string; name?: string; reasoning?: boolean }
+  >;
   modelStateLoading: boolean;
   currentThinkingLevel: string;
+  thinkingLevelBySession: Record<string, string>;
   availableModels: Array<{
     provider: string;
     id: string;
@@ -180,12 +184,17 @@ export function createFetchInitialStateAction({
             if (!result) return;
 
             set((s) => {
-              if (s.activeSessionId !== sessionId || !s.activeProjectId) return {};
+              const projectState =
+                s.activeSessionId === sessionId && s.activeProjectId
+                  ? {
+                      projectStartFailed: { ...s.projectStartFailed, [s.activeProjectId]: false },
+                      projectStartError: { ...s.projectStartError, [s.activeProjectId]: "" },
+                    }
+                  : {};
               return {
                 sessionReady: { ...s.sessionReady, [sessionId]: true },
                 agentReady: { ...s.agentReady, [sessionId]: true },
-                projectStartFailed: { ...s.projectStartFailed, [s.activeProjectId]: false },
-                projectStartError: { ...s.projectStartError, [s.activeProjectId]: "" },
+                ...projectState,
               };
             });
 
@@ -307,11 +316,11 @@ export function createFetchInitialStateAction({
                 name: result.model.name,
                 reasoning: result.model.reasoning,
               };
-              set({
-                currentModel: resolvedModel,
+              set((s) => ({
+                currentModel: s.activeSessionId === sessionId ? resolvedModel : s.currentModel,
                 modelManuallySet: false,
-                modelBySession: { ...get().modelBySession, [sessionId]: resolvedModel },
-              });
+                modelBySession: { ...s.modelBySession, [sessionId]: resolvedModel },
+              }));
               if (manuallySet) {
                 log.info("skipped model overwrite (user manually switched)", {
                   sessionId,
@@ -320,8 +329,16 @@ export function createFetchInitialStateAction({
               }
             }
 
-            if (result.thinkingLevel) {
-              set({ currentThinkingLevel: result.thinkingLevel });
+            const thinkingLevel = result.thinkingLevel;
+            if (thinkingLevel) {
+              set((s) => ({
+                currentThinkingLevel:
+                  s.activeSessionId === sessionId ? thinkingLevel : s.currentThinkingLevel,
+                thinkingLevelBySession: {
+                  ...s.thinkingLevelBySession,
+                  [sessionId]: thinkingLevel,
+                },
+              }));
             }
             set({ modelStateLoading: false });
           })
@@ -660,36 +677,50 @@ export function createFetchInitialStateAction({
           .then(([rawState]) => {
             const stateResult = rawState as AgentStateResult;
             const projectPath = currentSessionMeta?.projectPath;
-            const configuredProjectTier = projectPath
-              ? useTierStore.getState().getCurrentTier(projectPath)
-              : null;
             if (stateResult?.model) {
               if (projectPath) {
                 useTierStore
                   .getState()
-                  .syncTierFromModel(
+                  .syncTierFromModelForSession(
+                    sessionId,
                     projectPath,
                     stateResult.model.provider ?? "",
                     stateResult.model.id ?? "",
+                    { preserveOnMismatch: true },
                   );
               }
             }
+
+            // Deferred tier switch for blank sessions: if syncTierFromModel
+            // didn't match any tier (current model is not in the tier map),
+            // auto-select the "fast" tier so the CLI has a valid tier mapping.
+            // This was added by dec226a2 and accidentally removed by 863de889
+            // during a merge conflict resolution.
+            if (!projectPath) return;
             const isBlankSession =
               currentSessionMeta &&
               (currentSessionMeta.messageCount ?? 0) === 0 &&
               !currentSessionMeta.firstMessage;
-            if (!projectPath || !isBlankSession) return;
-            if (!configuredProjectTier) return;
-            void useTierStore
+            if (!isBlankSession) return;
+            const existingTier = useTierStore
               .getState()
-              .switchToTier(configuredProjectTier, sessionId)
-              .catch((err) => {
-                log.warn("delayed tier switch failed after initial state", {
-                  sessionId,
-                  tier: configuredProjectTier,
-                  err: err instanceof Error ? err.message : String(err),
+              .getCurrentTierForSession(sessionId, projectPath);
+            if (existingTier) return;
+            const tierModels = useTierStore
+              .getState()
+              .getTierModelsForSession(sessionId, projectPath);
+            if (Object.keys(tierModels).length > 0 && tierModels.fast) {
+              void useTierStore
+                .getState()
+                .switchToTier("fast", sessionId)
+                .catch((err) => {
+                  log.warn("delayed tier switch failed after initial state", {
+                    sessionId,
+                    tier: "fast",
+                    err: err instanceof Error ? err.message : String(err),
+                  });
                 });
-              });
+            }
           })
           .catch(() => {});
 
@@ -758,6 +789,15 @@ export function createFetchInitialStateAction({
               typeof result.agentName === "string"
             ) {
               const restoredName = result.agentName;
+              if (restoredName === agentName) {
+                log.info("[fetchInit] latest agent already active; skipping restore", {
+                  sessionId,
+                  agentName: restoredName,
+                });
+                useAgentStore.getState().fetchAgentDetail(sessionId);
+                useAgentStore.getState().fetchAllTools(sessionId);
+                return;
+              }
               log.info("[fetchInit] restoring agent from latest change", {
                 sessionId,
                 agentName: restoredName,

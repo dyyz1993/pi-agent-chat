@@ -239,10 +239,18 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     writeNum(STATUS_WIDTH_KEY, clamped);
   },
   openStatusPanel: (tab) => {
-    const patch: Partial<LayoutState> = { statusPanel: "visible" };
+    const cur = get().statusPanel;
+    const patch: Partial<LayoutState> = {};
+    if (cur === "hidden") {
+      patch.statusPanel = "visible";
+    }
     if (tab) patch.activePanelTab = tab;
-    set(patch);
-    writePanel(STATUS_PANEL_KEY, "visible");
+    if (Object.keys(patch).length > 0) {
+      set(patch);
+    }
+    if (cur === "hidden") {
+      writePanel(STATUS_PANEL_KEY, "visible");
+    }
   },
 
   setActivePanelTab: (tab) => set({ activePanelTab: tab }),
