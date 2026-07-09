@@ -13,6 +13,7 @@ import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { getProjectWorkspacePath } from "../../lib/project-workspace-path";
+import { getFileIcon } from "../../utils/file-icon";
 import type { TreeNode } from "../../types";
 
 const MAX_CACHE = 200;
@@ -71,11 +72,13 @@ function FilePathLink({
   const filePath = dataFilePath ?? dataFilePathAttr;
 
   if (!filePath) return <a {...props}>{children}</a>;
+  const absoluteFileName = basename(filePath);
+  const iconNode: TreeNode = { name: absoluteFileName, path: filePath, type: "file" };
 
   return (
     <button
       type="button"
-      className="inline cursor-pointer rounded-sm px-0.5 text-left text-primary underline decoration-dotted underline-offset-2 transition-colors hover:text-primary/80"
+      className="inline-flex cursor-pointer items-baseline gap-0.5 rounded-sm px-0.5 text-left text-primary underline decoration-dotted underline-offset-2 transition-colors hover:text-primary/80"
       title={`Open file: ${filePath}`}
       onClick={(event) => {
         event.preventDefault();
@@ -95,6 +98,9 @@ function FilePathLink({
         void openFile(node, false);
       }}
     >
+      <span className="inline-flex translate-y-[1px] [&>svg]:h-3 [&>svg]:w-3">
+        {getFileIcon(iconNode)}
+      </span>
       {children}
     </button>
   );

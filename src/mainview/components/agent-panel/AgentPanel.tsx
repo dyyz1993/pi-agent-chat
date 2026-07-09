@@ -26,6 +26,7 @@ import { agentColorStyle } from "../../utils/agent-color";
 import { formatFilePath } from "../../lib/format-path";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
+import { useSessionStore } from "../../stores/use-session-store";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -317,13 +318,21 @@ function InitialPromptViewer({ value }: { value: string | undefined }) {
 
 export function AgentPanel() {
   const activeSessionId = useEffectiveSessionId();
+  const runtimeModel = useSessionStore(
+    useCallback(
+      (s) =>
+        activeSessionId
+          ? (s.modelBySession[activeSessionId] ??
+            (s.activeSessionId === activeSessionId ? s.currentModel : null))
+          : null,
+      [activeSessionId],
+    ),
+  );
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const allToolsBySession = useAgentStore((s) => s.allToolsBySession);
   const liveSystemPromptBySession = useAgentStore((s) => s.liveSystemPromptBySession);
   const loadingDetail = useAgentStore((s) => s.loadingDetail);
   const fetchAgents = useAgentStore((s) => s.fetchAgents);
-  const fetchAgentDetail = useAgentStore((s) => s.fetchAgentDetail);
-  const fetchAllTools = useAgentStore((s) => s.fetchAllTools);
   const fetchSystemPrompt = useAgentStore((s) => s.fetchSystemPrompt);
   const currentAgentBySession = useAgentStore((s) => s.currentAgentBySession);
   const agents = useAgentStore((s) => s.agents);
@@ -337,11 +346,9 @@ export function AgentPanel() {
   const handleRefresh = useCallback(() => {
     if (sessionId) {
       fetchAgents(sessionId);
-      fetchAgentDetail(sessionId);
-      fetchAllTools(sessionId);
       fetchSystemPrompt(sessionId);
     }
-  }, [sessionId, fetchAgents, fetchAgentDetail, fetchAllTools, fetchSystemPrompt]);
+  }, [sessionId, fetchAgents, fetchSystemPrompt]);
 
   const activePanelTab = useLayoutStore((s) => s.activePanelTab);
 
@@ -349,11 +356,9 @@ export function AgentPanel() {
   useEffect(() => {
     if (activePanelTab === "agent" && sessionId && currentAgentName) {
       fetchAgents(sessionId);
-      fetchAgentDetail(sessionId);
-      fetchAllTools(sessionId);
       fetchSystemPrompt(sessionId);
     }
-  }, [activePanelTab, sessionId, currentAgentName, fetchAgents, fetchAgentDetail, fetchAllTools, fetchSystemPrompt]);
+  }, [activePanelTab, sessionId, currentAgentName, fetchAgents, fetchSystemPrompt]);
 
   if (!sessionId) {
     return (
@@ -541,6 +546,15 @@ export function AgentPanel() {
       {/* Section 2: Model */}
       <Section title="Model" icon={Cpu}>
         <div className="space-y-1">
+          <FieldRow
+            label="Current"
+            value={
+              runtimeModel
+                ? `${runtimeModel.provider}/${runtimeModel.name ?? runtimeModel.id}`
+                : "\u2014"
+            }
+            mono
+          />
           <div className="flex items-center gap-2 text-xs">
             <span className="text-[var(--color-text-secondary)] min-w-[80px]">Tier:</span>
             {agent.tier ? (
@@ -552,7 +566,7 @@ export function AgentPanel() {
             )}
           </div>
           <FieldRow label="Thinking" value={fieldValue(agent.thinkingLevel)} />
-          <FieldRow label="Model" value={fieldValue(agent.model)} mono />
+          <FieldRow label="Agent default" value={fieldValue(agent.model)} mono />
           <FieldRow label="Effort" value={fieldValue(agent.effort)} />
         </div>
       </Section>

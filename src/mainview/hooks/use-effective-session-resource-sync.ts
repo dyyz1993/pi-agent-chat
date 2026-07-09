@@ -55,7 +55,10 @@ function resolveRuntimeTarget(
   }
 
   const activeParent = findSessionMetaById(sessionState.sessionsByProject, activeSessionId);
-  const sub = findSubsessionInfo(useSubagentStore.getState().subsessionsByParent, effectiveSessionId);
+  const sub = findSubsessionInfo(
+    useSubagentStore.getState().subsessionsByParent,
+    effectiveSessionId,
+  );
   if (sub?.sessionPath && activeParent?.projectPath) {
     return {
       sessionId: sub.sessionId,
@@ -123,11 +126,16 @@ export function useEffectiveSessionResourceSync(): void {
     const targetKey = target
       ? `${target.sessionId}:${target.sessionPath}:${target.projectPath}:${target.forceNewProcess}`
       : null;
-    const resourceKey = targetKey ? `${effectiveSessionId}:${targetKey}` : `${effectiveSessionId}:pending-target`;
+    const resourceKey = targetKey
+      ? `${effectiveSessionId}:${targetKey}`
+      : `${effectiveSessionId}:pending-target`;
     const fetchInitialStateOnce = () => {
       if (lastFetchedResourceKeyRef.current === resourceKey) return;
       lastFetchedResourceKeyRef.current = resourceKey;
       useSessionStore.getState().fetchInitialState(effectiveSessionId);
+      void useSessionStore
+        .getState()
+        .fetchModelState(effectiveSessionId, { force: true, includeFavorites: false });
     };
 
     if (target && targetKey && lastSyncedTargetKeyRef.current !== targetKey) {
@@ -139,5 +147,11 @@ export function useEffectiveSessionResourceSync(): void {
     }
 
     fetchInitialStateOnce();
-  }, [activeSessionId, activeSubsessionId, effectiveSessionId, sessionsByProject, subsessionsByParent]);
+  }, [
+    activeSessionId,
+    activeSubsessionId,
+    effectiveSessionId,
+    sessionsByProject,
+    subsessionsByParent,
+  ]);
 }

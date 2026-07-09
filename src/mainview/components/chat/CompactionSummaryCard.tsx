@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Archive, CheckCircle2, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
@@ -24,9 +24,15 @@ export const CompactionSummaryCard = memo(function CompactionSummaryCard({
   startedAt?: number;
 }) {
   const { t } = useTranslation("chat");
-  const [isOpen, setIsOpen] = useState(false);
   const effectiveStatus = status ?? "completed";
+  const shouldOpenByDefault = effectiveStatus === "failed" || effectiveStatus === "aborted";
+  const [isOpen, setIsOpen] = useState(shouldOpenByDefault);
   const isRunning = effectiveStatus === "running";
+  useEffect(() => {
+    if (shouldOpenByDefault) {
+      setIsOpen(true);
+    }
+  }, [shouldOpenByDefault]);
 
   const lines = summary.split("\n");
   const firstMeaningfulLine = lines.find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";

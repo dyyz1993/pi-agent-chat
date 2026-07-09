@@ -19,6 +19,7 @@
   "closePanel": "Close panel",
   "collapseSidebar": "Collapse sidebar",
   "sessionCreated": "Session created successfully",
+  "sessionReused": "Switched to existing empty session",
   "createFailed": "Create failed: {{error}}",
   "unpinSidebar": "Unpin sidebar",
   "pinSidebar": "Pin sidebar",

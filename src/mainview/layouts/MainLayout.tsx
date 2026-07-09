@@ -5,12 +5,10 @@ import { TabBar } from "../components/tab-bar/TabBar";
 import { ChatPanel } from "../components/chat/ChatPanel";
 import { LeftSidebar } from "../components/left-sidebar/LeftSidebar";
 import { RightSidebar } from "../components/right-sidebar/RightSidebar";
-import { FileOverlay } from "../components/file-preview/FileOverlay";
 import { DiffOverlay } from "../components/diff/DiffOverlay";
 import { CodeExpandOverlay } from "../components/chat/primitives/CodeExpandOverlay";
 import { MarkdownExpandOverlay } from "../components/chat/MarkdownExpandOverlay";
 import { ConnectionBanner } from "../components/ConnectionBanner";
-import { useExplorerStore } from "../stores/use-explorer-store";
 import { useGitStore } from "../stores/use-git-store";
 import { useChatOverlayStore } from "../stores/use-chat-overlay-store";
 
@@ -136,18 +134,6 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
     if (store.statusPanel === "visible") store.hideStatus();
   }, []);
 
-  const filePreview = useExplorerStore((s) => s.filePreview);
-  const loadingFile = useExplorerStore((s) => s.loadingFile);
-  const saveFileContent = useExplorerStore((s) => s.saveFileContent);
-  const setFileEditable = useExplorerStore((s) => s.setFileEditable);
-  const handleSaveFile = useCallback(
-    async (content: string) => {
-      if (filePreview?.path) {
-        await saveFileContent(filePreview.path, content);
-      }
-    },
-    [saveFileContent, filePreview?.path],
-  );
   const currentDiff = useGitStore((s) => s.currentDiff);
   const overlay = useChatOverlayStore((s) => s.overlay);
   const expandTitle = useChatOverlayStore((s) => s.expandTitle);
@@ -198,17 +184,6 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           onClick={handleChatAreaClick}
         >
           <ChatPanel />
-          {overlay === "file" && filePreview && (
-            <div onClick={(e) => e.stopPropagation()}>
-              <FileOverlay
-                preview={filePreview}
-                loading={loadingFile}
-                onClose={closeOverlay}
-                onSave={handleSaveFile}
-                onToggleEdit={setFileEditable}
-              />
-            </div>
-          )}
           {overlay === "diff" && currentDiff && (
             <div onClick={(e) => e.stopPropagation()}>
               <DiffOverlay />

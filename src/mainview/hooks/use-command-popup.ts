@@ -7,10 +7,7 @@ import { useComposerPlaceholderStore } from "../stores/use-composer-placeholder-
 import { apiClient } from "../lib/api-client";
 import type { TreeNode } from "../types";
 import { createLogger } from "../../shared/lib/logger";
-import {
-  buildSessionMentionItems,
-  type SessionMentionScope,
-} from "../lib/session-mention-items";
+import { buildSessionMentionItems, type SessionMentionScope } from "../lib/session-mention-items";
 import { jumpToSessionById } from "../components/chat/primitives/useJumpToSession";
 
 const log = createLogger("chat");
@@ -87,6 +84,25 @@ interface CommandInfo {
   source: string;
   description?: string;
 }
+
+const LOCAL_SLASH_COMMANDS: PopupItem[] = [
+  {
+    id: "local-command-compact",
+    label: "compact",
+    description: "手动压缩当前会话上下文",
+    icon: "filetext",
+    accentColor: "text-amber-400",
+    insertText: "/compact",
+  },
+  {
+    id: "local-command-compact-force",
+    label: "compact-force",
+    description: "兼容旧入口：手动触发上下文压缩",
+    icon: "filetext",
+    accentColor: "text-amber-400",
+    insertText: "/compact-force",
+  },
+];
 
 interface DirEntry {
   path: string;
@@ -309,6 +325,11 @@ export function useCommandPopup(): CommandPopupState {
           insertText: `/${cmd.name}`,
         });
       }
+      for (const command of LOCAL_SLASH_COMMANDS) {
+        if (!result.some((item) => item.label === command.label)) {
+          result.push(command);
+        }
+      }
       const skillsRaw = (await apiClient.call("agent.getSkills", {
         sessionId: activeSessionId,
       })) as SkillInfo[] | { skills: SkillInfo[] };
@@ -338,11 +359,7 @@ export function useCommandPopup(): CommandPopupState {
   useEffect(() => {
     if (!popupMode) return;
     if (popupMode === "at") {
-      if (
-        atTab === "recentSessions" ||
-        atTab === "currentSessions" ||
-        atTab === "globalSessions"
-      ) {
+      if (atTab === "recentSessions" || atTab === "currentSessions" || atTab === "globalSessions") {
         fetchAtSessions(atTab);
       } else if (atTab === "files") fetchAtFiles(currentDir);
       else if (atTab === "memory") fetchAtMemory();

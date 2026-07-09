@@ -39,7 +39,6 @@ import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RemoteProjectRef } from "../../../shared/modules/project";
-import type { RemoteSshStatus } from "../../../shared/modules/agent";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
@@ -47,6 +46,13 @@ const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   medium: { dot: "bg-status-warning", label: "M" },
   low: { dot: "bg-text-tertiary", label: "L" },
 };
+
+function isRemoteProjectLocalPath(projectPath: string | undefined): boolean {
+  return Boolean(
+    projectPath &&
+    /\/(?:\.pi-agent-chat|\.pi\/chat)\/remote-projects\/ssh-[^/]+(?:\/|$)/.test(projectPath),
+  );
+}
 
 function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
   const { t } = useTranslation("status");
@@ -86,10 +92,13 @@ export function StatusPanel() {
   const executionSandbox = useStatusStore((s) => s.executionSandbox);
   const executionSandboxLoading = useStatusStore((s) => s.executionSandboxLoading);
   const setRemoteRuntimeStatus = useStatusStore((s) => s.setRemoteRuntimeStatus);
+  const activeSessionId = useEffectiveSessionId();
+  const liveRemoteStatus = useStatusStore((s) =>
+    activeSessionId ? (s.remoteRuntimeBySession?.[activeSessionId] ?? null) : null,
+  );
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
-  const activeSessionId = useEffectiveSessionId();
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
@@ -140,18 +149,35 @@ export function StatusPanel() {
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
   const [showPermissionAdvanced, setShowPermissionAdvanced] = useState(false);
-  const [remoteStatus, setRemoteStatus] = useState<RemoteSshStatus | null>(null);
+  const [remoteStatus, setRemoteStatus] = useState<{
+    enabled: boolean;
+    configured: boolean;
+    status?: "connecting" | "connected" | "disconnected" | "error";
+    host?: string;
+    remoteCwd?: string;
+    error?: string;
+  } | null>(null);
   const [recoveredRemoteRef, setRecoveredRemoteRef] = useState<RemoteProjectRef | null>(null);
   const activeRemoteRef = activeProjectTab?.remote ?? recoveredRemoteRef;
+  const activeProjectIsRemote = Boolean(
+    activeRemoteRef ||
+    activeProjectTab?.runtime === "ssh" ||
+    isRemoteProjectLocalPath(activeProjectTab?.path),
+  );
+  const effectiveRemoteStatus = activeProjectIsRemote ? (liveRemoteStatus ?? remoteStatus) : null;
   const activeSshRuntimeKind =
     activeRemoteRef?.sshRuntimeKind ??
-    (remoteStatus?.enabled ? "ssh-command" : "remote-agent-child");
+    (effectiveRemoteStatus?.enabled ? "ssh-command" : "remote-agent-child");
+  const displayRemoteStatus = effectiveRemoteStatus?.status;
+  const displayRemoteDisconnected =
+    displayRemoteStatus === "disconnected" || displayRemoteStatus === "error";
+  const displayRemoteConnecting = displayRemoteStatus === "connecting";
   const displayRemoteEnabled = Boolean(
-    activeRemoteRef ?? remoteStatus?.enabled ?? activeProjectTab?.runtime === "ssh",
+    activeRemoteRef ?? effectiveRemoteStatus?.enabled ?? activeProjectTab?.runtime === "ssh",
   );
-  const displayRemoteHost = activeRemoteRef?.host ?? remoteStatus?.host;
+  const displayRemoteHost = activeRemoteRef?.host ?? effectiveRemoteStatus?.host;
   const displayRemotePath =
-    activeRemoteRef?.remotePath ?? remoteStatus?.remoteCwd ?? activeProjectTab?.path;
+    activeRemoteRef?.remotePath ?? effectiveRemoteStatus?.remoteCwd ?? activeProjectTab?.path;
 
   const permissionPresets = [
     {
@@ -208,47 +234,29 @@ export function StatusPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!activeSessionId) {
+    if (!activeSessionId || !activeProjectIsRemote) {
       setRemoteStatus(null);
+      if (activeSessionId) {
+        setRemoteRuntimeStatus(activeSessionId, null);
+      }
       return;
     }
-    const recheckRemoteConnection = async () => {
-      if (!activeRemoteRef?.host || !activeRemoteRef?.remotePath) return false;
-      const refreshed = await apiClient.call("agent.remoteSshTestConnection", {
-        sessionId: activeSessionId,
-        host: activeRemoteRef.host,
-        remoteCwd: activeRemoteRef.remotePath,
-      });
-      if (cancelled) return true;
-      setRemoteStatus(refreshed.status);
-      setRemoteRuntimeStatus(activeSessionId, refreshed.status);
-      return true;
-    };
     apiClient
       .call("agent.remoteSshGetStatus", { sessionId: activeSessionId })
-      .then(async (status) => {
+      .then((status) => {
         if (cancelled) return;
         setRemoteStatus(status);
         setRemoteRuntimeStatus(activeSessionId, status);
-
-        if (
-          (status?.status === "disconnected" || status?.status === "error") &&
-          activeRemoteRef?.host &&
-          activeRemoteRef?.remotePath
-        ) {
-          await recheckRemoteConnection();
-        }
       })
-      .catch(async () => {
+      .catch(() => {
         if (cancelled) return;
-        if (await recheckRemoteConnection()) return;
         setRemoteStatus(null);
         setRemoteRuntimeStatus(activeSessionId, null);
       });
     return () => {
       cancelled = true;
     };
-  }, [activeRemoteRef, activeSessionId, setRemoteRuntimeStatus]);
+  }, [activeProjectIsRemote, activeSessionId, setRemoteRuntimeStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -277,7 +285,7 @@ export function StatusPanel() {
     };
   }, [activeProjectTab?.path, activeProjectTab?.remote]);
 
-  const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
+  const BASE_SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
     { id: "permission", label: t("permissionMode"), icon: ShieldCheck },
     {
       id: "remote",
@@ -291,6 +299,9 @@ export function StatusPanel() {
     { id: "plugins", label: t("plugins"), icon: Puzzle },
     { id: "skills", label: t("skills"), icon: BookOpen },
   ];
+  const SECTIONS = BASE_SECTIONS.filter(
+    (section) => section.id !== "remote" || activeProjectIsRemote,
+  );
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -502,16 +513,30 @@ export function StatusPanel() {
                       <div className="flex items-start gap-1.5 text-[10px] leading-4 text-text-tertiary">
                         <span
                           className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
-                            displayRemoteEnabled ? "bg-status-success" : "bg-text-tertiary"
+                            displayRemoteDisconnected
+                              ? "bg-status-error"
+                              : displayRemoteConnecting
+                                ? "bg-status-warning animate-pulse"
+                                : displayRemoteEnabled
+                                  ? "bg-status-success"
+                                  : "bg-text-tertiary"
                           }`}
                         />
                         <div>
                           <div className="text-text-secondary">
-                            {displayRemoteEnabled
-                              ? t("remoteStatusConnected", {
-                                  host: displayRemoteHost ?? "",
-                                })
-                              : t("remoteStatusLocal")}
+                            {displayRemoteDisconnected
+                              ? t(
+                                  displayRemoteStatus === "error"
+                                    ? "remoteStatusError"
+                                    : "remoteStatusDisconnected",
+                                )
+                              : displayRemoteConnecting
+                                ? t("remoteStatusConnecting")
+                                : displayRemoteEnabled
+                                  ? t("remoteStatusConnected", {
+                                      host: displayRemoteHost ?? "",
+                                    })
+                                  : t("remoteStatusLocal")}
                           </div>
                           <div>
                             {activeRemoteRef
@@ -540,6 +565,14 @@ export function StatusPanel() {
                               <span className="truncate font-mono text-text-secondary">
                                 {displayRemotePath ?? t("notLoaded")}
                               </span>
+                              {displayRemoteDisconnected && effectiveRemoteStatus?.error && (
+                                <>
+                                  <span className="text-text-tertiary">{t("errorLabel")}</span>
+                                  <span className="truncate text-status-error">
+                                    {effectiveRemoteStatus.error}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </>
                         ) : (
@@ -949,6 +982,7 @@ export function StatusPanel() {
         <LogViewer
           logPath={logViewer.logPath}
           toolCallId={logViewer.toolCallId}
+          sessionId={activeSessionId}
           onClose={() => setLogViewer(null)}
         />
       )}

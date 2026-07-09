@@ -14,11 +14,9 @@ import {
   createSessionActivityLabels,
 } from "./SessionActivitySummary";
 import { SessionTaskCard } from "./SessionTaskCard";
-import {
-  mergeSessionTaskModelInfo,
-  SessionTaskModelBadges,
-} from "./SessionTaskModelBadges";
+import { mergeSessionTaskModelInfo, SessionTaskModelBadges } from "./SessionTaskModelBadges";
 import { useSessionTaskModelFallback } from "./useSessionTaskModelFallback";
+import { SessionTaskWorktreeBadge } from "./SessionTaskWorktreeBadge";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -52,6 +50,32 @@ function getAgentArg(record: Record<string, unknown>): string {
   return getStringArg(record, "agent") || getStringArg(record, "agentName");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+}
+
+function optionalString(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  if (!record) return undefined;
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function optionalNumber(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): number | undefined {
+  if (!record) return undefined;
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function shortPathName(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
   blockId,
@@ -68,6 +92,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   let requestedModel = "";
   let requestedProvider = "";
   let requestedThinkingLevel = "";
+  let requestedSessionId = "";
+  let requestedSessionPath = "";
   try {
     const parsed = JSON.parse(block.args ?? "{}") as Record<string, unknown>;
     requestedAgent = getAgentArg(parsed);
@@ -75,6 +101,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     requestedModel = getStringArg(parsed, "model");
     requestedProvider = getStringArg(parsed, "provider");
     requestedThinkingLevel = getStringArg(parsed, "thinkingLevel");
+    requestedSessionId = getStringArg(parsed, "sessionId");
+    requestedSessionPath = getStringArg(parsed, "sessionPath");
     description = getStringArg(parsed, "description");
     instruction =
       getStringArg(parsed, "instruction") ||
@@ -85,18 +113,43 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     logger.warn("Failed to parse subagent args", { error: String(e) });
   }
 
-  const displayTitle = description || instruction.slice(0, 120) || t("subagent.subagentTask");
+  const isResumeTool = block.toolName.toLowerCase() === "subagent_resume";
+  const rawDetails = asRecord(block.details);
+  const resultDetails = asRecord(rawDetails?.result);
+  const resultSessionId = optionalString(resultDetails, "sessionId");
+  const resultSessionPath = optionalString(resultDetails, "sessionPath");
+  const resultStatus = optionalString(resultDetails, "status");
+  const resultFinalText = optionalString(resultDetails, "finalText");
+  const resultError = optionalString(resultDetails, "error");
+  const resultExitCode = optionalNumber(resultDetails, "exitCode");
+  const isTimeout = resultStatus === "timeout";
+  const resumeTarget =
+    resultSessionId ||
+    requestedSessionId ||
+    (requestedSessionPath ? shortPathName(requestedSessionPath) : "") ||
+    (resultSessionPath ? shortPathName(resultSessionPath) : "");
+  const displayTitle =
+    description ||
+    (isResumeTool && resumeTarget ? `Resume: ${resumeTarget}` : "") ||
+    instruction.slice(0, 120) ||
+    t("subagent.subagentTask");
 
   const matchedSub = useSubagentStore((s): SubagentSessionInfo | null => {
     for (const subs of Object.values(s.subsessionsByParent)) {
       const found = subs.find(
-        (sub) => sub.toolCallId === block.toolCallId || sub.description === description,
+        (sub) =>
+          sub.toolCallId === block.toolCallId ||
+          (description && sub.description === description) ||
+          (resultSessionId && sub.sessionId === resultSessionId) ||
+          (requestedSessionId && sub.sessionId === requestedSessionId) ||
+          (resultSessionPath && sub.sessionPath === resultSessionPath) ||
+          (requestedSessionPath && sub.sessionPath === requestedSessionPath),
       );
       if (found) return found;
     }
     return null;
   });
-  const subSessionId = matchedSub?.sessionId;
+  const subSessionId = matchedSub?.sessionId ?? resultSessionId ?? requestedSessionId;
   const subMessages = useChatStore((s) =>
     subSessionId
       ? (s.messagesBySession?.[subSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
@@ -105,12 +158,16 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const subagentStatus = useSubagentStore((s) =>
     subSessionId ? s.subagentStatusMap?.[subSessionId] : undefined,
   );
-  const hasFinalOutput = Boolean(block.output?.trim());
+  const outputText = resultFinalText ?? block.output;
+  const hasFinalOutput = Boolean(outputText?.trim());
   const subagentHasCompleted = Boolean(matchedSub?.completedAt);
   const subagentHasError =
-    block.status === "error" ||
+    (block.status === "error" && !isTimeout) ||
+    resultStatus === "error" ||
+    resultStatus === "aborted" ||
     Boolean(matchedSub?.error) ||
-    (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0);
+    (typeof matchedSub?.exitCode === "number" && matchedSub.exitCode !== 0) ||
+    (!isTimeout && typeof resultExitCode === "number" && resultExitCode !== 0);
   const hasLiveSignal = isLiveSubagentStatus(subagentStatus) || block.status === "running";
   const isRunning = !hasFinalOutput && !subagentHasCompleted && !subagentHasError && hasLiveSignal;
   const isError = !isRunning && subagentHasError;
@@ -139,18 +196,26 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     return remainSec > 0 ? `${min}m${remainSec}s` : `${min}m`;
   }, [startTime, endTime, now]);
 
-  const { canJump, handleJump } = useJumpToSession(matchedSub?.sessionId);
+  const { canJump, handleJump } = useJumpToSession(subSessionId);
   const agents = useAgentStore((s) => s.agents);
 
-  const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
+  const status: ToolCardStatus = isRunning
+    ? "running"
+    : isTimeout
+      ? "background"
+      : isError
+        ? "error"
+        : "done";
 
   let statusText: string;
   if (isRunning) statusText = t("subagent.running");
+  else if (isTimeout) statusText = t("coordinator.timeout");
   else if (isDone) statusText = t("subagent.completed");
   else statusText = t("subagent.error");
 
   let statusColorClass: string;
   if (isRunning) statusColorClass = "text-semantic-agent animate-pulse";
+  else if (isTimeout) statusColorClass = "text-status-warning";
   else if (isDone) statusColorClass = "text-status-success";
   else statusColorClass = "text-status-error";
 
@@ -164,14 +229,15 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     [activityRoundLabels, isTerminal, subMessages],
   );
   const isLive =
-    !hasFinalOutput && !subagentHasCompleted && !subagentHasError && isLiveSubagentStatus(subagentStatus);
+    !hasFinalOutput &&
+    !subagentHasCompleted &&
+    !subagentHasError &&
+    isLiveSubagentStatus(subagentStatus);
   const agentName = firstNonEmptyString(matchedSub?.agent, requestedAgent) ?? "build";
   const agentColorName =
     agents.find((agent) => agent.name === agentName)?.color ?? BUILTIN_AGENT_COLORS[agentName];
   const agentBadgeStyle = agentColorStyle(agentColorName);
-  const shortSessionId = matchedSub?.sessionId
-    ? matchedSub.sessionId.replace(/^sess_/, "").slice(0, 12)
-    : "";
+  const shortSessionId = subSessionId ? subSessionId.replace(/^sess_/, "").slice(0, 12) : "";
   const modelFallback = useSessionTaskModelFallback();
   const modelInfo = mergeSessionTaskModelInfo(
     {
@@ -203,13 +269,13 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         provider={modelInfo.provider}
         thinkingLevel={modelInfo.thinkingLevel}
       />
+      <SessionTaskWorktreeBadge sessionId={subSessionId} />
       {shortSessionId && (
         <span className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono text-text-tertiary bg-surface-hover/60">
           {shortSessionId}
         </span>
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
-      {canJump && <SessionJumpButton onJump={handleJump} title={t("subagent.view")} />}
     </>
   );
 
@@ -220,6 +286,9 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
       status={status}
       title={displayTitle}
       badge={badgeContent}
+      action={
+        canJump ? <SessionJumpButton onJump={handleJump} title={t("subagent.view")} /> : undefined
+      }
       time={
         durationText ? (
           <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
@@ -228,9 +297,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         ) : undefined
       }
       input={
-        instruction
-          ? { label: t("subagent.input"), text: instruction.slice(0, 500) }
-          : undefined
+        instruction ? { label: t("subagent.input"), text: instruction.slice(0, 500) } : undefined
       }
       activity={{
         title: t("coordinator.activity"),
@@ -239,10 +306,11 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         labels: activityRoundLabels,
       }}
       result={
-        block.output
-          ? { label: t("subagent.output"), text: block.output, copyText: block.output }
+        outputText
+          ? { label: t("subagent.output"), text: outputText, copyText: outputText }
           : undefined
       }
+      error={resultError ? { label: "Error", text: resultError } : undefined}
     />
   );
 });
