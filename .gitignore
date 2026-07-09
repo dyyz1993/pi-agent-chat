@@ -140,6 +140,8 @@ dist-server.tar.gz
 
 # Debug/test temp scripts
 test-*-*.mjs
+investigate-high.mjs
+scan-project.mjs
 
 # Promo drafts
 promo/
