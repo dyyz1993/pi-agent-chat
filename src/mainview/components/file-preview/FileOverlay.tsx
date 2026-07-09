@@ -1,4 +1,4 @@
-import { FileText, Code, Eye, Save, Pencil, Check, Loader2 } from "lucide-react";
+import { Code, Eye, Save, Pencil, Check, Loader2 } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { FilePreview } from "../../types";
@@ -6,7 +6,8 @@ import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
-import { ContentSurface } from "../primitives";
+import { ContentSurface, SurfaceHeader } from "../primitives";
+import { getFileIcon } from "../../utils/file-icon";
 
 const log = createLogger("file");
 
@@ -18,6 +19,7 @@ interface FileOverlayProps {
   onClose: () => void;
   onSave?: (content: string) => Promise<void>;
   onToggleEdit?: (editable: boolean) => void;
+  embedded?: boolean;
 }
 
 function isSvgFile(filename: string): boolean {
@@ -51,7 +53,14 @@ function canUseFsRoute(): boolean {
 const toolbarBtnBase =
   "inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium transition-colors";
 
-export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }: FileOverlayProps) {
+export function FileOverlay({
+  preview,
+  loading,
+  onClose,
+  onSave,
+  onToggleEdit,
+  embedded = false,
+}: FileOverlayProps) {
   const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
@@ -194,8 +203,9 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
           onKeyDown={handleEditorKeyDown}
-          className="flex-1 w-full h-full text-xs font-mono bg-surface-dim dark:bg-surface-code text-text-primary border-0 outline-none resize-none p-4"
+          className="flex-1 h-full min-w-0 overflow-auto whitespace-pre text-xs font-mono bg-surface-dim dark:bg-surface-code text-text-primary border-0 outline-none resize-none p-4"
           spellCheck={false}
+          wrap="off"
         />
       );
     }
@@ -282,17 +292,32 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
       )}
     </>
   );
+  const titleIcon = getFileIcon({ name: preview.name, path: preview.path, type: "file" });
 
-  return (
+  return embedded ? (
+    <div className="flex h-full min-h-0 flex-col bg-bg-elevated dark:bg-surface-code">
+      <SurfaceHeader
+        title={title}
+        onClose={onClose}
+        closeLabel={t("close", { ns: "common" })}
+        icon={titleIcon}
+        actions={actions}
+      />
+      <div className="min-h-0 flex-1 overflow-hidden overscroll-contain bg-bg-secondary/60 flex flex-col">
+        {renderPreview()}
+      </div>
+    </div>
+  ) : (
     <ContentSurface
       title={title}
       onClose={onClose}
       closeLabel={t("close", { ns: "common" })}
-      icon={<FileText className="w-4 h-4 text-text-tertiary shrink-0" />}
+      icon={titleIcon}
       actions={actions}
       position="absolute"
       layer="modal"
       bodyClassName="flex-1 min-h-0 flex flex-col"
+      bodyStyle={{ overflow: "hidden" }}
     >
       {renderPreview()}
     </ContentSurface>

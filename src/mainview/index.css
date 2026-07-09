@@ -192,6 +192,10 @@ button {
   display: none;
 }
 
+.surface-header-safe-top {
+  padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+}
+
 .resize-handle {
   position: absolute;
   top: 0;
