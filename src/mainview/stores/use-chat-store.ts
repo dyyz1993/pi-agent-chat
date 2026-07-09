@@ -899,8 +899,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.steer", {
         sessionId,
-        promote: item.type === "followUp" ? item.index : undefined,
-        immediate: true,
+        content: item.text,
       });
     } catch (err) {
       if (previous) {
