@@ -22,7 +22,6 @@ import { useStatusStore } from "../../stores/use-status-store";
 import { AnchoredPopover, IconButton } from "../primitives";
 import {
   PermissionActionButtons,
-  findOneTimePermissionActionValue,
 } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 import { jumpToSessionById } from "./primitives/useJumpToSession";
@@ -271,8 +270,11 @@ type BatchApprovalAction = {
 
 function buildBatchApprovalAction(req: UIPendingRequest): BatchApprovalAction | null {
   if (req.method === "select" && req.permissionMeta) {
-    const allowValue = findOneTimePermissionActionValue(req.options, "allow");
-    const denyValue = findOneTimePermissionActionValue(req.options, "deny");
+    const options = req.options as Array<{ label?: string; value?: unknown }>;
+    const allowEntry = options.find((o) => o.label?.toLowerCase() === "allow");
+    const denyEntry = options.find((o) => o.label?.toLowerCase() === "deny");
+    const allowValue = allowEntry?.value;
+    const denyValue = denyEntry?.value;
     if (!allowValue && !denyValue) return null;
     return {
       requestId: req.requestId,

@@ -79,15 +79,7 @@ export function SidebarBottomControls() {
     ),
   );
   const modelStateLoading = useSessionStore((s) => s.modelStateLoading);
-  const currentThinkingLevel = useSessionStore(
-    useCallback(
-      (s) =>
-        activeSessionId
-          ? (s.thinkingLevelBySession?.[activeSessionId] ?? s.currentThinkingLevel)
-          : s.currentThinkingLevel,
-      [activeSessionId],
-    ),
-  );
+  const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
   const availableModels = useSessionStore(
     useCallback(
       (s) =>
@@ -98,7 +90,7 @@ export function SidebarBottomControls() {
       [activeSessionId],
     ),
   );
-  const setModelForSession = useSessionStore((s) => s.setModelForSession);
+  const setCurrentModel = useSessionStore((s) => s.setCurrentModel);
   const setThinkingLevel = useSessionStore((s) => s.setThinkingLevel);
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
   const fetchInitialState = useSessionStore((s) => s.fetchInitialState);
@@ -131,17 +123,13 @@ export function SidebarBottomControls() {
   const projectPath = currentSession?.projectPath ?? tabProjectPath;
 
   const currentTier = useTierStore((s) =>
-    activeSessionId && projectPath
-      ? s.getCurrentTierForSession(activeSessionId, projectPath)
-      : null,
+    projectPath ? s.getCurrentTier(projectPath) : null,
   );
   const switchToTier = useTierStore((s) => s.switchToTier);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
-  const saveTierModelsForSession = useTierStore((s) => s.saveTierModelsForSession);
+  const saveProjectTierConfig = useTierStore((s) => s.saveProjectTierConfig);
   const tierModels = useTierStore((s) =>
-    activeSessionId && projectPath
-      ? s.getTierModelsForSession(activeSessionId, projectPath)
-      : s.globalDefaults,
+    projectPath ? s.getTierModels(projectPath) : s.globalDefaults,
   );
   const [switchingTier, setSwitchingTier] = useState(false);
   const [tierConfigOpen, setTierConfigOpen] = useState(false);
@@ -330,14 +318,15 @@ export function SidebarBottomControls() {
     if (!activeSessionId || !projectPath) return;
     setTierConfigSaving(true);
     try {
-      await saveTierModelsForSession(activeSessionId, projectPath, tierConfigModels);
+      useTierStore.getState().setProjectTierModels(projectPath, tierConfigModels);
+      await saveProjectTierConfig(projectPath);
       setTierConfigOpen(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("save tier config failed", { error: msg });
     }
     setTierConfigSaving(false);
-  }, [activeSessionId, projectPath, tierConfigModels, saveTierModelsForSession]);
+  }, [activeSessionId, projectPath, tierConfigModels, saveProjectTierConfig]);
 
   const handleSelectModel = useCallback(
     async (key: string) => {
@@ -350,17 +339,18 @@ export function SidebarBottomControls() {
         await apiClient.call("agent.reload", { sessionId: activeSessionId });
         await apiClient.call("agent.setModel", {
           sessionId: activeSessionId,
-          model: key,
+          provider,
+          modelId,
         });
-        setModelForSession(activeSessionId, provider, modelId);
+        setCurrentModel(provider, modelId);
         if (projectPath) {
           const tierStore = useTierStore.getState();
-          const models = tierStore.getTierModelsForSession(activeSessionId, projectPath);
+          const models = tierStore.getTierModels(projectPath);
           const matchedTier = TIER_KEYS.find(
             (tier) => models[tier]?.toLowerCase() === `${provider}/${modelId}`.toLowerCase(),
           );
           if (matchedTier) {
-            tierStore.setSessionCurrentTier(activeSessionId, projectPath, matchedTier);
+            tierStore.setProjectCurrentTier(projectPath, matchedTier);
           }
         }
         fetchModelState(activeSessionId);
@@ -378,7 +368,7 @@ export function SidebarBottomControls() {
       }
       setSwitching(false);
     },
-    [activeSessionId, switching, currentModel, setModelForSession, projectPath, fetchModelState, t],
+    [activeSessionId, switching, currentModel, setCurrentModel, projectPath, fetchModelState, t],
   );
 
   const handleSelectThinking = useCallback(
@@ -393,7 +383,7 @@ export function SidebarBottomControls() {
           sessionId: activeSessionId,
           level,
         });
-        setThinkingLevel(level, activeSessionId);
+        setThinkingLevel(level);
       } catch (err) {
         log.warn("setThinkingLevel failed", { error: String(err) });
       }

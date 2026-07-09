@@ -80,7 +80,6 @@ interface InitialStateSessionState {
   >;
   modelStateLoading: boolean;
   currentThinkingLevel: string;
-  thinkingLevelBySession: Record<string, string>;
   availableModels: Array<{
     provider: string;
     id: string;
@@ -334,10 +333,6 @@ export function createFetchInitialStateAction({
               set((s) => ({
                 currentThinkingLevel:
                   s.activeSessionId === sessionId ? thinkingLevel : s.currentThinkingLevel,
-                thinkingLevelBySession: {
-                  ...s.thinkingLevelBySession,
-                  [sessionId]: thinkingLevel,
-                },
               }));
             }
             set({ modelStateLoading: false });
@@ -681,12 +676,10 @@ export function createFetchInitialStateAction({
               if (projectPath) {
                 useTierStore
                   .getState()
-                  .syncTierFromModelForSession(
-                    sessionId,
+                  .syncTierFromModel(
                     projectPath,
                     stateResult.model.provider ?? "",
                     stateResult.model.id ?? "",
-                    { preserveOnMismatch: true },
                   );
               }
             }
@@ -694,21 +687,15 @@ export function createFetchInitialStateAction({
             // Deferred tier switch for blank sessions: if syncTierFromModel
             // didn't match any tier (current model is not in the tier map),
             // auto-select the "fast" tier so the CLI has a valid tier mapping.
-            // This was added by dec226a2 and accidentally removed by 863de889
-            // during a merge conflict resolution.
             if (!projectPath) return;
             const isBlankSession =
               currentSessionMeta &&
               (currentSessionMeta.messageCount ?? 0) === 0 &&
               !currentSessionMeta.firstMessage;
             if (!isBlankSession) return;
-            const existingTier = useTierStore
-              .getState()
-              .getCurrentTierForSession(sessionId, projectPath);
+            const existingTier = useTierStore.getState().getCurrentTier(projectPath);
             if (existingTier) return;
-            const tierModels = useTierStore
-              .getState()
-              .getTierModelsForSession(sessionId, projectPath);
+            const tierModels = useTierStore.getState().getTierModels(projectPath);
             if (Object.keys(tierModels).length > 0 && tierModels.fast) {
               void useTierStore
                 .getState()
