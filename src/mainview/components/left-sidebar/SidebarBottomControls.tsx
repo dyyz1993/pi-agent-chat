@@ -674,7 +674,7 @@ export function SidebarBottomControls() {
                         <span className={`truncate ${isActive ? "text-semantic-accent font-medium" : ""}`}>{name}</span>
                         <span className="text-[10px] text-text-tertiary truncate">{wt.path}</span>
                       </div>
-                      {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-text-tertiary" />}
+                      {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-semantic-tool/60" />}
                     </button>
                   );
                 })}
@@ -682,7 +682,7 @@ export function SidebarBottomControls() {
               <div className="border-t border-border-secondary/60">
                 <button
                   ref={createDialogButtonRef}
-                  className="w-full text-left px-3 py-1.5 text-xs text-semantic-accent hover:bg-surface-hover dark:hover:bg-surface-hover flex items-center gap-2 transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-xs text-semantic-tool hover:bg-surface-hover dark:hover:bg-surface-hover flex items-center gap-2 transition-colors"
                   onClick={() => {
                     setShowCreateDialog(true);
                     setSourceBranch(currentWorkspace?.branch ?? "");
