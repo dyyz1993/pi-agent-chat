@@ -8,7 +8,7 @@ import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { isVisionModel } from "../../lib/vision-detection";
-import { ImageViewerOverlay } from "../primitives";
+import { ImageViewerOverlay, AnchoredPopover } from "../primitives";
 
 function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: () => void }) {
   const isImage = att.type.startsWith("image/");
@@ -131,7 +131,6 @@ export function AttachmentButtons({
   const { t } = useTranslation("chat");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const addMenuRef = useRef<HTMLDivElement>(null);
   const addFiles = useAttachmentStore((s) => s.addFiles);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const currentModel = useSessionStore((s) => s.currentModel);
@@ -204,28 +203,7 @@ export function AttachmentButtons({
     ? "flex h-8 w-8 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary"
     : "p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors";
   const iconClass = isCompact ? "w-4 h-4" : "w-4 h-4";
-
-  useEffect(() => {
-    if (!isCompact || !isAddMenuOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!addMenuRef.current?.contains(event.target as Node)) {
-        setIsAddMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsAddMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isAddMenuOpen, isCompact]);
+  const addMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   const openFilePicker = useCallback(() => {
     setIsAddMenuOpen(false);
@@ -298,8 +276,9 @@ export function AttachmentButtons({
         onChange={handleFileSelect}
       />
       {isCompact ? (
-        <div ref={addMenuRef} className="relative">
+        <div className="relative">
           <button
+            ref={addMenuButtonRef}
             type="button"
             onClick={() => setIsAddMenuOpen((open) => !open)}
             className={`${buttonClass} ${isAddMenuOpen ? "bg-surface-hover text-text-primary" : ""}`}
@@ -310,13 +289,16 @@ export function AttachmentButtons({
           >
             <Plus className={iconClass} />
           </button>
-          {isAddMenuOpen && (
-            <div
-              className="absolute bottom-full left-0 z-50 mb-2 w-72 overflow-hidden rounded-xl border border-border-primary bg-bg-elevated/95 p-1.5 text-sm shadow-lg backdrop-blur-md"
-              role="menu"
-              data-testid="composer-add-menu"
-            >
-              <div className="px-2.5 py-1.5 text-xs font-medium text-text-tertiary">
+          <AnchoredPopover
+            anchorRef={addMenuButtonRef}
+            open={isAddMenuOpen}
+            onClose={() => setIsAddMenuOpen(false)}
+            placement="top"
+            align="start"
+            minWidth={288}
+            className="rounded-xl border border-border-primary bg-bg-elevated/95 p-1.5 text-sm shadow-lg backdrop-blur-md"
+          >
+            <div className="px-2.5 py-1.5 text-xs font-medium text-text-tertiary">
                 {t("composerAddMenu.title")}
               </div>
               <button
@@ -368,8 +350,7 @@ export function AttachmentButtons({
                   </span>
                 </span>
               </button>
-            </div>
-          )}
+          </AnchoredPopover>
         </div>
       ) : (
         <button

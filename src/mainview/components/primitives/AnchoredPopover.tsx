@@ -97,7 +97,13 @@ export const AnchoredPopover = forwardRef<HTMLDivElement, AnchoredPopoverProps>(
       };
 
       if (align === "end") {
-        next.right = Math.max(viewportPadding, window.innerWidth - rect.right);
+        const rightPos = Math.max(viewportPadding, window.innerWidth - rect.right);
+        const leftPos = window.innerWidth - rightPos - clampedWidth;
+        if (leftPos < viewportPadding) {
+          next.left = viewportPadding;
+        } else {
+          next.right = rightPos;
+        }
       } else {
         next.left = Math.max(
           viewportPadding,

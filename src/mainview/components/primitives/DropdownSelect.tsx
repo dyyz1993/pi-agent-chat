@@ -115,11 +115,11 @@ export function DropdownSelect({
         align="stretch"
         maxHeight={260}
         className={cx(
-          "overflow-y-auto rounded-md border border-border-secondary bg-bg-elevated p-1 shadow-xl dark:bg-surface-dim",
+          "rounded-md border border-border-secondary bg-bg-elevated shadow-xl dark:bg-surface-dim overflow-hidden flex flex-col",
           menuClassName,
         )}
       >
-        <div id={id} role="listbox" aria-label={ariaLabel} className="space-y-0.5">
+        <div id={id} role="listbox" aria-label={ariaLabel} className="space-y-0.5 overflow-y-auto overflow-x-hidden flex-1 min-h-0 p-1">
           {options.length === 0 ? (
             <div className="px-2 py-1.5 text-xs text-text-tertiary">{emptyLabel}</div>
           ) : (

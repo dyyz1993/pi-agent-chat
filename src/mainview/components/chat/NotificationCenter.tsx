@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Bell, X, Info, AlertTriangle, AlertCircle, Trash2, BellRing } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNotificationStore, type AppNotification } from "../../stores/use-notification-store";
@@ -7,6 +7,7 @@ import {
   requestNotificationPermission,
   getNotificationPermission,
 } from "../../lib/channels/pwa-channel";
+import { AnchoredPopover } from "../primitives";
 
 const LEVEL_ICON: Record<AppNotification["level"], typeof Info> = {
   info: Info,
@@ -29,7 +30,7 @@ export function NotificationCenter() {
   const dismiss = useNotificationStore((s) => s.dismiss);
   const clearAll = useNotificationStore((s) => s.clearAll);
   const markRead = useNotificationStore((s) => s.markRead);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const [pwaPerm, setPwaPerm] = useState(() => getNotificationPermission());
 
   const handleEnablePwa = async () => {
@@ -57,27 +58,10 @@ export function NotificationCenter() {
 
   const unread = notifications.filter((n) => !n.read).length;
 
-  useEffect(() => {
-    if (!panelOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setPanelOpen(false);
-      }
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setPanelOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [panelOpen, setPanelOpen]);
-
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         data-testid="notification-bell"
         onClick={(e) => {
           e.stopPropagation();
@@ -100,13 +84,17 @@ export function NotificationCenter() {
         )}
       </button>
 
-      {panelOpen && (
-        <div
-          className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-surface-dim border border-border-secondary rounded-lg shadow-xl z-popover"
-          role="log"
-          aria-label={t("notification.list")}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
+      <AnchoredPopover
+        anchorRef={buttonRef}
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        placement="bottom"
+        align="end"
+        minWidth={288}
+        maxHeight={320}
+        className="bg-surface-dim border border-border-secondary rounded-lg shadow-xl overflow-hidden flex flex-col"
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
             <span className="text-[11px] text-text-tertiary font-medium">
               {t("notification.title")}
             </span>
@@ -121,7 +109,7 @@ export function NotificationCenter() {
             )}
           </div>
 
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto overflow-x-hidden flex-1">
             {notifications.length === 0 ? (
               <div className="py-6 text-center text-[11px] text-text-tertiary dark:text-text-secondary">
                 {t("notification.noNotifications")}
@@ -172,8 +160,7 @@ export function NotificationCenter() {
               </button>
             </div>
           )}
-        </div>
-      )}
+      </AnchoredPopover>
     </div>
   );
 }
