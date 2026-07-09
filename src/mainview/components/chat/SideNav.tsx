@@ -9,7 +9,16 @@ import {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { User, Bot, AlertTriangle, Archive, Brain, FileText, type LucideIcon } from "lucide-react";
+import {
+  User,
+  Bot,
+  AlertTriangle,
+  Archive,
+  Brain,
+  FileText,
+  MoreHorizontal,
+  type LucideIcon,
+} from "lucide-react";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
@@ -60,7 +69,8 @@ export type SideNavPagination = {
 };
 
 const MAX_SIDE_NAV_CACHE = 10;
-const FLAT_ITEMS_CACHE_VERSION = 2;
+const FLAT_ITEMS_CACHE_VERSION = 3;
+export const SIDE_NAV_TOOL_BLOCK_WINDOW_SIZE = 80;
 
 interface FlatItemsCacheEntry {
   version: number;
@@ -74,6 +84,74 @@ interface FlatItemsCacheEntry {
 }
 
 const _flatItemsCache = new Map<string, FlatItemsCacheEntry>();
+
+export function getCachedFlatItems({
+  sessionId,
+  messages,
+  showThinking,
+  showMemoryEntries,
+  collapsedMessageIds,
+  showToolCalls,
+  showToolResults,
+}: {
+  sessionId?: string;
+  messages: ChatMessage[];
+  showThinking: boolean;
+  showMemoryEntries: boolean;
+  collapsedMessageIds: ReadonlySet<string>;
+  showToolCalls: boolean;
+  showToolResults: boolean;
+}): FlatItem[] {
+  if (!sessionId) {
+    return buildFlatItems(
+      messages,
+      showThinking,
+      showMemoryEntries,
+      collapsedMessageIds,
+      showToolCalls,
+      showToolResults,
+    );
+  }
+  const cached = _flatItemsCache.get(sessionId);
+  if (
+    cached &&
+    cached.version === FLAT_ITEMS_CACHE_VERSION &&
+    cached.ref === messages &&
+    cached.showThinking === showThinking &&
+    cached.showMemoryEntries === showMemoryEntries &&
+    cached.showToolCalls === showToolCalls &&
+    cached.showToolResults === showToolResults &&
+    cached.collapsedMessageIds === collapsedMessageIds
+  ) {
+    renderLog.info("cache HIT (flatItems)", { sessionId, count: messages.length });
+    return cached.result;
+  }
+  const result = buildFlatItems(
+    messages,
+    showThinking,
+    showMemoryEntries,
+    collapsedMessageIds,
+    showToolCalls,
+    showToolResults,
+  );
+  renderLog.info("cache MISS (flatItems)", {
+    sessionId,
+    count: messages.length,
+    computeCount: result.length,
+  });
+  _flatItemsCache.set(sessionId, {
+    version: FLAT_ITEMS_CACHE_VERSION,
+    ref: messages,
+    showThinking,
+    showMemoryEntries,
+    showToolCalls,
+    showToolResults,
+    collapsedMessageIds,
+    result,
+  });
+  evictFlatItemsIfNeeded();
+  return result;
+}
 
 const SIDE_NAV_ITEM_HEIGHT = 32;
 const SIDE_NAV_SCROLL_MARGIN = 48;
@@ -270,6 +348,7 @@ export function buildFlatItems(
   collapsedMessageIds: ReadonlySet<string> = EMPTY_SET,
   showToolCalls = true,
   showToolResults = true,
+  toolBlockWindowSize = SIDE_NAV_TOOL_BLOCK_WINDOW_SIZE,
 ): FlatItem[] {
   const items: FlatItem[] = [];
   for (const msg of reorderMemoryMessagesWithinTurns(dedupeMemoryInjectMessages(messages))) {
@@ -332,7 +411,27 @@ export function buildFlatItems(
 
     if (isCollapsed) continue;
 
+    const hiddenToolBlockIndexes = getHiddenToolBlockIndexes(
+      msg.content,
+      showToolCalls,
+      showToolResults,
+      toolBlockWindowSize,
+    );
+    let insertedToolCluster = false;
+
     for (let i = 0; i < msg.content.length; i++) {
+      if (hiddenToolBlockIndexes.has(i)) {
+        if (!insertedToolCluster) {
+          items.push({
+            key: `${id}-older-tools`,
+            navId: id,
+            icon: MoreHorizontal,
+            color: errorColor ?? "text-text-tertiary",
+          });
+          insertedToolCluster = true;
+        }
+        continue;
+      }
       const block = msg.content[i];
       const blockItem = buildBlockItem(id, i, block, {
         showThinking,
@@ -346,6 +445,48 @@ export function buildFlatItems(
   }
 
   return items;
+}
+
+function isToolBlock(block: ContentBlock): boolean {
+  return block.type === "toolCall" || block.type === "toolExecution" || block.type === "toolResult";
+}
+
+function isToolBlockVisibleBySettings(
+  block: ContentBlock,
+  showToolCalls: boolean,
+  showToolResults: boolean,
+): boolean {
+  if (block.type === "toolResult") return showToolResults;
+  if (block.type === "toolCall" || block.type === "toolExecution") return showToolCalls;
+  return false;
+}
+
+function isForcedVisibleToolBlock(block: ContentBlock): boolean {
+  if (block.type === "toolExecution") return block.status === "running" || block.status === "error";
+  if (block.type === "toolResult") return block.isError === true;
+  return false;
+}
+
+function getHiddenToolBlockIndexes(
+  content: ContentBlock[],
+  showToolCalls: boolean,
+  showToolResults: boolean,
+  windowSize: number,
+): Set<number> {
+  if (windowSize <= 0) return new Set();
+  const foldableToolIndexes: number[] = [];
+  for (let i = 0; i < content.length; i++) {
+    const block = content[i];
+    if (
+      isToolBlock(block) &&
+      isToolBlockVisibleBySettings(block, showToolCalls, showToolResults) &&
+      !isForcedVisibleToolBlock(block)
+    ) {
+      foldableToolIndexes.push(i);
+    }
+  }
+  const hiddenCount = Math.max(0, foldableToolIndexes.length - windowSize);
+  return new Set(foldableToolIndexes.slice(0, hiddenCount));
 }
 
 function buildBlockItem(
@@ -467,7 +608,7 @@ function buildBlockItem(
   }
 }
 
-function NavDot({
+const NavDot = memo(function NavDot({
   Icon,
   color,
   isSelected,
@@ -479,8 +620,6 @@ function NavDot({
   avatar,
   agentFilePath,
   agentColor,
-  onClick,
-  onContextMenu,
 }: {
   Icon: LucideIcon;
   color: string;
@@ -493,8 +632,6 @@ function NavDot({
   avatar?: AgentAvatarValue;
   agentFilePath?: string;
   agentColor?: string;
-  onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const selectedTone = getSelectedTone(color);
   let bg = "hover:bg-surface-hover ";
@@ -521,8 +658,6 @@ function NavDot({
     <div
       className={`group relative w-10 h-8 rounded-r flex items-center justify-center leading-none cursor-pointer transition-[background-color,box-shadow,opacity] duration-150 ease-out ${bg}`}
       style={{ scrollSnapAlign: "start" }}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
       data-nav-key={dataNavKey}
       data-nav-message-id={dataMessageId}
       data-nav-block-id={dataBlockId}
@@ -542,7 +677,7 @@ function NavDot({
       />
     </div>
   );
-}
+});
 
 function getSelectedTone(color: string): { bar: string; scrollBar: string } {
   switch (color) {
@@ -610,10 +745,10 @@ export const SideNav = memo(
     {
       messages: ChatMessage[];
       onNavDotClick: (target: SideNavTarget) => void;
-      pagination?: SideNavPagination;
       isScrollLocked?: boolean;
+      pagination?: SideNavPagination;
     }
-  >(function SideNavInner({ messages, onNavDotClick, pagination, isScrollLocked = false }, ref) {
+  >(function SideNavInner({ messages, onNavDotClick, isScrollLocked = false, pagination }, ref) {
     const sessionId = useSessionStore((s) => s.activeSessionId);
     const activeId = useChatNavStore(
       useCallback(
@@ -670,47 +805,15 @@ export const SideNav = memo(
     const currentAgentColor = currentAgentDetail?.color ?? currentAgentSummary?.color;
 
     const items = useMemo(() => {
-      if (!sessionId)
-        return buildFlatItems(messages, showThinking, showMemoryEntries, collapsedMessageIds);
-      const cached = _flatItemsCache.get(sessionId);
-      if (
-        cached &&
-        cached.version === FLAT_ITEMS_CACHE_VERSION &&
-        cached.ref === messages &&
-        cached.showThinking === showThinking &&
-        cached.showMemoryEntries === showMemoryEntries &&
-        cached.showToolCalls === showToolCalls &&
-        cached.showToolResults === showToolResults &&
-        cached.collapsedMessageIds === collapsedMessageIds
-      ) {
-        renderLog.info("cache HIT (flatItems)", { sessionId, count: messages.length });
-        return cached.result;
-      }
-      const result = buildFlatItems(
+      return getCachedFlatItems({
+        sessionId: sessionId ?? undefined,
         messages,
         showThinking,
         showMemoryEntries,
         collapsedMessageIds,
         showToolCalls,
         showToolResults,
-      );
-      renderLog.info("cache MISS (flatItems)", {
-        sessionId,
-        count: messages.length,
-        computeCount: result.length,
       });
-      _flatItemsCache.set(sessionId, {
-        version: FLAT_ITEMS_CACHE_VERSION,
-        ref: messages,
-        showThinking,
-        showMemoryEntries,
-        showToolCalls,
-        showToolResults,
-        collapsedMessageIds,
-        result,
-      });
-      evictFlatItemsIfNeeded();
-      return result;
     }, [
       messages,
       showThinking,
@@ -723,7 +826,6 @@ export const SideNav = memo(
     const scrollRef = useRef<HTMLDivElement>(null);
     const viewportShellRef = useRef<HTMLDivElement>(null);
     const firstNavRef = useRef(true);
-    const loadMoreRafRef = useRef<number | null>(null);
     const [viewportMetrics, setViewportMetrics] = useState<SideNavViewportMetrics>({
       gap: 0,
       viewportHeight: 0,
@@ -760,8 +862,14 @@ export const SideNav = memo(
       [items],
     );
 
-    const handleClick = useCallback(
-      (key: string, navId: string, blockId: string | undefined) => {
+    const handleDelegatedClick = useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-nav-key]");
+        if (!target) return;
+        const key = target.dataset.navKey;
+        const navId = target.dataset.navMessageId;
+        if (!key || !navId) return;
+        const blockId = target.dataset.navBlockId;
         clickSuppressRef.current = {
           key,
           navId,
@@ -774,37 +882,17 @@ export const SideNav = memo(
       [onNavDotClick, setNavId],
     );
 
-    const handleContextMenu = useCallback(
-      (e: React.MouseEvent, id: string) => {
-        e.preventDefault();
-        toggleItemSelect(id);
+    const handleDelegatedContextMenu = useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-nav-key]");
+        if (!target) return;
+        const navId = target.dataset.navMessageId;
+        if (!navId) return;
+        event.preventDefault();
+        toggleItemSelect(navId);
       },
       [toggleItemSelect],
     );
-
-    useEffect(() => {
-      const container = scrollRef.current;
-      if (!container || !pagination) return;
-
-      const onScroll = () => {
-        if (loadMoreRafRef.current != null) return;
-        loadMoreRafRef.current = requestAnimationFrame(() => {
-          loadMoreRafRef.current = null;
-          if (container.scrollTop < 30 && pagination.hasMore && !pagination.isLoading) {
-            pagination.onLoadMore();
-          }
-        });
-      };
-
-      container.addEventListener("scroll", onScroll, { passive: true });
-      return () => {
-        container.removeEventListener("scroll", onScroll);
-        if (loadMoreRafRef.current != null) {
-          cancelAnimationFrame(loadMoreRafRef.current);
-          loadMoreRafRef.current = null;
-        }
-      };
-    }, [pagination]);
 
     useEffect(() => {
       const container = scrollRef.current;
@@ -815,6 +903,9 @@ export const SideNav = memo(
         if (raf) return;
         raf = requestAnimationFrame(() => {
           raf = 0;
+          if (container.scrollTop <= 24 && pagination?.hasMore && !pagination.isLoading) {
+            pagination.onLoadMore();
+          }
           refreshVisibleEdgeFallback();
         });
       };
@@ -825,7 +916,7 @@ export const SideNav = memo(
         container.removeEventListener("scroll", onScroll);
         if (raf) cancelAnimationFrame(raf);
       };
-    }, [refreshVisibleEdgeFallback, items, viewportMetrics.viewportHeight]);
+    }, [pagination, refreshVisibleEdgeFallback, items, viewportMetrics.viewportHeight]);
 
     useLayoutEffect(() => {
       refreshVisibleEdgeFallback();
@@ -930,6 +1021,8 @@ export const SideNav = memo(
             }}
           >
             <div
+              onClick={handleDelegatedClick}
+              onContextMenu={handleDelegatedContextMenu}
               style={{
                 minHeight: "100%",
                 display: "flex",
@@ -960,8 +1053,6 @@ export const SideNav = memo(
                     avatar={item.useAgentAvatar ? currentAgentAvatar : undefined}
                     agentFilePath={item.useAgentAvatar ? currentAgentFilePath : undefined}
                     agentColor={item.useAgentAvatar ? currentAgentColor : undefined}
-                    onClick={() => handleClick(item.key, item.navId, item.blockId)}
-                    onContextMenu={(e) => handleContextMenu(e, item.navId)}
                   />
                 );
               })}
