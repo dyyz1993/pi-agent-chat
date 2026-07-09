@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Clock, SendHorizontal, X, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Trash2, Undo2, Upload, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { type QueueItemRef, useSessionQueueStore } from "../../stores/use-session-queue-store";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -10,7 +10,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
   const queue = useSessionQueueStore((s) => s.queueBySession[sessionId]);
   const clearQueue = useChatStore((s) => s.clearQueue);
   const clearQueuedMessage = useChatStore((s) => s.clearQueuedMessage);
-  const promoteQueuedFollowUp = useChatStore((s) => s.promoteQueuedFollowUp);
+  const insertQueuedMessageNow = useChatStore((s) => s.insertQueuedMessageNow);
 
   if (!queue || (queue.steering.length === 0 && queue.followUp.length === 0)) return null;
 
@@ -57,23 +57,17 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
             <span className="shrink-0 text-[10px] uppercase tracking-wide opacity-80">{label}</span>
             <span className="truncate">{preview}</span>
           </button>
-          {item.type === "followUp" ? (
-            <button
-              type="button"
-              onClick={() => {
-                void promoteQueuedFollowUp({
-                  type: "followUp",
-                  index: item.index,
-                  text: item.text,
-                });
-              }}
-              className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
-              title={t("sendQueuedMessageNow", { text: preview })}
-              aria-label={t("sendQueuedMessageNow", { text: preview })}
-            >
-              <SendHorizontal className="w-3 h-3" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              void insertQueuedMessageNow(item);
+            }}
+            className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+            title={t("insertQueuedMessageNow", { text: preview })}
+            aria-label={t("insertQueuedMessageNow", { text: preview })}
+          >
+            <Upload className="w-3 h-3" />
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -83,7 +77,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
             title={t("revokeQueuedMessage", { text: preview })}
             aria-label={t("revokeQueuedMessage", { text: preview })}
           >
-            <X className="w-3 h-3" />
+            <Undo2 className="w-3 h-3" />
           </button>
         </div>
         {isExpanded ? (
@@ -102,15 +96,17 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
           {queue.steering.map((text, index) => renderItem({ type: "steering", index, text }))}
           {queue.followUp.map((text, index) => renderItem({ type: "followUp", index, text }))}
         </div>
-        <button
-          type="button"
-          onClick={clearQueue}
-          className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
-          title={t("revokeQueuedMessages", { count: total })}
-          aria-label={t("revokeQueuedMessages", { count: total })}
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {total > 1 ? (
+          <button
+            type="button"
+            onClick={clearQueue}
+            className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
+            title={t("revokeQueuedMessages", { count: total })}
+            aria-label={t("revokeQueuedMessages", { count: total })}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        ) : null}
       </div>
     </div>
   );

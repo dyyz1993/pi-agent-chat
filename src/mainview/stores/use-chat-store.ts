@@ -635,6 +635,7 @@ interface ChatState {
   sendFollowUp: () => Promise<void>;
   clearQueue: () => Promise<void>;
   clearQueuedMessage: (item: QueueItemRef) => Promise<void>;
+  insertQueuedMessageNow: (item: QueueItemRef) => Promise<void>;
   promoteQueuedFollowUp: (item: FollowUpQueueItemRef) => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (
@@ -884,6 +885,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
         useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
       }
       log.warn("clearQueuedMessage failed", { error: String(err) });
+    }
+  },
+
+  insertQueuedMessageNow: async (item: QueueItemRef) => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    const queueStore = useSessionQueueStore.getState();
+    const previous = queueStore.queueBySession[sessionId];
+    if (item.type === "followUp") {
+      queueStore.removeQueuedMessage(sessionId, item);
+    }
+    try {
+      await apiClient.call("agent.steer", {
+        sessionId,
+        promote: item.type === "followUp" ? item.index : undefined,
+        immediate: true,
+      });
+    } catch (err) {
+      if (previous) {
+        useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
+      }
+      log.warn("insertQueuedMessageNow failed", { error: String(err) });
     }
   },
 
