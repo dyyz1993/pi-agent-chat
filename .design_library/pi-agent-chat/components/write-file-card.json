@@ -1,0 +1,40 @@
+{
+  "slug": "write-file-card",
+  "schemaVersion": 2,
+  "name": "WriteFileCard",
+  "category": "tool-execution",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "tool", "evidence": "File write/create operation with diff or content preview" }
+  ],
+  "variantDimensions": [{ "name": "action", "values": ["create", "edit", "delete"] }],
+  "representativeVariants": [
+    {
+      "name": "Create File",
+      "traits": { "action": "create", "filePath": "src/utils.ts", "lineCount": 85 },
+      "whySelected": "New file creation",
+      "childrenDigest": "FilePlus icon + path + line count + content preview"
+    },
+    {
+      "name": "Edit File",
+      "traits": { "action": "edit", "filePath": "src/app.ts", "changes": 3 },
+      "whySelected": "File modification with diff",
+      "childrenDigest": "FileEdit icon + path + inline diff viewer"
+    },
+    {
+      "name": "Delete File",
+      "traits": { "action": "delete", "filePath": "src/old.ts" },
+      "whySelected": "File deletion",
+      "childrenDigest": "FileMinus icon + path + red accent"
+    }
+  ],
+  "anatomy": {
+    "parts": ["action-icon", "file-path", "diff-viewer", "content-preview", "line-stats"],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 23, "context": "File write/edit/delete operations by AI" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Action-colored icon (green=create, yellow=edit, red=delete), inline diff for edits, content preview for creates"
+}

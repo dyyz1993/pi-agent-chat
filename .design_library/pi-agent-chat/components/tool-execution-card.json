@@ -1,0 +1,56 @@
+{
+  "slug": "tool-execution-card",
+  "schemaVersion": 2,
+  "name": "ToolExecutionCard",
+  "category": "tool-execution",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "tool",
+      "evidence": "Generic tool execution wrapper with status header and collapsible body"
+    }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["running", "done", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Running",
+      "traits": { "status": "running", "toolName": "Read", "target": "src/app.ts" },
+      "whySelected": "Active tool execution",
+      "childrenDigest": "Spinner + tool name + target path + loading state"
+    },
+    {
+      "name": "Done",
+      "traits": { "status": "done", "toolName": "Bash", "target": "npm test", "duration": "2.3s" },
+      "whySelected": "Completed execution",
+      "childrenDigest": "Check icon + tool name + duration badge + collapsible output"
+    },
+    {
+      "name": "Error",
+      "traits": {
+        "status": "error",
+        "toolName": "Write",
+        "target": "config.json",
+        "error": "Permission denied"
+      },
+      "whySelected": "Failed execution",
+      "childrenDigest": "X icon + tool name + error message + red accent"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "status-icon",
+      "tool-name",
+      "target",
+      "duration-badge",
+      "output",
+      "error-message",
+      "collapse-toggle"
+    ],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 20, "context": "All tool execution results in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Left border color = tool status (green=done, yellow=running, red=error), collapsible output section, duration badge"
+}

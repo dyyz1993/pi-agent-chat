@@ -14,16 +14,32 @@ import {
   parseJsonlFromText,
   type ParsedMessageEntry,
   type ParsedCustomEntry,
+  type ParsedDeletionEntry,
 } from "./session-jsonl-parser";
 import {
   buildBranchPathSet,
   filterMessagesToBranch,
   filterCustomEntriesToBranch,
+  filterCustomEntriesToPaginatedMessages,
   applyPagination,
 } from "./session-branch-filter";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
+
+function collectDeletedEntryIds(
+  deletionEntries: ParsedDeletionEntry[],
+  pathIds: Set<string> | null,
+): Set<string> {
+  const deletedIds = new Set<string>();
+  for (const entry of deletionEntries) {
+    if (pathIds && !pathIds.has(entry.entryId)) continue;
+    for (const targetId of entry.targetIds) {
+      deletedIds.add(targetId);
+    }
+  }
+  return deletedIds;
+}
 
 /**
  * Race a promise against a timeout. Rejects with a descriptive error if the
@@ -97,7 +113,7 @@ export class SessionMessageReader {
       // on-disk leaf_pointer is only written by branch()/resetLeaf(), NOT by
       // normal message appends, so it can lag behind. activeJsonlLeafId is the
       // true current leaf (mirrors CLI _buildIndex "deepest descendant").
-      activeJsonlLeafId?: string | null;
+      activeJsonlLeafId: string | null;
       byteOffset: number;
     }
   >();
@@ -135,10 +151,11 @@ export class SessionMessageReader {
       tokensBefore?: number;
       timestamp: number;
     }>;
+    deletionEntries?: Array<{ entryId: string; targetIds: string[] }>;
     parentById: Map<string, string | null>;
     lineCount: number;
     lastJsonlLeafPointer: string | null;
-    activeJsonlLeafId?: string | null;
+    activeJsonlLeafId: string | null;
     byteOffset: number;
     needsIncremental: boolean;
   } | null {
@@ -150,13 +167,13 @@ export class SessionMessageReader {
         // Exact match — file unchanged
         this.sessionMsgCache.delete(sessionId);
         this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: false };
+        return { ...cached, activeJsonlLeafId: cached.activeJsonlLeafId ?? null, needsIncremental: false };
       }
       if (st.size > cached.fileSize) {
         // File grew — can do incremental append
         this.sessionMsgCache.delete(sessionId);
         this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: true };
+        return { ...cached, activeJsonlLeafId: cached.activeJsonlLeafId ?? null, needsIncremental: true };
       }
       // File shrunk or changed drastically — invalidate
     } catch {
@@ -183,10 +200,11 @@ export class SessionMessageReader {
         tokensBefore?: number;
         timestamp: number;
       }>;
+      deletionEntries?: Array<{ entryId: string; targetIds: string[] }>;
       parentById: Map<string, string | null>;
       lineCount: number;
       lastJsonlLeafPointer: string | null;
-      activeJsonlLeafId?: string | null;
+      activeJsonlLeafId: string | null;
       byteOffset?: number;
     },
   ): void {
@@ -260,6 +278,7 @@ export class SessionMessageReader {
       tokensBefore?: number;
       timestamp: number;
     }>;
+    newDeletionEntries: Array<{ entryId: string; targetIds: string[] }>;
     lastLeafPointer: string | null;
   }> {
     return readJsonlFromByteOffsetRaw(
@@ -522,7 +541,7 @@ export class SessionMessageReader {
   async getFullMessages(
     sessionId: string,
     sessionPath?: string,
-    options?: { limit?: number; afterEntryId?: string },
+    options?: { limit?: number; afterEntryId?: string; fromStart?: boolean },
   ): Promise<{
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
@@ -554,6 +573,7 @@ export class SessionMessageReader {
       tokensBefore?: number;
       timestamp: number;
     }> = [];
+    const allDeletionEntries: ParsedDeletionEntry[] = [];
     const parentById: Map<string, string | null> = new Map();
     let lastJsonlLeafPointer: string | null = null;
     // Tracks the deepest/latest entry in JSONL order. Updated on every parsed
@@ -573,6 +593,7 @@ export class SessionMessageReader {
             allMessages.push(...parsed.messages);
             allCustomEntries.push(...parsed.customEntries);
             allCompactionEntries.push(...parsed.compactionEntries);
+            allDeletionEntries.push(...parsed.deletionEntries);
             for (const [k, v] of parsed.parentById) {
               parentById.set(k, v);
             }
@@ -593,6 +614,7 @@ export class SessionMessageReader {
         allMessages.push(...cached.messages);
         allCustomEntries.push(...cached.customEntries);
         allCompactionEntries.push(...cached.compactionEntries);
+        allDeletionEntries.push(...(cached.deletionEntries ?? []));
         for (const [k, v] of cached.parentById) {
           parentById.set(k, v);
         }
@@ -602,6 +624,7 @@ export class SessionMessageReader {
         allMessages.push(...cached.messages);
         allCustomEntries.push(...cached.customEntries);
         allCompactionEntries.push(...cached.compactionEntries);
+        allDeletionEntries.push(...(cached.deletionEntries ?? []));
         for (const [k, v] of cached.parentById) {
           parentById.set(k, v);
         }
@@ -624,6 +647,11 @@ export class SessionMessageReader {
               allCompactionEntries.push(ce);
             }
           }
+          for (const de of incrResult.newDeletionEntries) {
+            if (!allDeletionEntries.some((entry) => entry.entryId === de.entryId)) {
+              allDeletionEntries.push(de);
+            }
+          }
           if (incrResult.lastLeafPointer) {
             lastJsonlLeafPointer = incrResult.lastLeafPointer;
           }
@@ -638,6 +666,7 @@ export class SessionMessageReader {
             messages: allMessages,
             customEntries: allCustomEntries,
             compactionEntries: allCompactionEntries,
+            deletionEntries: allDeletionEntries,
             parentById,
             lineCount: cached.lineCount + incrResult.totalLines,
             lastJsonlLeafPointer,
@@ -655,6 +684,7 @@ export class SessionMessageReader {
           allMessages.push(...fullResult.messages);
           allCustomEntries.push(...fullResult.customEntries);
           allCompactionEntries.push(...fullResult.compactionEntries);
+          allDeletionEntries.push(...fullResult.deletionEntries);
           for (const [k, v] of fullResult.parentById) {
             parentById.set(k, v);
           }
@@ -665,6 +695,7 @@ export class SessionMessageReader {
             messages: allMessages,
             customEntries: allCustomEntries,
             compactionEntries: allCompactionEntries,
+            deletionEntries: allDeletionEntries,
             parentById,
             lineCount: fullResult.totalLines,
             lastJsonlLeafPointer,
@@ -712,13 +743,24 @@ export class SessionMessageReader {
       });
     }
 
-    const filteredMessages = filterMessagesToBranch(allMessages, pathIds);
-    const customEntries = filterCustomEntriesToBranch(allCustomEntries, pathIds);
+    const deletedIds = collectDeletedEntryIds(allDeletionEntries, pathIds);
+    const filteredMessages = filterMessagesToBranch(allMessages, pathIds).filter(
+      (message) => !deletedIds.has(message.entryId),
+    );
+    const branchCustomEntries = filterCustomEntriesToBranch(allCustomEntries, pathIds);
 
     // Apply pagination to filtered results.
     let totalCount = filteredMessages.length;
     const paginationResult = applyPagination(filteredMessages, options ?? {});
     const slicedMessages = paginationResult.messages;
+    const customEntries = filterCustomEntriesToPaginatedMessages(
+      branchCustomEntries,
+      slicedMessages,
+      options ?? {},
+      parentById,
+      leafId,
+      filteredMessages.map((entry) => entry.entryId),
+    );
     const hasMore = paginationResult.hasMore;
     const nextCursor = paginationResult.nextCursor;
 

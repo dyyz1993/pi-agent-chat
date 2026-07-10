@@ -1,0 +1,58 @@
+{
+  "slug": "bash-execution-card",
+  "schemaVersion": 2,
+  "name": "BashExecutionCard",
+  "category": "tool-execution",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "tool",
+      "evidence": "Bash/terminal command execution with command display and output"
+    }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["running", "done", "error", "background"] }],
+  "representativeVariants": [
+    {
+      "name": "Running",
+      "traits": { "status": "running", "command": "npm run build", "workingDir": "/project" },
+      "whySelected": "Active terminal process",
+      "childrenDigest": "Terminal icon + command text + working dir + spinner"
+    },
+    {
+      "name": "Done",
+      "traits": {
+        "status": "done",
+        "command": "git status",
+        "output": "On branch main\nnothing to commit",
+        "duration": "0.8s",
+        "exitCode": 0
+      },
+      "whySelected": "Completed command",
+      "childrenDigest": "Terminal icon + command + output block + exit code badge"
+    },
+    {
+      "name": "Background",
+      "traits": { "status": "background", "command": "npm run dev", "pid": 12345 },
+      "whySelected": "Long-running background process",
+      "childrenDigest": "Terminal icon + command + PID badge + stop button"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "terminal-icon",
+      "command",
+      "working-dir",
+      "output-block",
+      "exit-code",
+      "duration",
+      "pid",
+      "actions"
+    ],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 21, "context": "Bash/terminal command execution display" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Monospace command display, dark code block for output, exit code badge (0=green, non-zero=red), background process with PID and stop button"
+}

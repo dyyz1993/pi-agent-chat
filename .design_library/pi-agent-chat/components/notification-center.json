@@ -1,0 +1,50 @@
+{
+  "slug": "notification-center",
+  "schemaVersion": 2,
+  "name": "NotificationCenter",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "panel", "evidence": "Notification panel with bell trigger and notification list" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["closed", "open"] }],
+  "representativeVariants": [
+    {
+      "name": "Open",
+      "traits": {
+        "state": "open",
+        "unread": 3,
+        "notifications": [
+          { "level": "error", "message": "Build failed" },
+          { "level": "info", "message": "Deploy complete" },
+          { "level": "warning", "message": "Memory limit" }
+        ]
+      },
+      "whySelected": "Open notification panel",
+      "childrenDigest": "Bell icon with badge + positioned panel + notification list + clear all"
+    },
+    {
+      "name": "Closed",
+      "traits": { "state": "closed", "unread": 3 },
+      "whySelected": "Bell trigger only",
+      "childrenDigest": "Bell icon + unread count badge"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "bell-trigger",
+      "unread-badge",
+      "panel",
+      "notification-item",
+      "level-icon",
+      "clear-all",
+      "timestamp"
+    ],
+    "structurePatterns": ["triggered-panel"]
+  },
+  "usageHints": { "priorityHint": 66, "context": "App notification center in top bar" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Top-right positioned panel, bell icon with count badge, semantic color per level, click-outside-to-close"
+}

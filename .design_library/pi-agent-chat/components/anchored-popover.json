@@ -1,0 +1,40 @@
+{
+  "slug": "anchored-popover",
+  "schemaVersion": 2,
+  "name": "AnchoredPopover",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "popover",
+      "evidence": "Dropdown/popover anchored to trigger element with positioning"
+    }
+  ],
+  "variantDimensions": [
+    { "name": "placement", "values": ["top", "bottom"] },
+    { "name": "align", "values": ["start", "end", "stretch"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Bottom Start",
+      "traits": { "placement": "bottom", "align": "start", "trigger": "Model Picker" },
+      "whySelected": "Standard dropdown popover",
+      "childrenDigest": "Anchor element + positioned popover panel + menu items"
+    },
+    {
+      "name": "Bottom Stretch",
+      "traits": { "placement": "bottom", "align": "stretch", "trigger": "Select" },
+      "whySelected": "Width-matched dropdown",
+      "childrenDigest": "Full-width popover matching trigger width"
+    }
+  ],
+  "anatomy": {
+    "parts": ["anchor-element", "popover-panel", "positioning-offset", "content-slot"],
+    "structurePatterns": ["anchored-dropdown"]
+  },
+  "usageHints": { "priorityHint": 61, "context": "Dropdown menus, model picker, select menus" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Portal-rendered, positioned relative to anchor, shadow-3, rounded-lg, border, max-height with scroll"
+}

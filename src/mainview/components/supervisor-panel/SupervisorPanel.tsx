@@ -63,7 +63,7 @@ function getChecklistStatusClass(
     case "blocked":
       return "border-status-warning/30 bg-status-warning/10 text-status-warning";
     case "in_progress":
-      return "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent";
+      return "border-accent/30 bg-accent/10 text-accent";
     default:
       return "border-border-primary bg-bg-elevated text-text-tertiary";
   }
@@ -93,7 +93,7 @@ export function SupervisorPanel() {
     <div className="h-full flex flex-col bg-bg-secondary">
       <div className="shrink-0 border-b border-border-primary px-3 py-2">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-semantic-accent" />
+          <ShieldCheck className="w-4 h-4 text-accent" />
           <div className="min-w-0">
             <div className="text-sm font-semibold text-text-primary">
               {t("supervisor.panelTitle")}
@@ -318,7 +318,7 @@ function SupervisorPanelContent({
         action={
           <button
             type="button"
-            className="text-[11px] text-semantic-accent hover:underline"
+            className="text-[11px] text-accent hover:underline"
             onClick={() => fetchTriggerHistory(sessionId, 50, { force: true })}
           >
             {t("supervisor.triggerHistory.refresh")}

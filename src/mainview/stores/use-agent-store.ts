@@ -113,6 +113,28 @@ const SOURCE_LABELS: Record<AgentSource, string> = {
   project: "项目",
 };
 
+const inFlightAgentFetches = new Map<string, Promise<void>>();
+const inFlightAgentDetailFetches = new Map<string, Promise<void>>();
+const inFlightAllToolsFetches = new Map<string, Promise<void>>();
+const inFlightSystemPromptFetches = new Map<string, Promise<void>>();
+
+function runOncePerSession(
+  inFlight: Map<string, Promise<void>>,
+  sessionId: string,
+  work: () => Promise<void>,
+): Promise<void> {
+  const existing = inFlight.get(sessionId);
+  if (existing) return existing;
+
+  const promise = work().finally(() => {
+    if (inFlight.get(sessionId) === promise) {
+      inFlight.delete(sessionId);
+    }
+  });
+  inFlight.set(sessionId, promise);
+  return promise;
+}
+
 export const getSourceLabel = (source: AgentSource): string => SOURCE_LABELS[source] ?? source;
 
 export const isGlobalAgent = (source: AgentSource): boolean =>
@@ -330,101 +352,102 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     }
   },
 
-  fetchAgents: async (sessionId) => {
-    try {
-      let favorites = get().agentFavorites;
+  fetchAgents: (sessionId) =>
+    runOncePerSession(inFlightAgentFetches, sessionId, async () => {
       try {
-        const favoriteResult = (await apiClient.call("project.getAgentFavorites", {})) as {
-          favorites: string[];
+        let favorites = get().agentFavorites;
+        try {
+          const favoriteResult = (await apiClient.call("project.getAgentFavorites", {})) as {
+            favorites: string[];
+          };
+          favorites = new Set(favoriteResult.favorites ?? []);
+          set({ agentFavorites: favorites });
+        } catch (favoriteError) {
+          maybeNotifyStaleDesktopFavoriteRpc(favoriteError);
+          log.warn("failed to fetch agent favorites", {
+            error: favoriteError instanceof Error ? favoriteError.message : String(favoriteError),
+          });
+        }
+
+        const result = (await apiClient.call("agent.getAgents", { sessionId })) as {
+          agents: Array<{
+            name: string;
+            description?: string;
+            tier?: string;
+            tools?: string[];
+            permissionMode?: string;
+            source: string;
+            filePath: string;
+            color?: string;
+            avatar?: AgentAvatar;
+          }>;
         };
-        favorites = new Set(favoriteResult.favorites ?? []);
-        set({ agentFavorites: favorites });
-      } catch (favoriteError) {
-        maybeNotifyStaleDesktopFavoriteRpc(favoriteError);
-        log.warn("failed to fetch agent favorites", {
-          error: favoriteError instanceof Error ? favoriteError.message : String(favoriteError),
+        const agents: AgentInfo[] = (result.agents ?? []).map((a) => ({
+          name: a.name,
+          description: a.description,
+          tier: a.tier,
+          tools: a.tools,
+          permissionMode: a.permissionMode,
+          source: (a.source ?? "builtin") as AgentSource,
+          filePath: a.filePath ?? "",
+          color: a.color,
+          avatar: a.avatar,
+        }));
+        set({
+          agentFavorites: favorites,
+          agents: withFavoriteMetadata(agents, favorites),
+          loaded: true,
         });
+
+        const currentResult = (await apiClient.call("agent.getCurrentAgent", { sessionId })) as {
+          agentName: string | null;
+        };
+        const agentName = currentResult.agentName ?? "build";
+        set((state) => ({
+          currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
+        }));
+        get().fetchAgentDetail(sessionId);
+        get().fetchAllTools(sessionId);
+        log.info("fetched agents", {
+          count: agents.length,
+          session: sessionId,
+          current: currentResult.agentName,
+        });
+      } catch (err) {
+        log.warn("failed to fetch agents", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        const defaultAgents: AgentInfo[] = [
+          {
+            name: "build",
+            description: "Full-stack development",
+            tier: "pro",
+            source: "builtin",
+            filePath: "",
+          },
+          {
+            name: "explore",
+            description: "Read-only exploration",
+            tier: "fast",
+            source: "builtin",
+            filePath: "",
+          },
+          {
+            name: "plan",
+            description: "Planning mode",
+            tier: "pro",
+            permissionMode: "plan",
+            source: "builtin",
+            filePath: "",
+          },
+        ];
+        set((state) => ({
+          agents: withFavoriteMetadata(defaultAgents, state.agentFavorites),
+          loaded: true,
+          currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: "build" },
+        }));
       }
-
-      const result = (await apiClient.call("agent.getAgents", { sessionId })) as {
-        agents: Array<{
-          name: string;
-          description?: string;
-          tier?: string;
-          tools?: string[];
-          permissionMode?: string;
-          source: string;
-          filePath: string;
-          color?: string;
-          avatar?: AgentAvatar;
-        }>;
-      };
-      const agents: AgentInfo[] = (result.agents ?? []).map((a) => ({
-        name: a.name,
-        description: a.description,
-        tier: a.tier,
-        tools: a.tools,
-        permissionMode: a.permissionMode,
-        source: (a.source ?? "builtin") as AgentSource,
-        filePath: a.filePath ?? "",
-        color: a.color,
-        avatar: a.avatar,
-      }));
-      set({
-        agentFavorites: favorites,
-        agents: withFavoriteMetadata(agents, favorites),
-        loaded: true,
-      });
-
-      const currentResult = (await apiClient.call("agent.getCurrentAgent", { sessionId })) as {
-        agentName: string | null;
-      };
-      const agentName = currentResult.agentName ?? "build";
-      set((state) => ({
-        currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
-      }));
-      get().fetchAgentDetail(sessionId);
-      get().fetchAllTools(sessionId);
-      log.info("fetched agents", {
-        count: agents.length,
-        session: sessionId,
-        current: currentResult.agentName,
-      });
-    } catch (err) {
-      log.warn("failed to fetch agents", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      const defaultAgents: AgentInfo[] = [
-        {
-          name: "build",
-          description: "Full-stack development",
-          tier: "pro",
-          source: "builtin",
-          filePath: "",
-        },
-        {
-          name: "explore",
-          description: "Read-only exploration",
-          tier: "fast",
-          source: "builtin",
-          filePath: "",
-        },
-        {
-          name: "plan",
-          description: "Planning mode",
-          tier: "pro",
-          permissionMode: "plan",
-          source: "builtin",
-          filePath: "",
-        },
-      ];
-      set((state) => ({
-        agents: withFavoriteMetadata(defaultAgents, state.agentFavorites),
-        loaded: true,
-        currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: "build" },
-      }));
-    }
-  },
+    }),
 
   switchAgent: async (agentName, sessionId) => {
     const prev = get().currentAgentBySession[sessionId] ?? "build";
@@ -463,11 +486,15 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         if (resolvedProjectPath) {
           useTierStore
             .getState()
-            .setProjectCurrentTier(resolvedProjectPath, result.tier as "fast" | "pro" | "max");
+            .setSessionCurrentTier(
+              sessionId,
+              resolvedProjectPath,
+              result.tier as "fast" | "pro" | "max",
+            );
         }
       }
       if (result.thinkingLevel) {
-        useSessionStore.getState().setThinkingLevel(result.thinkingLevel);
+        useSessionStore.getState().setThinkingLevel(result.thinkingLevel, sessionId);
       }
       get().fetchAgentDetail(sessionId);
       get().fetchAllTools(sessionId);
@@ -487,117 +514,120 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     }
   },
 
-  fetchAgentDetail: async (sessionId) => {
-    set({ loadingDetail: true });
-    try {
-      const agentName = get().getCurrentAgentForSession(sessionId);
-      if (!agentName) return;
-      const result = await apiClient.call("agent.getAgentDetail", { sessionId, agentName });
-      set((state) => ({
-        agentDetailBySession: {
-          ...state.agentDetailBySession,
-          [sessionId]: result.agent as AgentDetail,
-        },
-      }));
-    } catch (e) {
-      if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
-        try {
-          const agentName = get().getCurrentAgentForSession(sessionId);
-          if (!agentName) return;
-          const result = await apiClient.call("agent.getAgentDetail", { sessionId, agentName });
-          set((state) => ({
-            agentDetailBySession: {
-              ...state.agentDetailBySession,
-              [sessionId]: result.agent as AgentDetail,
-            },
-          }));
-          return;
-        } catch (retryError) {
-          log.warn("Failed to fetch agent detail after runtime recovery", {
-            sessionId,
-            error: errorMessage(retryError),
-          });
-          return;
+  fetchAgentDetail: (sessionId) =>
+    runOncePerSession(inFlightAgentDetailFetches, sessionId, async () => {
+      set({ loadingDetail: true });
+      try {
+        const agentName = get().getCurrentAgentForSession(sessionId);
+        if (!agentName) return;
+        const result = await apiClient.call("agent.getAgentDetail", { sessionId, agentName });
+        set((state) => ({
+          agentDetailBySession: {
+            ...state.agentDetailBySession,
+            [sessionId]: result.agent as AgentDetail,
+          },
+        }));
+      } catch (e) {
+        if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
+          try {
+            const agentName = get().getCurrentAgentForSession(sessionId);
+            if (!agentName) return;
+            const result = await apiClient.call("agent.getAgentDetail", { sessionId, agentName });
+            set((state) => ({
+              agentDetailBySession: {
+                ...state.agentDetailBySession,
+                [sessionId]: result.agent as AgentDetail,
+              },
+            }));
+            return;
+          } catch (retryError) {
+            log.warn("Failed to fetch agent detail after runtime recovery", {
+              sessionId,
+              error: errorMessage(retryError),
+            });
+            return;
+          }
         }
+        log.warn("Failed to fetch agent detail", { sessionId, error: errorMessage(e) });
+      } finally {
+        set({ loadingDetail: false });
       }
-      log.warn("Failed to fetch agent detail", { sessionId, error: errorMessage(e) });
-    } finally {
-      set({ loadingDetail: false });
-    }
-  },
+    }),
 
-  fetchAllTools: async (sessionId) => {
-    try {
-      const result = await apiClient.call("agent.getAllTools", { sessionId });
-      set((state) => ({
-        allToolsBySession: {
-          ...state.allToolsBySession,
-          [sessionId]: result.tools as AgentToolInfo[],
-        },
-      }));
-    } catch (e) {
-      if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
-        try {
-          const result = await apiClient.call("agent.getAllTools", { sessionId });
-          set((state) => ({
-            allToolsBySession: {
-              ...state.allToolsBySession,
-              [sessionId]: result.tools as AgentToolInfo[],
-            },
-          }));
-          return;
-        } catch (retryError) {
-          log.warn("Failed to fetch all tools after runtime recovery", {
-            sessionId,
-            error: errorMessage(retryError),
-          });
-          return;
+  fetchAllTools: (sessionId) =>
+    runOncePerSession(inFlightAllToolsFetches, sessionId, async () => {
+      try {
+        const result = await apiClient.call("agent.getAllTools", { sessionId });
+        set((state) => ({
+          allToolsBySession: {
+            ...state.allToolsBySession,
+            [sessionId]: result.tools as AgentToolInfo[],
+          },
+        }));
+      } catch (e) {
+        if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
+          try {
+            const result = await apiClient.call("agent.getAllTools", { sessionId });
+            set((state) => ({
+              allToolsBySession: {
+                ...state.allToolsBySession,
+                [sessionId]: result.tools as AgentToolInfo[],
+              },
+            }));
+            return;
+          } catch (retryError) {
+            log.warn("Failed to fetch all tools after runtime recovery", {
+              sessionId,
+              error: errorMessage(retryError),
+            });
+            return;
+          }
         }
+        log.warn("Failed to fetch all tools", { sessionId, error: errorMessage(e) });
       }
-      log.warn("Failed to fetch all tools", { sessionId, error: errorMessage(e) });
-    }
-  },
+    }),
 
-  fetchSystemPrompt: async (sessionId) => {
-    // Deduplicate: skip if already loading for this session
-    if (get().loadingSystemPrompt.has(sessionId)) return;
-    set((state) => ({ loadingSystemPrompt: new Set(state.loadingSystemPrompt).add(sessionId) }));
-    try {
-      const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
-      set((state) => ({
-        liveSystemPromptBySession: {
-          ...state.liveSystemPromptBySession,
-          [sessionId]: (result as { systemPrompt: string }).systemPrompt,
-        },
-      }));
-    } catch (e) {
-      if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
-        try {
-          const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
-          set((state) => ({
-            liveSystemPromptBySession: {
-              ...state.liveSystemPromptBySession,
-              [sessionId]: (result as { systemPrompt: string }).systemPrompt,
-            },
-          }));
-          return;
-        } catch (retryError) {
-          log.warn("Failed to fetch system prompt after runtime recovery", {
-            sessionId,
-            error: errorMessage(retryError),
-          });
-          return;
+  fetchSystemPrompt: (sessionId) =>
+    runOncePerSession(inFlightSystemPromptFetches, sessionId, async () => {
+      // Deduplicate: skip if already loading for this session
+      if (get().loadingSystemPrompt.has(sessionId)) return;
+      set((state) => ({ loadingSystemPrompt: new Set(state.loadingSystemPrompt).add(sessionId) }));
+      try {
+        const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
+        set((state) => ({
+          liveSystemPromptBySession: {
+            ...state.liveSystemPromptBySession,
+            [sessionId]: (result as { systemPrompt: string }).systemPrompt,
+          },
+        }));
+      } catch (e) {
+        if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
+          try {
+            const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
+            set((state) => ({
+              liveSystemPromptBySession: {
+                ...state.liveSystemPromptBySession,
+                [sessionId]: (result as { systemPrompt: string }).systemPrompt,
+              },
+            }));
+            return;
+          } catch (retryError) {
+            log.warn("Failed to fetch system prompt after runtime recovery", {
+              sessionId,
+              error: errorMessage(retryError),
+            });
+            return;
+          }
         }
+        log.warn("Failed to fetch system prompt", { sessionId, error: errorMessage(e) });
+      } finally {
+        set((state) => {
+          const next = new Set(state.loadingSystemPrompt);
+          next.delete(sessionId);
+          return { loadingSystemPrompt: next };
+        });
       }
-      log.warn("Failed to fetch system prompt", { sessionId, error: errorMessage(e) });
-    } finally {
-      set((state) => {
-        const next = new Set(state.loadingSystemPrompt);
-        next.delete(sessionId);
-        return { loadingSystemPrompt: next };
-      });
-    }
-  },
+    }),
 
   clearAgentDetail: (sessionId) => {
     set((state) => {

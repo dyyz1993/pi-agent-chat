@@ -80,6 +80,7 @@ interface InitialStateSessionState {
   >;
   modelStateLoading: boolean;
   currentThinkingLevel: string;
+  thinkingLevelBySession: Record<string, string>;
   availableModels: Array<{
     provider: string;
     id: string;
@@ -333,6 +334,10 @@ export function createFetchInitialStateAction({
               set((s) => ({
                 currentThinkingLevel:
                   s.activeSessionId === sessionId ? thinkingLevel : s.currentThinkingLevel,
+                thinkingLevelBySession: {
+                  ...s.thinkingLevelBySession,
+                  [sessionId]: thinkingLevel,
+                },
               }));
             }
             set({ modelStateLoading: false });
@@ -676,10 +681,12 @@ export function createFetchInitialStateAction({
               if (projectPath) {
                 useTierStore
                   .getState()
-                  .syncTierFromModel(
+                  .syncTierFromModelForSession(
+                    sessionId,
                     projectPath,
                     stateResult.model.provider ?? "",
                     stateResult.model.id ?? "",
+                    { preserveOnMismatch: true },
                   );
               }
             }

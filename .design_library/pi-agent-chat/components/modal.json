@@ -1,0 +1,39 @@
+{
+  "slug": "modal",
+  "schemaVersion": 2,
+  "name": "Modal",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [{ "type": "dialog", "evidence": "overlay panel with focus trap" }],
+  "variantDimensions": [{ "name": "variant", "values": ["settings", "confirm"] }],
+  "representativeVariants": [
+    {
+      "name": "Settings Modal",
+      "traits": { "variant": "settings", "title": "Settings" },
+      "whySelected": "Chat display settings with toggle switches",
+      "childrenDigest": "Title + segmented control + toggle list + action buttons"
+    },
+    {
+      "name": "Confirm Dialog",
+      "traits": {
+        "variant": "confirm",
+        "title": "Rollback Code",
+        "description": "Revert all file modifications made in this turn."
+      },
+      "whySelected": "Rollback/action confirmation prompt",
+      "childrenDigest": "Title + description + button row"
+    }
+  ],
+  "anatomy": {
+    "parts": ["overlay", "container", "header", "body", "footer"],
+    "structurePatterns": ["centered-dialog", "stacked-content"]
+  },
+  "usageHints": {
+    "priorityHint": 6,
+    "context": "Settings, rollback confirmation, user input prompts"
+  },
+  "doNotInvent": ["fullscreen-modal", "drawer-modal", "multi-step-modal"],
+  "unknowns": ["backdrop blur implementation"],
+  "keyInsightSeed": "Dark overlay with centered card, iOS-style toggle switches, segmented control for mode selection"
+}

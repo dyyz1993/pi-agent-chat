@@ -1,0 +1,42 @@
+{
+  "slug": "hook-intervention-card",
+  "schemaVersion": 2,
+  "name": "HookInterventionCard",
+  "category": "context",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "intervention", "evidence": "Hook/pre-tool intervention message" }
+  ],
+  "variantDimensions": [{ "name": "type", "values": ["pre-tool", "post-tool", "block"] }],
+  "representativeVariants": [
+    {
+      "name": "Pre-tool Hook",
+      "traits": {
+        "type": "pre-tool",
+        "hookName": "lint-check",
+        "message": "Running ESLint before write..."
+      },
+      "whySelected": "Pre-execution hook",
+      "childrenDigest": "Hook icon + hook name + message + spinner"
+    },
+    {
+      "name": "Block Hook",
+      "traits": {
+        "type": "block",
+        "hookName": "security-scan",
+        "message": "Blocked: potential secret detected"
+      },
+      "whySelected": "Blocking intervention",
+      "childrenDigest": "Shield icon + hook name + message + red accent"
+    }
+  ],
+  "anatomy": {
+    "parts": ["hook-icon", "hook-name", "message", "status-indicator"],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 43, "context": "Hook system intervention messages" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Hook-specific accent color, compact message style, block type has prominent red accent"
+}

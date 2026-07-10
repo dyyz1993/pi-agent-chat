@@ -19,6 +19,7 @@
   "closePanel": "关闭面板",
   "collapseSidebar": "收起侧边栏",
   "sessionCreated": "会话创建成功",
+  "sessionReused": "已切换到现有空会话",
   "createFailed": "创建失败: {{error}}",
   "unpinSidebar": "取消固定侧边栏",
   "pinSidebar": "固定侧边栏",

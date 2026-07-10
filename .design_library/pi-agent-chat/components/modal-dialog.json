@@ -1,0 +1,53 @@
+{
+  "slug": "modal-dialog",
+  "schemaVersion": 2,
+  "name": "ModalDialog",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "modal",
+      "evidence": "Centered modal dialog with backdrop blur, title, content, footer"
+    }
+  ],
+  "variantDimensions": [
+    { "name": "size", "values": ["sm", "md", "lg"] },
+    { "name": "closeButton", "values": ["shown", "hidden"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Medium Modal",
+      "traits": {
+        "size": "md",
+        "title": "Settings",
+        "closeButton": true,
+        "footer": "Save + Cancel"
+      },
+      "whySelected": "Standard settings modal",
+      "childrenDigest": "Backdrop overlay + centered dialog + header(title+close) + body + footer(buttons)"
+    },
+    {
+      "name": "Small Confirm",
+      "traits": {
+        "size": "sm",
+        "title": "Delete?",
+        "closeButton": false,
+        "footer": "Cancel + Delete"
+      },
+      "whySelected": "Confirmation dialog",
+      "childrenDigest": "Backdrop + compact dialog + title + message + danger buttons"
+    }
+  ],
+  "anatomy": {
+    "parts": ["backdrop", "dialog-container", "header", "title", "close-button", "body", "footer"],
+    "structurePatterns": ["overlay-container"]
+  },
+  "usageHints": {
+    "priorityHint": 60,
+    "context": "Global modals for settings, confirmations, forms"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Backdrop blur-sm, centered with max-w constraint (sm=384px, md=576px, lg=768px), focus trap, escape to close"
+}

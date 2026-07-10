@@ -1,0 +1,28 @@
+{
+  "slug": "pdf-card",
+  "schemaVersion": 2,
+  "name": "PdfCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "media", "evidence": "PDF document preview with first page thumbnail" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["loading", "loaded", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Loaded",
+      "traits": { "state": "loaded", "fileName": "report.pdf", "pageCount": 12 },
+      "whySelected": "PDF preview",
+      "childrenDigest": "First page thumbnail + filename + page count + open button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["thumbnail", "filename", "page-count", "open-button"],
+    "structurePatterns": ["media-preview"]
+  },
+  "usageHints": { "priorityHint": 48, "context": "PDF preview in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "First page as thumbnail, filename and page count overlay, rounded-lg container"
+}

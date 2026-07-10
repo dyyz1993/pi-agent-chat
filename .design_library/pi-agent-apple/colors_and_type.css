@@ -1,0 +1,175 @@
+/* pi-agent-apple — Apple HIG 风格设计系统
+ * Generated: 2026-07-08
+ * 命名 schema: 同 pi-agent-chat/colors_and_type.css
+ */
+
+/* ================================
+   1. Background Colors (macOS 暗色灰阶)
+   ================================ */
+:root {
+  --bg-primary: #1c1c1e;
+  --bg-secondary: rgba(30, 30, 30, 0.85);
+  --bg-tertiary: rgba(44, 44, 46, 0.7);
+  --bg-elevated: rgba(58, 58, 60, 0.6);
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+  --bg-input: rgba(0, 0, 0, 0.25);
+}
+
+/* ================================
+   2. Text Colors
+   ================================ */
+:root {
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --text-muted: rgba(255, 255, 255, 0.2);
+  --text-inverse: #1c1c1e;
+}
+
+/* ================================
+   3. Border Colors (半透明)
+   ================================ */
+:root {
+  --border-primary: rgba(255, 255, 255, 0.08);
+  --border-secondary: rgba(255, 255, 255, 0.15);
+  --border-focus: rgba(10, 132, 255, 0.5);
+  --border-muted: rgba(255, 255, 255, 0.04);
+}
+
+/* ================================
+   4. Accent Colors (Apple Blue)
+   ================================ */
+:root {
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-muted: rgba(10, 132, 255, 0.15);
+  --accent-text: #0a84ff;
+  --accent-brand: #0a84ff;
+  --accent-idle: #30d158;
+  --accent-agent: #bf5af2;
+}
+
+/* ================================
+   5. Status Colors (RGB 三元组格式, Apple HIG)
+   ================================ */
+:root {
+  --status-success: 48 209 88;
+  --status-warning: 255 214 10;
+  --status-error: 255 69 58;
+  --status-info: 100 210 255;
+}
+
+/* ================================
+   6. Semantic Colors (RGB 三元组格式)
+   ================================ */
+:root {
+  --semantic-agent: 191 90 242;
+  --semantic-tool: 90 200 250;
+  --semantic-memory: 102 212 207;
+  --semantic-notify: 255 159 10;
+  --semantic-media: 255 55 95;
+  --semantic-line: rgba(255, 255, 255, 0.06);
+}
+
+/* ================================
+   7. Typography
+   ================================ */
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+    "PingFang SC", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 15px;
+  --font-size-h2: 17px;
+  --font-size-h1: 22px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-body: 1.5;
+  --line-height-heading: 1.2;
+  --line-height-mono: 1.5;
+}
+
+/* ================================
+   8. Spacing (4px grid)
+   ================================ */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  --spacing-indent: 24px;
+  --input-font-size: 16px;
+  --touch-target-min: 44px;
+}
+
+/* ================================
+   9. Border Radius (macOS 标准)
+   ================================ */
+:root {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+}
+
+/* ================================
+   10. Shadows (带半透明边框线的 Apple 风格)
+   ================================ */
+:root {
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+}
+
+/* ================================
+   11. Transitions (Apple 弹性曲线)
+   ================================ */
+:root {
+  --transition-fast: 120ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-normal: 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-slow: 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ================================
+   12. Z-Index
+   ================================ */
+:root {
+  --z-base: 0;
+  --z-float: 10;
+  --z-header: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
+  --z-fullscreen: 200;
+  --z-system: 300;
+}
+
+/* ================================
+   13. Safe Area
+   ================================ */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}

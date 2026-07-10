@@ -1,0 +1,37 @@
+{
+  "slug": "sidebar",
+  "schemaVersion": 2,
+  "name": "Sidebar",
+  "category": "navigation",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "navigation", "evidence": "side panel for session/file navigation" }
+  ],
+  "variantDimensions": [{ "name": "variant", "values": ["icon-rail", "session-panel"] }],
+  "representativeVariants": [
+    {
+      "name": "Icon Rail",
+      "traits": { "variant": "icon-rail", "activeIcon": "chat" },
+      "whySelected": "Left sidebar navigation with icon-only buttons",
+      "childrenDigest": "Vertical stack of icon buttons with active indicator"
+    },
+    {
+      "name": "Session Panel",
+      "traits": { "variant": "session-panel", "activeSession": "Session A3F2" },
+      "whySelected": "Session list panel with search and session items",
+      "childrenDigest": "Search input + scrollable session list"
+    }
+  ],
+  "anatomy": {
+    "parts": ["container", "search", "nav-items", "active-indicator"],
+    "structurePatterns": ["vertical-stack-nav", "resizable-panel"]
+  },
+  "usageHints": {
+    "priorityHint": 4,
+    "context": "Left icon rail, right tool panel, session management"
+  },
+  "doNotInvent": ["collapsible-tree-sidebar", "multi-column-sidebar"],
+  "unknowns": ["pin/unpin animation"],
+  "keyInsightSeed": "Icon-only left rail with active state indicator, resizable right panel with handle"
+}

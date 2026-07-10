@@ -1,0 +1,34 @@
+{
+  "slug": "card-shell",
+  "schemaVersion": 2,
+  "name": "CardShell",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "shell", "evidence": "Outer wrapper for UI interaction cards with border and status" }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["pending", "active", "responded"] }],
+  "representativeVariants": [
+    {
+      "name": "Pending",
+      "traits": { "status": "pending" },
+      "whySelected": "Awaiting user input",
+      "childrenDigest": "Border container + pending indicator"
+    },
+    {
+      "name": "Responded",
+      "traits": { "status": "responded" },
+      "whySelected": "User has responded",
+      "childrenDigest": "Border container + check indicator"
+    }
+  ],
+  "anatomy": {
+    "parts": ["border", "status-indicator", "content-slot"],
+    "structurePatterns": ["wrapper"]
+  },
+  "usageHints": { "priorityHint": 31, "context": "Wrapper for all UI interaction cards" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Outer shell with status-aware border color, wraps confirm/ask/select/input cards"
+}

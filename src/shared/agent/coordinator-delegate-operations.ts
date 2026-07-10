@@ -36,6 +36,7 @@ import {
 } from "./coordinator-delegate-utils";
 
 const log = createLogger("agent");
+const ASYNC_DELEGATE_REQUIRED_TOOLS = ["session_delegate_send"] as const;
 
 interface DelegateSendManaged {
   info: {
@@ -83,17 +84,40 @@ interface DelegateParentManaged {
   };
 }
 
-function parseCoordinatorModel(
-  model: string | undefined,
-): { provider: string; modelId: string } | null {
-  if (!model) return null;
-  const [provider, ...modelParts] = model.split("/");
-  const modelId = modelParts.join("/");
-  if (!provider || !modelId) {
-    throw new Error(`Invalid model "${model}". Expected format: provider/modelId`);
-  }
-  return { provider, modelId };
+function formatDelegateTimeoutDuration(timeoutMs: number): string {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return `${timeoutMs}ms`;
+  if (timeoutMs % 60_000 === 0) return `${timeoutMs / 60_000} 分钟`;
+  if (timeoutMs % 1000 === 0) return `${timeoutMs / 1000} 秒`;
+  return `${timeoutMs}ms`;
 }
+
+export function buildDelegateSyncTimeoutRecoveryText(options: {
+  sessionId: string;
+  timeoutMs: number;
+  lastText?: string;
+}): string {
+  const lastText = options.lastText?.trim();
+  return [
+    `子任务等待超时（${formatDelegateTimeoutDuration(options.timeoutMs)}），但子会话没有被终止，可以恢复继续。`,
+    "",
+    `- 子会话 ID: \`${options.sessionId}\``,
+    `- 查看状态: \`session_delegate_status({"sessionId":"${options.sessionId}"})\``,
+    `- 如需停止: \`session_delegate_stop({"sessionId":"${options.sessionId}"})\``,
+    `- 如需继续: 打开子会话 \`${options.sessionId}\`，发送后续指令；完成后回到主会话查看结果。`,
+    "",
+    "最近输出:",
+    lastText || "暂无可用输出。",
+  ].join("\n");
+}
+
+export type CoordinatorSetModelFromName = (
+  sessionId: string,
+  model: string,
+  options: {
+    parentSessionId: string;
+    projectPath?: string;
+  },
+) => Promise<unknown>;
 
 async function cleanupFailedDelegateBootstrap(options: {
   sessionId: string;
@@ -165,6 +189,7 @@ interface CreateAndStartDelegateSessionOptions<TManaged extends DelegateParentMa
   rawProjectPath?: string;
   sessionIdPrefix: string;
   delegateType: "coordinator" | "subagent";
+  agent?: string;
   getActiveManaged: (sessionId: string) => TManaged | null;
   start: (
     sessionId: string,
@@ -217,6 +242,7 @@ async function createAndStartDelegateSession<TManaged extends DelegateParentMana
       parentSessionPath: parent.info.sessionPath,
       delegateType: options.delegateType,
       permissionMode: parent.info.permissionMode,
+      agent: options.agent,
     });
   } catch (writeErr: unknown) {
     log.warn(`[createDelegateSession] failed to write session header`, {
@@ -268,6 +294,40 @@ async function inheritDelegatePermissionMode(options: {
   }
 }
 
+function extractActiveToolNames(switchResult: unknown): string[] | null {
+  if (!switchResult || typeof switchResult !== "object") return null;
+  const tools = (switchResult as { tools?: unknown }).tools;
+  if (!Array.isArray(tools)) return null;
+  return tools.filter((tool): tool is string => typeof tool === "string");
+}
+
+async function ensureAsyncDelegateReplyTools(options: {
+  sessionId: string;
+  switchResult: unknown;
+  setActiveTools?: (sessionId: string, toolNames: string[]) => Promise<unknown>;
+}): Promise<void> {
+  const activeTools = extractActiveToolNames(options.switchResult);
+  if (!activeTools) return;
+
+  const missingTools = ASYNC_DELEGATE_REQUIRED_TOOLS.filter((tool) => !activeTools.includes(tool));
+  if (missingTools.length === 0) return;
+
+  if (!options.setActiveTools) {
+    log.warn("[handleCoordinatorDelegate] missing setActiveTools for delegate reply tools", {
+      sessionId: options.sessionId,
+      missingTools,
+    });
+    return;
+  }
+
+  const restoredTools = [...activeTools, ...missingTools];
+  await options.setActiveTools(options.sessionId, restoredTools);
+  log.info("[handleCoordinatorDelegate] restored delegate reply tools", {
+    sessionId: options.sessionId,
+    missingTools,
+  });
+}
+
 async function normalizeDelegateProjectPath(projectPath?: string): Promise<string | undefined> {
   if (!projectPath) return undefined;
   const remoteProject = await getRemoteProjectByPath(projectPath).catch(() => null);
@@ -292,7 +352,8 @@ export async function handleCoordinatorDelegateOperation<
   ) => Promise<{ status: "started" | "already_running" }>;
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
-  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setActiveTools?: (sessionId: string, toolNames: string[]) => Promise<unknown>;
+  setModelFromName?: CoordinatorSetModelFromName;
   stop?: (sessionId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
@@ -311,7 +372,6 @@ export async function handleCoordinatorDelegateOperation<
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task } = options.msg;
   const agent = options.msg.agent ?? options.msg.agentName;
-  const model = parseCoordinatorModel(options.msg.model);
   const replyMode = options.msg.replyMode ?? "interrupt";
 
   const session = await createAndStartDelegateSession({
@@ -322,6 +382,7 @@ export async function handleCoordinatorDelegateOperation<
     getActiveManaged: options.getActiveManaged,
     start: options.start,
     setPermissionMode: options.setPermissionMode,
+    agent,
     parentChildMap: options.parentChildMap,
     delegateCreatedAt: options.delegateCreatedAt,
     delegateReplyCount: options.delegateReplyCount,
@@ -329,10 +390,33 @@ export async function handleCoordinatorDelegateOperation<
     sessionIdFactory: options.sessionIdFactory,
   });
   options.delegateReplyMode?.set(session.sessionId, replyMode);
+  if (options.msg.model && options.setModelFromName) {
+    try {
+      await options.setModelFromName(session.sessionId, options.msg.model, {
+        parentSessionId: options.parentSessionId,
+        projectPath: session.projectPath,
+      });
+      log.info("[handleCoordinatorDelegate] model switched", {
+        newSessionId: session.sessionId,
+        model: options.msg.model,
+      });
+    } catch (modelErr: unknown) {
+      log.warn("[handleCoordinatorDelegate] setModel failed, using default model", {
+        newSessionId: session.sessionId,
+        model: options.msg.model,
+        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
+      });
+    }
+  }
 
   if (agent && options.switchAgent) {
     try {
-      await options.switchAgent(session.sessionId, agent);
+      const switchResult = await options.switchAgent(session.sessionId, agent);
+      await ensureAsyncDelegateReplyTools({
+        sessionId: session.sessionId,
+        switchResult,
+        setActiveTools: options.setActiveTools,
+      });
       log.info("[handleCoordinatorDelegate] agent switched", {
         newSessionId: session.sessionId,
         agent,
@@ -357,24 +441,6 @@ export async function handleCoordinatorDelegateOperation<
         sessionId: session.sessionId,
         agent,
         err: switchErr,
-      });
-    }
-  }
-
-  if (model && options.setModel) {
-    try {
-      await options.setModel(session.sessionId, model.provider, model.modelId);
-      log.info("[handleCoordinatorDelegate] model switched", {
-        newSessionId: session.sessionId,
-        provider: model.provider,
-        modelId: model.modelId,
-      });
-    } catch (modelErr: unknown) {
-      log.warn("[handleCoordinatorDelegate] setModel failed, using default model", {
-        newSessionId: session.sessionId,
-        provider: model.provider,
-        modelId: model.modelId,
-        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
       });
     }
   }
@@ -418,6 +484,7 @@ export async function handleCoordinatorDelegateOperation<
         projectPath: session.projectPath,
         parentSessionPath: session.parentSessionPath,
         delegateType: "coordinator",
+        agent,
         firstMessage: task,
         createdAt: session.createdAt,
       }),
@@ -586,7 +653,7 @@ export async function handleCoordinatorDelegateSyncOperation<
   ) => Promise<unknown>;
   setPermissionMode?: (sessionId: string, mode: string) => Promise<unknown>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
-  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setModelFromName?: CoordinatorSetModelFromName;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   steer: (sessionId: string, content: string) => void;
@@ -615,7 +682,6 @@ export async function handleCoordinatorDelegateSyncOperation<
 }): Promise<DelegateSyncResult> {
   const { task, title, timeoutMs = 1800000 } = options.msg;
   const agent = options.msg.agent ?? options.msg.agentName;
-  const model = parseCoordinatorModel(options.msg.model);
 
   const session = await createAndStartDelegateSession({
     parentSessionId: options.parentSessionId,
@@ -625,12 +691,31 @@ export async function handleCoordinatorDelegateSyncOperation<
     getActiveManaged: options.getActiveManaged,
     start: options.start,
     setPermissionMode: options.setPermissionMode,
+    agent,
     parentChildMap: options.parentChildMap,
     delegateCreatedAt: options.delegateCreatedAt,
     delegateReplyCount: options.delegateReplyCount,
     now: options.now,
     sessionIdFactory: options.sessionIdFactory,
   });
+  if (options.msg.model && options.setModelFromName) {
+    try {
+      await options.setModelFromName(session.sessionId, options.msg.model, {
+        parentSessionId: options.parentSessionId,
+        projectPath: session.projectPath,
+      });
+      log.info("[handleCoordinatorDelegateSync] model switched", {
+        newSessionId: session.sessionId,
+        model: options.msg.model,
+      });
+    } catch (modelErr: unknown) {
+      log.warn("[handleCoordinatorDelegateSync] setModel failed, using default model", {
+        newSessionId: session.sessionId,
+        model: options.msg.model,
+        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
+      });
+    }
+  }
 
   if (agent) {
     try {
@@ -658,24 +743,6 @@ export async function handleCoordinatorDelegateSyncOperation<
         sessionId: session.sessionId,
         agent,
         err: switchErr,
-      });
-    }
-  }
-
-  if (model && options.setModel) {
-    try {
-      await options.setModel(session.sessionId, model.provider, model.modelId);
-      log.info("[handleCoordinatorDelegateSync] model switched", {
-        newSessionId: session.sessionId,
-        provider: model.provider,
-        modelId: model.modelId,
-      });
-    } catch (modelErr: unknown) {
-      log.warn("[handleCoordinatorDelegateSync] setModel failed, using default model", {
-        newSessionId: session.sessionId,
-        provider: model.provider,
-        modelId: model.modelId,
-        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
       });
     }
   }
@@ -732,7 +799,11 @@ export async function handleCoordinatorDelegateSyncOperation<
         sessionId: session.sessionId,
         status: "timeout",
         exitCode: 1,
-        finalText: lastText || "(timed out, no output captured)",
+        finalText: buildDelegateSyncTimeoutRecoveryText({
+          sessionId: session.sessionId,
+          timeoutMs,
+          lastText,
+        }),
       });
     }, timeoutMs);
 
@@ -755,6 +826,7 @@ export async function handleCoordinatorDelegateSyncOperation<
         projectPath: session.projectPath,
         parentSessionPath: session.parentSessionPath,
         delegateType: "subagent",
+        agent,
         firstMessage: task,
         createdAt: session.createdAt,
       }),
@@ -794,8 +866,10 @@ export async function handleCoordinatorDelegateSyncOperation<
 
   const syncResult = await syncPromise;
 
-  await options.stop(session.sessionId);
-  removeDelegateChild(options.parentChildMap, options.parentSessionId, session.sessionId);
+  if (syncResult.status !== "timeout") {
+    await options.stop(session.sessionId);
+    removeDelegateChild(options.parentChildMap, options.parentSessionId, session.sessionId);
+  }
 
   return syncResult;
 }
@@ -813,7 +887,7 @@ export async function handleCoordinatorDelegateForkOperation<
     options: { forceNewProcess: true; delegateParentSessionId: string },
   ) => Promise<{ status: "started" | "already_running" }>;
   switchAgent?: (sessionId: string, agentName: string) => Promise<unknown>;
-  setModel?: (sessionId: string, provider: string, modelId: string) => Promise<unknown>;
+  setModelFromName?: CoordinatorSetModelFromName;
   stop?: (sessionId: string) => Promise<unknown>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
@@ -827,7 +901,6 @@ export async function handleCoordinatorDelegateForkOperation<
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task, sessionId: targetSessionId } = options.msg;
   const agent = options.msg.agent ?? options.msg.agentName;
-  const model = parseCoordinatorModel(options.msg.model);
   if (!canManageDelegateChild(options.parentChildMap, options.parentSessionId, targetSessionId)) {
     throw new Error(`Session not found: ${targetSessionId}`);
   }
@@ -854,6 +927,24 @@ export async function handleCoordinatorDelegateForkOperation<
   });
 
   registerDelegateChild(options.parentChildMap, options.parentSessionId, forkedSessionId);
+  if (options.msg.model && options.setModelFromName) {
+    try {
+      await options.setModelFromName(forkedSessionId, options.msg.model, {
+        parentSessionId: options.parentSessionId,
+        projectPath,
+      });
+      log.info("[handleCoordinatorDelegateFork] model switched", {
+        forkedSessionId,
+        model: options.msg.model,
+      });
+    } catch (modelErr: unknown) {
+      log.warn("[handleCoordinatorDelegateFork] setModel failed, using default model", {
+        forkedSessionId,
+        model: options.msg.model,
+        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
+      });
+    }
+  }
 
   if (agent && options.switchAgent) {
     try {
@@ -878,24 +969,6 @@ export async function handleCoordinatorDelegateForkOperation<
         sessionId: forkedSessionId,
         agent,
         err: switchErr,
-      });
-    }
-  }
-
-  if (model && options.setModel) {
-    try {
-      await options.setModel(forkedSessionId, model.provider, model.modelId);
-      log.info("[handleCoordinatorDelegateFork] model switched", {
-        forkedSessionId,
-        provider: model.provider,
-        modelId: model.modelId,
-      });
-    } catch (modelErr: unknown) {
-      log.warn("[handleCoordinatorDelegateFork] setModel failed, using default model", {
-        forkedSessionId,
-        provider: model.provider,
-        modelId: model.modelId,
-        err: modelErr instanceof Error ? modelErr.message : String(modelErr),
       });
     }
   }

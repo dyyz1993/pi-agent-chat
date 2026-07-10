@@ -1,0 +1,41 @@
+{
+  "slug": "ask-user-question-card",
+  "schemaVersion": 2,
+  "name": "AskUserQuestionCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "interaction",
+      "evidence": "Agent asking user a question with optional multiple choice"
+    }
+  ],
+  "variantDimensions": [{ "name": "format", "values": ["open-ended", "multiple-choice"] }],
+  "representativeVariants": [
+    {
+      "name": "Open Question",
+      "traits": { "format": "open-ended", "question": "Which framework do you prefer?" },
+      "whySelected": "Free-form question",
+      "childrenDigest": "Question icon + question text + text input + submit button"
+    },
+    {
+      "name": "Multiple Choice",
+      "traits": {
+        "format": "multiple-choice",
+        "question": "Select deployment target",
+        "options": ["AWS", "GCP", "Vercel"]
+      },
+      "whySelected": "Choice-based question",
+      "childrenDigest": "Question icon + question text + option buttons"
+    }
+  ],
+  "anatomy": {
+    "parts": ["question-icon", "question-text", "options-list", "input-field", "submit-button"],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 33, "context": "Agent asking questions to user in chat flow" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Embedded in chat (not modal), option buttons with hover/active states, text input for open-ended"
+}

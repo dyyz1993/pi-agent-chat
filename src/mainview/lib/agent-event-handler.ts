@@ -1,8 +1,15 @@
-import type { ContentBlock, ChatMessage, TokenUsage, PermissionMeta } from "../types";
+import type {
+  ContentBlock,
+  ChatMessage,
+  ProviderRequestContextUsage,
+  TokenUsage,
+  PermissionMeta,
+} from "../types";
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import {
+  appendLocalCompactionFailureMessage,
   getMemorySemanticTimestamp,
   insertChatMessageByDisplayOrder,
   useChatStore,
@@ -23,6 +30,8 @@ import { notificationGateway } from "./notification-gateway";
 import { apiClient } from "./api-client";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "./message-mapper";
+import { isProviderRequestContextUsage } from "./provider-error-diagnostics";
+import { isBillingErrorMessage } from "./billing-utils";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { isBashBackgroundProcessType } from "../components/chat/bash-background-process";
 import { createLogger } from "../../shared/lib/logger";
@@ -327,6 +336,49 @@ function isErrorStopReason(stopReason: string | null | undefined): boolean {
   return stopReason === "error";
 }
 
+function hasRunningToolExecution(content: ContentBlock[]): boolean {
+  return content.some((block) => block.type === "toolExecution" && !isTerminalToolStatus(block.status));
+}
+
+function canReleaseSessionOnAssistantBoundary(
+  sessionId: string,
+  stopReason: string | null | undefined,
+  content: ContentBlock[],
+): boolean {
+  if (isToolUseStopReason(stopReason)) return false;
+  if (hasRunningToolExecution(content)) return false;
+  const activeToolIds = useChatStore.getState().activeToolCallIdsBySession?.[sessionId] ?? [];
+  return activeToolIds.length === 0;
+}
+
+function releaseStreamingSessionIfTerminal(
+  sessionId: string,
+  stopReason: string | null | undefined,
+  content: ContentBlock[],
+): void {
+  if (!canReleaseSessionOnAssistantBoundary(sessionId, stopReason, content)) return;
+
+  const sessionStore = useSessionStore.getState();
+  const currentStatus = sessionStore.sessionStatusMap[sessionId];
+  if (currentStatus === "streaming") {
+    sessionStore.updateSessionStatus(sessionId, "idle");
+  }
+
+  const chat = useChatStore.getState();
+  if (chat.isStreaming) {
+    chat.setIsStreaming(false);
+  }
+}
+
+function getLatestProviderRequestForSession(sessionId: string): ProviderRequestContextUsage | undefined {
+  const usage = useSessionStore.getState().sessionContextMap[sessionId];
+  const providerRequest =
+    usage && typeof usage === "object" && "providerRequest" in usage
+      ? (usage as { providerRequest?: unknown }).providerRequest
+      : undefined;
+  return isProviderRequestContextUsage(providerRequest) ? providerRequest : undefined;
+}
+
 function buildEmptyTurnErrorMessage(afterMessage?: ChatMessage): ChatMessage {
   return {
     id: `error_empty_turn_${Date.now()}`,
@@ -345,25 +397,149 @@ function buildEmptyTurnErrorMessage(afterMessage?: ChatMessage): ChatMessage {
   };
 }
 
-function buildLlmProviderErrorMessage(
-  errorDetail: string,
-  source?: string,
-  afterMessage?: ChatMessage,
-): ChatMessage {
-  const sourceLine = source ? `来源: ${source}\n` : "";
+function getLlmErrorPresentation(errorDetail: string): {
+  title: string;
+  notificationTitle: string;
+  notificationLevel: "warning" | "error";
+} {
+  if (isBillingErrorMessage(errorDetail)) {
+    return {
+      title: "模型额度或账单异常",
+      notificationTitle: "模型额度或账单异常",
+      notificationLevel: "error",
+    };
+  }
+
   return {
-    id: `error_llm_${Date.now()}`,
+    title: "LLM 响应失败",
+    notificationTitle: "响应失败",
+    notificationLevel: "error",
+  };
+}
+
+function buildLlmErrorMessage({
+  afterMessage,
+  entryId,
+  stopReason,
+  errorDetail,
+  providerRequest,
+}: {
+  afterMessage: ChatMessage;
+  entryId?: string;
+  stopReason: string | null;
+  errorDetail: string;
+  providerRequest?: ProviderRequestContextUsage;
+}): ChatMessage {
+  const presentation = getLlmErrorPresentation(errorDetail);
+  return {
+    id: `error_llm_${entryId ?? afterMessage.entryId ?? afterMessage.id}`,
     role: "error",
     content: [
       {
         type: "text",
-        text: `LLM 服务异常\n${sourceLine}${errorDetail}`,
+        text: `${presentation.title}\n${errorDetail}`,
+      },
+    ],
+    timestamp: Math.max(Date.now(), afterMessage.timestamp + 1),
+    stopReason: stopReason ?? "error",
+    ...(providerRequest ? { providerRequest } : {}),
+    isStreaming: false,
+  };
+}
+
+function primaryTextOf(message: ChatMessage): string {
+  return (
+    message.content.find(
+      (block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text",
+    )?.text ?? ""
+  );
+}
+
+function llmErrorDetailKey(message: ChatMessage): string | null {
+  if (message.role !== "error" || message.stopReason !== "error") return null;
+  const text = primaryTextOf(message).trim();
+  if (!text) return null;
+
+  const [title, ...detailLines] = text.split("\n");
+  const detail = detailLines.join("\n").trim();
+  const key = detail || title.trim();
+  return key.replace(/\s+/gu, " ");
+}
+
+function findCurrentTurnStart(messages: ChatMessage[], beforeIndex: number): number {
+  for (let i = Math.min(beforeIndex, messages.length - 1); i >= 0; i--) {
+    if (messages[i]?.role === "user" || messages[i]?.role === "custom") return i + 1;
+  }
+  return 0;
+}
+
+function mergeDuplicateLlmErrorForTurn({
+  messages,
+  candidate,
+  turnStartIndex,
+}: {
+  messages: ChatMessage[];
+  candidate: ChatMessage;
+  turnStartIndex: number;
+}): { messages: ChatMessage[]; merged: boolean } {
+  const candidateKey = llmErrorDetailKey(candidate);
+  if (!candidateKey) return { messages, merged: false };
+
+  const existingIdx = messages.findIndex(
+    (msg, idx) => idx >= turnStartIndex && llmErrorDetailKey(msg) === candidateKey,
+  );
+  if (existingIdx < 0) return { messages, merged: false };
+
+  const existing = messages[existingIdx];
+  return {
+    messages: replaceMsgAt(messages, existingIdx, {
+      ...existing,
+      content: candidate.content,
+      stopReason: candidate.stopReason,
+      providerRequest: candidate.providerRequest ?? existing.providerRequest,
+      isStreaming: false,
+    }),
+    merged: true,
+  };
+}
+
+function removeEmptyTurnFallbackErrors(messages: ChatMessage[], turnStartIndex: number): ChatMessage[] {
+  return messages.filter(
+    (msg, idx) => !(idx >= turnStartIndex && msg.role === "error" && msg.stopReason === "empty_response"),
+  );
+}
+
+function buildAgentEndErrorMessage(
+  errorDetail: string,
+  afterMessage?: ChatMessage,
+  providerRequest?: ProviderRequestContextUsage,
+): ChatMessage {
+  const presentation = getLlmErrorPresentation(errorDetail);
+  return {
+    id: `error_agent_end_${Date.now()}`,
+    role: "error",
+    content: [
+      {
+        type: "text",
+        text: `${presentation.title}\n${errorDetail}`,
       },
     ],
     timestamp: Math.max(Date.now(), (afterMessage?.timestamp ?? 0) + 1),
-    stopReason: "llm_error",
+    stopReason: "error",
+    ...(providerRequest ? { providerRequest } : {}),
     isStreaming: false,
   };
+}
+
+function emitLlmErrorNotification(sessionId: string, errorDetail: string): void {
+  const presentation = getLlmErrorPresentation(errorDetail);
+  notificationGateway.emit({
+    type: "session_error",
+    sessionId,
+    title: presentation.notificationTitle,
+    body: errorDetail,
+    level: presentation.notificationLevel,
+  });
 }
 
 function appendVisibleLlmProviderErrorMessage(
@@ -374,7 +550,8 @@ function appendVisibleLlmProviderErrorMessage(
   const chat = useChatStore.getState();
   const existing = chat.messagesBySession[sessionId] || [];
   const last = existing[existing.length - 1];
-  const errorMessage = buildLlmProviderErrorMessage(errorDetail, source, last);
+  const sourceLine = source ? `来源: ${source}\n` : "";
+  const errorMessage = buildAgentEndErrorMessage(`${sourceLine}${errorDetail}`, last);
   const errorText = errorMessage.content[0]?.type === "text" ? errorMessage.content[0].text : "";
   const lastText =
     last?.content.find((block): block is Extract<ContentBlock, { type: "text" }> =>
@@ -787,13 +964,25 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (crashReason) {
-      notificationGateway.emit({
-        type: "session_complete",
-        sessionId,
-        title: "Agent 进程异常退出",
-        body: crashReason,
-        level: "error",
+      const currentMsgs = changed ? closedMsgs : msgs;
+      const lastMsg = currentMsgs[currentMsgs.length - 1];
+      const errorMessage = buildAgentEndErrorMessage(
+        crashReason,
+        lastMsg,
+        getLatestProviderRequestForSession(sessionId),
+      );
+      const turnStartIndex = findCurrentTurnStart(currentMsgs, currentMsgs.length - 1);
+      const deduped = mergeDuplicateLlmErrorForTurn({
+        messages: currentMsgs,
+        candidate: errorMessage,
+        turnStartIndex,
       });
+      if (deduped.merged) {
+        chat.setMessagesForSession(sessionId, deduped.messages);
+      } else if (lastMsg?.role !== "error" && !isErrorStopReason(lastMsg?.stopReason)) {
+        chat.setMessagesForSession(sessionId, [...currentMsgs, errorMessage]);
+      }
+      emitLlmErrorNotification(sessionId, crashReason);
     } else {
       const currentMsgs = changed ? closedMsgs : msgs;
       const lastMsg = currentMsgs[currentMsgs.length - 1];
@@ -809,6 +998,20 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           sessionId,
           title: "响应失败",
           body: "Agent 未返回任何响应，请检查模型配置或重试",
+          level: "error",
+        });
+      } else if (lastMsg?.role === "error") {
+        // message_end already surfaced the error card and notification. Do not
+        // turn the same failed turn into a completion toast on agent_end.
+      } else if (lastMsg?.role === "assistant" && isErrorStopReason(lastMsg.stopReason)) {
+        const textBlock = lastMsg.content.find(
+          (block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text",
+        );
+        notificationGateway.emit({
+          type: "session_error",
+          sessionId,
+          title: "响应失败",
+          body: textBlock?.text ?? "LLM 返回了错误响应",
           level: "error",
         });
       } else {
@@ -839,9 +1042,14 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     finishCompactionAfterMinimumVisibility(sessionId, () => {
       if (event.aborted || (event.reason && event.reason !== "success")) {
         const errMsg = event.reason ?? "压缩失败";
+        const activity = useCompactionStore.getState().activitiesBySession[sessionId];
         useCompactionStore
           .getState()
           .markFinished(sessionId, event.aborted ? "aborted" : "failed", errMsg);
+        appendLocalCompactionFailureMessage(sessionId, errMsg, {
+          status: event.aborted ? "aborted" : "failed",
+          startedAt: activity?.startedAt,
+        });
         notificationGateway.emit({
           type: "session_error",
           sessionId,
@@ -1296,19 +1504,21 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (!hasContent && storeGet().sessionStatusMap[sessionId] === "streaming") {
       const finalMsg = messageToChatMessage(message, entryId, toolCallNameMap);
       if (finalMsg && hasRenderableContent(finalMsg)) {
+        const stopReason = assistantMsg.stopReason ?? lastMsg.stopReason ?? null;
         chat.setMessagesForSession(
           sessionId,
           replaceMsgAt(existing, lastMsgIdx, {
             ...lastMsg,
             content: finalMsg.content,
             isStreaming: false,
-            stopReason: assistantMsg.stopReason ?? lastMsg.stopReason ?? null,
+            stopReason,
             provider: assistantMsg.api ?? lastMsg.provider,
             model: assistantMsg.model ?? lastMsg.model,
             ...buildTokenUsage(assistantMsg.usage),
             entryId,
           }),
         );
+        releaseStreamingSessionIfTerminal(sessionId, stopReason, finalMsg.content);
       } else {
         scheduleEmptyStreamingReload(sessionId, lastMsg.id);
       }
@@ -1338,45 +1548,106 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         assistantMsg.errorMessage ??
         (isErrorStopReason(stopReason) ? "LLM 返回了错误响应" : undefined) ??
         "LLM 返回了空响应";
-      const errorTitle = "LLM 未返回有效响应";
+      const errorTitle = isErrorStopReason(stopReason)
+        ? getLlmErrorPresentation(errorDetail).title
+        : "LLM 未返回有效响应";
+      const providerRequest = isErrorStopReason(stopReason)
+        ? getLatestProviderRequestForSession(sessionId)
+        : undefined;
+      const errorCandidate: ChatMessage = {
+        ...lastMsg,
+        role: "error" as const,
+        content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
+        stopReason,
+        ...(providerRequest ? { providerRequest } : {}),
+        isStreaming: false,
+      };
+      const withoutEmptyAssistant = [...existing.slice(0, lastMsgIdx), ...existing.slice(lastMsgIdx + 1)];
+      const turnStartIndex = findCurrentTurnStart(existing, lastMsgIdx);
+      const cleanedMessages = removeEmptyTurnFallbackErrors(withoutEmptyAssistant, turnStartIndex);
+      const deduped = mergeDuplicateLlmErrorForTurn({
+        messages: cleanedMessages,
+        candidate: errorCandidate,
+        turnStartIndex,
+      });
+      const insertIndex = Math.min(lastMsgIdx, cleanedMessages.length);
       chat.setMessagesForSession(
         sessionId,
-        replaceMsgAt(existing, lastMsgIdx, {
-          ...lastMsg,
-          role: "error" as const,
-          content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
-          stopReason,
-          isStreaming: false,
-        }),
+        deduped.merged
+          ? deduped.messages
+          : [...cleanedMessages.slice(0, insertIndex), errorCandidate, ...cleanedMessages.slice(insertIndex)],
       );
-      notificationGateway.emit({
-        type: "session_error",
-        sessionId,
-        title: "响应为空",
-        body: "LLM 返回了空响应，可能是模型配置问题或 API 错误",
-        level: "warning",
-      });
+      releaseStreamingSessionIfTerminal(sessionId, stopReason, lastMsg.content);
+      if (isErrorStopReason(stopReason)) {
+        emitLlmErrorNotification(sessionId, errorDetail);
+      } else {
+        notificationGateway.emit({
+          type: "session_error",
+          sessionId,
+          title: "响应为空",
+          body: "LLM 返回了空响应，可能是模型配置问题或 API 错误",
+          level: "warning",
+        });
+      }
       return;
     }
 
+    const stopReason = assistantMsg.stopReason ?? lastMsg.stopReason ?? null;
     const closedContent = closeRunningToolExecutions(
       lastMsg.content,
-      isErrorStopReason(assistantMsg.stopReason) ? "error" : "done",
+      isErrorStopReason(stopReason) ? "error" : "done",
     );
 
-    chat.setMessagesForSession(
-      sessionId,
-      replaceMsgAt(existing, lastMsgIdx, {
-        ...lastMsg,
-        content: closedContent,
-        isStreaming: false,
-        stopReason: assistantMsg.stopReason ?? lastMsg.stopReason ?? null,
-        provider: assistantMsg.api ?? lastMsg.provider,
-        model: assistantMsg.model ?? lastMsg.model,
-        ...buildTokenUsage(assistantMsg.usage),
+    const nextAssistant: ChatMessage = {
+      ...lastMsg,
+      content: closedContent,
+      isStreaming: false,
+      stopReason,
+      provider: assistantMsg.api ?? lastMsg.provider,
+      model: assistantMsg.model ?? lastMsg.model,
+      ...buildTokenUsage(assistantMsg.usage),
+      entryId,
+    };
+    let nextMessages = replaceMsgAt(existing, lastMsgIdx, nextAssistant);
+
+    if (isErrorStopReason(stopReason)) {
+      const errorDetail = assistantMsg.errorMessage ?? "LLM 返回了错误响应";
+      const providerRequest = getLatestProviderRequestForSession(sessionId);
+      const errorMessage = buildLlmErrorMessage({
+        afterMessage: nextAssistant,
         entryId,
-      }),
-    );
+        stopReason,
+        errorDetail,
+        providerRequest,
+      });
+      const turnStartIndex = findCurrentTurnStart(nextMessages, lastMsgIdx);
+      nextMessages = removeEmptyTurnFallbackErrors(nextMessages, turnStartIndex);
+      const nextAssistantIdx = nextMessages.findIndex((msg) => msg.id === nextAssistant.id);
+      const errorInsertIdx = nextAssistantIdx >= 0 ? nextAssistantIdx + 1 : Math.min(lastMsgIdx + 1, nextMessages.length);
+      const deduped = mergeDuplicateLlmErrorForTurn({
+        messages: nextMessages,
+        candidate: errorMessage,
+        turnStartIndex,
+      });
+      if (deduped.merged) {
+        nextMessages = deduped.messages;
+      } else {
+      const existingErrorIdx = nextMessages.findIndex((msg) => msg.id === errorMessage.id);
+      if (existingErrorIdx >= 0) {
+        nextMessages = replaceMsgAt(nextMessages, existingErrorIdx, errorMessage);
+      } else {
+        nextMessages = [
+          ...nextMessages.slice(0, errorInsertIdx),
+          errorMessage,
+          ...nextMessages.slice(errorInsertIdx),
+        ];
+        emitLlmErrorNotification(sessionId, errorDetail);
+      }
+      }
+    }
+
+    chat.setMessagesForSession(sessionId, nextMessages);
+    releaseStreamingSessionIfTerminal(sessionId, stopReason, closedContent);
     return;
   }
 

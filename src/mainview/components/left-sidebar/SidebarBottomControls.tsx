@@ -29,7 +29,7 @@ import { createLogger } from "../../../shared/lib/logger";
 import { ThemeMenu } from "../theme/ThemeMenu";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { CopyButton } from "../chat/CopyButton";
-import { DropdownSelect, AnchoredPopover } from "../primitives";
+import { DropdownSelect } from "../primitives";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { useNotificationStore } from "../../stores/use-notification-store";
@@ -79,7 +79,15 @@ export function SidebarBottomControls() {
     ),
   );
   const modelStateLoading = useSessionStore((s) => s.modelStateLoading);
-  const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
+  const currentThinkingLevel = useSessionStore(
+    useCallback(
+      (s) =>
+        activeSessionId
+          ? (s.thinkingLevelBySession?.[activeSessionId] ?? s.currentThinkingLevel)
+          : s.currentThinkingLevel,
+      [activeSessionId],
+    ),
+  );
   const availableModels = useSessionStore(
     useCallback(
       (s) =>
@@ -90,14 +98,13 @@ export function SidebarBottomControls() {
       [activeSessionId],
     ),
   );
-  const setCurrentModel = useSessionStore((s) => s.setCurrentModel);
+  const setModelForSession = useSessionStore((s) => s.setModelForSession);
   const setThinkingLevel = useSessionStore((s) => s.setThinkingLevel);
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
   const fetchInitialState = useSessionStore((s) => s.fetchInitialState);
 
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const thinkingRef = useRef<HTMLDivElement>(null);
-  const thinkingButtonRef = useRef<HTMLButtonElement>(null);
   const [switching, setSwitching] = useState(false);
 
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
@@ -123,20 +130,23 @@ export function SidebarBottomControls() {
   const projectPath = currentSession?.projectPath ?? tabProjectPath;
 
   const currentTier = useTierStore((s) =>
-    projectPath ? s.getCurrentTier(projectPath) : null,
+    activeSessionId && projectPath
+      ? s.getCurrentTierForSession(activeSessionId, projectPath)
+      : null,
   );
   const switchToTier = useTierStore((s) => s.switchToTier);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
-  const saveProjectTierConfig = useTierStore((s) => s.saveProjectTierConfig);
+  const saveTierModelsForSession = useTierStore((s) => s.saveTierModelsForSession);
   const tierModels = useTierStore((s) =>
-    projectPath ? s.getTierModels(projectPath) : s.globalDefaults,
+    activeSessionId && projectPath
+      ? s.getTierModelsForSession(activeSessionId, projectPath)
+      : s.globalDefaults,
   );
   const [switchingTier, setSwitchingTier] = useState(false);
   const [tierConfigOpen, setTierConfigOpen] = useState(false);
   const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
   const [tierConfigSaving, setTierConfigSaving] = useState(false);
   const tierConfigRef = useRef<HTMLDivElement>(null);
-  const tierConfigButtonRef = useRef<HTMLButtonElement>(null);
 
   const currentAgent = useAgentStore((s) =>
     activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
@@ -152,7 +162,6 @@ export function SidebarBottomControls() {
   const toggleAgentFavorite = useAgentStore((s) => s.toggleAgentFavorite);
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
-  const agentButtonRef = useRef<HTMLButtonElement>(null);
 
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
 
@@ -165,12 +174,10 @@ export function SidebarBottomControls() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceRefreshing, setWorkspaceRefreshing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const createDialogButtonRef = useRef<HTMLButtonElement>(null);
   const [newBranch, setNewBranch] = useState("");
   const [sourceBranch, setSourceBranch] = useState("");
   const [creating, setCreating] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
-  const workspaceButtonRef = useRef<HTMLButtonElement>(null);
 
   const sessionFetchedRef = useRef<string | null>(null);
   const tierFetchedRef = useRef<string | null>(null);
@@ -233,8 +240,13 @@ export function SidebarBottomControls() {
   }, [activeTabPath, refreshGitAll, workspaceRefreshing]);
 
   useEffect(() => {
-    if (!tierConfigOpen) return;
+    if (!agentOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
     const handleClick = (e: MouseEvent) => {
+      if (agentRef.current && !agentRef.current.contains(e.target as Node)) setAgentOpen(false);
+      if (thinkingRef.current && !thinkingRef.current.contains(e.target as Node))
+        setThinkingOpen(false);
+      if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node))
+        setWorkspaceOpen(false);
       if (tierConfigRef.current && !tierConfigRef.current.contains(e.target as Node)) {
         const el = e.target as HTMLElement;
         if (!el.closest?.("[data-model-picker-dropdown]")) {
@@ -244,6 +256,9 @@ export function SidebarBottomControls() {
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        setAgentOpen(false);
+        setThinkingOpen(false);
+        setWorkspaceOpen(false);
         setTierConfigOpen(false);
       }
     };
@@ -253,7 +268,7 @@ export function SidebarBottomControls() {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [tierConfigOpen]);
+  }, [agentOpen, thinkingOpen, workspaceOpen, tierConfigOpen]);
 
   const handleSwitchWorkspace = useCallback((wt: { path: string }) => {
     const state = useSessionStore.getState();
@@ -318,15 +333,14 @@ export function SidebarBottomControls() {
     if (!activeSessionId || !projectPath) return;
     setTierConfigSaving(true);
     try {
-      useTierStore.getState().setProjectTierModels(projectPath, tierConfigModels);
-      await saveProjectTierConfig(projectPath);
+      await saveTierModelsForSession(activeSessionId, projectPath, tierConfigModels);
       setTierConfigOpen(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("save tier config failed", { error: msg });
     }
     setTierConfigSaving(false);
-  }, [activeSessionId, projectPath, tierConfigModels, saveProjectTierConfig]);
+  }, [activeSessionId, projectPath, tierConfigModels, saveTierModelsForSession]);
 
   const handleSelectModel = useCallback(
     async (key: string) => {
@@ -339,18 +353,17 @@ export function SidebarBottomControls() {
         await apiClient.call("agent.reload", { sessionId: activeSessionId });
         await apiClient.call("agent.setModel", {
           sessionId: activeSessionId,
-          provider,
-          modelId,
+          model: key,
         });
-        setCurrentModel(provider, modelId);
+        setModelForSession(activeSessionId, provider, modelId);
         if (projectPath) {
           const tierStore = useTierStore.getState();
-          const models = tierStore.getTierModels(projectPath);
+          const models = tierStore.getTierModelsForSession(activeSessionId, projectPath);
           const matchedTier = TIER_KEYS.find(
             (tier) => models[tier]?.toLowerCase() === `${provider}/${modelId}`.toLowerCase(),
           );
           if (matchedTier) {
-            tierStore.setProjectCurrentTier(projectPath, matchedTier);
+            tierStore.setSessionCurrentTier(activeSessionId, projectPath, matchedTier);
           }
         }
         fetchModelState(activeSessionId);
@@ -368,7 +381,7 @@ export function SidebarBottomControls() {
       }
       setSwitching(false);
     },
-    [activeSessionId, switching, currentModel, setCurrentModel, projectPath, fetchModelState, t],
+    [activeSessionId, switching, currentModel, setModelForSession, projectPath, fetchModelState, t],
   );
 
   const handleSelectThinking = useCallback(
@@ -383,7 +396,7 @@ export function SidebarBottomControls() {
           sessionId: activeSessionId,
           level,
         });
-        setThinkingLevel(level);
+        setThinkingLevel(level, activeSessionId);
       } catch (err) {
         log.warn("setThinkingLevel failed", { error: String(err) });
       }
@@ -430,7 +443,6 @@ export function SidebarBottomControls() {
     <div className="shrink-0 border-t border-border-secondary/80 dark:border-surface-dim/80 px-3 py-2 space-y-1.5">
       <div className="relative" ref={agentRef}>
         <button
-          ref={agentButtonRef}
           onClick={() => {
             const nextOpen = !agentOpen;
             setAgentOpen(nextOpen);
@@ -471,82 +483,73 @@ export function SidebarBottomControls() {
             className={`w-3 h-3 shrink-0 transition-transform ${agentOpen ? "rotate-180" : ""}`}
           />
         </button>
-        <AnchoredPopover
-          anchorRef={agentButtonRef}
-          open={agentOpen}
-          onClose={() => setAgentOpen(false)}
-          placement="top"
-          align="start"
-          minWidth={260}
-          maxWidth={320}
-          maxHeight={240}
-          className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl overflow-hidden flex flex-col"
-        >
-          <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
-            {agents.map((agent) => {
-              const isActive = currentAgent === agent.name;
-              const isFavorite = agentFavorites.has(agent.name);
-              const iconMap: Record<string, LucideIcon> = {
-                build: Wrench,
-                explore: Search,
-                plan: ClipboardList,
-              };
-              const Icon = iconMap[agent.name] || Bot;
-              return (
-                <div
-                  key={agent.name}
-                  role="button"
-                  tabIndex={0}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors cursor-pointer ${
-                    isActive
-                      ? "bg-semantic-accent/10"
-                      : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
-                  }`}
-                  onClick={async () => {
-                    if (activeSessionId && agentReady && !agentSwitching && !isActive) {
-                      await switchAgent(agent.name, activeSessionId);
-                    }
-                    setAgentOpen(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      (e.target as HTMLElement).click();
-                    }
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={`mt-0.5 -ml-0.5 p-0.5 rounded text-text-tertiary hover:text-semantic-accent hover:bg-semantic-accent/10 transition-colors ${
-                      isFavorite ? "text-semantic-accent" : ""
+        {agentOpen && (
+          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[260px] max-w-[320px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
+            <div className="overflow-y-auto max-h-[15rem]">
+              {agents.map((agent) => {
+                const isActive = currentAgent === agent.name;
+                const isFavorite = agentFavorites.has(agent.name);
+                const iconMap: Record<string, LucideIcon> = {
+                  build: Wrench,
+                  explore: Search,
+                  plan: ClipboardList,
+                };
+                const Icon = iconMap[agent.name] || Bot;
+                return (
+                  <div
+                    key={agent.name}
+                    role="button"
+                    tabIndex={0}
+                    className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors cursor-pointer ${
+                      isActive
+                        ? "bg-accent/10"
+                        : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                     }`}
-                    title={isFavorite ? t("unfavorite") : t("favorite")}
-                    aria-label={isFavorite ? t("unfavorite") : t("favorite")}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void toggleAgentFavorite(agent.name);
+                    onClick={async () => {
+                      if (activeSessionId && agentReady && !agentSwitching && !isActive) {
+                        await switchAgent(agent.name, activeSessionId);
+                      }
+                      setAgentOpen(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        (e.target as HTMLElement).click();
+                      }
                     }}
                   >
-                    <Star className="w-3 h-3" fill={isFavorite ? "currentColor" : "none"} />
-                  </button>
-                  <AgentAvatar
-                    avatar={agent.avatar}
-                    agentFilePath={agent.filePath}
-                    color={agent.color}
-                    fallbackIcon={Icon}
-                    className={`w-3.5 h-3.5 rounded-full shrink-0 mt-0.5 ${
-                      isActive ? "text-semantic-accent" : "text-text-tertiary"
-                    }`}
-                    title={agent.name}
-                  />
-                  <div className="flex-1 min-w-0">
+                    <button
+                      type="button"
+                      className={`mt-0.5 -ml-0.5 p-0.5 rounded text-text-tertiary hover:text-accent hover:bg-accent/10 transition-colors ${
+                        isFavorite ? "text-accent" : ""
+                      }`}
+                      title={isFavorite ? t("unfavorite") : t("favorite")}
+                      aria-label={isFavorite ? t("unfavorite") : t("favorite")}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleAgentFavorite(agent.name);
+                      }}
+                    >
+                      <Star className="w-3 h-3" fill={isFavorite ? "currentColor" : "none"} />
+                    </button>
+                    <AgentAvatar
+                      avatar={agent.avatar}
+                      agentFilePath={agent.filePath}
+                      color={agent.color}
+                      fallbackIcon={Icon}
+                      className={`w-3.5 h-3.5 rounded-full shrink-0 mt-0.5 ${
+                        isActive ? "text-accent" : "text-text-tertiary"
+                      }`}
+                      title={agent.name}
+                    />
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className={`font-medium truncate ${isActive ? "text-semantic-accent" : ""}`}>{agent.name}</span>
+                        <span className={`font-medium truncate ${isActive ? "text-accent" : ""}`}>{agent.name}</span>
                         <span
                           className={`text-[9px] px-1 py-0.5 rounded shrink-0 font-mono ${
                             isGlobalAgent(agent.source)
-                              ? "bg-semantic-accent/10 text-semantic-accent"
+                              ? "bg-accent/10 text-accent"
                               : "bg-surface-dim text-text-tertiary"
                           }`}
                           title={getSourceLabel(agent.source)}
@@ -576,7 +579,7 @@ export function SidebarBottomControls() {
                         </div>
                       )}
                     </div>
-                    {isActive && <Check className="w-3 h-3 shrink-0 text-semantic-accent mt-0.5" />}
+                    {isActive && <Check className="w-3 h-3 shrink-0 text-accent mt-0.5" />}
                     {agent.tier && (
                       <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">
                         {agent.tier}
@@ -585,8 +588,9 @@ export function SidebarBottomControls() {
                   </div>
                 );
               })}
+            </div>
           </div>
-        </AnchoredPopover>
+        )}
       </div>
 
       <div className="relative" ref={workspaceRef}>
@@ -612,7 +616,6 @@ export function SidebarBottomControls() {
           </button>
         ) : (
           <button
-            ref={workspaceButtonRef}
             onClick={() => {
               const nextOpen = !workspaceOpen;
               setWorkspaceOpen(nextOpen);
@@ -636,78 +639,52 @@ export function SidebarBottomControls() {
             />
           </button>
         )}
-        {isGitRepo && (
-          <AnchoredPopover
-            anchorRef={workspaceButtonRef}
-            open={workspaceOpen}
-            onClose={() => {
-              setWorkspaceOpen(false);
-              setShowCreateDialog(false);
-            }}
-            placement="top"
-            align="start"
-            minWidth={240}
-            maxWidth={300}
-            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl overflow-hidden flex flex-col"
-          >
-            <div className="max-h-64 flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
-                {worktrees.map((wt) => {
-                  const isActive = currentWorkspace?.path === wt.path;
-                  const name = wt.isMain ? t("mainWorkspace") : wt.branch;
-                  return (
-                    <button
-                      key={wt.path}
-                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-                        isActive
-                          ? "bg-semantic-accent/10"
-                          : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
-                      }`}
-                      onClick={() => handleSwitchWorkspace(wt)}
-                    >
-                      {isActive ? (
-                        <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
-                      ) : (
-                        <span className="w-3 shrink-0" />
-                      )}
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className={`truncate ${isActive ? "text-semantic-accent font-medium" : ""}`}>{name}</span>
-                        <span className="text-[10px] text-text-tertiary truncate">{wt.path}</span>
-                      </div>
-                      {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-semantic-tool/60" />}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="border-t border-border-secondary/60">
-                <button
-                  ref={createDialogButtonRef}
-                  className="w-full text-left px-3 py-1.5 text-xs text-semantic-tool hover:bg-surface-hover dark:hover:bg-surface-hover flex items-center gap-2 transition-colors"
-                  onClick={() => {
-                    setShowCreateDialog(true);
-                    setSourceBranch(currentWorkspace?.branch ?? "");
-                  }}
-                >
-                  <Plus className="w-3 h-3 shrink-0" />
-                  <span>{t("newWorkspace")}</span>
-                </button>
-              </div>
+        {isGitRepo && workspaceOpen && (
+          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[240px] max-w-[300px] max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col">
+            <div className="overflow-y-auto flex-1 py-1">
+              {worktrees.map((wt) => {
+                const isActive = currentWorkspace?.path === wt.path;
+                const name = wt.isMain ? t("mainWorkspace") : wt.branch;
+                return (
+                  <button
+                    key={wt.path}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
+                      isActive
+                        ? "bg-accent/10"
+                        : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
+                    }`}
+                    onClick={() => handleSwitchWorkspace(wt)}
+                  >
+                    {isActive ? (
+                      <Check className="w-3 h-3 shrink-0 text-accent" />
+                    ) : (
+                      <span className="w-3 shrink-0" />
+                    )}
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className={`truncate ${isActive ? "text-accent font-medium" : ""}`}>{name}</span>
+                      <span className="text-[10px] text-text-tertiary truncate">{wt.path}</span>
+                    </div>
+                    {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-text-tertiary" />}
+                  </button>
+                );
+              })}
             </div>
-          </AnchoredPopover>
+            <div className="border-t border-border-secondary/60">
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs text-accent hover:bg-surface-hover dark:hover:bg-surface-hover flex items-center gap-2 transition-colors"
+                onClick={() => {
+                  setShowCreateDialog(true);
+                  setSourceBranch(currentWorkspace?.branch ?? "");
+                }}
+              >
+                <Plus className="w-3 h-3 shrink-0" />
+                <span>{t("newWorkspace")}</span>
+              </button>
+            </div>
+          </div>
         )}
         {showCreateDialog && (
-          <AnchoredPopover
-            anchorRef={createDialogButtonRef}
-            open={showCreateDialog}
-            onClose={() => {
-              setShowCreateDialog(false);
-              setNewBranch("");
-            }}
-            placement="top"
-            align="start"
-            minWidth={260}
-            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
-          >
+          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[260px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2">
             <div className="text-xs font-medium text-text-primary">{t("newWorkspaceTitle")}</div>
             <div className="space-y-1.5">
               <div>
@@ -750,12 +727,12 @@ export function SidebarBottomControls() {
               <button
                 onClick={handleCreateWorktree}
                 disabled={!newBranch.trim() || creating}
-                className="px-2 py-1 rounded text-xs bg-semantic-accent text-white hover:bg-semantic-accent/90 disabled:opacity-40"
+                className="px-2 py-1 rounded text-xs bg-accent text-white hover:bg-accent/90 disabled:opacity-40"
               >
                 {creating ? t("creating") : t("create")}
               </button>
             </div>
-          </AnchoredPopover>
+          </div>
         )}
       </div>
 
@@ -823,7 +800,7 @@ export function SidebarBottomControls() {
                 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 min-w-0 justify-center overflow-hidden whitespace-nowrap
                 ${
                   isActive
-                    ? "bg-semantic-accent/10 text-semantic-accent font-medium ring-1 ring-accent/25"
+                    ? "bg-accent/10 text-accent font-medium ring-1 ring-accent/25"
                     : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim"
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
@@ -836,7 +813,6 @@ export function SidebarBottomControls() {
           );
         })}
         <button
-          ref={tierConfigButtonRef}
           onClick={handleOpenTierConfig}
           disabled={!activeSessionId || !agentReady}
           className="p-0.5 rounded text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors disabled:opacity-40 shrink-0"
@@ -847,91 +823,78 @@ export function SidebarBottomControls() {
         </button>
 
         {tierConfigOpen && (
-          <AnchoredPopover
-            anchorRef={tierConfigButtonRef}
-            open={tierConfigOpen}
-            onClose={() => setTierConfigOpen(false)}
-            placement="top"
-            align="end"
-            minWidth={240}
-            maxHeight={280}
-            closeOnOutsideClick={false}
-            closeOnEscape={false}
-            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col"
+          <div
+            ref={tierConfigRef}
+            className="absolute bottom-full left-0 mb-1 z-[90] min-w-[340px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
           >
-            <div ref={tierConfigRef} className="flex flex-col overflow-hidden flex-1 min-h-0">
-              <div className="px-3 py-2 text-xs font-medium text-text-primary shrink-0 border-b border-border-secondary/60">
-                {t("tierConfigTitle", "Configure tier models")}
-              </div>
-              <div className="overflow-y-auto overflow-x-hidden flex-1 py-1.5 px-2 space-y-1.5">
-                {TIER_KEYS.map((tier) => {
-                  const labels: Record<TierKey, string> = {
-                    fast: t("tierFast"),
-                    pro: t("tierPro"),
-                    max: t("tierMax"),
-                  };
-                  const icons: Record<TierKey, React.ComponentType<{ className?: string }>> = {
-                    fast: Zap,
-                    pro: Target,
-                    max: Brain,
-                  };
-                  const Icon = icons[tier];
-                  return (
-                    <div key={tier} className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 w-12 shrink-0">
-                        <Icon className="w-3 h-3 text-text-tertiary shrink-0" />
-                        <span className="text-[11px] text-text-secondary truncate">{labels[tier]}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <ModelPickerButton
-                          models={availableModels}
-                          value={tierConfigModels[tier] ?? ""}
-                          onChange={(v) => {
-                            setTierConfigModels((prev) => ({ ...prev, [tier]: v }));
-                          }}
-                          onOpenChange={(open) => {
-                            if (open) refreshModelsForActiveSession();
-                          }}
-                          placement="up"
-                          dropdownMinWidth={420}
-                          dropdownMaxWidth={520}
-                          placeholder={
-                            currentModel
-                              ? t("tierConfigDefault", "默认 ({{model}})", {
-                                  model:
-                                    currentModel.name ?? `${currentModel.provider}/${currentModel.id}`,
-                                })
-                              : t("tierConfigDefaultPlain", "-- 默认 --")
-                          }
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border-secondary/60 shrink-0">
-                <button
-                  onClick={() => setTierConfigOpen(false)}
-                  className="px-2 py-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover whitespace-nowrap"
-                >
-                  {t("cancel", { ns: "common" })}
-                </button>
-                <button
-                  onClick={handleSaveTierConfig}
-                  disabled={tierConfigSaving}
-                  className="px-2 py-1 rounded text-[11px] bg-semantic-accent text-white hover:bg-semantic-accent/90 disabled:opacity-40 whitespace-nowrap"
-                >
-                  {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
-                </button>
-              </div>
+            <div className="text-xs font-medium text-text-primary">
+              {t("tierConfigTitle", "Configure tier models")}
             </div>
-          </AnchoredPopover>
+            {TIER_KEYS.map((tier) => {
+              const labels: Record<TierKey, string> = {
+                fast: t("tierFast"),
+                pro: t("tierPro"),
+                max: t("tierMax"),
+              };
+              const icons: Record<TierKey, React.ComponentType<{ className?: string }>> = {
+                fast: Zap,
+                pro: Target,
+                max: Brain,
+              };
+              const Icon = icons[tier];
+              return (
+                <div key={tier} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 w-14 shrink-0 whitespace-nowrap">
+                    <Icon className="w-3 h-3 text-text-tertiary" />
+                    <span className="text-[11px] text-text-secondary truncate">{labels[tier]}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <ModelPickerButton
+                      models={availableModels}
+                      value={tierConfigModels[tier] ?? ""}
+                      onChange={(v) => {
+                        setTierConfigModels((prev) => ({ ...prev, [tier]: v }));
+                      }}
+                      onOpenChange={(open) => {
+                        if (open) refreshModelsForActiveSession();
+                      }}
+                      placement="up"
+                      dropdownMinWidth={420}
+                      dropdownMaxWidth={520}
+                      placeholder={
+                        currentModel
+                          ? t("tierConfigDefault", "默认 ({{model}})", {
+                              model:
+                                currentModel.name ?? `${currentModel.provider}/${currentModel.id}`,
+                            })
+                          : t("tierConfigDefaultPlain", "-- 默认 --")
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => setTierConfigOpen(false)}
+                className="px-2 py-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover whitespace-nowrap"
+              >
+                {t("cancel", { ns: "common" })}
+              </button>
+              <button
+                onClick={handleSaveTierConfig}
+                disabled={tierConfigSaving}
+                className="px-2 py-1 rounded text-[11px] bg-accent text-white hover:bg-accent/90 disabled:opacity-40 whitespace-nowrap"
+              >
+                {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
       <div className="relative" ref={thinkingRef}>
         <button
-          ref={thinkingButtonRef}
           onClick={() => {
             setThinkingOpen(!thinkingOpen);
             setWorkspaceOpen(false);
@@ -954,17 +917,8 @@ export function SidebarBottomControls() {
             className={`w-3 h-3 shrink-0 transition-transform ${thinkingOpen ? "rotate-180" : ""}`}
           />
         </button>
-        <AnchoredPopover
-          anchorRef={thinkingButtonRef}
-          open={thinkingOpen}
-          onClose={() => setThinkingOpen(false)}
-          placement="top"
-          align="start"
-          minWidth={200}
-          maxHeight={240}
-          className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl overflow-hidden flex flex-col"
-        >
-          <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
+        {thinkingOpen && (
+          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             {THINKING_LEVEL_VALUES.map((value, idx) => {
               const isActive = currentThinkingLevel === value;
               return (
@@ -972,17 +926,17 @@ export function SidebarBottomControls() {
                   key={value}
                   className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                     isActive
-                      ? "bg-semantic-accent/10"
+                      ? "bg-accent/10"
                       : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                   }`}
                   onClick={() => handleSelectThinking(value)}
                 >
                   {isActive ? (
-                    <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
+                    <Check className="w-3 h-3 shrink-0 text-accent" />
                   ) : (
                     <span className="w-3 shrink-0" />
                   )}
-                  <span className={`whitespace-nowrap ${isActive ? "text-semantic-accent font-medium" : ""}`}>{t(THINKING_LEVEL_KEYS[idx])}</span>
+                  <span className={`whitespace-nowrap ${isActive ? "text-accent font-medium" : ""}`}>{t(THINKING_LEVEL_KEYS[idx])}</span>
                   <span className="text-text-tertiary ml-auto text-[10px] font-mono whitespace-nowrap">
                     {value}
                   </span>
@@ -990,7 +944,7 @@ export function SidebarBottomControls() {
               );
             })}
           </div>
-        </AnchoredPopover>
+        )}
       </div>
 
       <ThemeMenu />

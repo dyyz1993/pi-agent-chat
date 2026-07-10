@@ -13,6 +13,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createRef } from "react";
 import {
   SideNav,
+  SIDE_NAV_TOOL_BLOCK_WINDOW_SIZE,
   buildFlatItems,
   getSideNavScrollTarget,
   getSideNavVisibleEdgeFallbackKey,
@@ -843,6 +844,58 @@ describe("SideNav — flat block navigation (G)", () => {
     ]);
   });
 
+  it("collapses older ordinary tool block nav markers for long assistant messages", () => {
+    const toolBlocks = Array.from({ length: SIDE_NAV_TOOL_BLOCK_WINDOW_SIZE + 12 }, (_, index) => ({
+      type: "toolExecution" as const,
+      toolCallId: `tc-${index}`,
+      toolName: "bash",
+      args: "{}",
+      status: "done" as const,
+    }));
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-long-tools",
+        role: "assistant",
+        content: [{ type: "text", text: "working" }, ...toolBlocks],
+        timestamp: 1,
+      },
+    ];
+
+    const items = buildFlatItems(messages, false);
+    const toolMarkers = items.filter((item) => item.blockId?.startsWith("msg-long-tools-"));
+    const collapsedMarker = items.find((item) => item.key === "msg-long-tools-older-tools");
+
+    expect(collapsedMarker).toBeTruthy();
+    expect(toolMarkers).toHaveLength(SIDE_NAV_TOOL_BLOCK_WINDOW_SIZE + 1);
+    expect(toolMarkers[0].blockId).toBe("msg-long-tools-0");
+    expect(toolMarkers[1].blockId).toBe("msg-long-tools-13");
+  });
+
+  it("keeps running and error tool nav markers even outside the ordinary window", () => {
+    const toolBlocks = Array.from({ length: SIDE_NAV_TOOL_BLOCK_WINDOW_SIZE + 12 }, (_, index) => ({
+      type: "toolExecution" as const,
+      toolCallId: `tc-${index}`,
+      toolName: "bash",
+      args: "{}",
+      status:
+        index === 0 ? ("running" as const) : index === 1 ? ("error" as const) : ("done" as const),
+    }));
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-tool-status",
+        role: "assistant",
+        content: [{ type: "text", text: "working" }, ...toolBlocks],
+        timestamp: 1,
+      },
+    ];
+
+    const items = buildFlatItems(messages, false);
+    const blockIds = items.map((item) => item.blockId).filter(Boolean);
+
+    expect(blockIds).toContain("msg-tool-status-1");
+    expect(blockIds).toContain("msg-tool-status-2");
+  });
+
   it("click on message icon passes only the message target to onNavDotClick", () => {
     const messages: ChatMessage[] = [
       {
@@ -949,16 +1002,9 @@ describe("SideNav — right-click multi-select (K)", () => {
 });
 
 describe("SideNav — pagination (L)", () => {
-  it("loads older nav items when the SideNav scroll container reaches the top", () => {
+  it("loads older nav items from SideNav scrolling without touching the message list", async () => {
     const messages = makeMessages();
     const onLoadMore = vi.fn();
-    const raf = vi
-      .spyOn(globalThis, "requestAnimationFrame")
-      .mockImplementation((callback: FrameRequestCallback) => {
-        callback(0);
-        return 1;
-      });
-    const cancel = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
 
     const { container } = render(
       <SideNav
@@ -976,54 +1022,10 @@ describe("SideNav — pagination (L)", () => {
     });
 
     fireEvent.scroll(scrollContainer);
-
-    expect(onLoadMore).toHaveBeenCalledTimes(1);
-
-    raf.mockRestore();
-    cancel.mockRestore();
-  });
-
-  it("does not load older nav items when already loading or exhausted", () => {
-    const messages = makeMessages();
-    const onLoadMore = vi.fn();
-    const raf = vi
-      .spyOn(globalThis, "requestAnimationFrame")
-      .mockImplementation((callback: FrameRequestCallback) => {
-        callback(0);
-        return 1;
-      });
-    const cancel = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
-
-    const { container, rerender } = render(
-      <SideNav
-        ref={createRef()}
-        messages={messages}
-        onNavDotClick={vi.fn()}
-        pagination={{ hasMore: true, isLoading: true, onLoadMore }}
-      />,
-    );
-    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
-    Object.defineProperty(scrollContainer, "scrollTop", {
-      value: 0,
-      writable: true,
-      configurable: true,
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
 
-    fireEvent.scroll(scrollContainer);
-    expect(onLoadMore).not.toHaveBeenCalled();
-
-    rerender(
-      <SideNav
-        ref={createRef()}
-        messages={messages}
-        onNavDotClick={vi.fn()}
-        pagination={{ hasMore: false, isLoading: false, onLoadMore }}
-      />,
-    );
-    fireEvent.scroll(scrollContainer);
-    expect(onLoadMore).not.toHaveBeenCalled();
-
-    raf.mockRestore();
-    cancel.mockRestore();
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
 });

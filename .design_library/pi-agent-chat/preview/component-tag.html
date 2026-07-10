@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Tag - pi-agent-chat</title>
+    <link rel="stylesheet" href="../colors_and_type.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: var(--space-3);
+        background: var(--color-surface);
+        font-family: var(--font-body);
+        color: var(--color-on-surface);
+      }
+      .specimen {
+        max-width: 720px;
+      }
+      .row {
+        display: flex;
+        gap: var(--space-2);
+        align-items: center;
+        margin-bottom: var(--space-2);
+        flex-wrap: wrap;
+      }
+      .label {
+        font-family: var(--font-body);
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-eyebrow);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        min-width: 92px;
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: var(--space-3) 0;
+      }
+
+      /* @component-css-start */
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--space-1) var(--space-2);
+        font-family: var(--font-body);
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-eyebrow);
+        line-height: 1;
+        white-space: nowrap;
+        flex-shrink: 0;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+        cursor: default;
+        min-width: 20px;
+        min-height: 20px;
+      }
+      .tag-filled-success {
+        background: var(--pi-success-50);
+        color: var(--color-success);
+      }
+      .tag-filled-warning {
+        background: var(--pi-warning-50);
+        color: var(--color-warning);
+      }
+      .tag-filled-error {
+        background: var(--color-error-container);
+        color: var(--color-error);
+      }
+      .tag-filled-info {
+        background: var(--pi-info-50);
+        color: var(--pi-info-500);
+      }
+      .tag-filled-neutral {
+        background: var(--color-surface-container-low);
+        color: var(--text-secondary);
+      }
+      .tag-outline-success {
+        border: 1px solid var(--color-success);
+        color: var(--color-success);
+      }
+      .tag-outline-warning {
+        border: 1px solid var(--color-warning);
+        color: var(--color-warning);
+      }
+      .tag-outline-error {
+        border: 1px solid var(--color-error);
+        color: var(--color-error);
+      }
+      .tag-outline-info {
+        border: 1px solid var(--pi-info-500);
+        color: var(--pi-info-500);
+      }
+      .tag-outline-neutral {
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+      }
+      .tag-filled:hover {
+        filter: brightness(0.92);
+      }
+      .tag-outline:hover {
+        background: var(--color-surface-container-low);
+      }
+      /* @component-css-end */
+    </style>
+  </head>
+  <body>
+    <div class="specimen">
+      <div class="row">
+        <span class="label">Filled</span>
+        <span class="tag tag-filled-success" data-evidence-sample="Success Filled">done</span>
+        <span class="tag tag-filled-warning" data-evidence-sample="Warning Filled"
+          >Rolled Back</span
+        >
+        <span class="tag tag-filled-error" data-evidence-sample="Error Filled">error</span>
+        <span class="tag tag-filled-info" data-evidence-sample="Info Filled">running</span>
+        <span class="tag tag-filled-neutral" data-evidence-sample="Neutral Filled">SubAgent</span>
+      </div>
+      <hr class="divider" />
+      <div class="row">
+        <span class="label">Outline</span>
+        <span class="tag tag-outline-success" data-evidence-sample="Success Outline">done</span>
+        <span class="tag tag-outline-warning" data-evidence-sample="Warning Outline"
+          >Rolled Back</span
+        >
+        <span class="tag tag-outline-error" data-evidence-sample="Error Outline">error</span>
+        <span class="tag tag-outline-info" data-evidence-sample="Info Outline">running</span>
+        <span class="tag tag-outline-neutral" data-evidence-sample="Neutral Outline">SubAgent</span>
+      </div>
+    </div>
+  </body>
+</html>

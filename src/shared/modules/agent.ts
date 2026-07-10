@@ -110,7 +110,13 @@ export interface AgentMethods {
     result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
   };
   "agent.getFullMessages": {
-    params: { sessionId: string; sessionPath?: string; limit?: number; afterEntryId?: string };
+    params: {
+      sessionId: string;
+      sessionPath?: string;
+      limit?: number;
+      afterEntryId?: string;
+      fromStart?: boolean;
+    };
     result: {
       messages: AgentMessageForUI[];
       customEntries: CustomEntryForUI[];
@@ -119,8 +125,48 @@ export interface AgentMethods {
       nextCursor: string | null;
     };
   };
+  "agent.getFullMessagesAround": {
+    params: {
+      sessionId: string;
+      sessionPath?: string;
+      targetEntryId: string;
+      before?: number;
+      after?: number;
+    };
+    result: {
+      messages: AgentMessageForUI[];
+      customEntries: CustomEntryForUI[];
+      hasMoreBefore: boolean;
+      hasMoreAfter: boolean;
+      beforeCursor: string | null;
+      afterCursor: string | null;
+      targetFound: boolean;
+      totalCount: number;
+    };
+  };
+  "agent.getMessageNavPage": {
+    params: {
+      sessionId: string;
+      sessionPath?: string;
+      limit?: number;
+      afterEntryId?: string;
+      fromStart?: boolean;
+    };
+    result: {
+      messages: AgentMessageForUI[];
+      hasMore: boolean;
+      totalCount: number;
+      nextCursor: string | null;
+    };
+  };
   "agent.steer": {
-    params: { sessionId: string; content: string; images?: ImageContent[] };
+    params: {
+      sessionId: string;
+      content?: string;
+      images?: ImageContent[];
+      promote?: number;
+      immediate?: boolean;
+    };
     result: { ok: boolean };
   };
   "agent.followUp": {
@@ -147,7 +193,7 @@ export interface AgentMethods {
     }>;
   };
   "agent.setModel": {
-    params: { sessionId: string; provider: string; modelId: string };
+    params: { sessionId: string; model: string; parentSessionId?: string; projectPath?: string };
     result: { provider: string; id: string };
   };
   "agent.switchTier": {
@@ -479,6 +525,14 @@ export interface AgentMethods {
   "agent.getForkMessages": {
     params: { sessionId: string };
     result: { messages: Array<{ entryId: string; text: string }> };
+  };
+  "agent.deleteEntries": {
+    params: { sessionId: string; targetIds: string[] };
+    result: { ok: boolean; entryId: string };
+  };
+  "agent.summarizeEntries": {
+    params: { sessionId: string; targetIds: string[]; summary?: string; model?: string };
+    result: { ok: boolean; entryId: string };
   };
   "agent.fork": {
     params: { sessionId: string; entryId: string; position?: "before" | "at" };

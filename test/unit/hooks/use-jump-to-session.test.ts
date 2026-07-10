@@ -113,6 +113,19 @@ describe("jumpToSessionById", () => {
     expect(hoisted.setActiveSession).not.toHaveBeenCalledWith("sess_sub_child", true);
   });
 
+  it("opens sidebar subagent targets with explicit parent context when the child is not in session lists", async () => {
+    await jumpToSessionById("sidebar-only-sub", {
+      subagentParentSessionId: "parent-session",
+      returnSourceSessionId: "origin-session",
+    });
+
+    expect(hoisted.setActiveSession).toHaveBeenCalledWith("parent-session", true);
+    expect(hoisted.loadSubsessions).toHaveBeenCalledWith("/sessions/parent.jsonl");
+    expect(hoisted.setActiveSubsession).toHaveBeenCalledWith("parent-session", "sidebar-only-sub");
+    expect(hoisted.setReturnSource).toHaveBeenCalledWith("parent-session", "origin-session");
+    expect(hoisted.setActiveSession).not.toHaveBeenCalledWith("sidebar-only-sub", true);
+  });
+
   it("keeps non-subagent delegate sessions as normal session jumps", async () => {
     await jumpToSessionById("delegate-session", { returnSourceSessionId: "origin-session" });
 

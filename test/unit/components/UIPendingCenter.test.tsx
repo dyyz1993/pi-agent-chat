@@ -17,6 +17,7 @@ import {
 import { ContentBlockRenderer } from "../../../src/mainview/components/chat/ContentBlockRenderer";
 import {
   AskUserQuestionToolCard,
+  ConfirmCard,
   PathPermissionCard,
 } from "../../../src/mainview/components/chat/tool-renderers/UICardRenderer";
 import type { UIInteractionBlock } from "../../../src/mainview/types";
@@ -256,7 +257,7 @@ describe("UIPendingCenter", () => {
     expect(screen.getByText("Session B")).toBeInTheDocument();
   });
 
-  it("scopes the pending requests panel to chat instead of a full-screen modal", () => {
+  it("renders the pending requests panel as an anchored popover instead of a full-screen modal", () => {
     setupProject();
     mockPanelOpen = true;
     currentPending = [makeRequest({ requestId: "r1", sessionId: "sess-1" })];
@@ -266,7 +267,7 @@ describe("UIPendingCenter", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("aria-modal", "false");
     expect(dialog).toHaveAttribute("data-ui-pending-scope", "chat");
-    expect(dialog).toHaveClass("absolute");
+    expect(dialog.parentElement).toHaveClass("fixed");
     expect(dialog).not.toHaveClass("fixed");
     expect(dialog).not.toHaveClass("inset-0");
   });
@@ -294,6 +295,100 @@ describe("UIPendingCenter", () => {
     ];
     render(<UIPendingCenter />);
     expect(screen.getByText("uiPending.pendingRequestsTitle")).toBeInTheDocument();
+  });
+
+  it("bulk allows one-time approval requests without choosing persistent permissions", () => {
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [
+      makeRequest({
+        requestId: "runtime-approval",
+        sessionId: "sess-1",
+        method: "select",
+        options: ["1. Allow once", "2. Always allow: Exact command", "3. Deny once"],
+        permissionMeta: {
+          type: "permission_runtime",
+          requestId: "runtime-approval",
+          provider: "dangerous-command",
+          subject: "command.run",
+          toolCallId: "tool-1",
+        },
+      }),
+      makeRequest({
+        requestId: "path-approval",
+        sessionId: "sess-2",
+        method: "select",
+        options: ["✅ Allow once", "📁 Always allow", "❌ Deny"],
+        permissionMeta: {
+          type: "path_boundary",
+          path: "/tmp/outside.txt",
+          cwd: "/projects/my-project",
+          toolName: "write",
+          scope: "write",
+          relativeTo: "outside project",
+        },
+      }),
+      makeRequest({
+        requestId: "plain-question",
+        sessionId: "sess-1",
+        method: "input",
+        title: "Needs text",
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+    fireEvent.click(screen.getByRole("button", { name: /uiPending\.batchAllowOnce/ }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("runtime-approval", {
+      value: "1. Allow once",
+    });
+    expect(mockRespondById).toHaveBeenCalledWith("path-approval", {
+      value: "✅ Allow once",
+    });
+    expect(mockRespondById).not.toHaveBeenCalledWith("plain-question", expect.anything());
+  });
+
+  it("bulk denies one-time approval requests and hook confirmations", () => {
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [
+      makeRequest({
+        requestId: "runtime-approval",
+        sessionId: "sess-1",
+        method: "select",
+        options: ["1. Allow once", "2. Always allow: Exact command", "3. Deny once"],
+        permissionMeta: {
+          type: "permission_runtime",
+          requestId: "runtime-approval",
+          provider: "dangerous-command",
+          subject: "command.run",
+          toolCallId: "tool-1",
+        },
+      }),
+      makeRequest({
+        requestId: "hook-confirm",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Hook approval",
+        hookMeta: {
+          toolName: "bash",
+          matcher: "npm *",
+          command: "npm run build",
+          hookCommand: "bash ~/.pi/hooks/pre-tool-use.sh",
+          eventName: "PreToolUse",
+          source: "project",
+          reason: "Needs approval",
+        },
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+    fireEvent.click(screen.getByRole("button", { name: /uiPending\.batchDenyOnce/ }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("runtime-approval", {
+      value: "3. Deny once",
+    });
+    expect(mockDismissById).toHaveBeenCalledWith("hook-confirm");
   });
 
   it("uses the unified session jump and closes modal on goto session click", () => {
@@ -849,6 +944,31 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(document.querySelector('[data-ui-request-id="r1"]')).toBeInTheDocument();
   });
 
+  it("shows auto-deny timeout for active-session hook approval requests", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "hook-timeout",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Hook permission",
+        message: "Allow this command?",
+        timeout: 60_000,
+        hookMeta: {
+          toolName: "bash",
+          matcher: "npm *",
+          command: "npm run build",
+          reason: "Needs approval",
+        },
+      }),
+    ];
+
+    setupProject();
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Hook permission")).toBeInTheDocument();
+    expect(screen.getByText('uiCard.autoDeny {"seconds":60}')).toBeInTheDocument();
+  });
+
   it("can dock active-session requests above the composer instead of in document flow", () => {
     currentPending = [
       makeRequest({
@@ -1200,6 +1320,33 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(screen.getByText("/opt/∗∗")).toBeInTheDocument();
   });
 
+  it("shows auto-deny timeout on pending hook confirm cards", () => {
+    const block: UIInteractionBlock = {
+      type: "uiInteraction",
+      id: "hook-confirm-1",
+      method: "confirm",
+      status: "pending",
+      title: "Bash confirmation",
+      message: "Allow this command?",
+      timeout: 60_000,
+      hookMeta: {
+        toolName: "bash",
+        matcher: "npm *",
+        command: "npm run build",
+        hookCommand: "bash ~/.pi/hooks/pre-tool-use.sh",
+        eventName: "PreToolUse",
+        source: "project",
+        reason: "Needs approval",
+      },
+    };
+
+    render(<ConfirmCard block={block} />);
+
+    expect(screen.getByText("Bash confirmation")).toBeInTheDocument();
+    expect(screen.getByText("npm run build")).toBeInTheDocument();
+    expect(screen.getByText('uiCard.autoDeny {"seconds":60}')).toBeInTheDocument();
+  });
+
   it("does not render pending requests from other sessions in the runtime action area", () => {
     setupProject();
     currentPending = [
@@ -1467,6 +1614,35 @@ describe("UIPendingCenter subagent request recovery", () => {
     expect(screen.getByText("uiPending.fromSession")).toBeInTheDocument();
     expect(screen.getAllByText("uiPending.subtaskSource").length).toBeGreaterThan(0);
     expect(screen.getByText("↳ uiPending.subtaskSource")).toBeInTheDocument();
+  });
+
+  it("bulk handles current-project subagent approval requests", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "subagent-runtime-approval",
+        sessionId: "sess_sub_001",
+        method: "select",
+        title: "Child runtime approval",
+        options: ["1. Allow once", "2. Always allow: Exact command", "3. Deny once"],
+        permissionMeta: {
+          type: "permission_runtime",
+          requestId: "subagent-runtime-approval",
+          provider: "dangerous-command",
+          subject: "command.run",
+          toolCallId: "tool-1",
+        },
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+    expect(screen.getByTitle(/uiPending\.pendingRequestsCount/i)).toHaveTextContent("1");
+    expect(screen.getByText("↳ uiPending.subtaskSource")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /uiPending\.batchAllowOnce/ }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("subagent-runtime-approval", {
+      value: "1. Allow once",
+    });
   });
 
   it("keeps project pending visible for live child requests before subagent list is restored", () => {

@@ -1,0 +1,37 @@
+{
+  "slug": "editor-card",
+  "schemaVersion": 2,
+  "name": "EditorCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    {
+      "type": "interaction",
+      "evidence": "Code editor request embedded in chat for user to write/edit code"
+    }
+  ],
+  "variantDimensions": [
+    { "name": "language", "values": ["typescript", "python", "json", "other"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Code Editor",
+      "traits": {
+        "language": "typescript",
+        "label": "Edit the handler function",
+        "initialCode": "function handle() {}"
+      },
+      "whySelected": "Code editing request",
+      "childrenDigest": "Label + code editor area + submit button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["label", "language-badge", "editor-area", "submit-button"],
+    "structurePatterns": ["stacked-label-content-actions"]
+  },
+  "usageHints": { "priorityHint": 36, "context": "Agent requesting code editing from user" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Full code editor embedded in chat card, language badge, syntax highlighting"
+}

@@ -49,6 +49,19 @@ pi-momo-fork/packages/coding-agent/
 - `yalc push` 后如果 `bun run dev:web` 已经在跑，新创建的 Agent 进程会读取更新后的 `dist/`；已经运行中的 Agent/CLI 进程需要 `agent.reload`、停止后重启 session，或重启 dev server 才会加载新的 extension 代码。
 - 修改底层包后至少验证三层：底层相关单测（例如 `npm test -- extensions/coordinator/handler.test.ts`）、`npm run build && yalc push`、消费项目端口健康检查（默认 `http://localhost:3100/` 和 `http://localhost:5173/`）。
 
+### Session Context / Compaction Flow
+
+- 正常聊天、手动 `/compact`、自动压缩、multi-compaction extension、memory/rules 注入、rollback/delete/leaf pointer 相关改动，先读 `docs/architecture/session-context-and-compaction-flow.md`。
+- LLM 可见历史的统一边界是 fork 里的 `materializeSessionContextEntries()` 和 `buildSessionContext()`；压缩准备必须复用同一套 effective-history 语义，不要从 raw `branchEntries` 另写一套解释逻辑。
+- `session_before_compact` 扩展要优先使用 `preparation` 里的有效历史；`branchEntries` 只作为审计/诊断/raw 数据使用，除非扩展明确重新应用同样的 materialization 规则。
+- 改到 `SessionManager.buildSessionContext()`、`materializeSessionContextEntries()`、`AgentSession.prompt()`、`AgentSession.compact()`、auto-compaction、`input` / `before_agent_start` / `context` / `before_provider_request` / `session_before_compact` / `session_compact` hooks、provider payload 转换或 context diagnostics 时，必须同步更新该文档和对应测试。
+
+### Model Tier Scope
+
+- Fast / Pro / Max 模型档位配置先读 `docs/architecture/model-tier-scope-contract.md`。
+- 产品语义只有两层：全局默认和会话覆盖。不要新增或恢复 project-level tier mapping；新会话/分叉可复制来源会话配置，但仍然是目标会话自己的覆盖配置。
+- 改到 `use-tier-store`、模型设置面板、侧边栏 Tier 选择、session/fork 创建继承、Agent switch tier 或 `agent.setTierModels` hydration 时，必须同步更新该文档和对应测试。
+
 ### Desktop dev 启动方式
 
 - Web/HMR 与 App Server 默认分开看：`bun run dev:web` 会同时启动 Vite `http://localhost:5173` 和 server `http://localhost:3100`；若它们已经在跑，不要重复启动一组新进程。

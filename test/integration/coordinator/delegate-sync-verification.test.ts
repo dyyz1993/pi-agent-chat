@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { buildDelegateSyncTimeoutRecoveryText } from "../../../src/shared/agent/coordinator-delegate-operations";
 
 type SyncResult = {
   sessionId: string;
@@ -93,7 +94,11 @@ class SyncDelegateTestHarness {
           sessionId: newSessionId,
           status: "timeout",
           exitCode: 1,
-          finalText: "(timed out)",
+          finalText: buildDelegateSyncTimeoutRecoveryText({
+            sessionId: newSessionId,
+            timeoutMs,
+            lastText: this.syncDelegateLastText.get(newSessionId),
+          }),
         });
       }, timeoutMs);
 
@@ -246,7 +251,9 @@ describe("session_delegate_sync — Full Flow Verification", () => {
 
         expect(result.status).toBe("timeout");
         expect(result.exitCode).toBe(1);
-        expect(result.finalText).toBe("(timed out)");
+        expect(result.finalText).toContain(`子会话 ID: \`${childId}\``);
+        expect(result.finalText).toContain("session_delegate_status");
+        expect(result.finalText).toContain("session_delegate_stop");
         expect(result.sessionId).toBe(childId);
         expect(harness.syncDelegateResolvers.has(childId)).toBe(false);
         expect(harness.subagentSyncChildren.has(childId)).toBe(false);

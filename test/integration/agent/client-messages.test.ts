@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   getFullMessagesOperation,
+  getFullMessagesAroundOperation,
+  getMessageNavPageOperation,
   getMessagesOperation,
 } from "../../../src/shared/agent/agent-client-message-operations";
 
@@ -97,6 +99,225 @@ describe("agent client message operations", () => {
       "user",
     ]);
     expect(result.totalCount).toBe(3);
+  });
+
+  it("limits custom entries to the requested message page window", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "old user"),
+        customEntry("c1", "m1", "bash_background_process"),
+        messageEntry("m2", "c1", "assistant", "old assistant"),
+        customEntry("c2", "m2", "bash_background_process"),
+        messageEntry("m3", "c2", "user", "new user"),
+        customEntry("c3", "m3", "bash_background_process"),
+        messageEntry("m4", "c3", "assistant", "new assistant"),
+        customEntry("c4", "m4", "bash_background_process"),
+      ].join("\n"),
+    );
+    const leafIds = new Map<string, string | null>([["sess-1", "c4"]]);
+
+    const latest = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds,
+      pagination: { limit: 2 },
+    });
+
+    expect(latest.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["m3", "m4"]);
+    expect(latest.customEntries.map((entry) => entry.id)).toEqual(["c3", "c4"]);
+    expect(latest.nextCursor).toBe("m3");
+
+    const previous = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds,
+      pagination: {
+        limit: 2,
+        afterEntryId: latest.nextCursor ?? undefined,
+      },
+    });
+
+    expect(previous.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["m1", "m2"]);
+    expect(previous.customEntries.map((entry) => entry.id)).toEqual(["c1", "c2"]);
+  });
+
+  it("loads the oldest page directly without including later custom entries", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "old user"),
+        customEntry("c1", "m1", "bash_background_process"),
+        messageEntry("m2", "c1", "assistant", "old assistant"),
+        customEntry("c2", "m2", "bash_background_process"),
+        messageEntry("m3", "c2", "user", "new user"),
+        customEntry("c3", "m3", "bash_background_process"),
+        messageEntry("m4", "c3", "assistant", "new assistant"),
+        customEntry("c4", "m4", "bash_background_process"),
+      ].join("\n"),
+    );
+    const leafIds = new Map<string, string | null>([["sess-1", "c4"]]);
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds,
+      pagination: { limit: 2, fromStart: true },
+    });
+
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["m1", "m2"]);
+    expect(result.customEntries.map((entry) => entry.id)).toEqual(["c1", "c2"]);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("returns lightweight paginated messages for the side nav index", async () => {
+    const largeText = "large-output ".repeat(2_000);
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "old user prompt"),
+        jsonlEntry({
+          id: "m2",
+          parentId: "m1",
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "text", text: largeText },
+              {
+                type: "toolCall",
+                id: "tc-bash",
+                name: "bash",
+                arguments: { command: "printf huge" },
+              },
+            ],
+          },
+        }),
+        toolResultEntry("m3", "m2", "tc-bash", "bash", largeText),
+        messageEntry("m4", "m3", "assistant", "new assistant"),
+      ].join("\n"),
+    );
+
+    const result = await getMessageNavPageOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map([["sess-1", "m4"]]),
+      pagination: { limit: 3 },
+    });
+
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual([
+      "m2",
+      "m3",
+      "m4",
+    ]);
+    expect(JSON.stringify(result.messages)).not.toContain("large-output");
+    expect(JSON.stringify(result.messages)).not.toContain("printf huge");
+    expect(result.nextCursor).toBe("m2");
+    expect(result.hasMore).toBe(true);
+  });
+
+  it("loads a full message window around a side nav target entry", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "one"),
+        customEntry("c1", "m1", "bash_background_process"),
+        messageEntry("m2", "c1", "assistant", "two"),
+        customEntry("c2", "m2", "bash_background_process"),
+        messageEntry("m3", "c2", "user", "three"),
+        customEntry("c3", "m3", "bash_background_process"),
+        messageEntry("m4", "c3", "assistant", "four"),
+        customEntry("c4", "m4", "bash_background_process"),
+        messageEntry("m5", "c4", "user", "five"),
+        customEntry("c5", "m5", "bash_background_process"),
+      ].join("\n"),
+    );
+
+    const result = await getFullMessagesAroundOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      targetEntryId: "m3",
+      before: 1,
+      after: 1,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map([["sess-1", "c5"]]),
+    });
+
+    expect(result.targetFound).toBe(true);
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual([
+      "m2",
+      "m3",
+      "m4",
+    ]);
+    expect(result.customEntries.map((entry) => entry.id)).toEqual(["c2", "c3"]);
+    expect(result.beforeCursor).toBe("m2");
+    expect(result.afterCursor).toBe("m4");
+    expect(result.hasMoreBefore).toBe(true);
+    expect(result.hasMoreAfter).toBe(true);
+  });
+
+  it("returns an empty focus window when the target entry is not in the active branch", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "root"),
+        messageEntry("m2", "m1", "assistant", "kept branch"),
+        messageEntry("m3", "m1", "assistant", "rolled away branch"),
+      ].join("\n"),
+    );
+
+    const result = await getFullMessagesAroundOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      targetEntryId: "m3",
+      before: 1,
+      after: 1,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map([["sess-1", "m2"]]),
+    });
+
+    expect(result.targetFound).toBe(false);
+    expect(result.messages).toEqual([]);
+    expect(result.customEntries).toEqual([]);
+  });
+
+  it("limits custom entries by file order when no leaf pointer exists", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "old user"),
+        customEntry("c1", "m1", "bash_background_process"),
+        messageEntry("m2", "c1", "assistant", "old assistant"),
+        customEntry("c2", "m2", "bash_background_process"),
+        messageEntry("m3", "c2", "user", "new user"),
+        customEntry("c3", "m3", "bash_background_process"),
+        messageEntry("m4", "c3", "assistant", "new assistant"),
+        customEntry("c4", "m4", "bash_background_process"),
+      ].join("\n"),
+    );
+
+    const latest = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+      pagination: { limit: 2 },
+    });
+
+    expect(latest.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["m3", "m4"]);
+    expect(latest.customEntries.map((entry) => entry.id)).toEqual(["c3", "c4"]);
   });
 
   it("merges streaming in-memory messages without duplicating persisted user text", async () => {
@@ -349,10 +570,7 @@ describe("agent client message operations", () => {
   it("getMessages reads active SDK messages and filters JSONL custom entries by leaf path", async () => {
     writeFileSync(
       sessionPath,
-      [
-        customEntry("c1", "m1", "on-path"),
-        customEntry("c2", "other", "off-path"),
-      ].join("\n"),
+      [customEntry("c1", "m1", "on-path"), customEntry("c2", "other", "off-path")].join("\n"),
     );
     const leafIds = new Map<string, string | null>();
     const managed = {
@@ -389,10 +607,9 @@ describe("agent client message operations", () => {
   it("getMessages reads inactive JSONL messages and custom entries", async () => {
     writeFileSync(
       sessionPath,
-      [
-        messageEntry("m1", null, "user", "hello"),
-        customEntry("c1", "m1", "file-review-turn"),
-      ].join("\n"),
+      [messageEntry("m1", null, "user", "hello"), customEntry("c1", "m1", "file-review-turn")].join(
+        "\n",
+      ),
     );
 
     const result = await getMessagesOperation({
@@ -408,9 +625,7 @@ describe("agent client message operations", () => {
       leafIds: new Map([["sess-1", "c1"]]),
     });
 
-    expect(result.messages.map((message) => (message as { role?: string }).role)).toEqual([
-      "user",
-    ]);
+    expect(result.messages.map((message) => (message as { role?: string }).role)).toEqual(["user"]);
     expect(result.customEntries.map((entry) => entry.customType)).toEqual(["file-review-turn"]);
   });
 });

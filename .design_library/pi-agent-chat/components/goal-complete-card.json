@@ -1,0 +1,26 @@
+{
+  "slug": "goal-complete-card",
+  "schemaVersion": 2,
+  "name": "GoalCompleteCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [{ "type": "status", "evidence": "Goal completion celebration card" }],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Complete",
+      "traits": { "goal": "All tests passing", "duration": "45s", "actions": 3 },
+      "whySelected": "Completed goal summary",
+      "childrenDigest": "Success icon + goal text + duration + action count"
+    }
+  ],
+  "anatomy": {
+    "parts": ["success-icon", "goal-text", "stats", "actions"],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 16, "context": "Goal completion display" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Green success accent, compact stat row showing duration and action count"
+}

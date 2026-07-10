@@ -117,7 +117,7 @@ export function getPreviewResourceIcon(resourceType: string): ToolIconEntry {
 
 const USER_ENTRY: ToolIconEntry = {
   icon: User,
-  color: "text-semantic-accent",
+  color: "text-accent",
   label: "User",
 };
 
@@ -165,7 +165,7 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
 };
 
 const UI_METHOD_ICON_MAP: Record<string, ToolIconEntry> = {
-  askUserQuestion: { icon: MessageCircleQuestion, color: "text-semantic-accent", label: "询问" },
+  askUserQuestion: { icon: MessageCircleQuestion, color: "text-accent", label: "询问" },
   confirm: { icon: CircleCheckBig, color: "text-status-success", label: "确认" },
   select: { icon: ListChecks, color: "text-status-info", label: "选择" },
   input: { icon: TextCursorInput, color: "text-status-warning", label: "输入" },

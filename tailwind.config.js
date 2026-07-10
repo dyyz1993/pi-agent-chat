@@ -33,13 +33,20 @@ export default {
           accent: tokenColor("--color-accent"),
         },
         accent: {
-          default: tokenColor("--color-accent"),
+          DEFAULT: tokenColor("--color-accent"),
           hover: tokenColor("--color-accent-hover"),
           muted: "var(--color-accent-muted)",
           text: tokenColor("--color-accent-text"),
           brand: tokenColor("--color-accent-brand"),
           idle: tokenColor("--color-accent-idle"),
           agent: tokenColor("--color-accent-agent"),
+        },
+        /* Runtime/connection type colors (fixed, theme-independent) */
+        runtime: {
+          ssh: "rgb(var(--runtime-ssh) / <alpha-value>)",
+          sandbox: "rgb(var(--runtime-sandbox) / <alpha-value>)",
+          docker: "rgb(var(--runtime-docker) / <alpha-value>)",
+          local: "rgb(var(--runtime-local) / <alpha-value>)",
         },
         /* Semantic status colors (RGB format for opacity support) */
         status: {

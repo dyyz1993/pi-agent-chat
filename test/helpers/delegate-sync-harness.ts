@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { buildDelegateSyncTimeoutRecoveryText } from "../../src/shared/agent/coordinator-delegate-operations";
 
 export type SyncResult = {
   sessionId: string;
@@ -160,7 +161,11 @@ export class SyncDelegateHarness {
           sessionId: newSessionId,
           status: "timeout",
           exitCode: 1,
-          finalText: "(timed out)",
+          finalText: buildDelegateSyncTimeoutRecoveryText({
+            sessionId: newSessionId,
+            timeoutMs,
+            lastText: this.syncDelegateLastText.get(newSessionId),
+          }),
         });
       }, timeoutMs);
 
@@ -338,7 +343,9 @@ export class SyncDelegateHarness {
   }
 }
 
-export function createMockDeps(): DelegateSyncDeps & { _mocks: Record<string, ReturnType<typeof vi.fn>> } {
+export function createMockDeps(): DelegateSyncDeps & {
+  _mocks: Record<string, ReturnType<typeof vi.fn>>;
+} {
   const start = vi.fn().mockResolvedValue({ status: "started" });
   const send = vi.fn();
   const setSessionName = vi.fn().mockResolvedValue(undefined);

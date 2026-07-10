@@ -26,10 +26,16 @@ export interface CompactionEntry {
   timestamp: number;
 }
 
+export interface DeletionEntry {
+  entryId: string;
+  targetIds: string[];
+}
+
 export interface FullMessageAccumulator {
   allMessages: EntryMessage[];
   allCustomEntries: UiCustomEntry[];
   allCompactionEntries: CompactionEntry[];
+  allDeletionEntries: DeletionEntry[];
   parentById: Map<string, string | null>;
   lastJsonlLeafPointer: string | null;
   activeJsonlLeafId: string | null;
@@ -47,11 +53,21 @@ export interface PaginatedMessages {
   nextCursor: string | null;
 }
 
+export interface AroundEntryMessages {
+  slicedMessages: unknown[];
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+  beforeCursor: string | null;
+  afterCursor: string | null;
+  targetFound: boolean;
+}
+
 function createFullMessageAccumulator(): FullMessageAccumulator {
   return {
     allMessages: [],
     allCustomEntries: [],
     allCompactionEntries: [],
+    allDeletionEntries: [],
     parentById: new Map(),
     lastJsonlLeafPointer: null,
     activeJsonlLeafId: null,
@@ -185,6 +201,13 @@ export function appendFullJsonlEntry(
       timestamp: compactionMessage.timestamp,
     });
     accumulator.allMessages.push({ entryId, message: compactionMessage });
+  } else if (parsed.type === "deletion") {
+    accumulator.allDeletionEntries.push({
+      entryId,
+      targetIds: Array.isArray(parsed.targetIds)
+        ? parsed.targetIds.filter((targetId): targetId is string => typeof targetId === "string")
+        : [],
+    });
   }
 }
 
@@ -248,6 +271,7 @@ function accumulatorFromCache(hit: SessionCacheHit): FullMessageAccumulator {
     allMessages: hit.messages,
     allCustomEntries: hit.customEntries,
     allCompactionEntries: hit.compactionEntries,
+    allDeletionEntries: hit.deletionEntries ?? [],
     parentById: hit.parentById,
     lastJsonlLeafPointer: hit.lastJsonlLeafPointer,
     activeJsonlLeafId: hit.activeJsonlLeafId,
@@ -263,6 +287,7 @@ function cacheDataFromAccumulator(
     messages: [...accumulator.allMessages],
     customEntries: [...accumulator.allCustomEntries],
     compactionEntries: [...accumulator.allCompactionEntries],
+    deletionEntries: [...accumulator.allDeletionEntries],
     parentById: new Map(accumulator.parentById),
     lastJsonlLeafPointer: accumulator.lastJsonlLeafPointer,
     activeJsonlLeafId: accumulator.activeJsonlLeafId,
@@ -418,13 +443,15 @@ export function buildBranchPathIds(
 export function filterMessagesToBranch(options: {
   allMessages: EntryMessage[];
   allCustomEntries: UiCustomEntry[];
+  allDeletionEntries?: DeletionEntry[];
   parentById: Map<string, string | null>;
   leafId: string | null;
 }): BranchFilteredMessages {
   const pathIds = buildBranchPathIds(options.parentById, options.leafId);
+  const deletedIds = collectDeletedEntryIds(options.allDeletionEntries ?? [], pathIds);
   if (!pathIds) {
     return {
-      filteredMessages: options.allMessages,
+      filteredMessages: options.allMessages.filter((message) => !deletedIds.has(message.entryId)),
       customEntries: options.allCustomEntries,
       leafFound:
         !options.leafId || options.parentById.size === 0 || options.parentById.has(options.leafId),
@@ -432,12 +459,128 @@ export function filterMessagesToBranch(options: {
   }
   const COMPACTION_CUSTOM_TYPES = new Set(["compaction_fold", "compaction_snip"]);
   return {
-    filteredMessages: options.allMessages.filter((message) => pathIds.has(message.entryId)),
+    filteredMessages: options.allMessages.filter(
+      (message) => pathIds.has(message.entryId) && !deletedIds.has(message.entryId),
+    ),
     customEntries: options.allCustomEntries.filter(
       (entry) => pathIds.has(entry.id) && !COMPACTION_CUSTOM_TYPES.has(entry.customType),
     ),
     leafFound: true,
   };
+}
+
+function collectDeletedEntryIds(
+  deletionEntries: DeletionEntry[],
+  pathIds: Set<string> | null,
+): Set<string> {
+  const deletedIds = new Set<string>();
+  for (const entry of deletionEntries) {
+    if (pathIds && !pathIds.has(entry.entryId)) continue;
+    for (const targetId of entry.targetIds) {
+      deletedIds.add(targetId);
+    }
+  }
+  return deletedIds;
+}
+
+export function filterCustomEntriesToPaginatedMessages(options: {
+  customEntries: UiCustomEntry[];
+  messages: unknown[];
+  allMessageEntryIds?: string[];
+  limit?: number;
+  afterEntryId?: string;
+  fromStart?: boolean;
+  parentById: Map<string, string | null>;
+  leafId: string | null;
+}): UiCustomEntry[] {
+  if (options.limit === undefined) return options.customEntries;
+  if (options.messages.length === 0) return [];
+
+  const pathOrder = new Map<string, number>();
+  const path: string[] = [];
+  if (options.leafId && options.parentById.has(options.leafId)) {
+    let curId: string | null = options.leafId;
+    while (curId) {
+      path.push(curId);
+      curId = options.parentById.get(curId) ?? null;
+    }
+    path.reverse();
+  } else {
+    path.push(...options.parentById.keys());
+  }
+  path.forEach((id, index) => pathOrder.set(id, index));
+
+  let min = Number.POSITIVE_INFINITY;
+  let messageMax = Number.NEGATIVE_INFINITY;
+  for (const message of options.messages) {
+    if (!isRecord(message) || typeof message.entryId !== "string") continue;
+    const order = pathOrder.get(message.entryId);
+    if (order === undefined) continue;
+    min = Math.min(min, order);
+    messageMax = Math.max(messageMax, order);
+  }
+  if (!Number.isFinite(min)) return [];
+  const cursorOrder =
+    typeof options.afterEntryId === "string" ? pathOrder.get(options.afterEntryId) : undefined;
+  const nextMessageOrderAfterWindow =
+    options.fromStart === true
+      ? (options.allMessageEntryIds ?? [])
+          .map((entryId) => pathOrder.get(entryId))
+          .filter((order): order is number => order !== undefined && order > messageMax)
+          .sort((a, b) => a - b)[0]
+      : undefined;
+  const max =
+    options.fromStart === true
+      ? nextMessageOrderAfterWindow !== undefined
+        ? nextMessageOrderAfterWindow - 1
+        : pathOrder.size - 1
+      : cursorOrder === undefined
+        ? pathOrder.size - 1
+        : cursorOrder - 1;
+
+  return options.customEntries.filter((entry) => {
+    const order = pathOrder.get(entry.id);
+    return order !== undefined && order >= min && order <= max;
+  });
+}
+
+export function filterCustomEntriesToMessageWindow(options: {
+  customEntries: UiCustomEntry[];
+  messages: unknown[];
+  parentById: Map<string, string | null>;
+  leafId: string | null;
+}): UiCustomEntry[] {
+  if (options.messages.length === 0) return [];
+
+  const pathOrder = new Map<string, number>();
+  const path: string[] = [];
+  if (options.leafId && options.parentById.has(options.leafId)) {
+    let curId: string | null = options.leafId;
+    while (curId) {
+      path.push(curId);
+      curId = options.parentById.get(curId) ?? null;
+    }
+    path.reverse();
+  } else {
+    path.push(...options.parentById.keys());
+  }
+  path.forEach((id, index) => pathOrder.set(id, index));
+
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const message of options.messages) {
+    if (!isRecord(message) || typeof message.entryId !== "string") continue;
+    const order = pathOrder.get(message.entryId);
+    if (order === undefined) continue;
+    min = Math.min(min, order);
+    max = Math.max(max, order);
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
+
+  return options.customEntries.filter((entry) => {
+    const order = pathOrder.get(entry.id);
+    return order !== undefined && order >= min && order <= max;
+  });
 }
 
 export function injectEntryId(entry: EntryMessage): unknown {
@@ -539,8 +682,9 @@ export function paginateEntryMessages(options: {
   filteredMessages: EntryMessage[];
   limit?: number;
   afterEntryId?: string;
+  fromStart?: boolean;
 }): PaginatedMessages {
-  const { filteredMessages, limit, afterEntryId } = options;
+  const { filteredMessages, limit, afterEntryId, fromStart } = options;
   const totalCount = filteredMessages.length;
   const cursorIndex =
     afterEntryId != null
@@ -549,6 +693,18 @@ export function paginateEntryMessages(options: {
 
   if (afterEntryId != null && cursorIndex < 0) {
     return { slicedMessages: [], hasMore: false, nextCursor: null };
+  }
+
+  if (limit !== undefined && fromStart === true) {
+    const startIndex = 0;
+    const endIndex = Math.min(totalCount, limit);
+    return {
+      slicedMessages: expandToolPairWindow(filteredMessages, startIndex, endIndex).map(
+        injectEntryId,
+      ),
+      hasMore: false,
+      nextCursor: null,
+    };
   }
 
   if (limit !== undefined) {
@@ -569,5 +725,42 @@ export function paginateEntryMessages(options: {
     slicedMessages: filteredMessages.map(injectEntryId),
     hasMore: false,
     nextCursor: null,
+  };
+}
+
+export function getEntryMessageWindowAround(options: {
+  filteredMessages: EntryMessage[];
+  targetEntryId: string;
+  before?: number;
+  after?: number;
+}): AroundEntryMessages {
+  const { filteredMessages, targetEntryId } = options;
+  const targetIndex = filteredMessages.findIndex((entry) => entry.entryId === targetEntryId);
+  if (targetIndex < 0) {
+    return {
+      slicedMessages: [],
+      hasMoreBefore: false,
+      hasMoreAfter: false,
+      beforeCursor: null,
+      afterCursor: null,
+      targetFound: false,
+    };
+  }
+
+  const before = Math.max(0, Math.floor(options.before ?? 25));
+  const after = Math.max(0, Math.floor(options.after ?? 25));
+  const startIndex = Math.max(0, targetIndex - before);
+  const endIndex = Math.min(filteredMessages.length, targetIndex + after + 1);
+  const slicedEntries = expandToolPairWindow(filteredMessages, startIndex, endIndex);
+  const firstEntry = slicedEntries[0];
+  const lastEntry = slicedEntries[slicedEntries.length - 1];
+
+  return {
+    slicedMessages: slicedEntries.map(injectEntryId),
+    hasMoreBefore: startIndex > 0,
+    hasMoreAfter: endIndex < filteredMessages.length,
+    beforeCursor: firstEntry?.entryId ?? null,
+    afterCursor: lastEntry?.entryId ?? null,
+    targetFound: true,
   };
 }

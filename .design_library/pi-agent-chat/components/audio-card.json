@@ -1,0 +1,34 @@
+{
+  "slug": "audio-card",
+  "schemaVersion": 2,
+  "name": "AudioCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "media", "evidence": "Audio player card with waveform and controls" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["loading", "playing", "paused"] }],
+  "representativeVariants": [
+    {
+      "name": "Playing",
+      "traits": { "state": "playing", "duration": "3:45", "currentTime": "1:23" },
+      "whySelected": "Active audio playback",
+      "childrenDigest": "Waveform visualization + play/pause + progress bar + time"
+    },
+    {
+      "name": "Paused",
+      "traits": { "state": "paused", "duration": "3:45" },
+      "whySelected": "Paused audio",
+      "childrenDigest": "Waveform + play button + progress bar"
+    }
+  ],
+  "anatomy": {
+    "parts": ["waveform", "play-pause-button", "progress-bar", "time-display"],
+    "structurePatterns": ["media-controls"]
+  },
+  "usageHints": { "priorityHint": 46, "context": "Audio playback in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Compact audio player, waveform visualization, progress bar with accent color"
+}

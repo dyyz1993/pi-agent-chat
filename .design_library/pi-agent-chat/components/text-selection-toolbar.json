@@ -1,0 +1,31 @@
+{
+  "slug": "text-selection-toolbar",
+  "schemaVersion": 2,
+  "name": "TextSelectionToolbar",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "toolbar",
+      "evidence": "Floating toolbar on text selection with copy and quote actions"
+    }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Toolbar",
+      "traits": { "actions": ["Copy", "Quote"] },
+      "whySelected": "Text selection toolbar",
+      "childrenDigest": "Floating bar + Copy button + Quote button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["toolbar-bar", "copy-button", "quote-button", "positioning"],
+    "structurePatterns": ["floating-toolbar"]
+  },
+  "usageHints": { "priorityHint": 68, "context": "Text selection actions in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Fixed-position floating bar, appears on text selection, rounded-lg, shadow-3, compact 36px height, 226px width"
+}

@@ -19,5 +19,8 @@
   "saving": "Saving...",
   "save": "Save",
   "saved": "Saved",
-  "saveFailed": "Save failed"
+  "saveFailed": "Save failed",
+  "zoomIn": "Zoom in",
+  "zoomOut": "Zoom out",
+  "zoomReset": "Reset zoom"
 }

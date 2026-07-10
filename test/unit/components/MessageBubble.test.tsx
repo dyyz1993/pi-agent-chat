@@ -5,6 +5,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryCard } from "../../../src/mainview/components/chat/MemoryCard";
+import {
+  buildAssistantRenderItems,
+  MessageBubble,
+  TOOL_BLOCK_RENDER_WINDOW_SIZE,
+} from "../../../src/mainview/components/chat/MessageBubble";
 import { TextContentCard } from "../../../src/mainview/components/chat/TextContentCard";
 import { ToolExecutionCard } from "../../../src/mainview/components/chat/ToolExecutionCard";
 import { ReadFileCard } from "../../../src/mainview/components/chat/tool-renderers/ReadFileCard";
@@ -12,6 +17,7 @@ import { useChatOverlayStore } from "../../../src/mainview/stores/use-chat-overl
 import { useExplorerStore } from "../../../src/mainview/stores/use-explorer-store";
 import { useMemoryStore } from "../../../src/mainview/stores/use-memory-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import type { ChatMessage, ContentBlock } from "../../../src/mainview/types";
 
 vi.mock("react-i18next", () => ({
   initReactI18next: {
@@ -40,6 +46,106 @@ afterEach(() => {
 });
 
 describe("extracted message bubble components", () => {
+  const makeToolBlock = (
+    index: number,
+    overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {},
+  ): Extract<ContentBlock, { type: "toolExecution" }> => ({
+    type: "toolExecution",
+    toolCallId: `tool-${index}`,
+    toolName: "bash",
+    args: `echo ${index}`,
+    status: "done",
+    output: `output ${index}`,
+    ...overrides,
+  });
+
+  it("windows older tool blocks before rendering assistant messages", () => {
+    const content = Array.from({ length: TOOL_BLOCK_RENDER_WINDOW_SIZE + 10 }, (_, index) =>
+      makeToolBlock(index),
+    );
+
+    const items = buildAssistantRenderItems({
+      content,
+      uiBlockMap: new Map(),
+    });
+
+    const collapsedGroups = items.filter((item) => item.kind === "collapsed-tools");
+    const renderedBlocks = items.filter((item) => item.kind === "block");
+    expect(collapsedGroups).toHaveLength(1);
+    expect(
+      collapsedGroups[0]?.kind === "collapsed-tools" && collapsedGroups[0].blocks,
+    ).toHaveLength(10);
+    expect(renderedBlocks).toHaveLength(TOOL_BLOCK_RENDER_WINDOW_SIZE);
+  });
+
+  it("does not create a collapsed tool group for hidden tool call settings", () => {
+    const content = Array.from({ length: TOOL_BLOCK_RENDER_WINDOW_SIZE + 10 }, (_, index) =>
+      makeToolBlock(index),
+    );
+
+    const items = buildAssistantRenderItems({
+      content,
+      uiBlockMap: new Map(),
+      showToolCalls: false,
+    });
+
+    expect(items.some((item) => item.kind === "collapsed-tools")).toBe(false);
+  });
+
+  it("keeps running, error, and pending-interaction tool blocks visible", () => {
+    const content = Array.from({ length: TOOL_BLOCK_RENDER_WINDOW_SIZE + 3 }, (_, index) =>
+      makeToolBlock(index),
+    );
+    content[0] = makeToolBlock(0, { status: "running" });
+    content[1] = makeToolBlock(1, { status: "error" });
+    const uiBlockMap = new Map([
+      [
+        "tool-2",
+        {
+          type: "uiInteraction",
+          id: "ui-2",
+          toolCallId: "tool-2",
+          status: "pending",
+          title: "Approval",
+        } as ContentBlock & { type: "uiInteraction" },
+      ],
+    ]);
+
+    const items = buildAssistantRenderItems({ content, uiBlockMap });
+    const renderedToolIds = items
+      .filter((item): item is Extract<typeof item, { kind: "block" }> => item.kind === "block")
+      .map((item) => item.block)
+      .filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      )
+      .map((block) => block.toolCallId);
+
+    expect(renderedToolIds).toContain("tool-0");
+    expect(renderedToolIds).toContain("tool-1");
+    expect(renderedToolIds).toContain("tool-2");
+  });
+
+  it("does not mount older tool card bodies until the collapsed group is expanded", () => {
+    const message: ChatMessage = {
+      id: "assistant-many-tools",
+      role: "assistant",
+      timestamp: Date.now(),
+      content: Array.from({ length: TOOL_BLOCK_RENDER_WINDOW_SIZE + 2 }, (_, index) =>
+        makeToolBlock(index),
+      ),
+    };
+
+    render(<MessageBubble message={message} />);
+
+    expect(screen.getByText("2 older tools")).toBeInTheDocument();
+    expect(screen.queryByText("output 0")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Show all/ }));
+
+    expect(screen.getByText("output 0")).toBeInTheDocument();
+  });
+
   it("opens the markdown overlay for long text content", () => {
     const text = Array.from({ length: 22 }, (_, index) => `line ${index + 1}`).join("\n");
 

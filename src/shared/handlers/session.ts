@@ -173,6 +173,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     let delegateParentSessionId: string | undefined;
     let delegateType: string | undefined;
+    let agent: string | undefined;
 
     for (const line of lines) {
       try {
@@ -186,12 +187,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             delegateParentSessionId:
               (parsed.delegateParentSessionId as string | undefined) ?? delegateParentSessionId,
             delegateType: delegateType ?? null,
+            agent: (parsed.agent as string | undefined) ?? agent,
             createdAt: parsed.timestamp as string | undefined,
           };
         }
         if (parsed.type === "delegate_info" && parsed.delegateParentSessionId) {
           delegateParentSessionId = parsed.delegateParentSessionId as string;
           if (parsed.delegateType) delegateType = parsed.delegateType as string;
+          if (typeof parsed.agent === "string" && parsed.agent.trim()) {
+            agent = parsed.agent;
+          }
         }
       } catch {
         continue;

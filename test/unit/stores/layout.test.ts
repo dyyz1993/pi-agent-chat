@@ -5,9 +5,13 @@ describe("useLayoutStore", () => {
   beforeEach(() => {
     useLayoutStore.setState({
       statusPanel: "hidden",
-      activePanelTab: "changeReview",
+      activePanelTab: "status",
       breakpoint: "desktop",
     });
+  });
+
+  it("uses status as the default right panel tab", () => {
+    expect(useLayoutStore.getState().activePanelTab).toBe("status");
   });
 
   it("opens the right status panel and switches to the requested tab", () => {

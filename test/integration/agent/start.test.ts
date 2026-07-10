@@ -140,6 +140,36 @@ describe("agent start operations", () => {
     expect(options.sessionProjectPaths.get("sess-1")).toBe("/repo");
   });
 
+  it("makes the managed client discoverable before channel registration can receive coordinator calls", async () => {
+    const options = makeOptions();
+    const registrationVisibility: boolean[] = [];
+
+    options.registerAgentChannels = vi.fn((args) => {
+      const sessionId = args.getSessionId();
+      registrationVisibility.push(options.clients.has(sessionId));
+      registrationVisibility.push(options.sessionPaths.get(sessionId) === "/sessions/sess-1.jsonl");
+      registrationVisibility.push(options.sessionProjectPaths.get(sessionId) === "/repo");
+      args.handleCoordinatorCall(
+        sessionId,
+        { __call: "session_delegate_list", invokeId: "probe-1" },
+        "coordinator",
+      );
+      return 3;
+    });
+
+    await expect(startAgentClientOperation(options)).resolves.toEqual({
+      agentId: "sess-1",
+      status: "started",
+    });
+
+    expect(registrationVisibility).toEqual([true, true, true]);
+    expect(options.handleCoordinatorCall).toHaveBeenCalledWith(
+      "sess-1",
+      { __call: "session_delegate_list", invokeId: "probe-1" },
+      "coordinator",
+    );
+  });
+
   it("does not stop a pooled process when starting another session", async () => {
     const pooled = makeManaged("old-session");
     const processByCwd = new Map([["/repo", new Set([pooled])]]);

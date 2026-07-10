@@ -128,3 +128,96 @@ describe("AgentProcessManager.switchTier", () => {
     expect(managed.client.setModel).not.toHaveBeenCalled();
   });
 });
+
+describe("AgentProcessManager model name resolution", () => {
+  let manager: APM;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    manager = new AgentProcessManager(
+      new MockRPCServer() as unknown as Parameters<typeof AgentProcessManager>[0],
+    );
+  });
+
+  it("resolves delegate model aliases from the source session runtime tier models", async () => {
+    const managed = makeManaged({
+      pro: "zhipuai/glm-5.1",
+    });
+    internals(manager).clients.set("parent", {
+      ...managed,
+      info: {
+        ...managed.info,
+        sessionId: "parent",
+        projectPath: "/parent/project",
+      },
+      _activeSessionId: "parent",
+    });
+
+    await expect(
+      manager.resolveModelName("pro", {
+        parentSessionId: "parent",
+        projectPath: "/target/project",
+      }),
+    ).resolves.toEqual({ provider: "zhipuai", modelId: "glm-5.1" });
+
+    expect(managed.client.send).toHaveBeenCalledWith({ type: "get_tier_models" });
+  });
+
+  it("falls back to runtime tier models when project config is absent", async () => {
+    const managed = makeManaged({
+      pro: "zhipuai/glm-5.1",
+    });
+    internals(manager).clients.set("parent", {
+      ...managed,
+      info: {
+        ...managed.info,
+        sessionId: "parent",
+        projectPath: "/parent/project",
+      },
+      _activeSessionId: "parent",
+    });
+
+    await expect(
+      manager.resolveModelName("pro", {
+        parentSessionId: "parent",
+        projectPath: "/target/project",
+      }),
+    ).resolves.toEqual({ provider: "zhipuai", modelId: "glm-5.1" });
+
+    expect(managed.client.send).toHaveBeenCalledWith({ type: "get_tier_models" });
+  });
+
+  it("sets model from uppercase tier aliases through the shared model path", async () => {
+    const managed = makeManaged({
+      pro: "zhipuai/glm-5.1",
+    });
+    internals(manager).clients.set("parent", {
+      ...managed,
+      info: {
+        ...managed.info,
+        sessionId: "parent",
+        projectPath: "/parent/project",
+      },
+      _activeSessionId: "parent",
+    });
+    internals(manager).clients.set("child", {
+      ...managed,
+      info: {
+        ...managed.info,
+        sessionId: "child",
+        projectPath: "/target/project",
+      },
+      _activeSessionId: "child",
+    });
+
+    await expect(
+      manager.setModelFromName("child", "PRO", {
+        parentSessionId: "parent",
+        projectPath: "/target/project",
+      }),
+    ).resolves.toEqual({ provider: "zhipuai", id: "glm-5.1" });
+
+    expect(managed.client.send).toHaveBeenCalledWith({ type: "get_tier_models" });
+    expect(managed.client.setModel).toHaveBeenCalledWith("zhipuai", "glm-5.1");
+  });
+});

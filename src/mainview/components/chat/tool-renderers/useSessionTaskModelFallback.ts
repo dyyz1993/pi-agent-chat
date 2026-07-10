@@ -7,10 +7,13 @@ export function useSessionTaskModelFallback(): SessionTaskModelInfo {
   const activeProjectPath = useSessionStore(
     (s) => s.projectTabs.find((tab) => tab.id === s.activeProjectId)?.path,
   );
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const currentModel = useSessionStore((s) => s.currentModel);
   const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
   const currentTier = useTierStore((s) =>
-    activeProjectPath ? s.getCurrentTier(activeProjectPath) : null,
+    activeSessionId && activeProjectPath
+      ? s.getCurrentTierForSession(activeSessionId, activeProjectPath)
+      : null,
   );
 
   return useMemo(

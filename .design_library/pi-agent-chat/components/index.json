@@ -1,0 +1,612 @@
+{
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "action",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 1,
+      "keyInsightSeed": "Compact button heights (32/36/40px), blue accent primary, ghost and subtle secondary variants"
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "layout",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 2,
+      "keyInsightSeed": "Subtle border + shadow elevation, tool execution card with colored icon header"
+    },
+    {
+      "slug": "input",
+      "name": "Input",
+      "category": "form",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 3,
+      "keyInsightSeed": "Chat-style multiline input with 16px mobile font-size, focus ring uses accent color"
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "navigation",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 4,
+      "keyInsightSeed": "Icon-only left rail with active state indicator, resizable right panel with handle"
+    },
+    {
+      "slug": "tag",
+      "name": "Tag",
+      "category": "data-display",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 5,
+      "keyInsightSeed": "Semantic color-coded status tags (success/warning/error/info) for tool states"
+    },
+    {
+      "slug": "modal",
+      "name": "Modal",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 2,
+      "priorityHint": 6,
+      "keyInsightSeed": "Dark overlay with centered card, iOS-style toggle switches, segmented control for mode selection"
+    },
+
+    {
+      "slug": "message-card",
+      "name": "MessageCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 10,
+      "keyInsightSeed": "Minimal bubble style: user right-aligned, assistant left-aligned with avatar and agent name tag"
+    },
+    {
+      "slug": "text-content-card",
+      "name": "TextContentCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 11,
+      "keyInsightSeed": "Markdown rendered inline, code blocks with copy button, custom scrollbar for overflow"
+    },
+    {
+      "slug": "error-message-card",
+      "name": "ErrorMessageCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 12,
+      "keyInsightSeed": "Red-tinted background with left border stripe, collapsible stack trace, rounded-lg corners"
+    },
+    {
+      "slug": "thinking-card",
+      "name": "ThinkingCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 13,
+      "keyInsightSeed": "Animated pulse icon, compact inline style, muted text color, duration badge when complete"
+    },
+    {
+      "slug": "compaction-summary-card",
+      "name": "CompactionSummaryCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 14,
+      "keyInsightSeed": "Muted/compact style with info icon, shows count of compacted messages"
+    },
+    {
+      "slug": "goal-action-card",
+      "name": "GoalActionCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 2,
+      "priorityHint": 15,
+      "keyInsightSeed": "Compact inline style with accent color icon, progress indicator for active goals"
+    },
+    {
+      "slug": "goal-complete-card",
+      "name": "GoalCompleteCard",
+      "category": "message",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 16,
+      "keyInsightSeed": "Green success accent, compact stat row showing duration and action count"
+    },
+
+    {
+      "slug": "tool-execution-card",
+      "name": "ToolExecutionCard",
+      "category": "tool-execution",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 20,
+      "keyInsightSeed": "Left border color = tool status (green=done, yellow=running, red=error), collapsible output section, duration badge"
+    },
+    {
+      "slug": "bash-execution-card",
+      "name": "BashExecutionCard",
+      "category": "tool-execution",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 4,
+      "priorityHint": 21,
+      "keyInsightSeed": "Monospace command display, dark code block for output, exit code badge (0=green, non-zero=red), background process with PID and stop button"
+    },
+    {
+      "slug": "read-file-card",
+      "name": "ReadFileCard",
+      "category": "tool-execution",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 22,
+      "keyInsightSeed": "File path as header with language color badge, code block with syntax highlighting and copy action"
+    },
+    {
+      "slug": "write-file-card",
+      "name": "WriteFileCard",
+      "category": "tool-execution",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 23,
+      "keyInsightSeed": "Action-colored icon (green=create, yellow=edit, red=delete), inline diff for edits, content preview for creates"
+    },
+    {
+      "slug": "lsp-execution-card",
+      "name": "LspExecutionCard",
+      "category": "tool-execution",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 4,
+      "priorityHint": 24,
+      "keyInsightSeed": "Compact diagnostic display with error/warning count badges, hover info with monospace type signature"
+    },
+    {
+      "slug": "session-task-card",
+      "name": "SessionTaskCard",
+      "category": "tool-execution",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 25,
+      "keyInsightSeed": "Similar to tool-execution but for session-level tasks, with result summary on completion"
+    },
+    {
+      "slug": "lsp-diagnostics-card",
+      "name": "LspDiagnosticsCard",
+      "category": "diagnostic",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 4,
+      "priorityHint": 30,
+      "keyInsightSeed": "List-based layout, each diagnostic is a row with severity icon, line number, code, and message"
+    },
+
+    {
+      "slug": "memory-card",
+      "name": "MemoryCard",
+      "category": "agent",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 26,
+      "keyInsightSeed": "Teal/cyan accent for memory entries, compact key-value layout, subtle delete action"
+    },
+    {
+      "slug": "bash-background-process-card",
+      "name": "BashBackgroundProcessCard",
+      "category": "agent",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 27,
+      "keyInsightSeed": "Persistent process card in sidebar or panel, PID badge, stop/restart controls, live output preview"
+    },
+    {
+      "slug": "supervisor-continue-card",
+      "name": "SupervisorContinueCard",
+      "category": "agent",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 28,
+      "keyInsightSeed": "Agent-purple accent, step progress list, prominent continue action button"
+    },
+    {
+      "slug": "queue-cards",
+      "name": "QueueCards",
+      "category": "queue",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 29,
+      "keyInsightSeed": "Numbered list with status indicators, active item highlighted, muted for waiting items"
+    },
+
+    {
+      "slug": "card-container",
+      "name": "CardContainer",
+      "category": "primitive",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 6,
+      "priorityHint": 35,
+      "keyInsightSeed": "Primitive container: provides border, background, left/top accent stripe, density variants"
+    },
+    {
+      "slug": "tool-card-header",
+      "name": "ToolCardHeader",
+      "category": "primitive",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 36,
+      "keyInsightSeed": "Status-colored icon (green check, yellow spinner, red X), tool type icon, monospace target, duration badge"
+    },
+
+    {
+      "slug": "card-shell",
+      "name": "CardShell",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 31,
+      "keyInsightSeed": "Outer shell with status-aware border color, wraps confirm/ask/select/input cards"
+    },
+    {
+      "slug": "confirm-card",
+      "name": "ConfirmCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 32,
+      "keyInsightSeed": "Card-style confirmation (not modal), inline buttons, danger variant has red confirm button"
+    },
+    {
+      "slug": "ask-user-question-card",
+      "name": "AskUserQuestionCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 33,
+      "keyInsightSeed": "Embedded in chat (not modal), option buttons with hover/active states, text input for open-ended"
+    },
+    {
+      "slug": "select-card",
+      "name": "SelectCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 34,
+      "keyInsightSeed": "Card-style select (not dropdown), option items with accent border when selected, count badge for multi"
+    },
+    {
+      "slug": "input-card",
+      "name": "InputCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 37,
+      "keyInsightSeed": "Chat-embedded input card, mono font for path inputs, accent-colored submit button"
+    },
+    {
+      "slug": "editor-card",
+      "name": "EditorCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 4,
+      "priorityHint": 38,
+      "keyInsightSeed": "Full code editor embedded in chat card, language badge, syntax highlighting"
+    },
+    {
+      "slug": "notify-card",
+      "name": "NotifyCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 4,
+      "priorityHint": 39,
+      "keyInsightSeed": "Compact notification with level-colored icon, auto-dismiss or manual dismiss, rounded-lg"
+    },
+    {
+      "slug": "path-permission-card",
+      "name": "PathPermissionCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 40,
+      "keyInsightSeed": "Permission shield icon, path in mono font, reason text, prominent Allow/Deny action buttons"
+    },
+    {
+      "slug": "runtime-permission-card",
+      "name": "RuntimePermissionCard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 41,
+      "keyInsightSeed": "Risk-level colored accent (green/yellow/red), monospace command display, clear reason text"
+    },
+    {
+      "slug": "ui-interaction-anchor",
+      "name": "UIInteractionAnchor",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 42,
+      "keyInsightSeed": "Small inline indicator, connects chat interaction to notification/panel element"
+    },
+    {
+      "slug": "respond-ui-card",
+      "name": "RespondUICard",
+      "category": "ui-interaction",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 43,
+      "keyInsightSeed": "Compact inline status, mirrors parent interaction card style"
+    },
+
+    {
+      "slug": "context-reference-card",
+      "name": "ContextReferenceCard",
+      "category": "context",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 44,
+      "keyInsightSeed": "Subtle muted style, clickable to jump to source, line range for code references"
+    },
+    {
+      "slug": "hook-intervention-card",
+      "name": "HookInterventionCard",
+      "category": "context",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 45,
+      "keyInsightSeed": "Hook-specific accent color, compact message style, block type has prominent red accent"
+    },
+    {
+      "slug": "long-content-card",
+      "name": "LongContentCard",
+      "category": "context",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 46,
+      "keyInsightSeed": "Rounded-xl corners (unique), smooth expand/collapse animation, truncated preview with gradient fade"
+    },
+
+    {
+      "slug": "image-card",
+      "name": "ImageCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 50,
+      "keyInsightSeed": "Rounded-lg container, responsive thumbnail with aspect ratio, open-in-viewer action"
+    },
+    {
+      "slug": "video-card",
+      "name": "VideoCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 4,
+      "priorityHint": 51,
+      "keyInsightSeed": "Poster frame with centered play button, duration badge, rounded-lg corners"
+    },
+    {
+      "slug": "audio-card",
+      "name": "AudioCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 52,
+      "keyInsightSeed": "Compact audio player, waveform visualization, progress bar with accent color"
+    },
+    {
+      "slug": "html-card",
+      "name": "HtmlCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 53,
+      "keyInsightSeed": "Sandboxed iframe preview, title bar with expand/close actions, rounded-lg container"
+    },
+    {
+      "slug": "pdf-card",
+      "name": "PdfCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 3,
+      "priorityHint": 54,
+      "keyInsightSeed": "First page as thumbnail, filename and page count overlay, rounded-lg container"
+    },
+    {
+      "slug": "text-card",
+      "name": "TextCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 55,
+      "keyInsightSeed": "Monospace text preview, line count badge, expand to full view"
+    },
+    {
+      "slug": "markdown-card",
+      "name": "MarkdownCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 2,
+      "priorityHint": 56,
+      "keyInsightSeed": "Rendered markdown in card, toggle between rendered and source views"
+    },
+    {
+      "slug": "url-card",
+      "name": "UrlCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 1,
+      "priorityHint": 57,
+      "keyInsightSeed": "Favicon + title + description layout (like social card), external link icon, rounded-lg"
+    },
+    {
+      "slug": "fallback-card",
+      "name": "FallbackCard",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 58,
+      "keyInsightSeed": "Generic file icon, filename and size display, download action"
+    },
+    {
+      "slug": "media-card-error",
+      "name": "MediaCardError",
+      "category": "preview",
+      "sourceKind": "from-scratch",
+      "confidence": "medium",
+      "variantCount": 1,
+      "priorityHint": 59,
+      "keyInsightSeed": "Red-tinted background, centered error icon and message, optional retry action"
+    },
+
+    {
+      "slug": "modal-dialog",
+      "name": "ModalDialog",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 4,
+      "priorityHint": 60,
+      "keyInsightSeed": "Backdrop blur-sm, centered with max-w constraint (sm=384px, md=576px, lg=768px), focus trap, escape to close"
+    },
+    {
+      "slug": "anchored-popover",
+      "name": "AnchoredPopover",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 6,
+      "priorityHint": 61,
+      "keyInsightSeed": "Portal-rendered, positioned relative to anchor, shadow-3, rounded-lg, border, max-height with scroll"
+    },
+    {
+      "slug": "toast-viewport",
+      "name": "ToastViewport",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 62,
+      "keyInsightSeed": "z-toast, stacked with gap-2, pointer-events-none container, rounded-lg, backdrop-blur-sm, limit 3 visible, semantic bg colors"
+    },
+    {
+      "slug": "fullscreen-overlay",
+      "name": "FullscreenOverlay",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 4,
+      "priorityHint": 63,
+      "keyInsightSeed": "inset-0 fixed/absolute, bg-bg-elevated, flex-col, overflow-hidden body, focus trap, safe-area padding"
+    },
+    {
+      "slug": "tooltip",
+      "name": "Tooltip",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 4,
+      "priorityHint": 64,
+      "keyInsightSeed": "z-tooltip, max-w-64, 11px font, shadow-1, rounded-md, border, opacity-0 to 1 transition, group-hover pattern"
+    },
+    {
+      "slug": "dropdown-select",
+      "name": "DropdownSelect",
+      "category": "form",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 3,
+      "priorityHint": 65,
+      "keyInsightSeed": "Custom select (not native), uses AnchoredPopover internally, keyboard navigable, selected item has check mark"
+    },
+    {
+      "slug": "notification-center",
+      "name": "NotificationCenter",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 66,
+      "keyInsightSeed": "Top-right positioned panel, bell icon with count badge, semantic color per level, click-outside-to-close"
+    },
+    {
+      "slug": "confirm-dialog",
+      "name": "ConfirmDialog",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 2,
+      "priorityHint": 67,
+      "keyInsightSeed": "Wraps ModalDialog size=sm, no close button, Cancel + primary/danger action buttons"
+    },
+    {
+      "slug": "text-selection-toolbar",
+      "name": "TextSelectionToolbar",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 1,
+      "priorityHint": 68,
+      "keyInsightSeed": "Fixed-position floating bar, appears on text selection, rounded-lg, shadow-3, compact 36px height"
+    },
+    {
+      "slug": "retry-notification",
+      "name": "RetryNotification",
+      "category": "overlay",
+      "sourceKind": "from-scratch",
+      "confidence": "high",
+      "variantCount": 1,
+      "priorityHint": 69,
+      "keyInsightSeed": "Fixed top-right position, red accent bg, animated progress bar, countdown display, compact"
+    }
+  ]
+}

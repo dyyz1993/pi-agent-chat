@@ -44,19 +44,7 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
   },
 
   openFile: () => {
-    const layout = useLayoutStore.getState();
-    const prev = get()._prevStatusPanel;
-    if (layout.statusPanel === "visible" && !prev) {
-      set({
-        overlay: "file",
-        _prevStatusPanel: layout.statusPanel,
-        expandContent: null,
-        markdownContent: null,
-      });
-      useLayoutStore.setState({ statusPanel: "hidden" });
-    } else {
-      set({ overlay: "file", expandContent: null, markdownContent: null });
-    }
+    set({ overlay: "file", expandContent: null, markdownContent: null });
   },
 
   openExpand: (title, content) => {

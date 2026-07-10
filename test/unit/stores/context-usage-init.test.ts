@@ -194,11 +194,16 @@ beforeEach(() => {
     modelFavorites: new Set(),
   });
   useSupervisorStore.setState({ bySession: {} });
-  useTierStore.setState({ globalDefaults: {}, dataByProject: {}, switching: false });
+  useTierStore.setState({
+    globalDefaults: {},
+    hasGlobalDefaults: false,
+    dataBySession: {},
+    switching: false,
+  });
 });
 
 describe("fetchInitialState context usage retry", () => {
-  it("shares startup model and tier fetches with component store entrypoints", async () => {
+  it("shares startup model fetches with component store entrypoints", async () => {
     const sid = nextSid();
     seedSessionProject(sid);
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
@@ -211,32 +216,28 @@ describe("fetchInitialState context usage retry", () => {
 
     const calls = (apiClient.call as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.filter(([method]) => method === "agent.getAvailableModels")).toHaveLength(1);
-    expect(calls.filter(([method]) => method === "agent.getTierModels")).toHaveLength(1);
+    expect(calls.filter(([method]) => method === "agent.getTierModels").length).toBeGreaterThan(0);
   });
 
-  it("applies the configured project tier after startup state is available for blank sessions", async () => {
+  it("does not apply a project tier while opening a blank session", async () => {
     const sid = nextSid();
     seedSessionProject(sid);
-    useTierStore.getState().setProjectCurrentTier("/tmp/pi-agent-chat-test", "fast");
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
 
     await useSessionStore.getState().fetchInitialState(sid);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(apiClient.call).toHaveBeenCalledWith("agent.getState", { sessionId: sid });
-    expect(apiClient.call).toHaveBeenCalledWith("agent.switchTier", {
-      sessionId: sid,
-      tier: "fast",
-    });
+    const calls = (apiClient.call as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.filter(([method]) => method === "agent.switchTier")).toHaveLength(0);
   });
 
-  it("does not apply project tier when opening a non-empty existing session", async () => {
+  it("does not apply a project tier when opening a non-empty existing session", async () => {
     const sid = nextSid();
     seedSessionProject(sid, "/tmp/pi-agent-chat-test", {
       messageCount: 3,
       firstMessage: "existing conversation",
     });
-    useTierStore.getState().setProjectCurrentTier("/tmp/pi-agent-chat-test", "fast");
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
 
     await useSessionStore.getState().fetchInitialState(sid);

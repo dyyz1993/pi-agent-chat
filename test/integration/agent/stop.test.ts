@@ -185,4 +185,49 @@ describe("stopAgentClientOperation", () => {
     expect(parentWasVisibleDuringEnd).toBe(true);
     expect(parentChildMap.has("parent-1")).toBe(false);
   });
+
+  it("continues local cleanup when agent_end delivery hangs", async () => {
+    vi.useFakeTimers();
+
+    const managed = makeManaged();
+    const clients = new Map([["sess-remote", managed]]);
+    const removeFromPool = vi.fn();
+    const deleteLspState = vi.fn();
+    const clearSessionCache = vi.fn();
+
+    const promise = stopAgentClientOperation({
+      sessionId: "sess-remote",
+      getActiveManaged: () => managed,
+      clients,
+      parentChildMap: new Map(),
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      delegateReplyMetadata: new Map(),
+      delegateRepliedSessions: new Set(),
+      syncDelegateResolvers: new Map(),
+      subagentSyncChildren: new Set(),
+      syncDelegateLastText: new Map(),
+      leafIds: new Map(),
+      getPoolKey: (cwd) => cwd,
+      removeFromPool,
+      stopChild: vi.fn(),
+      emitAgentEvent: vi.fn(() => new Promise<void>(() => {})),
+      deleteLspState,
+      clearSessionCache,
+      emitAgentEndTimeoutMs: 1,
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(promise).resolves.toBe(true);
+
+    expect(managed.info.status).toBe("idle");
+    expect(managed.unsubscribe).toHaveBeenCalled();
+    expect(managed.client.stop).toHaveBeenCalled();
+    expect(clients.has("sess-remote")).toBe(false);
+    expect(removeFromPool).toHaveBeenCalledWith("/project", managed);
+    expect(deleteLspState).toHaveBeenCalledWith("sess-remote");
+    expect(clearSessionCache).toHaveBeenCalledWith("sess-remote");
+
+    vi.useRealTimers();
+  });
 });

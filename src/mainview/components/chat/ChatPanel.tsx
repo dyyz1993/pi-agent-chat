@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   PanelLeft,
@@ -27,9 +19,9 @@ import {
   Target,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { ImageContent } from "@dyyz1993/pi-ai";
+import type { ImageContent, Message } from "@dyyz1993/pi-ai";
 import { createLogger } from "../../../shared/lib/logger";
-import { useChatStore } from "../../stores/use-chat-store";
+import { normalizeToolBlocks, useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
@@ -41,10 +33,12 @@ import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
+import { useStatusStore } from "../../stores/use-status-store";
 import { apiClient } from "../../lib/api-client";
+import { messageToChatMessage } from "../../lib/message-mapper";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
 import type { VirtualizerHandle } from "virtua";
-import { SideNav, buildFlatItems, type SideNavPagination, type SideNavTarget } from "./SideNav";
+import { SideNav, getCachedFlatItems, type SideNavPagination, type SideNavTarget } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
 import { getProcessedMessagesForSession, MessageListView } from "./MessageListView";
@@ -55,7 +49,10 @@ import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { GoalActionCard } from "./GoalActionCard";
-import { useReturnToSourceSession } from "./primitives/useReturnToSourceSession";
+import {
+  useReturnToSourceSession,
+  type ReturnSourceTarget,
+} from "./primitives/useReturnToSourceSession";
 import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { ForkDialog } from "./ForkDialog";
@@ -69,10 +66,15 @@ import {
   useComposerPlaceholderStore,
 } from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
-import type { ChatMessage, SessionStatus } from "../../types";
+import type { ChatMessage } from "../../types";
+import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
+import { FileOverlay } from "../file-preview/FileOverlay";
+import { useExplorerStore } from "../../stores/use-explorer-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import {
   getProjectDisplayName,
   getSessionIdentity,
@@ -83,19 +85,53 @@ import type { SessionMeta } from "../../types";
 const log = createLogger("chat");
 const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
 const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
+const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
+const SIDE_NAV_PAGE_SIZE = 200;
 
 const MAX_MSG_IDS_CACHE = 10;
 
 const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
 
-export function shouldShowChatReloadButton({
-  sessionId,
-  status,
-}: {
-  sessionId: string | null | undefined;
-  status: SessionStatus | undefined;
-}): boolean {
-  return Boolean(sessionId) && status === "idle";
+export { ChatReloadButton, shouldShowChatReloadButton };
+
+function stringifyMessageBlock(block: ChatMessage["content"][number]): string {
+  switch (block.type) {
+    case "text":
+      return block.text;
+    case "thinking":
+      return `[thinking]\n${block.thinking}`;
+    case "toolCall":
+      return `[tool call: ${block.name}]\n${block.input}`;
+    case "toolResult":
+      return `[tool result: ${block.toolName}${block.isError ? " error" : ""}]\n${block.content}`;
+    case "toolExecution": {
+      const parts = [`[tool execution: ${block.toolName} ${block.status}]`];
+      if (block.description) parts.push(block.description);
+      if (block.args) parts.push(`args:\n${block.args}`);
+      if (block.output) parts.push(`output:\n${block.output}`);
+      return parts.join("\n");
+    }
+    case "compactionSummary":
+      return `[compaction summary]\n${block.summary}`;
+    case "custom":
+      return `[${block.customType}]\n${JSON.stringify(block.data)}`;
+    case "imageBlock":
+      return `[image: ${block.alt ?? block.url}]`;
+    default:
+      return JSON.stringify(block);
+  }
+}
+
+function buildSelectedMemoryContent(messages: ChatMessage[], ids: string[]): string {
+  const selected = new Set(ids);
+  return messages
+    .filter((message) => selected.has(message.id))
+    .map((message) => {
+      const body = message.content.map(stringifyMessageBlock).filter(Boolean).join("\n\n");
+      return `## ${message.role} ${message.id}\n\n${body || "(empty)"}`;
+    })
+    .join("\n\n---\n\n")
+    .trim();
 }
 
 interface TopLoadScrollAnchor {
@@ -121,7 +157,7 @@ function sessionIdentityClass(identity: SessionIdentity): string {
     return "border-status-info/30 bg-status-info/10 text-status-info";
   }
   if (identity.kind === "fork") {
-    return "border-semantic-accent/30 bg-semantic-accent/10 text-semantic-accent";
+    return "border-accent/30 bg-accent/10 text-accent";
   }
   return "border-status-warning/30 bg-status-warning/10 text-status-warning";
 }
@@ -132,6 +168,7 @@ export function shouldStartTopLoad({
   hasMoreMessages,
   isLoadingMore,
   isViewingSubagent,
+  initialScrollComplete,
   lockedSessionId,
 }: {
   activeSessionId: string | null | undefined;
@@ -139,6 +176,7 @@ export function shouldStartTopLoad({
   hasMoreMessages: boolean;
   isLoadingMore: boolean;
   isViewingSubagent: boolean;
+  initialScrollComplete: boolean;
   lockedSessionId: string | null;
 }): boolean {
   return (
@@ -147,7 +185,50 @@ export function shouldStartTopLoad({
     hasMoreMessages &&
     !isLoadingMore &&
     !isViewingSubagent &&
+    initialScrollComplete &&
     lockedSessionId !== activeSessionId
+  );
+}
+
+export function shouldHideMessageSurfaceUntilInitialBottom({
+  effectiveSessionId,
+  messageCount,
+  initialScrollCompleteSessionId,
+  revealFallbackSessionId,
+}: {
+  effectiveSessionId: string | null | undefined;
+  messageCount: number;
+  initialScrollCompleteSessionId: string | null;
+  revealFallbackSessionId?: string | null;
+}): boolean {
+  return (
+    !!effectiveSessionId &&
+    messageCount > 0 &&
+    initialScrollCompleteSessionId !== effectiveSessionId &&
+    revealFallbackSessionId !== effectiveSessionId
+  );
+}
+
+export function shouldBlockComposerForRemoteDisconnect({
+  projectConnected,
+  projectRuntime,
+  hasRemoteProjectRef,
+  remoteRuntimeEnabled,
+  remoteConnectionStatus,
+}: {
+  projectConnected?: boolean;
+  projectRuntime?: string;
+  hasRemoteProjectRef?: boolean;
+  remoteRuntimeEnabled?: boolean;
+  remoteConnectionStatus?: string;
+}): boolean {
+  const isRemoteProject =
+    projectRuntime === "ssh" || hasRemoteProjectRef === true || remoteRuntimeEnabled === true;
+  if (!isRemoteProject) return false;
+  return (
+    projectConnected === false ||
+    remoteConnectionStatus === "disconnected" ||
+    remoteConnectionStatus === "error"
   );
 }
 
@@ -164,6 +245,37 @@ function evictMsgIdsIfNeeded(): void {
     const firstKey = _messageIdsCache.keys().next().value;
     if (firstKey !== undefined) _messageIdsCache.delete(firstKey);
   }
+}
+
+function mapNavMessages(rawMessages: AgentMessageForUI[]): ChatMessage[] {
+  const toolCallNameMap: Record<string, string> = {};
+  for (const raw of rawMessages) {
+    if (raw.role !== "assistant" || !Array.isArray(raw.content)) continue;
+    for (const block of raw.content) {
+      if (block.type === "toolCall" && block.id && block.name) {
+        toolCallNameMap[block.id] = block.name;
+      }
+    }
+  }
+  const messages = rawMessages
+    .map((raw) => messageToChatMessage(raw as unknown as Message, raw.id, toolCallNameMap))
+    .filter((message): message is ChatMessage => !!message);
+  normalizeToolBlocks(messages, true, false);
+  return messages;
+}
+
+function mergeSideNavMessages(
+  olderMessages: ChatMessage[],
+  newerMessages: ChatMessage[],
+): ChatMessage[] {
+  const seen = new Set<string>();
+  const merged: ChatMessage[] = [];
+  for (const message of [...olderMessages, ...newerMessages]) {
+    if (seen.has(message.id)) continue;
+    seen.add(message.id);
+    merged.push(message);
+  }
+  return merged;
 }
 
 const EMPTY_MSGS: never[] = [];
@@ -187,7 +299,7 @@ function RefineGoalOverlay({ step }: { step: number }) {
   ];
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 px-4 bg-bg-secondary/90 backdrop-blur-sm rounded">
-      <Loader2 className="w-4 h-4 text-semantic-accent animate-spin shrink-0" />
+      <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" />
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {steps.map((s, i) => {
           const isActive = i + 1 === step;
@@ -200,7 +312,7 @@ function RefineGoalOverlay({ step }: { step: number }) {
                 isDone
                   ? "text-status-success"
                   : isActive
-                    ? "text-semantic-accent font-medium"
+                    ? "text-accent font-medium"
                     : "text-text-tertiary/50"
               }`}
             >
@@ -223,6 +335,20 @@ function RefineGoalOverlay({ step }: { step: number }) {
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
+  const overlay = useChatOverlayStore((s) => s.overlay);
+  const closeOverlay = useChatOverlayStore((s) => s.close);
+  const filePreview = useExplorerStore((s) => s.filePreview);
+  const loadingFile = useExplorerStore((s) => s.loadingFile);
+  const saveFileContent = useExplorerStore((s) => s.saveFileContent);
+  const setFileEditable = useExplorerStore((s) => s.setFileEditable);
+  const handleSaveFile = useCallback(
+    async (content: string) => {
+      if (filePreview?.path) {
+        await saveFileContent(filePreview.path, content);
+      }
+    },
+    [saveFileContent, filePreview?.path],
+  );
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const parentStatus = useSessionStore((s) =>
     activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle",
@@ -234,7 +360,21 @@ export function ChatPanel() {
   const subSessionStatus = useSessionStore((s) =>
     activeSubId ? s.sessionStatusMap[activeSubId] : undefined,
   );
+  const isViewingSubagent = !!activeSubId;
+  const effectiveScrollSessionId = isViewingSubagent ? activeSubId : activeSessionId;
+  const messageViewMode = useChatStore(
+    useCallback(
+      (s) =>
+        effectiveScrollSessionId
+          ? (s.messageViewBySession[effectiveScrollSessionId] ?? "tail")
+          : "tail",
+      [effectiveScrollSessionId],
+    ),
+  );
   const subMessages = useChatStore((s) => {
+    if (activeSubId && (s.messageViewBySession[activeSubId] ?? "tail") === "focus") {
+      return s.focusMessagesBySession[activeSubId] ?? EMPTY_MSGS;
+    }
     return getDisplayedMessagesForChatPanel({
       activeSessionId: null,
       activeSubsessionId: activeSubId,
@@ -242,13 +382,15 @@ export function ChatPanel() {
     });
   });
   const mainMessages = useChatStore((s) => {
+    if (activeSessionId && (s.messageViewBySession[activeSessionId] ?? "tail") === "focus") {
+      return s.focusMessagesBySession[activeSessionId] ?? EMPTY_MSGS;
+    }
     return getDisplayedMessagesForChatPanel({
       activeSessionId,
       activeSubsessionId: null,
       messagesBySession: s.messagesBySession,
     });
   });
-  const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
   const attachmentCount = useAttachmentStore((s) => s.attachments.length);
   const composerPlaceholders = useComposerPlaceholderStore((s) => s.placeholders);
@@ -279,9 +421,11 @@ export function ChatPanel() {
   const chatProjectName = getProjectDisplayName(chatProjectPath);
 
   const effectiveStatus = isViewingSubagent ? (subSessionStatus ?? subStatus) : parentStatus;
-  const reloadSessionId = isViewingSubagent ? activeSubId : activeSessionId;
 
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const activeProjectTab = useSessionStore(
+    useCallback((s) => s.projectTabs.find((tab) => tab.id === s.activeProjectId) ?? null, []),
+  );
   const currentModel = useSessionStore((s) => s.currentModel);
   const activeSessionPath = useSessionStore(
     useCallback(
@@ -296,6 +440,9 @@ export function ChatPanel() {
       [activeSessionId],
     ),
   );
+  const activeSideNavSessionPath = isViewingSubagent
+    ? (activeSubSessionMeta?.sessionPath ?? null)
+    : activeSessionPath;
   const projectFailed = useSessionStore(
     useCallback(
       (s) => !!activeProjectId && s.projectStartFailed[activeProjectId],
@@ -309,6 +456,26 @@ export function ChatPanel() {
     ),
   );
   const retryActiveProject = useSessionStore((s) => s.retryActiveProject);
+  const effectiveRemoteRuntime = useStatusStore(
+    useCallback(
+      (s) =>
+        effectiveScrollSessionId
+          ? (s.remoteRuntimeBySession[effectiveScrollSessionId] ?? null)
+          : null,
+      [effectiveScrollSessionId],
+    ),
+  );
+  const remoteConnectionStatus = effectiveRemoteRuntime?.status;
+  const activeRemoteDisconnected = shouldBlockComposerForRemoteDisconnect({
+    projectConnected: activeProjectTab?.connected,
+    projectRuntime: activeProjectTab?.runtime,
+    hasRemoteProjectRef: Boolean(activeProjectTab?.remote),
+    remoteRuntimeEnabled: effectiveRemoteRuntime?.enabled,
+    remoteConnectionStatus,
+  });
+  const remoteDisconnectedMessage = activeRemoteDisconnected
+    ? (effectiveRemoteRuntime?.error ?? t("remoteDisconnectedComposer"))
+    : "";
   const sessionReady = useSessionStore(
     useCallback((s) => !!activeSessionId && s.sessionReady[activeSessionId], [activeSessionId]),
   );
@@ -318,17 +485,32 @@ export function ChatPanel() {
 
   const hasMoreMessages = useChatStore(
     useCallback(
-      (s) => !!activeSessionId && !!s.hasMoreMessagesBySession?.[activeSessionId],
-      [activeSessionId],
+      (s) => !!effectiveScrollSessionId && !!s.hasMoreMessagesBySession?.[effectiveScrollSessionId],
+      [effectiveScrollSessionId],
     ),
   );
   const isLoadingMore = useChatStore(
     useCallback(
-      (s) => !!activeSessionId && !!s.isLoadingMoreBySession?.[activeSessionId],
-      [activeSessionId],
+      (s) => !!effectiveScrollSessionId && !!s.isLoadingMoreBySession?.[effectiveScrollSessionId],
+      [effectiveScrollSessionId],
+    ),
+  );
+  const messageNextCursor = useChatStore(
+    useCallback(
+      (s) =>
+        effectiveScrollSessionId
+          ? (s.nextCursorBySession?.[effectiveScrollSessionId] ?? null)
+          : null,
+      [effectiveScrollSessionId],
     ),
   );
   const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
+  const loadTopMessages = useChatStore((s) => s.loadTopMessages);
+  const clearTopWindowMessages = useChatStore((s) => s.clearTopWindowMessages);
+  const loadSessionMessages = useChatStore((s) => s.loadSessionMessages);
+  const loadFocusedMessagesAround = useChatStore((s) => s.loadFocusedMessagesAround);
+  const clearFocusedMessages = useChatStore((s) => s.clearFocusedMessages);
+  const deleteMessagesForSession = useChatStore((s) => s.deleteMessagesForSession);
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -341,6 +523,20 @@ export function ChatPanel() {
   const inputBarRef = useRef<InputBarHandle>(null);
   const topLoadScrollAnchorRef = useRef<TopLoadScrollAnchor | null>(null);
   const topLoadLockedSessionRef = useRef<string | null>(null);
+  const topLoadRestoreRafRef = useRef<number | null>(null);
+  const topSeekSessionRef = useRef<string | null>(null);
+  const topSeekRunIdRef = useRef(0);
+  const [isSeekingTop, setIsSeekingTop] = useState(false);
+  const [initialScrollCompleteSessionId, setInitialScrollCompleteSessionId] = useState<
+    string | null
+  >(null);
+  const [initialScrollRevealFallbackSessionId, setInitialScrollRevealFallbackSessionId] = useState<
+    string | null
+  >(null);
+  const [sideNavExtraMessages, setSideNavExtraMessages] = useState<ChatMessage[]>([]);
+  const [sideNavCursor, setSideNavCursor] = useState<string | null>(null);
+  const [sideNavHasMore, setSideNavHasMore] = useState(false);
+  const [isSideNavLoadingMore, setIsSideNavLoadingMore] = useState(false);
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
@@ -351,6 +547,7 @@ export function ChatPanel() {
   const showToolResults = useSettingsStore((s) => s.showToolResults);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
+  const returnSourceTarget = useReturnToSourceSession();
   const shouldRenderSideNav = messages.length > 0;
   const renderedMessages = useMemo(
     () =>
@@ -367,70 +564,52 @@ export function ChatPanel() {
     [activeSessionId, activeSubId, effectiveStatus, isViewingSubagent, messages, showMemoryEntries],
   );
   const messageIds = useMemo(() => {
-    if (!activeSessionId) return renderedMessages.map((m) => m.id);
-    const cached = _messageIdsCache.get(activeSessionId);
+    if (!effectiveScrollSessionId) return renderedMessages.map((m) => m.id);
+    const cacheKey = `${effectiveScrollSessionId}:${messageViewMode}`;
+    const cached = _messageIdsCache.get(cacheKey);
     if (cached && cached.ref === renderedMessages) return cached.result;
     const result = renderedMessages.map((m) => m.id);
-    _messageIdsCache.set(activeSessionId, { ref: renderedMessages, result });
+    _messageIdsCache.set(cacheKey, { ref: renderedMessages, result });
     evictMsgIdsIfNeeded();
     return result;
-  }, [renderedMessages, activeSessionId]);
+  }, [renderedMessages, effectiveScrollSessionId, messageViewMode]);
+  const sideNavMessages = useMemo(() => {
+    if (sideNavExtraMessages.length === 0) return renderedMessages;
+    return mergeSideNavMessages(sideNavExtraMessages, renderedMessages);
+  }, [renderedMessages, sideNavExtraMessages]);
   const collapsedMessageIdsForNav = useTurnStore(
     useCallback(
       (s) =>
-        shouldRenderSideNav && activeSessionId
-          ? (s.collapsedMessageIdsBySession[activeSessionId] ?? EMPTY_SET)
+        shouldRenderSideNav && effectiveScrollSessionId
+          ? (s.collapsedMessageIdsBySession[effectiveScrollSessionId] ?? EMPTY_SET)
           : EMPTY_SET,
-      [activeSessionId, shouldRenderSideNav],
+      [effectiveScrollSessionId, shouldRenderSideNav],
     ),
   );
-  const sideNavTargets = useMemo(() => {
+  const sideNavRenderedTargets = useMemo(() => {
     if (!shouldRenderSideNav) return undefined;
-    return buildFlatItems(
-      renderedMessages,
+    return getCachedFlatItems({
+      sessionId: effectiveScrollSessionId ?? undefined,
+      messages: renderedMessages,
       showThinking,
       showMemoryEntries,
-      collapsedMessageIdsForNav,
+      collapsedMessageIds: collapsedMessageIdsForNav,
       showToolCalls,
       showToolResults,
-    ).map((item) => ({
+    }).map((item) => ({
       key: item.key,
       messageId: item.navId,
       blockId: item.blockId,
     }));
   }, [
     renderedMessages,
+    effectiveScrollSessionId,
     shouldRenderSideNav,
     showThinking,
     showMemoryEntries,
     collapsedMessageIdsForNav,
     showToolCalls,
     showToolResults,
-  ]);
-  const sideNavPagination = useMemo<SideNavPagination | undefined>(() => {
-    if (!shouldRenderSideNav || !activeSessionId || isViewingSubagent) return undefined;
-    return {
-      hasMore: hasMoreMessages,
-      isLoading: isLoadingMore,
-      onLoadMore: () => {
-        const el = messagesScrollRef.current;
-        if (el) {
-          topLoadScrollAnchorRef.current = {
-            sessionId: activeSessionId,
-            scrollHeight: el.scrollHeight,
-            scrollTop: el.scrollTop,
-          };
-        }
-        void loadMoreMessages(activeSessionId);
-      },
-    };
-  }, [
-    activeSessionId,
-    hasMoreMessages,
-    isLoadingMore,
-    isViewingSubagent,
-    loadMoreMessages,
-    shouldRenderSideNav,
   ]);
   const isStreaming =
     effectiveStatus === "streaming" ||
@@ -444,28 +623,37 @@ export function ChatPanel() {
 
   const streamVersion = useChatStore(
     useCallback(
-      (s) => (activeSessionId ? (s.streamVersionBySession[activeSessionId] ?? 0) : 0),
-      [activeSessionId],
+      (s) =>
+        effectiveScrollSessionId ? (s.streamVersionBySession[effectiveScrollSessionId] ?? 0) : 0,
+      [effectiveScrollSessionId],
     ),
   );
   const historyLoadVersion = useChatStore(
     useCallback(
-      (s) => (activeSessionId ? (s.historyLoadVersionBySession?.[activeSessionId] ?? 0) : 0),
-      [activeSessionId],
+      (s) =>
+        effectiveScrollSessionId
+          ? (s.historyLoadVersionBySession?.[effectiveScrollSessionId] ?? 0)
+          : 0,
+      [effectiveScrollSessionId],
     ),
   );
   const messageHydration = useChatStore(
     useCallback(
       (s) =>
-        activeSessionId ? (s.messageHydrationBySession?.[activeSessionId] ?? "idle") : "idle",
-      [activeSessionId],
+        effectiveScrollSessionId
+          ? (s.messageHydrationBySession?.[effectiveScrollSessionId] ?? "idle")
+          : "idle",
+      [effectiveScrollSessionId],
     ),
   );
   const initialScrollReady =
-    isViewingSubagent ||
-    !activeSessionId ||
-    messageHydration === "ready" ||
-    messageHydration === "error";
+    !effectiveScrollSessionId || messageHydration === "ready" || messageHydration === "error";
+  const hideMessageSurfaceUntilInitialBottom = shouldHideMessageSurfaceUntilInitialBottom({
+    effectiveSessionId: effectiveScrollSessionId,
+    messageCount: messageIds.length,
+    initialScrollCompleteSessionId,
+    revealFallbackSessionId: initialScrollRevealFallbackSessionId,
+  });
 
   const agentColor = useAgentStore(
     useCallback(
@@ -476,6 +664,7 @@ export function ChatPanel() {
   const agentBorderColor = agentColor ? agentColorStyle(agentColor) : null;
 
   const pushNotif = useNotificationStore((s) => s.push);
+  const clearMessageSelection = useTurnStore((s) => s.clearSelection);
   const [isAborting, setIsAborting] = useState(false);
   const [goalMode, setGoalMode] = useState(false);
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
@@ -483,11 +672,37 @@ export function ChatPanel() {
   const [refineStep, setRefineStep] = useState(0); // 0=idle, 1=gathering, 2=calling LLM, 3=done
   const preGoalInputRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
+  const showComposerUtilityRow = !isMobileOrTablet || goalMode || !!returnSourceTarget;
+  const hasSendableContent = goalMode
+    ? inputText.trim().length > 0
+    : inputText.trim().length > 0 || attachmentCount > 0 || hasComposerPlaceholders;
+  const composerInputDisabled = !activeSessionId || isCreatingGoal || activeRemoteDisconnected;
+  const sendDisabled =
+    !agentReady ||
+    isAborting ||
+    isCreatingGoal ||
+    isPermissionPending ||
+    !hasSendableContent ||
+    !activeSessionId ||
+    hasNoModel ||
+    activeRemoteDisconnected;
 
   useEffect(() => {
     if (!activeSessionPath) return;
     void useSubagentStore.getState().loadSubsessions(activeSessionPath);
   }, [activeSessionPath]);
+
+  useEffect(() => {
+    setInitialScrollCompleteSessionId(null);
+    topLoadScrollAnchorRef.current = null;
+    topSeekRunIdRef.current++;
+    topSeekSessionRef.current = null;
+    setIsSeekingTop(false);
+    if (topLoadRestoreRafRef.current != null) {
+      cancelAnimationFrame(topLoadRestoreRafRef.current);
+      topLoadRestoreRafRef.current = null;
+    }
+  }, [effectiveScrollSessionId]);
 
   useEffect(() => {
     if (!isStreaming && isAborting) {
@@ -528,6 +743,102 @@ export function ChatPanel() {
       pushNotif({ message: "Failed to stop agent, please try again", level: "error" });
     }
   }, [activeSessionId, activeSubId, isAborting, pushNotif]);
+
+  const handleDeleteSelectedMessages = useCallback(
+    async (ids: string[]) => {
+      const targetSessionId = isViewingSubagent ? activeSubId : activeSessionId;
+      if (!targetSessionId || ids.length === 0) return;
+
+      const targetIds = Array.from(new Set(ids));
+      deleteMessagesForSession(targetSessionId, targetIds);
+      clearMessageSelection();
+
+      try {
+        await apiClient.call("agent.deleteEntries", {
+          sessionId: targetSessionId,
+          targetIds,
+        });
+        await loadSessionMessages(targetSessionId, { force: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        pushNotif({ message: `删除消息失败：${message}`, level: "error" });
+        await loadSessionMessages(targetSessionId, { force: true }).catch(() => undefined);
+      }
+    },
+    [
+      activeSessionId,
+      activeSubId,
+      clearMessageSelection,
+      deleteMessagesForSession,
+      isViewingSubagent,
+      loadSessionMessages,
+      pushNotif,
+    ],
+  );
+
+  const handleSummarizeSelectedMessages = useCallback(
+    async (ids: string[]) => {
+      const targetSessionId = isViewingSubagent ? activeSubId : activeSessionId;
+      if (!targetSessionId || ids.length === 0) return;
+
+      const targetIds = Array.from(new Set(ids));
+      clearMessageSelection();
+
+      try {
+        await apiClient.call("agent.summarizeEntries", {
+          sessionId: targetSessionId,
+          targetIds,
+        });
+        await loadSessionMessages(targetSessionId, { force: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        pushNotif({ message: `总结消息失败：${message}`, level: "error" });
+      }
+    },
+    [
+      activeSessionId,
+      activeSubId,
+      clearMessageSelection,
+      isViewingSubagent,
+      loadSessionMessages,
+      pushNotif,
+    ],
+  );
+
+  const handleRememberSelectedMessages = useCallback(
+    async (ids: string[]) => {
+      const targetSessionId = isViewingSubagent ? activeSubId : activeSessionId;
+      if (!targetSessionId || ids.length === 0) return;
+
+      const targetIds = Array.from(new Set(ids));
+      const content = buildSelectedMemoryContent(messages, targetIds);
+      if (!content) return;
+
+      clearMessageSelection();
+
+      try {
+        await apiClient.call("memory.remember", {
+          projectPath: chatProjectPath,
+          sessionId: targetSessionId,
+          messageIds: targetIds,
+          content,
+        });
+        pushNotif({ message: "已提交到 Learning 记忆", level: "info" });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        pushNotif({ message: `保存记忆失败：${message}`, level: "error" });
+      }
+    },
+    [
+      activeSessionId,
+      activeSubId,
+      chatProjectPath,
+      clearMessageSelection,
+      isViewingSubagent,
+      messages,
+      pushNotif,
+    ],
+  );
 
   const handleSubagentFork = useCallback(async () => {
     const parentSessionId = useSessionStore.getState().activeSessionId;
@@ -571,6 +882,40 @@ export function ChatPanel() {
     releaseSideNavScrollLock();
   }, [activeSessionId, activeSubId, releaseSideNavScrollLock]);
 
+  useEffect(() => {
+    setSideNavExtraMessages([]);
+    setSideNavCursor(messageNextCursor);
+    setSideNavHasMore(hasMoreMessages);
+    setIsSideNavLoadingMore(false);
+  }, [effectiveScrollSessionId, hasMoreMessages, messageNextCursor]);
+
+  useEffect(() => {
+    if (sideNavExtraMessages.length > 0 || isSideNavLoadingMore) return;
+    setSideNavCursor(messageNextCursor);
+    setSideNavHasMore(hasMoreMessages);
+  }, [hasMoreMessages, isSideNavLoadingMore, messageNextCursor, sideNavExtraMessages.length]);
+
+  useEffect(() => {
+    setInitialScrollRevealFallbackSessionId(null);
+    if (
+      !effectiveScrollSessionId ||
+      messageIds.length === 0 ||
+      initialScrollCompleteSessionId === effectiveScrollSessionId
+    ) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setInitialScrollRevealFallbackSessionId(effectiveScrollSessionId);
+    }, INITIAL_SCROLL_REVEAL_GRACE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [effectiveScrollSessionId, initialScrollCompleteSessionId, messageIds.length]);
+
+  const handleInitialScrollComplete = useCallback(() => {
+    setInitialScrollCompleteSessionId(effectiveScrollSessionId ?? null);
+  }, [effectiveScrollSessionId]);
+
   const {
     handleScroll,
     handleScrollEnd,
@@ -586,8 +931,8 @@ export function ChatPanel() {
     scrollRef: messagesScrollRef,
     vlistRef,
     messageIds,
-    activeTargets: sideNavTargets,
-    sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
+    activeTargets: sideNavRenderedTargets,
+    sessionId: effectiveScrollSessionId ?? undefined,
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
@@ -597,6 +942,7 @@ export function ChatPanel() {
     streamVersion,
     historyLoadVersion,
     initialScrollReady,
+    onInitComplete: handleInitialScrollComplete,
   });
 
   const wrappedHandleScrollEnd = useCallback(() => {
@@ -627,24 +973,91 @@ export function ChatPanel() {
     topLoadScrollAnchorRef.current = null;
   }, [activeSessionId, historyLoadVersion, isLoadingMore, isViewingSubagent]);
 
+  const seekToAbsoluteTop = useCallback(async () => {
+    if (!activeSessionId || isViewingSubagent) {
+      scrollToEdge("top");
+      return;
+    }
+
+    const sessionId = activeSessionId;
+    const runId = topSeekRunIdRef.current + 1;
+    topSeekRunIdRef.current = runId;
+    topSeekSessionRef.current = sessionId;
+    topLoadLockedSessionRef.current = sessionId;
+    topLoadScrollAnchorRef.current = null;
+    setIsSeekingTop(true);
+    try {
+      await loadTopMessages(sessionId);
+    } finally {
+      if (topSeekRunIdRef.current === runId) {
+        topSeekSessionRef.current = null;
+        topLoadLockedSessionRef.current = null;
+        setIsSeekingTop(false);
+        scrollToEdge("top");
+        requestAnimationFrame(() => {
+          const iconId = sideNavRef.current?.getFirstIconId();
+          if (iconId) {
+            lastSetNavIdRef.current = iconId;
+            setNavId(iconId);
+          }
+        });
+      }
+    }
+  }, [activeSessionId, isViewingSubagent, loadTopMessages, scrollToEdge, setNavId]);
+
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
       if (messageIds.length === 0) return;
       suspendAutoScroll();
       lastSetNavIdRef.current = null;
+      if (edge === "top") {
+        if (effectiveScrollSessionId && messageViewMode === "focus") {
+          clearFocusedMessages(effectiveScrollSessionId);
+          requestAnimationFrame(() => void seekToAbsoluteTop());
+          return;
+        }
+        void seekToAbsoluteTop();
+        return;
+      }
+      if (effectiveScrollSessionId && messageViewMode === "focus") {
+        clearFocusedMessages(effectiveScrollSessionId);
+        requestAnimationFrame(() => {
+          scrollToEdge("bottom");
+          setTimeout(() => {
+            const iconId = sideNavRef.current?.getLastIconId();
+            if (iconId) {
+              lastSetNavIdRef.current = iconId;
+              setNavId(iconId);
+            }
+          }, 200);
+        });
+        return;
+      }
+      if (activeSessionId && !isViewingSubagent) {
+        clearTopWindowMessages(activeSessionId);
+      }
       scrollToEdge(edge);
       setTimeout(() => {
-        const iconId =
-          edge === "top"
-            ? sideNavRef.current?.getFirstIconId()
-            : sideNavRef.current?.getLastIconId();
+        const iconId = sideNavRef.current?.getLastIconId();
         if (iconId) {
           lastSetNavIdRef.current = iconId;
           setNavId(iconId);
         }
       }, 200);
     },
-    [messageIds, scrollToEdge, suspendAutoScroll, setNavId],
+    [
+      activeSessionId,
+      clearFocusedMessages,
+      clearTopWindowMessages,
+      effectiveScrollSessionId,
+      isViewingSubagent,
+      messageIds,
+      messageViewMode,
+      scrollToEdge,
+      seekToAbsoluteTop,
+      suspendAutoScroll,
+      setNavId,
+    ],
   );
 
   const scrollBlockIntoViewWhenRendered = useCallback((blockId: string, attempt = 0) => {
@@ -657,6 +1070,52 @@ export function ChatPanel() {
     requestAnimationFrame(() => scrollBlockIntoViewWhenRendered(blockId, attempt + 1));
   }, []);
 
+  const loadMoreSideNav = useCallback(async () => {
+    if (!effectiveScrollSessionId || isSideNavLoadingMore || !sideNavHasMore) return;
+    const sessionId = effectiveScrollSessionId;
+    setIsSideNavLoadingMore(true);
+    try {
+      const result = await apiClient.call("agent.getMessageNavPage", {
+        sessionId,
+        sessionPath: activeSideNavSessionPath ?? undefined,
+        afterEntryId: sideNavCursor ?? undefined,
+        limit: SIDE_NAV_PAGE_SIZE,
+      });
+      const olderMessages = mapNavMessages(result.messages);
+      setSideNavExtraMessages((prev) => mergeSideNavMessages(olderMessages, prev));
+      setSideNavCursor(result.nextCursor ?? null);
+      setSideNavHasMore(result.hasMore === true);
+    } catch (err) {
+      log.warn("Failed to load side nav page", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsSideNavLoadingMore(false);
+    }
+  }, [
+    activeSideNavSessionPath,
+    effectiveScrollSessionId,
+    isSideNavLoadingMore,
+    sideNavCursor,
+    sideNavHasMore,
+  ]);
+
+  const sideNavPagination = useMemo<SideNavPagination | undefined>(() => {
+    if (!shouldRenderSideNav || !effectiveScrollSessionId) return undefined;
+    return {
+      hasMore: sideNavHasMore,
+      isLoading: isSideNavLoadingMore,
+      onLoadMore: loadMoreSideNav,
+    };
+  }, [
+    effectiveScrollSessionId,
+    isSideNavLoadingMore,
+    loadMoreSideNav,
+    shouldRenderSideNav,
+    sideNavHasMore,
+  ]);
+
   const handleNavDotClick = useCallback(
     (target: SideNavTarget) => {
       suspendAutoScroll();
@@ -668,7 +1127,27 @@ export function ChatPanel() {
       }, SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS);
 
       if (!messageIds.includes(target.messageId)) {
-        releaseSideNavScrollLock();
+        const sessionId = effectiveScrollSessionId;
+        if (!sessionId) {
+          releaseSideNavScrollLock();
+          return;
+        }
+        void (async () => {
+          const loaded = await loadFocusedMessagesAround(sessionId, target.messageId, {
+            sessionPath: activeSideNavSessionPath ?? undefined,
+          });
+          if (!loaded) {
+            releaseSideNavScrollLock();
+            return;
+          }
+          requestAnimationFrame(() => {
+            lastSetNavIdRef.current = target.blockId ?? target.messageId;
+            scrollToMessage(target.messageId, { align: "start", smooth: false });
+            if (target.blockId) {
+              scrollBlockIntoViewWhenRendered(target.blockId);
+            }
+          });
+        })();
         return;
       }
       lastSetNavIdRef.current = target.blockId ?? target.messageId;
@@ -680,6 +1159,9 @@ export function ChatPanel() {
       }
     },
     [
+      activeSideNavSessionPath,
+      effectiveScrollSessionId,
+      loadFocusedMessagesAround,
       messageIds,
       releaseSideNavScrollLock,
       scrollBlockIntoViewWhenRendered,
@@ -900,19 +1382,21 @@ export function ChatPanel() {
   }, []);
 
   useEffect(() => {
-    if (!isAtTop || !hasMoreMessages || isViewingSubagent) {
+    if (!isAtTop || !hasMoreMessages || isViewingSubagent || messageViewMode === "focus") {
       topLoadLockedSessionRef.current = null;
     }
-  }, [activeSessionId, hasMoreMessages, isAtTop, isViewingSubagent]);
+  }, [activeSessionId, hasMoreMessages, isAtTop, isViewingSubagent, messageViewMode]);
 
   useEffect(() => {
     if (
+      topSeekSessionRef.current === activeSessionId ||
       !shouldStartTopLoad({
         activeSessionId,
         isAtTop,
-        hasMoreMessages,
+        hasMoreMessages: messageViewMode === "focus" ? false : hasMoreMessages,
         isLoadingMore,
         isViewingSubagent,
+        initialScrollComplete: initialScrollCompleteSessionId === activeSessionId,
         lockedSessionId: topLoadLockedSessionRef.current,
       })
     ) {
@@ -928,10 +1412,14 @@ export function ChatPanel() {
     captureTopLoadScrollAnchor,
     isAtTop,
     hasMoreMessages,
+    initialScrollCompleteSessionId,
     isLoadingMore,
     isViewingSubagent,
     loadMoreMessages,
+    messageViewMode,
   ]);
+
+  const isFilePreviewOpen = overlay === "file" && !!filePreview;
 
   return (
     <div
@@ -941,343 +1429,389 @@ export function ChatPanel() {
       <MermaidFullscreen />
       <RollbackOverlay />
       <ForkDialog />
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-bg-secondary/90 border-b border-border-primary text-[11px] text-text-tertiary flex-shrink-0">
-        <SessionToggleIcon />
-        {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
-        <ReturnToSourceButton variant="top" />
-        {chatIdentity && (
-          <span
-            data-testid="chat-session-identity-badge"
-            data-session-kind={chatIdentity.kind}
-            className={`inline-flex min-w-0 max-w-[220px] items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${sessionIdentityClass(chatIdentity)}`}
-            title={
-              chatProjectPath ? `${chatIdentity.title} · ${chatProjectPath}` : chatIdentity.title
-            }
-          >
-            {chatIdentity.kind === "fork" ? (
-              <GitFork className="h-3 w-3 shrink-0" />
-            ) : (
-              <Bot className="h-3 w-3 shrink-0" />
-            )}
-            <span className="shrink-0">{chatIdentity.label}</span>
-            {chatProjectName && (
-              <span className="min-w-0 truncate text-current/75">{chatProjectName}</span>
-            )}
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-1">
-          <UIPendingCenter />
-          <NotificationCenter />
-          <ChatReloadButton sessionId={reloadSessionId} status={effectiveStatus} />
-          <ChangeReviewBell />
-          <StatusToggleIcon />
+      <>
+        <div className="flex items-center gap-2 px-2 py-1.5 bg-bg-secondary/90 border-b border-border-primary text-[11px] text-text-tertiary flex-shrink-0 sm:gap-4 sm:px-4">
+          <SessionToggleIcon />
+          {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
+          {chatIdentity && (
+            <span
+              data-testid="chat-session-identity-badge"
+              data-session-kind={chatIdentity.kind}
+              className={`inline-flex min-w-0 max-w-[220px] items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${sessionIdentityClass(chatIdentity)}`}
+              title={
+                chatProjectPath ? `${chatIdentity.title} · ${chatProjectPath}` : chatIdentity.title
+              }
+            >
+              {chatIdentity.kind === "fork" ? (
+                <GitFork className="h-3 w-3 shrink-0" />
+              ) : (
+                <Bot className="h-3 w-3 shrink-0" />
+              )}
+              <span className="shrink-0">{chatIdentity.label}</span>
+              {chatProjectName && (
+                <span className="min-w-0 truncate text-current/75">{chatProjectName}</span>
+              )}
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            <UIPendingCenter />
+            <NotificationCenter />
+            <ChangeReviewBell />
+            <StatusToggleIcon />
+          </div>
         </div>
-      </div>
 
-      <RetryNotification />
+        <RetryNotification />
 
-      <div className="flex-1 min-h-0 flex overflow-hidden">
-        <div className="flex-1 min-h-0 min-w-0 flex flex-col">
-          <div className="flex-1 min-h-0 min-w-0 relative overflow-hidden">
-            {projectFailed && !isViewingSubagent ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3 max-w-xs text-center">
-                  <AlertTriangle className="w-8 h-8 text-status-warning" />
-                  <div className="text-sm text-text-secondary">{t("sessionStartFailed")}</div>
-                  {projectError && (
-                    <div className="whitespace-pre-line break-words text-xs text-text-tertiary">
-                      {projectError}
-                    </div>
-                  )}
-                  <button
-                    onClick={retryActiveProject}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-semantic-accent text-white text-xs hover:bg-semantic-accent transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    {t("retry")}
-                  </button>
+        <div
+          className={`flex-1 min-h-0 flex overflow-hidden ${
+            hideMessageSurfaceUntilInitialBottom ? "pointer-events-none opacity-0" : ""
+          }`}
+          aria-busy={hideMessageSurfaceUntilInitialBottom ? "true" : undefined}
+        >
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col">
+            <div className="flex-1 min-h-0 min-w-0 relative overflow-hidden">
+              {projectFailed && !isViewingSubagent ? (
+                <div className="h-full flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-3 max-w-xs text-center">
+                    <AlertTriangle className="w-8 h-8 text-status-warning" />
+                    <div className="text-sm text-text-secondary">{t("sessionStartFailed")}</div>
+                    {projectError && (
+                      <div className="whitespace-pre-line break-words text-xs text-text-tertiary">
+                        {projectError}
+                      </div>
+                    )}
+                    <button
+                      onClick={retryActiveProject}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs hover:bg-accent-hover transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      {t("retry")}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div ref={selectionRootRef} className="relative h-full">
-                <MessageListView
-                  source={isViewingSubagent ? "sub" : "main"}
-                  scrollRef={messagesScrollRef}
-                  vlistRef={vlistRef}
-                  onScroll={handleScroll}
-                  onScrollEnd={wrappedHandleScrollEnd}
-                  isLoadingMore={!isViewingSubagent ? isLoadingMore : undefined}
-                  hasMoreMessages={!isViewingSubagent ? hasMoreMessages : undefined}
-                  activeSessionId={(isViewingSubagent ? activeSubId : activeSessionId) ?? undefined}
-                  bufferSize={isMobileOrTablet ? 360 : 800}
+              ) : (
+                <div ref={selectionRootRef} className="relative h-full">
+                  <MessageListView
+                    source={isViewingSubagent ? "sub" : "main"}
+                    scrollRef={messagesScrollRef}
+                    vlistRef={vlistRef}
+                    onScroll={handleScroll}
+                    onScrollEnd={wrappedHandleScrollEnd}
+                    isLoadingMore={!isViewingSubagent ? isLoadingMore : undefined}
+                    hasMoreMessages={!isViewingSubagent ? hasMoreMessages : undefined}
+                    activeSessionId={
+                      (isViewingSubagent ? activeSubId : activeSessionId) ?? undefined
+                    }
+                    bufferSize={isMobileOrTablet ? 720 : 1600}
+                  />
+                  <TextSelectionToolbar
+                    rootRef={selectionRootRef}
+                    onQuoteText={(text) =>
+                      useComposerPlaceholderStore.getState().addTextQuote(text)
+                    }
+                    onFocusInput={() => inputBarRef.current?.focus()}
+                  />
+                </div>
+              )}
+              {messages.length > 0 && (
+                <ScrollToolbar
+                  isAtTop={isAtTop}
+                  isAtBottom={isAtBottom}
+                  autoScrollEnabled={autoScrollEnabled}
+                  onScrollToTop={() => handleScrollToEdge("top")}
+                  onScrollToBottom={() => handleScrollToEdge("bottom")}
+                  onToggleAutoScroll={toggleAutoScroll}
+                  isSeekingTop={isSeekingTop}
                 />
-                <TextSelectionToolbar
-                  rootRef={selectionRootRef}
-                  onQuoteText={(text) => useComposerPlaceholderStore.getState().addTextQuote(text)}
-                  onFocusInput={() => inputBarRef.current?.focus()}
-                />
-              </div>
-            )}
-            {messages.length > 0 && (
-              <ScrollToolbar
-                isAtTop={isAtTop}
-                isAtBottom={isAtBottom}
-                autoScrollEnabled={autoScrollEnabled}
-                onScrollToTop={() => handleScrollToEdge("top")}
-                onScrollToBottom={() => handleScrollToEdge("bottom")}
-                onToggleAutoScroll={toggleAutoScroll}
-              />
+              )}
+            </div>
+            {activeSessionId && !isViewingSubagent && (
+              <>
+                {!goalMode && <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />}
+                <QueueCards sessionId={activeSessionId} />
+              </>
             )}
           </div>
-          {activeSessionId && !isViewingSubagent && (
-            <>
-              {!goalMode && <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />}
-              <QueueCards sessionId={activeSessionId} />
-            </>
+          {shouldRenderSideNav && (
+            <div className="w-10 shrink-0 overflow-hidden">
+              <SideNav
+                ref={sideNavRef}
+                messages={sideNavMessages}
+                onNavDotClick={handleNavDotClick}
+                pagination={sideNavPagination}
+                isScrollLocked={isSideNavScrollLocked}
+              />
+            </div>
           )}
         </div>
-        {shouldRenderSideNav && (
-          <div className="w-10 shrink-0 overflow-hidden">
-            <SideNav
-              ref={sideNavRef}
-              messages={renderedMessages}
-              onNavDotClick={handleNavDotClick}
-              pagination={sideNavPagination}
-              isScrollLocked={isSideNavScrollLocked}
-            />
-          </div>
-        )}
-      </div>
 
-      <MessageSelectionBar
-        messageIds={messageIds}
-        messages={messages}
-        onDeleteSelected={(ids) => {
-          void ids;
-        }}
-      />
-
-      {!goalMode && !isViewingSubagent && (
-        <QuickActionToolbar onGoalClick={() => startGoalMode()} />
-      )}
-
-      <div
-        className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
-        style={
-          isMobileOrTablet
-            ? undefined
-            : { paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }
-        }
-        onPaste={handlePaste}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <ProjectRuntimePendingRequests
-          activeSessionId={isViewingSubagent ? activeSubId : activeSessionId}
-          placement="composerOverlay"
+        <MessageSelectionBar
+          messageIds={messageIds}
+          messages={messages}
+          onSummarizeSelected={handleSummarizeSelectedMessages}
+          onRememberSelected={handleRememberSelectedMessages}
+          onDeleteSelected={handleDeleteSelectedMessages}
         />
-        {!isViewingSubagent ? (
-          (!sessionReady || !agentReady) && !projectFailed ? (
-            <div className="flex-1 flex items-center justify-center gap-2 py-2">
-              <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
-              <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-end gap-1.5">
-                <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
-                  {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
-                  {!goalMode && <AttachmentBar />}
-                  {!goalMode && <ComposerPlaceholderBar />}
-                  <InputBar
-                    ref={inputBarRef}
-                    onSend={goalMode ? handleCreateGoal : handleSend}
-                    sessionId={activeSessionId ?? ""}
-                    disabled={!activeSessionId || isCreatingGoal}
-                    placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
-                    historyEnabled={!goalMode}
-                    hasExternalContent={!goalMode && hasComposerPlaceholders}
-                    embedded
-                    onPasteTextAsPlaceholder={
-                      !goalMode
-                        ? (text) =>
-                            Boolean(
-                              useComposerPlaceholderStore.getState().addLongContentPaste(text),
-                            )
-                        : undefined
-                    }
-                    onTriggerPopup={
-                      !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
-                    }
-                    popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
-                    onPopupConfirm={commandPopup.confirmSelection}
-                    onPopupCancel={commandPopup.closePopup}
-                    onPopupArrowUp={commandPopup.navigateUp}
-                    onPopupArrowDown={commandPopup.navigateDown}
-                  />
-                  {(!isMobileOrTablet || goalMode) && (
-                    <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5 max-lg:min-h-8 max-lg:py-1">
-                      <AttachmentButtons
-                        layout="compact"
-                        mode={goalMode ? "goal" : "normal"}
-                        onGoalClick={() => startGoalMode()}
-                        onExitGoalMode={() => startGoalMode()}
-                      />
-                      {!goalMode && (
-                        <div className="hidden text-[11px] text-text-tertiary sm:block">
-                          {attachmentCount > 0
-                            ? t("fileAttachment.count", { count: attachmentCount })
-                            : t("composerActionsHint")}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                <div className="flex shrink-0 flex-col justify-end gap-1.5 py-1">
-                  {goalMode ? (
-                    <button
-                      onClick={() => void handleRefineGoal()}
-                      disabled={isCreatingGoal || isRefiningGoal || !inputText.trim()}
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-semantic-accent/20 text-semantic-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-semantic-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
-                      title={t("goal.refine")}
-                      aria-label={t("goal.refine")}
-                    >
-                      {isRefiningGoal ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4" />
-                      )}
-                    </button>
-                  ) : isStreaming && inputText.trim() ? (
-                    <button
-                      onClick={handleFollowUp}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
-                      title={t("sendFollowUp")}
-                      aria-label={t("sendFollowUp")}
-                    >
-                      <Clock className="w-4 h-4" />
-                    </button>
-                  ) : isStreaming ? (
-                    <button
-                      onClick={handleAbort}
-                      disabled={isAborting}
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
-                      title={isAborting ? t("stopping") : t("stop")}
-                      aria-label={isAborting ? t("stopping") : t("stop")}
-                    >
-                      {isAborting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      disabled
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
-                      title={t("stop")}
-                      aria-label={t("stop")}
-                    >
-                      <Square className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() =>
-                      goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
-                    }
-                    disabled={
-                      !agentReady ||
-                      isAborting ||
-                      isCreatingGoal ||
-                      isPermissionPending ||
-                      (goalMode
-                        ? !inputText.trim()
-                        : !inputText.trim() && attachmentCount === 0 && !hasComposerPlaceholders) ||
-                      !activeSessionId ||
-                      hasNoModel
-                    }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && (attachmentCount > 0 || hasComposerPlaceholders))) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
-                    title={
-                      isPermissionPending
-                        ? t("waitPermission")
-                        : hasNoModel
-                          ? t("sendDisabledNoModel")
-                          : goalMode
-                            ? t("goal.create")
-                            : isStreaming
-                              ? t("steer")
-                              : t("send")
-                    }
-                    aria-label={
-                      isPermissionPending
-                        ? t("waitPermission")
-                        : hasNoModel
-                          ? t("sendDisabledNoModel")
-                          : goalMode
-                            ? t("goal.create")
-                            : isStreaming
-                              ? t("steer")
-                              : t("send")
-                    }
-                  >
-                    {isCreatingGoal ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : goalMode ? (
-                      <Target className="w-4 h-4" />
-                    ) : isStreaming ? (
-                      <Zap className="w-4 h-4" />
-                    ) : (
-                      <ArrowUp className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </>
-          )
-        ) : null}
-        {isViewingSubagent && (
-          <div className="flex-1 flex items-center justify-center gap-3 py-2">
-            <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>
-            <ReturnToSourceButton variant="bottom" />
-            <button
-              onClick={handleSubagentFork}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
-                bg-semantic-accent/15 text-semantic-accent hover:bg-semantic-accent/25 hover:text-semantic-accent
-                border border-semantic-accent/20 transition-colors"
-              title={t("fork")}
-            >
-              <GitFork className="w-3 h-3" />
-              {t("fork")}
-            </button>
-          </div>
+        {!goalMode && !isViewingSubagent && (
+          <QuickActionToolbar onGoalClick={() => startGoalMode()} />
         )}
-        {!isMobileOrTablet && !isViewingSubagent && (
-          <CommandPopup
-            popupMode={commandPopup.popupMode}
-            atTab={commandPopup.atTab}
-            items={commandPopup.items}
-            loading={commandPopup.loading}
-            activeIndex={commandPopup.activeIndex}
-            query={commandPopup.query}
-            fileBreadcrumbs={commandPopup.fileBreadcrumbs}
-            onSetAtTab={commandPopup.setAtTab}
-            onSelect={commandPopup.handleSelect}
-            onClose={commandPopup.closePopup}
-            onBreadcrumb={commandPopup.handleBreadcrumb}
-            onListKeyDown={commandPopup.handleListKeyDown}
-            onSetActiveIndex={commandPopup.setActiveIndex}
+
+        <div
+          className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-accent/50 bg-accent/5" : ""}`}
+          style={
+            isMobileOrTablet
+              ? undefined
+              : { paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }
+          }
+          onPaste={handlePaste}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <ProjectRuntimePendingRequests
+            activeSessionId={isViewingSubagent ? activeSubId : activeSessionId}
+            placement="composerOverlay"
           />
-        )}
-      </div>
+          {!isViewingSubagent ? (
+            (!sessionReady || !agentReady) && !projectFailed ? (
+              <div className="flex-1 flex items-center justify-center gap-2 py-2">
+                <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
+                <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end gap-1.5">
+                  <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
+                    {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
+                    {!goalMode && <AttachmentBar />}
+                    {!goalMode && <ComposerPlaceholderBar />}
+                    {activeRemoteDisconnected && (
+                      <div
+                        data-testid="composer-remote-disconnected"
+                        className="mx-2 mt-2 flex items-start gap-2 rounded-lg border border-status-error/35 bg-status-error/10 px-2.5 py-2 text-[11px] leading-4 text-status-error"
+                      >
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-semibold">{t("remoteDisconnectedTitle")}</div>
+                          <div className="break-words text-status-error/80">
+                            {remoteDisconnectedMessage}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <InputBar
+                      ref={inputBarRef}
+                      onSend={goalMode ? handleCreateGoal : handleSend}
+                      sessionId={activeSessionId ?? ""}
+                      disabled={composerInputDisabled}
+                      placeholder={
+                        activeRemoteDisconnected
+                          ? t("remoteDisconnectedPlaceholder")
+                          : goalMode
+                            ? t("goal.inputPlaceholder")
+                            : undefined
+                      }
+                      historyEnabled={!goalMode}
+                      hasExternalContent={!goalMode && hasComposerPlaceholders}
+                      embedded
+                      onPasteTextAsPlaceholder={
+                        !goalMode
+                          ? (text) =>
+                              Boolean(
+                                useComposerPlaceholderStore.getState().addLongContentPaste(text),
+                              )
+                          : undefined
+                      }
+                      onTriggerPopup={
+                        !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
+                      }
+                      popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
+                      onPopupConfirm={commandPopup.confirmSelection}
+                      onPopupCancel={commandPopup.closePopup}
+                      onPopupArrowUp={commandPopup.navigateUp}
+                      onPopupArrowDown={commandPopup.navigateDown}
+                    />
+                    {showComposerUtilityRow && (
+                      <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5 max-lg:min-h-8 max-lg:py-1">
+                        {(!isMobileOrTablet || goalMode) && (
+                          <AttachmentButtons
+                            layout="compact"
+                            mode={goalMode ? "goal" : "normal"}
+                            onGoalClick={() => startGoalMode()}
+                            onExitGoalMode={() => startGoalMode()}
+                          />
+                        )}
+                        {!goalMode && (
+                          <ReturnToSourceButton variant="bottom" target={returnSourceTarget} />
+                        )}
+                        {!goalMode && !isMobileOrTablet && (
+                          <div className="hidden text-[11px] text-text-tertiary sm:block">
+                            {attachmentCount > 0
+                              ? t("fileAttachment.count", { count: attachmentCount })
+                              : t("composerActionsHint")}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-col justify-end gap-1.5 py-1">
+                    {goalMode ? (
+                      <button
+                        onClick={() => void handleRefineGoal()}
+                        disabled={isCreatingGoal || isRefiningGoal || !inputText.trim()}
+                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-accent/20 text-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        title={t("goal.refine")}
+                        aria-label={t("goal.refine")}
+                      >
+                        {isRefiningGoal ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                      </button>
+                    ) : isStreaming && inputText.trim() ? (
+                      <button
+                        onClick={handleFollowUp}
+                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
+                        title={t("sendFollowUp")}
+                        aria-label={t("sendFollowUp")}
+                      >
+                        <Clock className="w-4 h-4" />
+                      </button>
+                    ) : isStreaming ? (
+                      <button
+                        onClick={handleAbort}
+                        disabled={isAborting}
+                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                        title={isAborting ? t("stopping") : t("stop")}
+                        aria-label={isAborting ? t("stopping") : t("stop")}
+                      >
+                        {isAborting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
+                        title={t("stop")}
+                        aria-label={t("stop")}
+                      >
+                        <Square className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
+                      }
+                      disabled={sendDisabled}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!sendDisabled ? (goalMode ? "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                      title={
+                        isPermissionPending
+                          ? t("waitPermission")
+                          : activeRemoteDisconnected
+                            ? t("remoteDisconnectedPlaceholder")
+                            : hasNoModel
+                              ? t("sendDisabledNoModel")
+                              : goalMode
+                                ? t("goal.create")
+                                : isStreaming
+                                  ? t("steer")
+                                  : t("send")
+                      }
+                      aria-label={
+                        isPermissionPending
+                          ? t("waitPermission")
+                          : hasNoModel
+                            ? t("sendDisabledNoModel")
+                            : goalMode
+                              ? t("goal.create")
+                              : isStreaming
+                                ? t("steer")
+                                : t("send")
+                      }
+                    >
+                      {isCreatingGoal ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : goalMode ? (
+                        <Target className="w-4 h-4" />
+                      ) : isStreaming ? (
+                        <Zap className="w-4 h-4" />
+                      ) : (
+                        <ArrowUp className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )
+          ) : null}
+          {isViewingSubagent && (
+            <div className="flex-1 flex items-center justify-center gap-3 py-2">
+              <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>
+              <ReturnToSourceButton variant="bottom" />
+              <button
+                onClick={handleSubagentFork}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
+                bg-accent/15 text-accent hover:bg-accent/25 hover:text-accent
+                border border-accent/20 transition-colors"
+                title={t("enterChat", "进入聊天")}
+              >
+                <GitFork className="w-3 h-3" />
+                {t("enterChat", "进入聊天")}
+              </button>
+            </div>
+          )}
+          {!isMobileOrTablet && !isViewingSubagent && (
+            <CommandPopup
+              popupMode={commandPopup.popupMode}
+              atTab={commandPopup.atTab}
+              items={commandPopup.items}
+              loading={commandPopup.loading}
+              activeIndex={commandPopup.activeIndex}
+              query={commandPopup.query}
+              fileBreadcrumbs={commandPopup.fileBreadcrumbs}
+              onSetAtTab={commandPopup.setAtTab}
+              onSelect={commandPopup.handleSelect}
+              onClose={commandPopup.closePopup}
+              onBreadcrumb={commandPopup.handleBreadcrumb}
+              onListKeyDown={commandPopup.handleListKeyDown}
+              onSetActiveIndex={commandPopup.setActiveIndex}
+            />
+          )}
+        </div>
+      </>
+      {isFilePreviewOpen && (
+        <div className="absolute inset-0 z-20 bg-bg-elevated">
+          <FileOverlay
+            preview={filePreview}
+            loading={loadingFile}
+            onClose={closeOverlay}
+            onSave={handleSaveFile}
+            onToggleEdit={setFileEditable}
+            embedded
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-export function ReturnToSourceButton({ variant = "bottom" }: { variant?: "top" | "bottom" }) {
+export function ReturnToSourceButton({
+  variant = "bottom",
+  target,
+}: {
+  variant?: "top" | "bottom";
+  target?: ReturnSourceTarget | null;
+}) {
   const { t } = useTranslation("chat");
-  const returnTarget = useReturnToSourceSession();
+  const fallbackTarget = useReturnToSourceSession();
+  const returnTarget = target === undefined ? fallbackTarget : target;
   if (!returnTarget) return null;
 
   const label =
@@ -1353,7 +1887,7 @@ function SessionToggleIcon() {
           e.stopPropagation();
           toggleSessionCollapse();
         }}
-        className="p-1 rounded transition-colors text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
+        className="p-1 rounded transition-colors text-text-tertiary hover:text-text-primary hover:bg-surface-hover max-sm:-ml-1"
         title={t("openSessionPanel")}
       >
         <PanelLeft className="w-3.5 h-3.5" />
@@ -1375,7 +1909,7 @@ function SessionToggleIcon() {
           showSession();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+      className={`p-1 rounded transition-colors max-sm:-ml-1 ${isVisible ? "text-accent hover:text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isVisible ? t("closeSessionPanel") : t("openSessionPanel")}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -1406,64 +1940,10 @@ function StatusToggleIcon() {
           showStatus();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+      className={`p-1 rounded transition-colors max-sm:-mr-1 ${isVisible ? "text-accent hover:text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />
-    </button>
-  );
-}
-
-export function ChatReloadButton({
-  sessionId,
-  status,
-}: {
-  sessionId: string | null | undefined;
-  status: SessionStatus | undefined;
-}) {
-  const { t } = useTranslation("chat");
-  const pushNotif = useNotificationStore((s) => s.push);
-  const [isReloading, setIsReloading] = useState(false);
-  const isVisible = shouldShowChatReloadButton({ sessionId, status });
-
-  const handleReload = useCallback(
-    async (event: MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      if (!sessionId || isReloading) return;
-      setIsReloading(true);
-      try {
-        await apiClient.call("agent.reload", { sessionId });
-        useSessionStore.getState().fetchInitialState(sessionId);
-        pushNotif({ message: t("reloadSuccess"), level: "info" });
-      } catch (err) {
-        log.warn("agent.reload failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        pushNotif({ message: t("reloadFailed"), level: "error" });
-      } finally {
-        setIsReloading(false);
-      }
-    },
-    [isReloading, pushNotif, sessionId, t],
-  );
-
-  if (!isVisible && !isReloading) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={handleReload}
-      disabled={isReloading}
-      className={`p-1 rounded transition-colors ${
-        isReloading
-          ? "text-semantic-accent cursor-wait"
-          : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
-      }`}
-      title={t("reloadTitle")}
-      aria-label={t("reloadTitle")}
-    >
-      <RefreshCw className={`w-3.5 h-3.5 ${isReloading ? "animate-spin" : ""}`} />
     </button>
   );
 }

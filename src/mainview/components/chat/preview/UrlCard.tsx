@@ -65,7 +65,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   if (fullscreen) {
     return (
       <IframeFullscreenOverlay
-        icon={<Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />}
+        icon={<Globe className="w-3.5 h-3.5 text-info shrink-0" />}
         title={details.title ?? src}
         src={displayUrl}
         onClose={() => setFullscreen(false)}
@@ -79,7 +79,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30">
-        <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
+        <Globe className="w-3.5 h-3.5 text-info shrink-0" />
         <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
           {details.title ?? src}
         </span>

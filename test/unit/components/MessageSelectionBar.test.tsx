@@ -30,12 +30,14 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
     (sel: (s: Record<string, unknown>) => unknown) =>
       sel({
         activeSessionId: "test-session",
+        sessionContextMap: { "test-session": { tokens: 2000, contextWindow: 100000 } },
         projectTabs: [{ id: "proj-1", path: "/test" }],
         activeProjectId: "proj-1",
       }),
     {
       getState: () => ({
         activeSessionId: "test-session",
+        sessionContextMap: { "test-session": { tokens: 2000, contextWindow: 100000 } },
         projectTabs: [{ id: "proj-1", path: "/test" }],
         activeProjectId: "proj-1",
       }),
@@ -107,8 +109,27 @@ describe("MessageSelectionBar", () => {
         ]}
       />,
     );
-    expect(screen.getByText("700")).toBeInTheDocument();
-    expect(screen.getByText("400")).toBeInTheDocument();
+    expect(screen.getByText("1.1K")).toBeInTheDocument();
+    expect(screen.getByText("900")).toBeInTheDocument();
+  });
+
+  it("labels selected count and token stats so the numbers are understandable", () => {
+    render(
+      <MessageSelectionBar
+        messageIds={["msg-1", "msg-2"]}
+        messages={[
+          makeMessage("msg-1", "user", "hello", { input: 500, output: 100 }),
+          makeMessage("msg-2", "assistant", "hi", { input: 200, output: 300 }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("selection.selectedShort")).toBeInTheDocument();
+    expect(screen.getByText("selection.selectedTokensShort")).toBeInTheDocument();
+    expect(screen.getByText("selection.afterDeleteTokensShort")).toBeInTheDocument();
+    expect(screen.getByTitle("selection.selectedCountTitle")).toBeInTheDocument();
+    expect(screen.getByTitle("selection.selectedTokensTitle")).toBeInTheDocument();
+    expect(screen.getByTitle("selection.afterDeleteTokensTitle")).toBeInTheDocument();
   });
 
   it("does NOT show token stats when no tokenUsage", () => {
@@ -133,6 +154,32 @@ describe("MessageSelectionBar", () => {
     );
     fireEvent.click(screen.getByTitle("deleteSelected"));
     expect(onDeleteSelected).toHaveBeenCalledWith(["msg-1", "msg-2"]);
+  });
+
+  it("click Summary calls onSummarizeSelected with selected IDs", () => {
+    const onSummarizeSelected = vi.fn();
+    render(
+      <MessageSelectionBar
+        messageIds={["msg-1", "msg-2"]}
+        messages={[makeMessage("msg-1", "user", "hello"), makeMessage("msg-2", "assistant", "hi")]}
+        onSummarizeSelected={onSummarizeSelected}
+      />,
+    );
+    fireEvent.click(screen.getByTitle("summarizeSelected"));
+    expect(onSummarizeSelected).toHaveBeenCalledWith(["msg-1", "msg-2"]);
+  });
+
+  it("click Save as memory calls onRememberSelected with selected IDs", () => {
+    const onRememberSelected = vi.fn();
+    render(
+      <MessageSelectionBar
+        messageIds={["msg-1", "msg-2"]}
+        messages={[makeMessage("msg-1", "user", "hello"), makeMessage("msg-2", "assistant", "hi")]}
+        onRememberSelected={onRememberSelected}
+      />,
+    );
+    fireEvent.click(screen.getByTitle("saveAsMemory"));
+    expect(onRememberSelected).toHaveBeenCalledWith(["msg-1", "msg-2"]);
   });
 
   it("click X (cancel) calls clear()", () => {

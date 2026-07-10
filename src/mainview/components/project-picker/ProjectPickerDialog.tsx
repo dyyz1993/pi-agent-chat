@@ -16,6 +16,7 @@ import {
   ArrowDownAZ,
   Clock,
   Server,
+  PlugZap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -86,8 +87,10 @@ function compactMiddle(value: string, max = 64): string {
 
 function getRecentProjectDisplay(project: RecentProject) {
   if (project.runtime === "ssh" && project.remote) {
+    const isSandbox = project.remote.sshRuntimeKind === "ssh-command";
     return {
       isRemote: true,
+      isSandbox,
       title: project.name || pathBasename(project.remote.remotePath) || project.remote.host,
       primary: project.remote.host,
       secondary: project.remote.remotePath,
@@ -96,6 +99,7 @@ function getRecentProjectDisplay(project: RecentProject) {
   }
   return {
     isRemote: false,
+    isSandbox: false,
     title: project.name || pathBasename(project.path),
     primary: project.path,
     secondary: "",
@@ -401,7 +405,12 @@ export function ProjectPickerDialog({
 
     return projects.map((proj) => {
       const display = getRecentProjectDisplay(proj);
-      const Icon = display.isRemote ? Server : Folder;
+      const Icon = display.isRemote ? (display.isSandbox ? PlugZap : Server) : Folder;
+      const iconColorClass = display.isRemote
+        ? display.isSandbox
+          ? "border-runtime-sandbox/30 bg-runtime-sandbox/10 text-runtime-sandbox"
+          : "border-runtime-ssh/25 bg-runtime-ssh/10 text-runtime-ssh"
+        : "border-border-secondary bg-bg-elevated text-runtime-local";
       return (
         <div
           key={proj.path}
@@ -423,11 +432,7 @@ export function ProjectPickerDialog({
             <div
               className={`mt-0.5 flex shrink-0 items-center justify-center rounded-md border ${
                 mobile ? "h-9 w-9" : "h-8 w-8"
-              } ${
-                display.isRemote
-                  ? "border-status-info/25 bg-bg-elevated text-status-info"
-                  : "border-border-secondary bg-bg-elevated text-semantic-accent/80"
-              }`}
+              } ${iconColorClass}`}
             >
               <Icon className={mobile ? "h-5 w-5" : "h-4 w-4"} />
             </div>
@@ -443,8 +448,14 @@ export function ProjectPickerDialog({
                   {display.title}
                 </div>
                 {display.isRemote && (
-                  <span className="shrink-0 rounded border border-status-info/25 bg-status-info/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-status-info">
-                    {t("picker.remoteBadge")}
+                  <span
+                    className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                      display.isSandbox
+                        ? "border-runtime-sandbox/25 bg-runtime-sandbox/10 text-runtime-sandbox"
+                        : "border-runtime-ssh/25 bg-runtime-ssh/10 text-runtime-ssh"
+                    }`}
+                  >
+                    {display.isSandbox ? "Sandbox" : t("picker.remoteBadge")}
                   </span>
                 )}
               </div>
@@ -520,7 +531,7 @@ export function ProjectPickerDialog({
                 onClick={() => navigateTo(seg.path)}
                 className={`text-xs truncate max-w-[120px] px-1.5 py-0.5 rounded transition-colors ${
                   i === segments.length - 1
-                    ? "text-semantic-accent font-medium bg-semantic-accent/10"
+                    ? "text-accent font-medium bg-accent/10"
                     : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover/50"
                 }`}
               >
@@ -572,7 +583,7 @@ export function ProjectPickerDialog({
         </div>
         <button
           onClick={() => handleSelectFolder(entry.path)}
-          className="p-1 rounded hover:bg-semantic-accent/20 text-text-secondary hover:text-semantic-accent opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          className="p-1 rounded hover:bg-accent/20 text-text-secondary hover:text-accent opacity-0 group-hover:opacity-100 transition-all shrink-0"
           title={t("picker.selectFolderAsProject")}
         >
           <FolderOpen className="w-3.5 h-3.5" />
@@ -660,7 +671,7 @@ export function ProjectPickerDialog({
         <div className="space-y-2">
           <button
             onClick={() => navigateTo(homePathRef.current || "/")}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-semantic-accent/20 hover:bg-semantic-accent/30 border border-semantic-accent/30 rounded-lg text-xs text-semantic-accent transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent/10 hover:bg-accent/15 border border-accent/30 rounded-lg text-xs text-accent transition-colors"
           >
             <Home className="w-3.5 h-3.5" />
             {t("picker.browseOtherDirs")}
@@ -668,7 +679,7 @@ export function ProjectPickerDialog({
           {onOpenRemoteProject && (
             <button
               onClick={handleOpenRemote}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-status-info/10 hover:bg-status-info/15 border border-status-info/30 rounded-lg text-xs text-status-info transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-runtime-ssh/10 hover:bg-runtime-ssh/15 border border-runtime-ssh/30 rounded-lg text-xs text-runtime-ssh transition-colors"
             >
               <Server className="w-3.5 h-3.5" />
               {t("picker.openRemoteProject")}
@@ -690,14 +701,14 @@ export function ProjectPickerDialog({
               value={browserSearchQuery}
               onChange={(e) => setBrowserSearchQuery(e.target.value)}
               placeholder={t("picker.searchCurrentDir")}
-              className="w-full pl-7 pr-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+              className="w-full pl-7 pr-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-accent/50"
             />
           </div>
           <button
             onClick={() => setBrowserSortBy((prev) => (prev === "mtime" ? "name" : "mtime"))}
             className={`flex items-center gap-1 px-2 py-1.5 rounded-md border text-[10px] transition-colors shrink-0 ${
               browserSortBy === "mtime"
-                ? "border-semantic-accent/40 bg-semantic-accent/10 text-semantic-accent"
+                ? "border-accent/40 bg-accent/10 text-accent"
                 : "border-border-secondary dark:border-border-secondary/50 text-text-tertiary hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover/50"
             }`}
             title={browserSortBy === "mtime" ? t("picker.sortByModified") : t("picker.sortByName")}
@@ -727,12 +738,12 @@ export function ProjectPickerDialog({
               }}
               placeholder={t("picker.newFolderName")}
               autoFocus
-              className="flex-1 px-2.5 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+              className="flex-1 px-2.5 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-accent/50"
             />
             <button
               onClick={handleCreateFolder}
               disabled={!newFolderName.trim() || creating}
-              className="p-1.5 rounded-md bg-semantic-accent hover:bg-semantic-accent text-white disabled:opacity-40 shrink-0"
+              className="p-1.5 rounded-md bg-accent hover:bg-accent-hover text-white disabled:opacity-40 shrink-0"
             >
               {creating ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -759,7 +770,7 @@ export function ProjectPickerDialog({
           </button>
           <button
             onClick={handleSelectCurrentFolder}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-semantic-accent hover:bg-semantic-accent rounded-md text-[11px] font-medium text-white transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover rounded-md text-[11px] font-medium text-white transition-colors"
           >
             <FolderOpen className="w-3.5 h-3.5" />
             {t("picker.selectCurrentFolder")}
@@ -780,15 +791,14 @@ export function ProjectPickerDialog({
       {/* Mobile view */}
       <div
         ref={mobileDialogRef}
-        className="md:hidden fixed inset-0 z-fullscreen bg-surface-code flex flex-col animate-slide-in-up"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        className="md:hidden fixed inset-0 z-fullscreen bg-bg-elevated dark:bg-surface-code flex flex-col overflow-hidden animate-slide-in-up"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
         role="dialog"
         aria-modal="true"
         aria-label={t("picker.title")}
       >
         <div
-          className="flex items-center justify-between px-4 py-3 border-b border-border-secondary dark:border-surface-code shrink-0"
-          style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
+          className="surface-header-safe-top flex items-center justify-between px-4 py-3 border-b border-border-secondary shrink-0"
         >
           <h2 className="text-sm font-semibold text-text-primary">{t("picker.title")}</h2>
           <IconButton label={t("picker.close")} size="md" onClick={onClose}>
@@ -850,7 +860,7 @@ export function ProjectPickerDialog({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t("picker.searchProject")}
-                  className="w-full pl-9 pr-4 py-2.5 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                  className="w-full pl-9 pr-4 py-2.5 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
                 />
               </div>
               {renderProjectList(sortedRecents, true)}
@@ -928,7 +938,7 @@ export function ProjectPickerDialog({
                       value={browserSearchQuery}
                       onChange={(e) => setBrowserSearchQuery(e.target.value)}
                       placeholder={t("picker.searchCurrentDir")}
-                      className="w-full pl-7 pr-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                      className="w-full pl-7 pr-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
                     />
                   </div>
                   <button
@@ -937,7 +947,7 @@ export function ProjectPickerDialog({
                     }
                     className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border text-xs transition-colors shrink-0 ${
                       browserSortBy === "mtime"
-                        ? "border-semantic-accent/40 bg-semantic-accent/10 text-semantic-accent"
+                        ? "border-accent/40 bg-accent/10 text-accent"
                         : "border-border-secondary dark:border-border-secondary/50 text-text-tertiary active:text-text-secondary active:bg-surface-hover"
                     }`}
                   >
@@ -989,7 +999,7 @@ export function ProjectPickerDialog({
                                 e.stopPropagation();
                                 handleSelectFolder(entry.path);
                               }}
-                              className="p-2 rounded-lg active:bg-surface-hover dark:active:bg-surface-hover/50 text-text-tertiary active:text-semantic-accent shrink-0"
+                              className="p-2 rounded-lg active:bg-surface-hover dark:active:bg-surface-hover/50 text-text-tertiary active:text-accent shrink-0"
                               title={t("picker.selectFolderAsProject")}
                             >
                               <FolderOpen className="w-4 h-4" />
@@ -1033,12 +1043,12 @@ export function ProjectPickerDialog({
                       }}
                       placeholder={t("picker.newFolderName")}
                       autoFocus
-                      className="flex-1 px-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                      className="flex-1 px-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
                     />
                     <button
                       onClick={handleCreateFolder}
                       disabled={!newFolderName.trim() || creating}
-                      className="p-2 rounded-xl bg-semantic-accent active:bg-semantic-accent text-white disabled:opacity-40 shrink-0"
+                      className="p-2 rounded-xl bg-accent active:bg-accent-hover text-white disabled:opacity-40 shrink-0"
                     >
                       {creating ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1065,7 +1075,7 @@ export function ProjectPickerDialog({
                   </button>
                   <button
                     onClick={handleSelectCurrentFolder}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-semantic-accent active:bg-semantic-accent rounded-xl text-sm font-medium text-white transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent active:bg-accent-hover rounded-xl text-sm font-medium text-white transition-colors"
                   >
                     <FolderOpen className="w-4 h-4" />
                     {t("picker.selectCurrentFolder")}
@@ -1115,7 +1125,7 @@ export function ProjectPickerDialog({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t("picker.searchPlaceholder")}
-                    className="pl-7 pr-3 py-1 w-36 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-tertiary dark:placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+                    className="pl-7 pr-3 py-1 w-36 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-tertiary dark:placeholder:text-text-secondary outline-none focus:border-accent/50"
                   />
                 </div>
               </div>

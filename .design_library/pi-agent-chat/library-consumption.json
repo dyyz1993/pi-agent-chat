@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "tokenSource": "css.json",
+  "recommendedReadOrder": [
+    "SKILL.md",
+    "css.json",
+    "components/index.json",
+    "uikit-plan.json",
+    "preview/component-button.html",
+    "preview/component-card.html",
+    "preview/component-input.html",
+    "preview/component-sidebar.html",
+    "preview/component-tag.html",
+    "preview/component-modal.html",
+    "ui_kits/desktop-app/index.html"
+  ],
+  "coreComponents": ["button", "card", "input", "sidebar", "tag", "modal"],
+  "supportComponents": []
+}

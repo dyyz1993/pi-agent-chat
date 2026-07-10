@@ -24,6 +24,7 @@ import { formatProjectStartError, getErrorMessage } from "./session-start-error"
 import {
   createCreateNewSessionAction,
   createLoadSessionsForProjectAction,
+  type CreateNewSessionResult,
 } from "./session-project-actions";
 import {
   createRenameSessionAction,
@@ -80,6 +81,20 @@ function findSessionProjectPath(state: SessionState, sessionId: string): string 
 function getActiveTabPath(state: SessionState): string | null {
   const tab = state.projectTabs.find((item) => item.id === state.activeProjectId);
   return getProjectWorkspacePath(tab) || null;
+}
+
+function clearActiveSubsessionSelection(): void {
+  if (!useSubagentStore.getState().activeSubsessionId) return;
+  useSubagentStore.setState({ activeSubsessionId: null });
+}
+
+function clearActiveSubsessionWhenSessionChanges(
+  currentSessionId: string | null,
+  nextSessionId: string | null,
+): void {
+  if (currentSessionId !== nextSessionId) {
+    clearActiveSubsessionSelection();
+  }
 }
 
 function mergeProjectTab(existing: ProjectTab, incoming: ProjectTab): ProjectTab {
@@ -227,6 +242,7 @@ interface SessionState {
   modelStateLoading: boolean;
   modelManuallySet: boolean;
   currentThinkingLevel: string;
+  thinkingLevelBySession: Record<string, string>;
   availableModels: AvailableModel[];
   availableModelsBySession: Record<string, AvailableModel[]>;
   modelFavorites: Set<string>;
@@ -247,7 +263,7 @@ interface SessionState {
     options?: { skipCleanup?: boolean; forceNewProcess?: boolean },
   ) => void;
   retryActiveProject: () => void;
-  createNewSession: (projectPath?: string) => Promise<void>;
+  createNewSession: (projectPath?: string) => Promise<CreateNewSessionResult>;
   updateSessionProjectPath: (sessionId: string, projectPath: string) => void;
   renameSession: (sessionId: string, newName: string) => void;
   deleteSession: (sessionId: string) => void;
@@ -266,8 +282,9 @@ interface SessionState {
   ) => Promise<void>;
   scheduleWorkspaceResourceRefresh: (sessionId: string) => void;
   refreshSessionResources: (sessionId: string) => void;
+  setModelForSession: (sessionId: string, provider: string, modelId: string) => void;
   setCurrentModel: (provider: string, modelId: string) => void;
-  setThinkingLevel: (level: string) => void;
+  setThinkingLevel: (level: string, sessionId?: string) => void;
   fetchModelFavorites: () => void;
   toggleModelFavorite: (modelKey: string) => void;
   cleanupActiveSession: (sessionId: string) => void;
@@ -319,6 +336,7 @@ export const useSessionStore = create<SessionState>()(
       modelStateLoading: false,
       modelManuallySet: false,
       currentThinkingLevel: "medium",
+      thinkingLevelBySession: {},
       availableModels: [],
       availableModelsBySession: {},
       modelFavorites: new Set<string>(),
@@ -410,9 +428,11 @@ export const useSessionStore = create<SessionState>()(
         }
 
         const version = get()._projectVersion + 1;
+        const nextSessionId = shouldPreserveRecentSession ? prevSessionId : null;
+        clearActiveSubsessionWhenSessionChanges(prevSessionId, nextSessionId);
         set({
           activeProjectId: id,
-          activeSessionId: shouldPreserveRecentSession ? prevSessionId : null,
+          activeSessionId: nextSessionId,
           _projectVersion: version,
         });
         const tabs = get().projectTabs;
@@ -443,6 +463,7 @@ export const useSessionStore = create<SessionState>()(
               get().lastActiveSessionByProject[tab.path],
             );
             if (!targetSession) return;
+            clearActiveSubsessionWhenSessionChanges(get().activeSessionId, targetSession);
             set((s) => ({
               activeSessionId: targetSession,
               projectStartFailed: { ...s.projectStartFailed, [id]: false },
@@ -472,6 +493,7 @@ export const useSessionStore = create<SessionState>()(
                     get().lastActiveSessionByProject[tab.path],
                   );
                   if (!targetSession) return;
+                  clearActiveSubsessionWhenSessionChanges(get().activeSessionId, targetSession);
                   set((s) => ({
                     activeSessionId: targetSession,
                     projectStartFailed: { ...s.projectStartFailed, [id]: false },
@@ -513,6 +535,7 @@ export const useSessionStore = create<SessionState>()(
         isAgentStarted,
         markAgentStarted,
         clearAgentStarted,
+        clearActiveSubsessionSelection,
       }),
 
       retryActiveProject: createRetryActiveProjectAction({
@@ -591,6 +614,7 @@ export const useSessionStore = create<SessionState>()(
         if (nextActiveId) {
           get().setActiveSession(nextActiveId, true);
         } else {
+          clearActiveSubsessionWhenSessionChanges(get().activeSessionId, null);
           set({ activeSessionId: null });
         }
         if (deletedPath) {
@@ -788,8 +812,7 @@ export const useSessionStore = create<SessionState>()(
         if (existingPromise) {
           await existingPromise;
         } else {
-          const promise = apiClient
-            .call("agent.getAvailableModels", { sessionId })
+          const promise = Promise.resolve(apiClient.call("agent.getAvailableModels", { sessionId }))
             .then((modelsResult) => {
               if (Array.isArray(modelsResult)) {
                 set((s) => ({
@@ -818,24 +841,38 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      setCurrentModel: (provider, modelId) => {
-        const sid = get().activeSessionId;
-        const match = get().availableModels.find(
-          (m) => m.provider === provider && m.id === modelId,
-        );
+      setModelForSession: (sessionId, provider, modelId) => {
+        const availableModels =
+          get().availableModelsBySession[sessionId] ??
+          (get().activeSessionId === sessionId ? get().availableModels : []);
+        const match = availableModels.find((m) => m.provider === provider && m.id === modelId);
         const model: ModelInfo = {
           provider,
           id: modelId,
           ...(match?.name ? { name: match.name } : {}),
           reasoning: match?.reasoning,
         };
-        set({
-          currentModel: model,
+        set((s) => ({
+          currentModel: s.activeSessionId === sessionId ? model : s.currentModel,
           modelManuallySet: true,
-          ...(sid ? { modelBySession: { ...get().modelBySession, [sid]: model } } : {}),
-        });
+          modelBySession: { ...s.modelBySession, [sessionId]: model },
+        }));
       },
-      setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
+      setCurrentModel: (provider, modelId) => {
+        const sid = get().activeSessionId;
+        if (!sid) {
+          set({ currentModel: { provider, id: modelId } });
+          return;
+        }
+        get().setModelForSession(sid, provider, modelId);
+      },
+      setThinkingLevel: (level, sessionId) => {
+        const sid = sessionId ?? get().activeSessionId;
+        set((s) => ({
+          currentThinkingLevel: !sid || s.activeSessionId === sid ? level : s.currentThinkingLevel,
+          ...(sid ? { thinkingLevelBySession: { ...s.thinkingLevelBySession, [sid]: level } } : {}),
+        }));
+      },
 
       fetchModelFavorites: () => {
         apiClient
@@ -1044,6 +1081,7 @@ export const useSessionStore = create<SessionState>()(
 
         const tab = projectTabs.find((t) => t.id === activeProjectId);
         if (!tab) {
+          clearActiveSubsessionWhenSessionChanges(get().activeSessionId, null);
           set({ activeProjectId: null, activeSessionId: null });
           return false;
         }
@@ -1056,6 +1094,7 @@ export const useSessionStore = create<SessionState>()(
           const targetId = found ? activeSessionId : pickDefaultSessionId(sessions);
           if (!targetId) return false;
 
+          clearActiveSubsessionWhenSessionChanges(get().activeSessionId, null);
           set({ activeSessionId: null });
           get().setActiveSession(targetId);
 

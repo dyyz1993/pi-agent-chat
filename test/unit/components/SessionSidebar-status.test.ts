@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  getWorkspaceBadgeName,
   getSubagentSidebarStatus,
   sortSubagentsForSidebar,
+  WORKSPACE_BADGE_CLASS,
+  WORKSPACE_BADGE_LABEL_CLASS,
 } from "../../../src/mainview/components/session-sidebar/SessionSidebar";
 import type { SubagentSessionInfo } from "../../../src/mainview/types";
 
@@ -64,5 +67,25 @@ describe("sortSubagentsForSidebar", () => {
     });
 
     expect(sorted.map((sub) => sub.sessionId)).toEqual(["newer", "older"]);
+  });
+});
+
+describe("WorkspaceBadge compact layout contract", () => {
+  it("uses branch name for non-main worktrees", () => {
+    expect(
+      getWorkspaceBadgeName({
+        path: "/tmp/project/.worktrees/verify-delegate-readonly-v2",
+        branch: "verify-delegate-readonly-v2",
+        isMain: false,
+      }),
+    ).toBe("verify-delegate-readonly-v2");
+  });
+
+  it("keeps the branch badge single-line and truncatable in narrow sidebars", () => {
+    expect(WORKSPACE_BADGE_CLASS).toContain("whitespace-nowrap");
+    expect(WORKSPACE_BADGE_CLASS).toContain("overflow-hidden");
+    expect(WORKSPACE_BADGE_CLASS).toContain("max-w-");
+    expect(WORKSPACE_BADGE_CLASS).toContain("min-w-");
+    expect(WORKSPACE_BADGE_LABEL_CLASS).toContain("truncate");
   });
 });

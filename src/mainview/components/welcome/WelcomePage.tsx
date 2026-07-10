@@ -38,7 +38,7 @@ export function WelcomePage({
     <div className="h-screen overflow-y-auto bg-bg-primary text-text-primary">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-10">
         <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border-secondary bg-bg-elevated text-semantic-accent">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border-secondary bg-bg-elevated text-accent">
             <Sparkles className="h-5 w-5" />
           </div>
           <div>
@@ -55,7 +55,7 @@ export function WelcomePage({
             onClick={onOpenLocalProject}
             className="group flex min-h-36 flex-col items-start rounded-lg border border-border-secondary bg-bg-elevated p-5 text-left transition-colors hover:border-border-focus hover:bg-surface-hover/40"
           >
-            <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-semantic-accent/12 text-semantic-accent">
+            <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-accent/12 text-accent">
               <FolderOpen className="h-5 w-5" />
             </span>
             <span className="text-base font-medium text-text-primary">
@@ -64,7 +64,7 @@ export function WelcomePage({
             <span className="mt-1 text-sm leading-5 text-text-secondary">
               {t("welcome.localDescription")}
             </span>
-            <span className="mt-auto flex items-center gap-1 pt-4 text-sm font-medium text-semantic-accent">
+            <span className="mt-auto flex items-center gap-1 pt-4 text-sm font-medium text-accent">
               {t("welcome.openLocal")}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </span>
@@ -108,7 +108,7 @@ export function WelcomePage({
                   {project.runtime === "ssh" ? (
                     <Server className="h-4 w-4 shrink-0 text-runtime-ssh/80" />
                   ) : (
-                    <FolderOpen className="h-4 w-4 shrink-0 text-semantic-accent/80" />
+                    <FolderOpen className="h-4 w-4 shrink-0 text-accent/80" />
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-text-primary">

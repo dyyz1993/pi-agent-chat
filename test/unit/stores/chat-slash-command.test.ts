@@ -170,15 +170,58 @@ describe("slash command 本地消息 dedup", () => {
 });
 
 describe("slash command 发送状态", () => {
-  it("/compact-force 发送时走统一 streaming 状态", async () => {
+  it("/compact-force 发送时直接调用 agent.compact", async () => {
     const { apiClient } = await import("../../../src/mainview/lib/api-client");
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
 
     useChatStore.setState({ inputText: "/compact-force" });
     await useChatStore.getState().sendMessage();
 
-    const streamingCall = updateStatusMock.mock.calls.find(([, s]) => s === "streaming");
-    expect(streamingCall).toBeDefined();
+    expect(apiClient.call).toHaveBeenCalledWith("agent.compact", {
+      sessionId: "sess-1",
+      customInstructions: undefined,
+    });
+    expect(apiClient.call).not.toHaveBeenCalledWith(
+      "agent.send",
+      expect.objectContaining({ content: "/compact-force" }),
+    );
+    const compactingCall = updateStatusMock.mock.calls.find(([, s]) => s === "compacting");
+    expect(compactingCall).toBeDefined();
+  });
+
+  it("/compact 后面的文本会作为压缩说明透传", async () => {
+    const { apiClient } = await import("../../../src/mainview/lib/api-client");
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+
+    useChatStore.setState({ inputText: "/compact 保留最近的任务目标和文件变更" });
+    await useChatStore.getState().sendMessage();
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.compact", {
+      sessionId: "sess-1",
+      customInstructions: "保留最近的任务目标和文件变更",
+    });
+  });
+
+  it("/compact 失败时在消息列表保留压缩失败记录", async () => {
+    const { apiClient } = await import("../../../src/mainview/lib/api-client");
+    (apiClient.call as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Provider finish_reason: model_context_window_exceeded"),
+    );
+
+    useChatStore.setState({ inputText: "/compact" });
+    await useChatStore.getState().sendMessage();
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"] || [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: "compactionSummary",
+      _local: true,
+    });
+    expect(messages[0].content[0]).toMatchObject({
+      type: "compactionSummary",
+      status: "failed",
+      reason: "Provider finish_reason: model_context_window_exceeded",
+    });
   });
 
   it("普通消息发送时调 updateSessionStatus('streaming')", async () => {

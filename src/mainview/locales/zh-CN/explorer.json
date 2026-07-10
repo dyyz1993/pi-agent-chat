@@ -19,5 +19,8 @@
   "saving": "保存中...",
   "save": "保存",
   "saved": "已保存",
-  "saveFailed": "保存失败"
+  "saveFailed": "保存失败",
+  "zoomIn": "放大",
+  "zoomOut": "缩小",
+  "zoomReset": "重置缩放"
 }

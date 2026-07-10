@@ -1,0 +1,53 @@
+{
+  "slug": "lsp-execution-card",
+  "schemaVersion": 2,
+  "name": "LspExecutionCard",
+  "category": "tool-execution",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "tool", "evidence": "LSP language server operation result" }
+  ],
+  "variantDimensions": [
+    { "name": "operation", "values": ["diagnostics", "hover", "definition", "references"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Diagnostics",
+      "traits": {
+        "operation": "diagnostics",
+        "filePath": "src/app.ts",
+        "errorCount": 2,
+        "warningCount": 1
+      },
+      "whySelected": "LSP diagnostic results",
+      "childrenDigest": "Code icon + file path + error/warning count badges + diagnostic list"
+    },
+    {
+      "name": "Hover Info",
+      "traits": {
+        "operation": "hover",
+        "symbol": "formatDate",
+        "type": "function",
+        "filePath": "src/utils.ts:42"
+      },
+      "whySelected": "Type information from hover",
+      "childrenDigest": "Info icon + symbol name + type signature"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "operation-icon",
+      "file-path",
+      "symbol",
+      "type-info",
+      "diagnostic-list",
+      "count-badges"
+    ],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 24, "context": "LSP language server operation results" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Compact diagnostic display with error/warning count badges, hover info with monospace type signature"
+}

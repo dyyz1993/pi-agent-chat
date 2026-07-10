@@ -1,0 +1,54 @@
+{
+  "slug": "read-file-card",
+  "schemaVersion": 2,
+  "name": "ReadFileCard",
+  "category": "tool-execution",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "tool", "evidence": "File reading result with path header and code content" }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["loading", "done", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Done",
+      "traits": {
+        "status": "done",
+        "filePath": "src/app.ts",
+        "language": "typescript",
+        "lineCount": 142,
+        "offset": 1
+      },
+      "whySelected": "Successfully read file",
+      "childrenDigest": "File icon + path + language badge + syntax-highlighted code block"
+    },
+    {
+      "name": "Partial",
+      "traits": {
+        "status": "done",
+        "filePath": "src/large-file.ts",
+        "language": "typescript",
+        "lineCount": 500,
+        "offset": 100,
+        "limit": 50
+      },
+      "whySelected": "Partial file read with offset/limit",
+      "childrenDigest": "File icon + path + line range badge + code block"
+    }
+  ],
+  "anatomy": {
+    "parts": [
+      "file-icon",
+      "file-path",
+      "language-badge",
+      "line-range",
+      "code-block",
+      "copy-button"
+    ],
+    "structurePatterns": ["stacked-header-content"]
+  },
+  "usageHints": { "priorityHint": 22, "context": "Displaying file content read by AI" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "File path as header with language color badge, code block with syntax highlighting and copy action"
+}

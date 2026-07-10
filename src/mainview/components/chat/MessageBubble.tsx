@@ -251,7 +251,7 @@ export const MessageBubble = memo(function MessageBubble({
   const styleMemo = useMemo(() => {
     let bg = "";
     if (isSelected) {
-      bg = "bg-semantic-accent/[0.06]";
+      bg = "bg-accent/[0.06]";
     } else if (isActive) {
       bg = "bg-status-info/[0.04]";
     }
@@ -308,7 +308,7 @@ export const MessageBubble = memo(function MessageBubble({
       className="group relative w-full min-w-0"
     >
       {isSelected && (
-        <div className="absolute inset-0 rounded-lg bg-semantic-accent/[0.06] pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg bg-accent/[0.06] pointer-events-none" />
       )}
       {isUser ? (
         <div
@@ -421,7 +421,7 @@ export const MessageBubble = memo(function MessageBubble({
             <div
               className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
             >
-              <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-3 align-text-bottom" />
+              <span className="inline-block w-1.5 h-4 bg-accent animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
           {message.tokenUsage &&

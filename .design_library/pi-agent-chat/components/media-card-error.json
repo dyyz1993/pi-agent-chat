@@ -1,0 +1,28 @@
+{
+  "slug": "media-card-error",
+  "schemaVersion": 2,
+  "name": "MediaCardError",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "error", "evidence": "Error state for media preview cards" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Error",
+      "traits": { "message": "Failed to load media", "canRetry": true },
+      "whySelected": "Media load error",
+      "childrenDigest": "Error icon + message + retry button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["error-icon", "message", "retry-button"],
+    "structurePatterns": ["error-state"]
+  },
+  "usageHints": { "priorityHint": 53, "context": "Error state shared across media cards" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Red-tinted background, centered error icon and message, optional retry action"
+}

@@ -43,7 +43,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="text-text-tertiary text-sm mb-6">{i18n.t("common:errorDescription")}</div>
           <button
             onClick={this.handleRetry}
-            className="px-4 py-2 bg-semantic-accent hover:bg-semantic-accent/80 text-white text-sm rounded-lg transition-colors"
+            className="px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm rounded-lg transition-colors"
           >
             {i18n.t("common:retry")}
           </button>

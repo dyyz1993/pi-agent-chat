@@ -28,6 +28,7 @@ const log = createLogger("subagent");
 
 const subToolCallNameMapBySubId: Record<string, Record<string, string>> = {};
 const INTERACTIVE_UI_METHODS = new Set(["askUserQuestion", "confirm", "input", "select", "editor"]);
+const inFlightSubsessionLoads = new Map<string, Promise<SubagentSessionInfo[]>>();
 
 type InteractiveSubagentMethod = "askUserQuestion" | "confirm" | "input" | "select" | "editor";
 
@@ -98,13 +99,11 @@ async function restoreSubagentRuntimeState(
   try {
     const result = (await apiClient.call("agent.getState", {
       sessionId: sub.sessionId,
-    })) as
-      | {
-          isStreaming?: boolean;
-          isCompacting?: boolean;
-          pendingUIRequests?: ExtensionUIRequestEvent[];
-        }
-      | null;
+    })) as {
+      isStreaming?: boolean;
+      isCompacting?: boolean;
+      pendingUIRequests?: ExtensionUIRequestEvent[];
+    } | null;
 
     if (!result) return;
 
@@ -189,35 +188,54 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
     });
   },
 
-  loadSubsessions: async (parentSessionPath: string, force = false) => {
-    if (get().loadingByParent[parentSessionPath]) return [];
+  loadSubsessions: (parentSessionPath: string, force = false) => {
+    const existingLoad = inFlightSubsessionLoads.get(parentSessionPath);
+    if (existingLoad) return existingLoad;
     if (!force && get().subsessionsByParent[parentSessionPath])
-      return get().subsessionsByParent[parentSessionPath];
-    set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
-    try {
-      const result = await apiClient.call("subagent.listBySession", {
-        sessionPath: parentSessionPath,
-      });
-      const subs = result.subsessions as SubagentSessionInfo[];
-      set((s) => ({
-        subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: subs },
-        loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
-      }));
-      const parentSessionId = findParentSessionIdByPath(parentSessionPath);
-      const activeSubId = get().activeSubsessionId;
-      const activeSub = activeSubId ? subs.find((sub) => sub.sessionId === activeSubId) : null;
-      await Promise.all([
-        ...subs.map((sub) => restoreSubagentRuntimeState(sub, parentSessionId)),
-        activeSub?.sessionPath
-          ? get().loadSubHistory(activeSub.sessionPath, activeSub.sessionId)
-          : Promise.resolve(),
-      ]);
-      return subs;
-    } catch (e) {
-      log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
-      set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false } }));
-      return [];
-    }
+      return Promise.resolve(get().subsessionsByParent[parentSessionPath]);
+
+    if (get().loadingByParent[parentSessionPath]) return Promise.resolve([]);
+
+    let loadPromise: Promise<SubagentSessionInfo[]> = Promise.resolve([]);
+    loadPromise = (async () => {
+      set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
+      try {
+        const result = await apiClient.call("subagent.listBySession", {
+          sessionPath: parentSessionPath,
+        });
+        const subs = result.subsessions as SubagentSessionInfo[];
+        set((s) => ({
+          subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: subs },
+          loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
+        }));
+        const parentSessionId = findParentSessionIdByPath(parentSessionPath);
+        const activeSubId = get().activeSubsessionId;
+        const activeSub = activeSubId ? subs.find((sub) => sub.sessionId === activeSubId) : null;
+        void Promise.all([
+          ...subs.map((sub) => restoreSubagentRuntimeState(sub, parentSessionId)),
+          activeSub?.sessionPath
+            ? get().loadSubHistory(activeSub.sessionPath, activeSub.sessionId)
+            : Promise.resolve(),
+        ]).catch((error) => {
+          log.debug("restoreSubagentRuntimeState batch skipped", {
+            parentSessionPath,
+            error: String(error),
+          });
+        });
+        return subs;
+      } catch (e) {
+        log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
+        set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false } }));
+        return [];
+      } finally {
+        if (inFlightSubsessionLoads.get(parentSessionPath) === loadPromise) {
+          inFlightSubsessionLoads.delete(parentSessionPath);
+        }
+      }
+    })();
+
+    inFlightSubsessionLoads.set(parentSessionPath, loadPromise);
+    return loadPromise;
   },
 
   setActiveSubsession: (_parentSessionId: string, subId: string | null) => {
@@ -228,6 +246,12 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
     const match = findKnownSubsession(get().subsessionsByParent, subId);
     if (match?.sessionPath) {
       get().loadSubHistory(match.sessionPath, subId);
+      return;
+    }
+
+    const subSessionPath = findSessionPathById(subId);
+    if (subSessionPath) {
+      get().loadSubHistory(subSessionPath, subId);
       return;
     }
 
@@ -368,7 +392,11 @@ type SubagentCustomEvent =
     }
   | { type: "auto_retry_end" };
 
-type SubagentEvent = AgentEvent | SubagentCustomEvent | ExtensionUIRequestEvent | ExtensionUIResolvedEvent;
+type SubagentEvent =
+  | AgentEvent
+  | SubagentCustomEvent
+  | ExtensionUIRequestEvent
+  | ExtensionUIResolvedEvent;
 
 function replaceMsgAt(msgs: ChatMessage[], idx: number, replacement: ChatMessage): ChatMessage[] {
   return [...msgs.slice(0, idx), replacement, ...msgs.slice(idx + 1)];
@@ -399,7 +427,10 @@ export function handleSubagentEvent(
 ) {
   const store = useSubagentStore.getState();
 
-  if (event.type === "extension_ui_request" && isInteractiveUIRequest(event as ExtensionUIRequestEvent)) {
+  if (
+    event.type === "extension_ui_request" &&
+    isInteractiveUIRequest(event as ExtensionUIRequestEvent)
+  ) {
     if (options.skipUIRegistration) {
       store.updateSubagentStatus(subId, "permission");
       return;
@@ -599,10 +630,10 @@ export function handleSubagentEvent(
     );
 
     if (!hasContent) {
-      store.setSubMessages(
-        subId,
-        [...refreshedExisting.slice(0, lastMsgIdx), ...refreshedExisting.slice(lastMsgIdx + 1)],
-      );
+      store.setSubMessages(subId, [
+        ...refreshedExisting.slice(0, lastMsgIdx),
+        ...refreshedExisting.slice(lastMsgIdx + 1),
+      ]);
       return;
     }
 

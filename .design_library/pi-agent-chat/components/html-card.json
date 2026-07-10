@@ -1,0 +1,34 @@
+{
+  "slug": "html-card",
+  "schemaVersion": 2,
+  "name": "HtmlCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "media", "evidence": "HTML content preview rendered in an iframe or sandbox" }
+  ],
+  "variantDimensions": [{ "name": "mode", "values": ["preview", "fullscreen"] }],
+  "representativeVariants": [
+    {
+      "name": "Preview",
+      "traits": { "mode": "preview", "url": "about:preview", "title": "Component Preview" },
+      "whySelected": "Inline HTML preview",
+      "childrenDigest": "Rendered HTML frame + title bar + expand button"
+    },
+    {
+      "name": "Fullscreen",
+      "traits": { "mode": "fullscreen", "url": "about:preview" },
+      "whySelected": "Fullscreen HTML view",
+      "childrenDigest": "Full HTML content + close button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["title-bar", "html-frame", "expand-button", "close-button"],
+    "structurePatterns": ["media-preview"]
+  },
+  "usageHints": { "priorityHint": 47, "context": "HTML content preview in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Sandboxed iframe preview, title bar with expand/close actions, rounded-lg container"
+}

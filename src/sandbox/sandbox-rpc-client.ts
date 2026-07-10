@@ -235,7 +235,11 @@ export class SandboxRpcClient {
     return this.call("agent.getMessages");
   }
 
-  async getFullMessages(options?: { afterEntryId?: string; limit?: number }): Promise<{
+  async getFullMessages(options?: {
+    afterEntryId?: string;
+    limit?: number;
+    fromStart?: boolean;
+  }): Promise<{
     messages: AgentMessage[];
     hasMore: boolean;
     totalCount: number;
@@ -253,6 +257,36 @@ export class SandboxRpcClient {
     }>;
   }> {
     return this.call("agent.getFullMessages", options);
+  }
+
+  async getMessageNavPage(options?: {
+    afterEntryId?: string;
+    limit?: number;
+    fromStart?: boolean;
+  }): Promise<{
+    messages: AgentMessage[];
+    hasMore: boolean;
+    totalCount: number;
+    nextCursor: string | null;
+  }> {
+    return this.call("agent.getMessageNavPage", options);
+  }
+
+  async getFullMessagesAround(options: {
+    targetEntryId: string;
+    before?: number;
+    after?: number;
+  }): Promise<{
+    messages: AgentMessage[];
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMoreBefore: boolean;
+    hasMoreAfter: boolean;
+    beforeCursor: string | null;
+    afterCursor: string | null;
+    targetFound: boolean;
+    totalCount: number;
+  }> {
+    return this.call("agent.getFullMessagesAround", options);
   }
 
   async getTree(): Promise<{

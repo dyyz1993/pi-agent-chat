@@ -18,6 +18,7 @@ import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { isBashBackgroundProcessType } from "../components/chat/bash-background-process";
 import { messageToChatMessage } from "../lib/message-mapper";
+import { findNearestProviderRequest } from "../lib/provider-error-diagnostics";
 import {
   getMemoryCustomDedupeKey,
   getMemoryEntryScore,
@@ -42,6 +43,11 @@ const PAGE_SIZE = 50;
 const MAX_MESSAGE_CACHE_SESSIONS = 8;
 const MEMORY_SAME_QUERY_DEDUP_WINDOW_MS = 15_000;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
+const topWindowMessageIdsBySession = new Map<string, Set<string>>();
+const bottomPaginationSnapshotBySession = new Map<
+  string,
+  { hasMore: boolean | undefined; nextCursor: string | null | undefined }
+>();
 const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
   "memory_prefetch",
   "memory_prefetch_result",
@@ -55,11 +61,93 @@ const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
   "memory_irrelevant_marked",
 ]);
 
+function parseManualCompactionCommand(
+  text: string,
+): { command: "compact" | "compact-force"; customInstructions?: string } | null {
+  const trimmed = text.trim();
+  const match = /^\/(compact|compact-force)(?:\s+([\s\S]*))?$/.exec(trimmed);
+  if (!match) return null;
+  const customInstructions = match[2]?.trim();
+  return {
+    command: match[1] as "compact" | "compact-force",
+    ...(customInstructions ? { customInstructions } : {}),
+  };
+}
+
+function normalizeCompactionFailureReason(reason: unknown): string {
+  if (reason instanceof Error) return reason.message;
+  const text = String(reason ?? "").trim();
+  return text || "压缩失败";
+}
+
+export function buildCompactionFailureMessage(
+  reason: unknown,
+  options?: {
+    id?: string;
+    status?: "failed" | "aborted";
+    startedAt?: number;
+    timestamp?: number;
+  },
+): ChatMessage {
+  const status = options?.status ?? "failed";
+  const normalizedReason = normalizeCompactionFailureReason(reason);
+  const timestamp = options?.timestamp ?? Date.now();
+  return {
+    id: options?.id ?? `compact_failed_${timestamp}`,
+    role: "compactionSummary",
+    content: [
+      {
+        type: "compactionSummary",
+        summary: status === "aborted" ? "上下文压缩已中止。" : "上下文压缩失败，请查看原因后重试。",
+        status,
+        reason: normalizedReason,
+        startedAt: options?.startedAt,
+      },
+    ],
+    timestamp,
+    _local: true,
+  };
+}
+
+function getCompactionFailureSignature(message: ChatMessage): string | null {
+  if (message.role !== "compactionSummary") return null;
+  const block = message.content.find((b) => b.type === "compactionSummary");
+  if (!block || (block.status !== "failed" && block.status !== "aborted")) return null;
+  return `${block.status}:${block.reason ?? ""}`;
+}
+
+export function appendLocalCompactionFailureMessage(
+  sessionId: string,
+  reason: unknown,
+  options?: { status?: "failed" | "aborted"; startedAt?: number },
+): void {
+  const store = useChatStore.getState();
+  const nextMessage = buildCompactionFailureMessage(reason, options);
+  const nextSignature = getCompactionFailureSignature(nextMessage);
+  const current = store.messagesBySession[sessionId] || [];
+  if (
+    nextSignature &&
+    current.some((message) => getCompactionFailureSignature(message) === nextSignature)
+  ) {
+    return;
+  }
+  store.setMessagesForSession(sessionId, [...current, nextMessage]);
+}
+
 export function clearBackgroundRefreshGeneration(sessionId: string): void {
   backgroundRefreshGenerationBySession.delete(sessionId);
 }
 
 export type MessageHydrationState = "idle" | "loading" | "ready" | "error";
+export type MessageViewMode = "tail" | "focus";
+
+type FocusWindowMeta = {
+  targetEntryId: string;
+  beforeCursor: string | null;
+  afterCursor: string | null;
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+};
 
 function setSessionMessagesWithCacheLimit(
   current: Record<string, ChatMessage[]>,
@@ -276,11 +364,69 @@ export function dedupeMemoryInjectMessages(messages: ChatMessage[]): ChatMessage
   return result;
 }
 
+function primaryTextOf(message: ChatMessage): string {
+  return (
+    message.content.find(
+      (block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text",
+    )?.text ?? ""
+  );
+}
+
+function llmErrorDetailKey(message: ChatMessage): string | null {
+  if (message.role !== "error" || message.stopReason !== "error") return null;
+  const text = primaryTextOf(message).trim();
+  if (!text) return null;
+
+  const [title, ...detailLines] = text.split("\n");
+  const detail = detailLines.join("\n").trim();
+  const key = detail || title.trim();
+  return key.replace(/\s+/gu, " ");
+}
+
+function dedupeLlmErrorMessages(messages: ChatMessage[]): ChatMessage[] {
+  const result: ChatMessage[] = [];
+  const errorIndexByKey = new Map<string, number>();
+  let changed = false;
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      errorIndexByKey.clear();
+      result.push(message);
+      continue;
+    }
+
+    const key = llmErrorDetailKey(message);
+    if (!key) {
+      result.push(message);
+      continue;
+    }
+
+    const existingIdx = errorIndexByKey.get(key);
+    if (existingIdx === undefined) {
+      errorIndexByKey.set(key, result.length);
+      result.push(message);
+      continue;
+    }
+
+    const existing = result[existingIdx];
+    result[existingIdx] = {
+      ...existing,
+      content: message.content,
+      stopReason: message.stopReason,
+      providerRequest: message.providerRequest ?? existing.providerRequest,
+      isStreaming: false,
+    };
+    changed = true;
+  }
+
+  return changed ? result : messages;
+}
+
 function prepareMessagesForStore(
   msgs: ChatMessage[],
   options: { normalizeTools?: boolean; activeToolCallIds?: string[] } = {},
 ): ChatMessage[] {
-  const nextMsgs = [...dedupeMemoryInjectMessages(msgs)];
+  const nextMsgs = [...dedupeLlmErrorMessages(dedupeMemoryInjectMessages(msgs))];
   const activeToolCallIds =
     options.activeToolCallIds === undefined ? undefined : new Set(options.activeToolCallIds);
   if (options.normalizeTools) {
@@ -347,6 +493,82 @@ type MemoryCustomEntry = {
   data: unknown;
   timestamp: number;
 };
+
+function rawMessageTimestamp(raw: AgentMessageForUI): number {
+  const timestamp = (raw as unknown as { timestamp?: unknown }).timestamp;
+  if (typeof timestamp === "number" && Number.isFinite(timestamp)) return timestamp;
+  if (typeof timestamp === "string") {
+    const parsed = Date.parse(timestamp);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Date.now();
+}
+
+function rawMessageStopReason(raw: AgentMessageForUI): string | undefined {
+  const stopReason = (raw as unknown as { stopReason?: unknown }).stopReason;
+  return typeof stopReason === "string" ? stopReason : undefined;
+}
+
+function mapMessageWithProviderDiagnostics(
+  raw: AgentMessageForUI,
+  id: string | undefined,
+  toolCallNameMap: Record<string, string>,
+  customEntries: unknown[],
+): ChatMessage | null {
+  const providerRequest =
+    raw.role === "assistant" && rawMessageStopReason(raw) === "error"
+      ? findNearestProviderRequest(customEntries, rawMessageTimestamp(raw))
+      : undefined;
+  return messageToChatMessage(raw as unknown as Message, id, toolCallNameMap, providerRequest);
+}
+
+function mapRpcMessagesToStoreMessages(
+  sessionId: string,
+  messages: AgentMessageForUI[],
+  rawCustomEntries: MemoryCustomEntry[],
+  options: {
+    activeToolCallIds?: string[];
+    syncMemory?: boolean;
+  } = {},
+): ChatMessage[] {
+  const seenIds = new Set<string>();
+  const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    const msgId = msg.id;
+    if (msgId && seenIds.has(msgId)) continue;
+    if (msgId) seenIds.add(msgId);
+    rawMessages.unshift({ raw: msg, id: msgId });
+  }
+
+  const toolCallNameMap: Record<string, string> = {};
+  for (const { raw } of rawMessages) {
+    if (raw.role !== "assistant" || !Array.isArray(raw.content)) continue;
+    for (const block of raw.content) {
+      if (block.type === "toolCall" && block.id && block.name) {
+        toolCallNameMap[block.id] = block.name;
+      }
+    }
+  }
+
+  const msgs: ChatMessage[] = [];
+  for (const { raw, id } of rawMessages) {
+    const msg = mapMessageWithProviderDiagnostics(raw, id, toolCallNameMap, rawCustomEntries);
+    if (msg) msgs.push(msg);
+  }
+  normalizeToolBlocks(msgs, true, false);
+
+  const customEntries = normalizeMemoryCustomEntries(rawCustomEntries);
+  if (options.syncMemory) {
+    syncMemoryCustomEntries(sessionId, customEntries, { clearSession: true });
+  }
+
+  const finalMsgs = mergeRenderableCustomMessages(msgs, customEntries);
+  normalizeToolBlocks(finalMsgs, true, false);
+  return prepareMessagesForStore(finalMsgs, {
+    activeToolCallIds: options.activeToolCallIds,
+  });
+}
 
 function getNumericField(data: unknown, key: string): number | undefined {
   const record = data as Record<string, unknown> | undefined;
@@ -613,6 +835,9 @@ function syncMemoryCustomEntries(
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
+  focusMessagesBySession: Record<string, ChatMessage[]>;
+  messageViewBySession: Record<string, MessageViewMode>;
+  focusWindowMetaBySession: Record<string, FocusWindowMeta | undefined>;
   activeToolCallIdsBySession: Record<string, string[] | undefined>;
   inputText: string;
   isStreaming: boolean;
@@ -637,21 +862,31 @@ interface ChatState {
   clearQueuedMessage: (item: QueueItemRef) => Promise<void>;
   insertQueuedMessageNow: (item: QueueItemRef) => Promise<void>;
   promoteQueuedFollowUp: (item: FollowUpQueueItemRef) => Promise<void>;
+  insertQueuedMessageNow: (item: QueueItemRef) => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (
     sessionId: string,
     msgs: ChatMessage[],
     options?: { bumpStreamVersion?: boolean; streamingFastPath?: boolean },
   ) => void;
+  deleteMessagesForSession: (sessionId: string, messageIds: string[]) => void;
   clearSessionMessages: (sessionId: string) => void;
   setActiveToolCallIds: (sessionId: string, toolCallIds: string[] | undefined) => void;
   loadSessionMessages: (
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => Promise<void>;
+  loadFocusedMessagesAround: (
+    sessionId: string,
+    targetEntryId: string,
+    options?: { sessionPath?: string; before?: number; after?: number },
+  ) => Promise<boolean>;
+  clearFocusedMessages: (sessionId: string) => void;
   /** Background refresh: fetch latest messages and silently update store if different */
   _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => Promise<void>;
   loadMoreMessages: (sessionId: string) => Promise<void>;
+  loadTopMessages: (sessionId: string) => Promise<void>;
+  clearTopWindowMessages: (sessionId: string) => void;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
   saveInputDraft: (sessionId: string) => void;
@@ -675,6 +910,9 @@ function bumpHistoryLoadVersion(
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messagesBySession: {},
+  focusMessagesBySession: {},
+  messageViewBySession: {},
+  focusWindowMetaBySession: {},
   activeToolCallIdsBySession: {},
   inputText: "",
   pendingImages: [],
@@ -711,6 +949,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
       useNotificationStore
         .getState()
         .push({ message: "Cannot send to subagent session", level: "warning" });
+      return;
+    }
+
+    const compactionCommand = parseManualCompactionCommand(text);
+    if (compactionCommand) {
+      set({ inputText: "", pendingImages: [], isStreaming: true });
+      writeDraft(sessionId, "");
+      useSessionStore.getState().updateSessionStatus(sessionId, "compacting");
+
+      try {
+        perfLog.info("[compact] begin", {
+          sessionId,
+          command: compactionCommand.command,
+        });
+        await apiClient.call("agent.compact", {
+          sessionId,
+          customInstructions: compactionCommand.customInstructions,
+        });
+        perfLog.info("[compact] done", { sessionId });
+        set({ isStreaming: false });
+        if (useSessionStore.getState().sessionStatusMap?.[sessionId] === "compacting") {
+          useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+        }
+      } catch (err) {
+        set({ isStreaming: false, inputText: text });
+        if (useSessionStore.getState().sessionStatusMap?.[sessionId] === "compacting") {
+          useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+        }
+        const msg = err instanceof Error ? err.message : String(err);
+        appendLocalCompactionFailureMessage(sessionId, msg, { status: "failed" });
+        useAppStore.getState().addLog(`Compaction error: ${msg}`);
+        useNotificationStore
+          .getState()
+          .push({ message: `Compaction failed: ${msg}`, level: "error" });
+      }
       return;
     }
 
@@ -925,6 +1198,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  insertQueuedMessageNow: async (item) => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    const queueStore = useSessionQueueStore.getState();
+    const previous = queueStore.queueBySession[sessionId];
+    if (item.type === "followUp") {
+      queueStore.removeQueuedMessage(sessionId, item);
+    }
+    try {
+      await apiClient.call("agent.steer", {
+        sessionId,
+        promote: item.type === "followUp" ? item.index : undefined,
+        immediate: true,
+      });
+    } catch (err) {
+      if (previous) {
+        useSessionQueueStore.getState().setSessionQueue(sessionId, previous);
+      }
+      log.warn("insertQueuedMessageNow failed", { error: String(err) });
+    }
+  },
+
   addMessage: (msg) => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
@@ -965,9 +1260,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  deleteMessagesForSession: (sessionId, messageIds) => {
+    const idSet = new Set(messageIds);
+    if (idSet.size === 0) return;
+
+    set((s) => {
+      const currentMessages = s.messagesBySession[sessionId] ?? [];
+      const nextMessages = currentMessages.filter((message) => !idSet.has(message.id));
+      const currentFocusMessages = s.focusMessagesBySession[sessionId];
+      const nextFocusMessages = currentFocusMessages?.filter((message) => !idSet.has(message.id));
+      const messagesChanged = nextMessages.length !== currentMessages.length;
+      const focusChanged =
+        !!currentFocusMessages && nextFocusMessages?.length !== currentFocusMessages.length;
+
+      if (!messagesChanged && !focusChanged) return {};
+
+      const next: Partial<ChatState> = {
+        streamContentVersion: s.streamContentVersion + 1,
+        streamVersionBySession: {
+          ...s.streamVersionBySession,
+          [sessionId]: (s.streamVersionBySession[sessionId] ?? 0) + 1,
+        },
+        ...bumpHistoryLoadVersion(s, sessionId),
+      };
+
+      if (messagesChanged) {
+        next.messagesBySession = setSessionMessagesWithCacheLimit(
+          s.messagesBySession,
+          sessionId,
+          nextMessages,
+        );
+      }
+
+      if (focusChanged && nextFocusMessages) {
+        next.focusMessagesBySession = {
+          ...s.focusMessagesBySession,
+          [sessionId]: nextFocusMessages,
+        };
+      }
+
+      return next;
+    });
+  },
+
   clearSessionMessages: (sessionId) =>
     set((s) => {
       const { [sessionId]: _m, ...restMessages } = s.messagesBySession;
+      const { [sessionId]: _fm, ...restFocusMessages } = s.focusMessagesBySession;
+      const { [sessionId]: _mv, ...restMessageView } = s.messageViewBySession;
+      const { [sessionId]: _fwm, ...restFocusWindowMeta } = s.focusWindowMetaBySession;
       const { [sessionId]: _a, ...restActiveTools } = s.activeToolCallIdsBySession;
       const { [sessionId]: _sv, ...restStreamVersion } = s.streamVersionBySession;
       const { [sessionId]: _hlv, ...restHistoryLoadVersion } = s.historyLoadVersionBySession;
@@ -979,6 +1320,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       loadingSessions.delete(sessionId);
       return {
         messagesBySession: restMessages,
+        focusMessagesBySession: restFocusMessages,
+        messageViewBySession: restMessageView,
+        focusWindowMetaBySession: restFocusWindowMeta,
         activeToolCallIdsBySession: restActiveTools,
         streamVersionBySession: restStreamVersion,
         historyLoadVersionBySession: restHistoryLoadVersion,
@@ -1000,15 +1344,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [sessionId]: toolCallIds,
       };
       const existing = s.messagesBySession[sessionId];
-      if (!existing) return { activeToolCallIdsBySession };
+      const existingFocus = s.focusMessagesBySession[sessionId];
+      if (!existing && !existingFocus) return { activeToolCallIdsBySession };
 
       return {
         activeToolCallIdsBySession,
-        messagesBySession: setSessionMessagesWithCacheLimit(
-          s.messagesBySession,
-          sessionId,
-          prepareMessagesForStore(existing, { activeToolCallIds: toolCallIds }),
-        ),
+        ...(existing
+          ? {
+              messagesBySession: setSessionMessagesWithCacheLimit(
+                s.messagesBySession,
+                sessionId,
+                prepareMessagesForStore(existing, { activeToolCallIds: toolCallIds }),
+              ),
+            }
+          : {}),
+        ...(existingFocus
+          ? {
+              focusMessagesBySession: {
+                ...s.focusMessagesBySession,
+                [sessionId]: prepareMessagesForStore(existingFocus, {
+                  activeToolCallIds: toolCallIds,
+                }),
+              },
+            }
+          : {}),
       };
     }),
 
@@ -1024,6 +1383,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!sid) return;
 
     perfLog.info("[loadMessages] begin", { sessionId: sid, force: !!options?.force });
+    set((s) => {
+      if ((s.messageViewBySession[sid] ?? "tail") === "tail") return {};
+      const { [sid]: _focus, ...restFocusMessages } = s.focusMessagesBySession;
+      const { [sid]: _meta, ...restFocusMeta } = s.focusWindowMetaBySession;
+      return {
+        focusMessagesBySession: restFocusMessages,
+        focusWindowMetaBySession: restFocusMeta,
+        messageViewBySession: { ...s.messageViewBySession, [sid]: "tail" },
+      };
+    });
 
     if (get().loadingSessions.has(sid)) {
       log.warn("GUARD-1: already loading, skip", { sessionId: sid });
@@ -1154,10 +1523,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
+      const rawCustomEntries = Array.isArray(result.customEntries) ? result.customEntries : [];
       const msgs: ChatMessage[] = [];
       const nullCount = { byRole: {} as Record<string, number>, total: 0 };
       for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw as unknown as unknown as Message, id, toolCallNameMap);
+        const msg = mapMessageWithProviderDiagnostics(raw, id, toolCallNameMap, rawCustomEntries);
         if (msg) {
           msgs.push(msg);
         } else {
@@ -1181,9 +1551,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       normalizeToolBlocks(msgs, true, false);
 
-      const customEntries = Array.isArray(result.customEntries)
-        ? normalizeMemoryCustomEntries(result.customEntries)
-        : [];
+      const customEntries = normalizeMemoryCustomEntries(rawCustomEntries);
       if (Array.isArray(customEntries)) {
         syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
@@ -1335,6 +1703,92 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  loadFocusedMessagesAround: async (
+    sessionId: string,
+    targetEntryId: string,
+    options?: { sessionPath?: string; before?: number; after?: number },
+  ) => {
+    const sid = sessionId;
+    if (!sid || !targetEntryId) return false;
+    if (get().isLoadingMoreBySession[sid]) return false;
+
+    set((s) => ({
+      isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: true },
+    }));
+
+    try {
+      const ss = useSessionStore.getState();
+      const sessionMeta = Object.values(ss.sessionsByProject)
+        .flat()
+        .find((s) => s.sessionId === sid);
+      const sessionPath = options?.sessionPath ?? sessionMeta?.sessionPath;
+      const result = await apiClient.call("agent.getFullMessagesAround", {
+        sessionId: sid,
+        sessionPath,
+        targetEntryId,
+        before: options?.before ?? PAGE_SIZE,
+        after: options?.after ?? PAGE_SIZE,
+      });
+      if (!result.targetFound || !Array.isArray(result.messages)) {
+        log.warn("Focused message window target not found", { sessionId: sid, targetEntryId });
+        return false;
+      }
+
+      const rawCustomEntries = Array.isArray(result.customEntries) ? result.customEntries : [];
+      const focusedMsgs = mapRpcMessagesToStoreMessages(sid, result.messages, rawCustomEntries, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
+
+      set((s) => ({
+        focusMessagesBySession: {
+          ...s.focusMessagesBySession,
+          [sid]: focusedMsgs,
+        },
+        messageViewBySession: {
+          ...s.messageViewBySession,
+          [sid]: "focus",
+        },
+        focusWindowMetaBySession: {
+          ...s.focusWindowMetaBySession,
+          [sid]: {
+            targetEntryId,
+            beforeCursor: result.beforeCursor ?? null,
+            afterCursor: result.afterCursor ?? null,
+            hasMoreBefore: result.hasMoreBefore === true,
+            hasMoreAfter: result.hasMoreAfter === true,
+          },
+        },
+        ...bumpHistoryLoadVersion(s, sid, false),
+      }));
+      return true;
+    } catch (err) {
+      log.error("Failed to load focused message window", {
+        sessionId: sid,
+        targetEntryId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    } finally {
+      set((s) => ({
+        isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },
+      }));
+    }
+  },
+
+  clearFocusedMessages: (sessionId: string) => {
+    const sid = sessionId;
+    set((s) => {
+      const { [sid]: _focus, ...restFocusMessages } = s.focusMessagesBySession;
+      const { [sid]: _meta, ...restFocusMeta } = s.focusWindowMetaBySession;
+      return {
+        focusMessagesBySession: restFocusMessages,
+        focusWindowMetaBySession: restFocusMeta,
+        messageViewBySession: { ...s.messageViewBySession, [sid]: "tail" },
+        ...bumpHistoryLoadVersion(s, sid, false),
+      };
+    });
+  },
+
   /** Background refresh: fetch latest messages from server and silently update store if different.
    *  Used after optimistic render from cache to guarantee data completeness. */
   _backgroundRefreshMessages: async (sessionId: string, sessionPath?: string) => {
@@ -1398,19 +1852,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Process messages the same way as loadSessionMessages
       const toolCallNameMap: Record<string, string> = {};
       const msgs: ChatMessage[] = [];
+      const rawCustomEntries = Array.isArray(result.customEntries) ? result.customEntries : [];
       for (const msg of messages) {
-        const mapped = messageToChatMessage(
-          msg as unknown as unknown as Message,
+        const mapped = mapMessageWithProviderDiagnostics(
+          msg,
           msg.id,
           toolCallNameMap,
+          rawCustomEntries,
         );
         if (mapped) msgs.push(mapped);
       }
       normalizeToolBlocks(msgs, true, false);
 
-      const customEntries = Array.isArray(result.customEntries)
-        ? normalizeMemoryCustomEntries(result.customEntries)
-        : [];
+      const customEntries = normalizeMemoryCustomEntries(rawCustomEntries);
       if (Array.isArray(customEntries)) {
         syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
@@ -1530,6 +1984,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           sessionId,
           sessionPath,
           afterEntryId,
+          limit: PAGE_SIZE,
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
@@ -1543,6 +1998,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const toolCallNameMap: Record<string, string> = {};
       const allMsgs: ChatMessage[] = [];
+      const rawCustomEntries = Array.isArray(result.customEntries) ? result.customEntries : [];
 
       for (const msg of messages) {
         const role = msg.role;
@@ -1556,7 +2012,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
           }
         }
-        const chatMsg = messageToChatMessage(msg as unknown as Message, msg.id, toolCallNameMap);
+        const chatMsg = mapMessageWithProviderDiagnostics(
+          msg,
+          msg.id,
+          toolCallNameMap,
+          rawCustomEntries,
+        );
         if (chatMsg) allMsgs.push(chatMsg);
       }
       normalizeToolBlocks(allMsgs, true, false);
@@ -1599,7 +2060,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((s) => ({
         messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, preparedMsgs),
-        ...bumpHistoryLoadVersion(s, sid),
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
           [sid]: hasMore,
@@ -1611,6 +2071,144 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
     } catch (err) {
       log.error("Failed to load more messages", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      set((s) => ({
+        isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },
+      }));
+    }
+  },
+
+  clearTopWindowMessages: (sessionId: string) => {
+    const sid = sessionId;
+    const topIds = topWindowMessageIdsBySession.get(sid);
+    if (!topIds || topIds.size === 0) return;
+
+    const snapshot = bottomPaginationSnapshotBySession.get(sid);
+    topWindowMessageIdsBySession.delete(sid);
+    bottomPaginationSnapshotBySession.delete(sid);
+
+    set((s) => {
+      const current = s.messagesBySession[sid] || [];
+      const nextMessages = current.filter((message) => !topIds.has(message.id));
+      return {
+        messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, nextMessages),
+        hasMoreMessagesBySession: {
+          ...s.hasMoreMessagesBySession,
+          [sid]: snapshot?.hasMore ?? s.hasMoreMessagesBySession[sid] ?? true,
+        },
+        nextCursorBySession: {
+          ...s.nextCursorBySession,
+          [sid]: snapshot?.nextCursor ?? s.nextCursorBySession[sid] ?? null,
+        },
+      };
+    });
+  },
+
+  loadTopMessages: async (sessionId: string) => {
+    const sid = sessionId;
+    if (!sid) return;
+    if (get().isLoadingMoreBySession[sid]) {
+      log.warn("Already loading messages", { sessionId: sid });
+      return;
+    }
+
+    set((s) => ({
+      isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: true },
+    }));
+
+    try {
+      const LOAD_TOP_TIMEOUT_MS = 60_000;
+      const ss = useSessionStore.getState();
+      const sessionMeta = Object.values(ss.sessionsByProject)
+        .flat()
+        .find((s) => s.sessionId === sid);
+      const sessionPath = sessionMeta?.sessionPath;
+      perfLog.info("[loadTopMessages] begin", { sessionId: sid });
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+          sessionPath,
+          fromStart: true,
+          limit: PAGE_SIZE,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("loadTopMessages timed out (60s)")),
+            LOAD_TOP_TIMEOUT_MS,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
+      const messages = result.messages;
+      if (!Array.isArray(messages)) return;
+
+      const toolCallNameMap: Record<string, string> = {};
+      const topMsgs: ChatMessage[] = [];
+      const rawCustomEntries = Array.isArray(result.customEntries) ? result.customEntries : [];
+
+      for (const msg of messages) {
+        const role = msg.role;
+        if (role === "assistant") {
+          const content = msg.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block.type === "toolCall" && block.id && block.name) {
+                toolCallNameMap[block.id] = block.name;
+              }
+            }
+          }
+        }
+        const chatMsg = mapMessageWithProviderDiagnostics(
+          msg,
+          msg.id,
+          toolCallNameMap,
+          rawCustomEntries,
+        );
+        if (chatMsg) topMsgs.push(chatMsg);
+      }
+      normalizeToolBlocks(topMsgs, true, false);
+
+      const loadedIds = new Set(topMsgs.map((msg) => msg.id));
+      const current = get().messagesBySession[sid] || [];
+      const currentIds = new Set(current.map((message) => message.id));
+      const transientTopIds = new Set(
+        topMsgs.filter((msg) => !currentIds.has(msg.id)).map((msg) => msg.id),
+      );
+      if (transientTopIds.size > 0) {
+        bottomPaginationSnapshotBySession.set(sid, {
+          hasMore: get().hasMoreMessagesBySession[sid],
+          nextCursor: get().nextCursorBySession[sid],
+        });
+        topWindowMessageIdsBySession.set(sid, transientTopIds);
+      } else {
+        bottomPaginationSnapshotBySession.delete(sid);
+        topWindowMessageIdsBySession.delete(sid);
+      }
+      const mergedMsgs = [...topMsgs, ...current.filter((m) => !loadedIds.has(m.id))].sort(
+        (a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+        },
+      );
+      normalizeToolBlocks(mergedMsgs, true, false);
+      const preparedMsgs = prepareMessagesForStore(mergedMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
+
+      set((s) => ({
+        messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, preparedMsgs),
+        hasMoreMessagesBySession: {
+          ...s.hasMoreMessagesBySession,
+          [sid]: false,
+        },
+        nextCursorBySession: {
+          ...s.nextCursorBySession,
+          [sid]: null,
+        },
+      }));
+    } catch (err) {
+      log.error("Failed to load top messages", {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {

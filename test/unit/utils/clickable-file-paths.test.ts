@@ -29,6 +29,7 @@ describe("findFilePaths", () => {
     expect(findFilePaths("Check src/mainview/Xxx.tsx")[0]?.path).toBe("src/mainview/Xxx.tsx");
     expect(findFilePaths("See ./foo/bar.ts")[0]?.path).toBe("./foo/bar.ts");
     expect(findFilePaths("Import ../parent/file.jsx")[0]?.path).toBe("../parent/file.jsx");
+    expect(findFilePaths("Optional .ion/workflow.md")[0]?.path).toBe(".ion/workflow.md");
     expect(findFilePaths("Open /tmp/pi-e2e-click-path.md")[0]?.path).toBe(
       "/tmp/pi-e2e-click-path.md",
     );

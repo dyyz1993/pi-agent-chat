@@ -23,6 +23,7 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 }));
 
 import {
+  filterDisabledExtensionPaths,
   getBuiltinExtensionsDirForCliPath,
   parseTierModel,
   scanExtensionDir,
@@ -59,6 +60,8 @@ describe("agent runtime config", () => {
     touch(path.join(root, "module-b", "index.js"));
     touch(path.join(root, "module-c", "other.ts"));
     touch(path.join(root, ".hidden.ts"));
+    touch(path.join(root, "_disabled.ts"));
+    touch(path.join(root, "_auto-memory", "index.ts"));
     touch(path.join(root, "_single.ts"));
     touch(path.join(root, "_disabled", "index.ts"));
     touch(path.join(root, "__tests__", "index.ts"));
@@ -88,6 +91,47 @@ describe("agent runtime config", () => {
     scanExtensionDir(root, found);
 
     expect(found).toEqual([path.join(root, "linked-extension", "index.ts")]);
+  });
+
+  it("allows selected built-in private extension entries", () => {
+    const root = makeTempDir();
+    touch(path.join(root, "_auto-memory", "index.ts"));
+    touch(path.join(root, "_multi-compaction", "index.ts"));
+    touch(path.join(root, "learning", "index.ts"));
+
+    const found: string[] = [];
+    scanExtensionDir(root, found, { allowPrivateEntries: new Set(["_multi-compaction"]) });
+
+    expect(found.sort()).toEqual(
+      [
+        path.join(root, "_multi-compaction", "index.ts"),
+        path.join(root, "learning", "index.ts"),
+      ].sort(),
+    );
+  });
+
+  it("filters CLI-discovered extension paths using disabled settings entries", () => {
+    const root = makeTempDir();
+    const enabledPath = path.join(root, "learning", "index.ts");
+    const disabledPath = path.join(root, "_multi-compaction", "index.ts");
+    touch(enabledPath);
+    touch(disabledPath);
+
+    expect(filterDisabledExtensionPaths([enabledPath, disabledPath], [`-${disabledPath}`])).toEqual(
+      [enabledPath],
+    );
+  });
+
+  it("filters disabled extension paths through symlink realpaths", () => {
+    const root = makeTempDir();
+    const target = makeTempDir();
+    const targetIndex = path.join(target, "index.ts");
+    touch(targetIndex);
+    const linkDir = path.join(root, "_multi-compaction");
+    symlinkSync(target, linkDir, "dir");
+    const linkedIndex = path.join(linkDir, "index.ts");
+
+    expect(filterDisabledExtensionPaths([linkedIndex], [`-${targetIndex}`])).toEqual([]);
   });
 
   it("resolves builtin extensions from a yalc/node_modules package cli path", () => {

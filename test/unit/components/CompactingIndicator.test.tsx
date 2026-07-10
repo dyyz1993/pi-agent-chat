@@ -113,6 +113,20 @@ describe("CompactionSummaryCard — 压缩中样式", () => {
 
     expect(container.textContent).toContain("manual");
   });
+
+  it("失败态默认展开并显示失败原因", () => {
+    const { container } = render(
+      <CompactionSummaryCard
+        blockId="failed-compact"
+        summary="上下文压缩失败，请查看原因后重试。"
+        status="failed"
+        reason="Provider finish_reason: model_context_window_exceeded"
+      />,
+    );
+
+    expect(container.textContent).toContain("compactionFailed");
+    expect(container.textContent).toContain("Provider finish_reason");
+  });
 });
 
 describe("手动压缩事件流 — sessionStatus 变化", () => {
@@ -190,6 +204,29 @@ describe("手动压缩事件流 — sessionStatus 变化", () => {
 
     // status 应该被清除
     expect(useSessionStore.getState().sessionStatusMap[SESSION_ID]).toBe("idle");
+  });
+
+  it("compaction_end 失败时在消息列表保留失败记录", () => {
+    useSessionStore.getState().updateSessionStatus(SESSION_ID, "compacting");
+
+    handleAgentEvent(SESSION_ID, {
+      type: "compaction_end",
+      reason: "Summarization failed: Provider finish_reason: model_context_window_exceeded",
+      result: undefined,
+      aborted: false,
+    } as unknown as AgentEvent);
+
+    const messages = useChatStore.getState().messagesBySession[SESSION_ID] || [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: "compactionSummary",
+      _local: true,
+    });
+    expect(messages[0].content[0]).toMatchObject({
+      type: "compactionSummary",
+      status: "failed",
+      reason: "Summarization failed: Provider finish_reason: model_context_window_exceeded",
+    });
   });
 });
 

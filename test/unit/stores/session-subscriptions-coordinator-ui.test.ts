@@ -40,6 +40,22 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
           },
         ],
       },
+      projectTabs: [
+        {
+          id: "remote-tab",
+          name: "Remote",
+          path: "/remote-shadow",
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            id: "remote-tab",
+            name: "Remote",
+            host: "devbox",
+            remotePath: "/srv/project",
+            localPath: "/remote-shadow",
+          },
+        },
+      ],
       updateSessionStatus: updateSessionStatusMock,
     }),
     setState: vi.fn(),
@@ -163,7 +179,10 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 }));
 
 import { apiClient } from "../../../src/mainview/lib/api-client";
+import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import {
+  deriveProjectTabConnectedFromRemoteStatus,
+  doesProjectTabMatchRemoteRuntime,
   setupProjectStatusSubscription,
   setupSubscriptions,
   type SubscriptionMaps,
@@ -240,6 +259,41 @@ describe("project status subscriptions", () => {
     vi.clearAllMocks();
   });
 
+  it("derives transient project tab connection state from remote runtime status", () => {
+    expect(deriveProjectTabConnectedFromRemoteStatus("connected")).toBe(true);
+    expect(deriveProjectTabConnectedFromRemoteStatus("disconnected")).toBe(false);
+    expect(deriveProjectTabConnectedFromRemoteStatus("error")).toBe(false);
+    expect(deriveProjectTabConnectedFromRemoteStatus("connecting")).toBeUndefined();
+  });
+
+  it("matches remote tabs by local shadow path or remote cwd", () => {
+    expect(
+      doesProjectTabMatchRemoteRuntime(
+        {
+          id: "remote-tab",
+          name: "Remote",
+          path: "/remote-shadow",
+          runtime: "ssh",
+          remote: {
+            runtime: "ssh",
+            id: "remote-tab",
+            name: "Remote",
+            host: "devbox",
+            localPath: "/remote-shadow",
+            remotePath: "/srv/project",
+          },
+        },
+        "/other-shadow",
+        {
+          enabled: true,
+          configured: true,
+          status: "disconnected",
+          remoteCwd: "/srv/project",
+        },
+      ),
+    ).toBe(true);
+  });
+
   it("routes SSH connection changes into the status store", () => {
     setupProjectStatusSubscription();
 
@@ -277,6 +331,27 @@ describe("project status subscriptions", () => {
       status: "connecting",
       host: "devbox",
       remoteCwd: "/srv/project",
+    });
+
+    callback({
+      sessionId: "sess-ssh",
+      projectPath: "/remote-shadow",
+      status: {
+        enabled: true,
+        configured: true,
+        status: "disconnected",
+        host: "devbox",
+        remoteCwd: "/srv/project",
+      },
+    });
+
+    expect(vi.mocked(useSessionStore.setState)).toHaveBeenCalledWith({
+      projectTabs: [
+        expect.objectContaining({
+          id: "remote-tab",
+          connected: false,
+        }),
+      ],
     });
   });
 });

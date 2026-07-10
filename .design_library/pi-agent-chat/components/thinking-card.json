@@ -1,0 +1,34 @@
+{
+  "slug": "thinking-card",
+  "schemaVersion": 2,
+  "name": "ThinkingCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "status", "evidence": "Animated thinking/reasoning indicator during AI processing" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["thinking", "done"] }],
+  "representativeVariants": [
+    {
+      "name": "Thinking",
+      "traits": { "state": "thinking", "text": "Analyzing code structure..." },
+      "whySelected": "Active reasoning display",
+      "childrenDigest": "Spinning icon + animated text"
+    },
+    {
+      "name": "Done",
+      "traits": { "state": "done", "text": "Thought for 3.2s" },
+      "whySelected": "Completed reasoning summary",
+      "childrenDigest": "Static icon + duration label"
+    }
+  ],
+  "anatomy": {
+    "parts": ["indicator-icon", "status-text", "duration"],
+    "structurePatterns": ["inline-status"]
+  },
+  "usageHints": { "priorityHint": 13, "context": "AI reasoning/thinking state display" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Animated pulse icon, compact inline style, muted text color, duration badge when complete"
+}

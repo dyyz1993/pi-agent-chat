@@ -1,0 +1,33 @@
+{
+  "slug": "url-card",
+  "schemaVersion": 2,
+  "name": "UrlCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "link", "evidence": "URL link preview card with title, description, and favicon" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Preview",
+      "traits": {
+        "url": "https://example.com",
+        "title": "Example Page",
+        "description": "Page description text",
+        "favicon": "https://example.com/favicon.ico"
+      },
+      "whySelected": "Standard URL preview",
+      "childrenDigest": "Favicon + title + description + URL + open button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["favicon", "title", "description", "url", "open-button"],
+    "structurePatterns": ["link-preview"]
+  },
+  "usageHints": { "priorityHint": 51, "context": "URL link preview in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Favicon + title + description layout (like social card), external link icon, rounded-lg"
+}

@@ -570,6 +570,74 @@ describe("promoteQueuedFollowUp — 行为验证", () => {
   });
 });
 
+describe("insertQueuedMessageNow — 行为验证", () => {
+  it("通过 steer promote/immediate 立即插入一条 followUp 并乐观移出本地队列", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A"],
+          followUp: ["稍后 A", "稍后 B"],
+        },
+      },
+    });
+
+    await useChatStore.getState().insertQueuedMessageNow({
+      type: "followUp",
+      index: 0,
+      text: "稍后 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
+      sessionId: SID,
+      promote: 0,
+      immediate: true,
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A"],
+      followUp: ["稍后 B"],
+    });
+  });
+
+  it("对 steering 队列触发 immediate，让后端按既有队列顺序尽快消费", async () => {
+    useSessionQueueStore.setState({
+      queueBySession: {
+        [SID]: {
+          steering: ["转向 A", "转向 B"],
+          followUp: ["稍后 A"],
+        },
+      },
+    });
+
+    await useChatStore.getState().insertQueuedMessageNow({
+      type: "steering",
+      index: 0,
+      text: "转向 A",
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
+      sessionId: SID,
+      promote: undefined,
+      immediate: true,
+    });
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toEqual({
+      steering: ["转向 A", "转向 B"],
+      followUp: ["稍后 A"],
+    });
+  });
+
+  it("无 activeSessionId 不触发 insert RPC", async () => {
+    useSessionStore.setState({ activeSessionId: null });
+
+    await useChatStore.getState().insertQueuedMessageNow({
+      type: "steering",
+      index: 0,
+      text: "转向 A",
+    });
+
+    expect(apiClient.call).not.toHaveBeenCalled();
+  });
+});
+
 // ════════════════════════════════════════════════════════════════════════
 // 7. 完整事件流：followUp 入队 → queue_update → 后端消费 → message_start
 // ════════════════════════════════════════════════════════════════════════

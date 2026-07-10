@@ -24,7 +24,7 @@ export const PanelPinButton = memo(function PanelPinButton({
         e.stopPropagation();
         onToggle();
       }}
-      className={`p-1.5 rounded-md transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+      className={`p-1.5 rounded-md transition-colors max-sm:hidden ${isPinned ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isPinned ? t("unpinPanel") : t("pinPanel")}
       aria-label={isPinned ? t("unpinPanel") : t("pinPanel")}
     >

@@ -1,0 +1,45 @@
+{
+  "slug": "runtime-permission-card",
+  "schemaVersion": 2,
+  "name": "RuntimePermissionCard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "permission",
+      "evidence": "Runtime/execution permission request (e.g., running commands, installing packages)"
+    }
+  ],
+  "variantDimensions": [{ "name": "risk", "values": ["low", "medium", "high"] }],
+  "representativeVariants": [
+    {
+      "name": "Low Risk",
+      "traits": {
+        "risk": "low",
+        "command": "npm install lodash",
+        "reason": "Installing a dependency"
+      },
+      "whySelected": "Low risk command",
+      "childrenDigest": "Info icon + command + reason + Allow/Deny"
+    },
+    {
+      "name": "High Risk",
+      "traits": {
+        "risk": "high",
+        "command": "rm -rf /tmp/build",
+        "reason": "Cleaning build artifacts"
+      },
+      "whySelected": "Dangerous command",
+      "childrenDigest": "Warning icon + command + reason + Allow/Deny + red accent"
+    }
+  ],
+  "anatomy": {
+    "parts": ["risk-icon", "command", "reason", "risk-badge", "allow-button", "deny-button"],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 39, "context": "Command execution permission requests" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Risk-level colored accent (green/yellow/red), monospace command display, clear reason text"
+}

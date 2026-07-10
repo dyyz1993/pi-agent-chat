@@ -1,0 +1,50 @@
+{
+  "slug": "queue-cards",
+  "schemaVersion": 2,
+  "name": "QueueCards",
+  "category": "queue",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "queue", "evidence": "Pending task queue display showing waiting items" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["queued", "active", "completed"] }],
+  "representativeVariants": [
+    {
+      "name": "Queued",
+      "traits": {
+        "state": "queued",
+        "items": [
+          { "id": 1, "name": "Read file", "status": "waiting" },
+          { "id": 2, "name": "Write file", "status": "waiting" }
+        ]
+      },
+      "whySelected": "Pending queue display",
+      "childrenDigest": "Queue icon + numbered list of pending items with status indicators"
+    },
+    {
+      "name": "Processing",
+      "traits": {
+        "state": "active",
+        "activeItem": 1,
+        "items": [
+          { "id": 1, "name": "Read file", "status": "running" },
+          { "id": 2, "name": "Write file", "status": "waiting" }
+        ]
+      },
+      "whySelected": "Active queue with current item",
+      "childrenDigest": "Queue icon + active item highlighted + remaining items"
+    }
+  ],
+  "anatomy": {
+    "parts": ["queue-icon", "item-list", "item-status", "item-name", "progress-indicator"],
+    "structurePatterns": ["stacked-list"]
+  },
+  "usageHints": {
+    "priorityHint": 29,
+    "context": "Task queue display for sequential tool execution"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Numbered list with status indicators, active item highlighted, muted for waiting items"
+}

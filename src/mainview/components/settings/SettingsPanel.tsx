@@ -160,7 +160,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
   const effectiveTierModels = useTierStore((s) => s.globalDefaults);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
-  const setGlobalDefaults = useTierStore((s) => s.setGlobalDefaults);
+  const saveGlobalTierModels = useTierStore((s) => s.saveGlobalTierModels);
   const [localTierModels, setLocalTierModels] = useState<Record<string, string>>({});
   const [tierSaving, setTierSaving] = useState(false);
   const [tierSaveMessage, setTierSaveMessage] = useState<TierSaveMessage | null>(null);
@@ -196,7 +196,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     setTierSaving(true);
     try {
       void projectPath;
-      setGlobalDefaults(localTierModels);
+      await saveGlobalTierModels(sessionId, localTierModels);
       setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
     } catch (err) {
       log.warn("save tier config failed", {
@@ -206,7 +206,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     } finally {
       setTierSaving(false);
     }
-  }, [sessionId, projectPath, localTierModels, setGlobalDefaults, t]);
+  }, [sessionId, projectPath, localTierModels, saveGlobalTierModels, t]);
 
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
   const [proxyStatusLoading, setProxyStatusLoading] = useState(false);
@@ -300,7 +300,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               onClick={() => setViewMode(mode)}
               className={`h-8 text-[12px] font-medium transition-colors ${
                 chatViewMode === mode
-                  ? "bg-semantic-accent text-white"
+                  ? "bg-accent text-white"
                   : "text-text-secondary hover:bg-surface-hover/60"
               }`}
             >
@@ -325,7 +325,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               onClick={() => setFontPreset(option.key)}
               className={`min-w-0 whitespace-nowrap rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
                 fontPreset === option.key
-                  ? "bg-semantic-accent text-white"
+                  ? "bg-accent text-white"
                   : "text-text-secondary hover:bg-surface-hover/60"
               }`}
             >
@@ -514,23 +514,22 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       aria-modal="true"
       aria-labelledby={titleId}
       data-testid="settings-panel"
-      className="fixed inset-0 z-modal flex flex-col overflow-hidden bg-bg-primary text-text-primary"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      className="fixed inset-0 z-modal flex flex-col overflow-hidden bg-bg-elevated text-text-primary dark:bg-surface-code"
     >
       <div
-        className="flex min-h-[56px] shrink-0 items-center gap-3 border-b border-border-secondary bg-bg-elevated/95 px-3 sm:px-5"
-        style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
+        className="surface-header-safe-top flex min-h-[52px] shrink-0 items-center gap-3 border-b border-border-secondary bg-surface-dim px-4 py-2 dark:bg-surface-code sm:px-5"
       >
+        <SlidersHorizontal className="h-4 w-4 shrink-0 text-accent" />
         <h2 id={titleId} className="min-w-0 flex-1 truncate text-sm font-semibold">
           {t("title")}
         </h2>
-        <IconButton label={t("close")} size="md" onClick={onClose}>
+        <IconButton label={t("close")} size="sm" onClick={onClose} className="rounded-md">
           <X className="h-4 w-4" />
         </IconButton>
       </div>
 
       <div className="min-h-0 flex flex-1 flex-col bg-bg-primary md:flex-row">
-        <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 md:flex md:w-[288px] md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-0">
+        <aside className="shrink-0 border-b border-border-secondary bg-bg-elevated/60 p-2 dark:bg-surface-code/60 md:flex md:w-[260px] md:border-b-0 md:border-r md:bg-bg-primary/70 md:p-0">
           <div className="flex gap-1 overflow-x-auto scrollbar-none md:hidden">
             {SETTINGS_TABS.map((tab) => {
               const Icon = tab.icon;
@@ -542,7 +541,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex min-h-[44px] min-w-[92px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
                     selected
-                      ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
+                      ? "bg-accent/10 text-accent shadow-[inset_3px_0_0_var(--color-accent)]"
                       : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
                   }`}
                 >
@@ -567,7 +566,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   onClick={() => setActiveTab(group.items[0])}
                   className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center transition-colors ${
                     selected
-                      ? "bg-semantic-accent/10 text-semantic-accent"
+                      ? "bg-accent/10 text-accent"
                       : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
                   }`}
                 >
@@ -598,7 +597,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex min-h-[40px] items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
                       selected
-                        ? "bg-semantic-accent/10 text-semantic-accent shadow-[inset_3px_0_0_var(--color-accent)]"
+                        ? "bg-accent/10 text-accent shadow-[inset_3px_0_0_var(--color-accent)]"
                         : "text-text-tertiary hover:bg-surface-hover/50 hover:text-text-secondary"
                     }`}
                   >
@@ -618,7 +617,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         </main>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border-secondary bg-bg-elevated/95 px-3 py-3 sm:px-5">
+      <div
+        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border-secondary bg-surface-dim px-4 py-3 dark:bg-surface-code sm:px-5"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+      >
         <Button
           size="md"
           variant="ghost"

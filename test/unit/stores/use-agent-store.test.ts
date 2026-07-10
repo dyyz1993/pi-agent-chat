@@ -66,6 +66,42 @@ describe("useAgentStore agent list", () => {
     expect([...useAgentStore.getState().agentFavorites]).toEqual(["pi-expert"]);
   });
 
+  it("deduplicates concurrent agent resource fetches for the same session", async () => {
+    let resolveAgents:
+      | ((value: { agents: Array<{ name: string; source: string; filePath: string }> }) => void)
+      | null = null;
+    mockCall.mockImplementation((method: string) => {
+      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
+      if (method === "agent.getAgents") {
+        return new Promise((resolve) => {
+          resolveAgents = resolve;
+        });
+      }
+      if (method === "agent.getCurrentAgent") return Promise.resolve({ agentName: "build" });
+      if (method === "agent.getAgentDetail") return Promise.resolve({ agent: { name: "build" } });
+      if (method === "agent.getAllTools") return Promise.resolve({ tools: [] });
+      throw new Error(`unexpected method ${method}`);
+    });
+
+    const first = useAgentStore.getState().fetchAgents("sess-1");
+    const second = useAgentStore.getState().fetchAgents("sess-1");
+
+    await Promise.resolve();
+    expect(mockCall.mock.calls.filter(([method]) => method === "agent.getAgents")).toHaveLength(1);
+    resolveAgents?.({ agents: [{ name: "build", source: "builtin", filePath: "" }] });
+    await Promise.all([first, second]);
+
+    expect(
+      mockCall.mock.calls.filter(([method]) => method === "agent.getCurrentAgent"),
+    ).toHaveLength(1);
+    expect(
+      mockCall.mock.calls.filter(([method]) => method === "agent.getAgentDetail"),
+    ).toHaveLength(1);
+    expect(mockCall.mock.calls.filter(([method]) => method === "agent.getAllTools")).toHaveLength(
+      1,
+    );
+  });
+
   it("persists favorite toggles and reorders the existing list", async () => {
     useAgentStore.setState({
       agents: [

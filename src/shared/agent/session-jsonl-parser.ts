@@ -28,6 +28,11 @@ export interface ParsedCompactionEntry {
   timestamp: number;
 }
 
+export interface ParsedDeletionEntry {
+  entryId: string;
+  targetIds: string[];
+}
+
 export interface JsonlTreeEntry {
   id: string;
   parentId: string | null;
@@ -43,6 +48,7 @@ export interface FullJsonlParseResult {
   messages: ParsedMessageEntry[];
   customEntries: ParsedCustomEntry[];
   compactionEntries: ParsedCompactionEntry[];
+  deletionEntries: ParsedDeletionEntry[];
   parentById: Map<string, string | null>;
   lastLeafPointer: string | null;
   activeJsonlLeafId: string | null;
@@ -57,6 +63,7 @@ export interface IncrementalJsonlReadResult {
   totalLines: number;
   newByteOffset: number;
   newCompactionEntries: ParsedCompactionEntry[];
+  newDeletionEntries: ParsedDeletionEntry[];
   lastLeafPointer: string | null;
 }
 
@@ -118,8 +125,9 @@ function appendParsedEntry(
   messages: ParsedMessageEntry[],
   customEntries: ParsedCustomEntry[],
   compactionEntries?: ParsedCompactionEntry[],
+  deletionEntries?: ParsedDeletionEntry[],
   leafState?: { lastLeafPointer: string | null; activeJsonlLeafId: string | null },
-): "message" | "custom" | "compaction" | "leaf_pointer" | null {
+): "message" | "custom" | "compaction" | "deletion" | "leaf_pointer" | null {
   if (parsed.type === "message" && parsed.message) {
     messages.push({ entryId, message: parsed.message });
     if (leafState) {
@@ -185,6 +193,21 @@ function appendParsedEntry(
     return "leaf_pointer";
   }
 
+  if (parsed.type === "deletion") {
+    if (deletionEntries) {
+      deletionEntries.push({
+        entryId,
+        targetIds: Array.isArray(parsed.targetIds)
+          ? parsed.targetIds.filter((targetId): targetId is string => typeof targetId === "string")
+          : [],
+      });
+    }
+    if (leafState) {
+      leafState.activeJsonlLeafId = entryId;
+    }
+    return "deletion";
+  }
+
   return null;
 }
 
@@ -198,6 +221,7 @@ export async function readJsonlFully(sessionPath: string): Promise<FullJsonlPars
   const messages: ParsedMessageEntry[] = [];
   const customEntries: ParsedCustomEntry[] = [];
   const compactionEntries: ParsedCompactionEntry[] = [];
+  const deletionEntries: ParsedDeletionEntry[] = [];
   const parentById = new Map<string, string | null>();
   const leafState = {
     lastLeafPointer: null as string | null,
@@ -217,7 +241,15 @@ export async function readJsonlFully(sessionPath: string): Promise<FullJsonlPars
     if (entryId) {
       parentById.set(entryId, parentId);
     }
-    appendParsedEntry(parsed, entryId, messages, customEntries, compactionEntries, leafState);
+    appendParsedEntry(
+      parsed,
+      entryId,
+      messages,
+      customEntries,
+      compactionEntries,
+      deletionEntries,
+      leafState,
+    );
   }
   rl.close();
 
@@ -225,6 +257,7 @@ export async function readJsonlFully(sessionPath: string): Promise<FullJsonlPars
     messages,
     customEntries,
     compactionEntries,
+    deletionEntries,
     parentById,
     lastLeafPointer: leafState.lastLeafPointer,
     activeJsonlLeafId: leafState.activeJsonlLeafId,
@@ -248,6 +281,7 @@ export async function readJsonlFromByteOffset(
   let lineIndex = 0;
   let newEntries = 0;
   const newCompactionEntries: ParsedCompactionEntry[] = [];
+  const newDeletionEntries: ParsedDeletionEntry[] = [];
   const leafState = {
     lastLeafPointer: null as string | null,
     activeJsonlLeafId: null as string | null,
@@ -272,9 +306,15 @@ export async function readJsonlFromByteOffset(
       messages,
       customEntries,
       newCompactionEntries,
+      newDeletionEntries,
       leafState,
     );
-    if (entryType === "message" || entryType === "custom" || entryType === "compaction") {
+    if (
+      entryType === "message" ||
+      entryType === "custom" ||
+      entryType === "compaction" ||
+      entryType === "deletion"
+    ) {
       newEntries++;
     }
   }
@@ -292,6 +332,7 @@ export async function readJsonlFromByteOffset(
     totalLines: lineIndex,
     newByteOffset,
     newCompactionEntries,
+    newDeletionEntries,
     lastLeafPointer: leafState.lastLeafPointer,
   };
 }
@@ -398,6 +439,7 @@ export function parseJsonlFromText(
   | "messages"
   | "customEntries"
   | "compactionEntries"
+  | "deletionEntries"
   | "parentById"
   | "lastLeafPointer"
   | "activeJsonlLeafId"
@@ -405,6 +447,7 @@ export function parseJsonlFromText(
   const messages: ParsedMessageEntry[] = [];
   const customEntries: ParsedCustomEntry[] = [];
   const compactionEntries: ParsedCompactionEntry[] = [];
+  const deletionEntries: ParsedDeletionEntry[] = [];
   const parentById = new Map<string, string | null>();
   const leafState = {
     lastLeafPointer: null as string | null,
@@ -420,13 +463,22 @@ export function parseJsonlFromText(
       parentById.set(entryId, parentId);
       leafState.activeJsonlLeafId = entryId;
     }
-    appendParsedEntry(parsed, entryId, messages, customEntries, compactionEntries, leafState);
+    appendParsedEntry(
+      parsed,
+      entryId,
+      messages,
+      customEntries,
+      compactionEntries,
+      deletionEntries,
+      leafState,
+    );
   }
 
   return {
     messages,
     customEntries,
     compactionEntries,
+    deletionEntries,
     parentById,
     lastLeafPointer: leafState.lastLeafPointer,
     activeJsonlLeafId: leafState.activeJsonlLeafId,

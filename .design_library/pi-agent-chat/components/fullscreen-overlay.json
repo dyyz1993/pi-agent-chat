@@ -1,0 +1,43 @@
+{
+  "slug": "fullscreen-overlay",
+  "schemaVersion": 2,
+  "name": "FullscreenOverlay",
+  "category": "overlay",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "overlay",
+      "evidence": "Full-screen overlay panel with header, scrollable body, footer"
+    }
+  ],
+  "variantDimensions": [
+    { "name": "layer", "values": ["modal", "fullscreen"] },
+    { "name": "position", "values": ["fixed", "absolute"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Fullscreen",
+      "traits": { "layer": "fullscreen", "position": "fixed", "title": "Code Editor" },
+      "whySelected": "Full-screen code editor view",
+      "childrenDigest": "Fixed inset-0 + header + scrollable body + footer"
+    },
+    {
+      "name": "Modal Layer",
+      "traits": { "layer": "modal", "position": "fixed", "title": "Image Viewer" },
+      "whySelected": "Modal-layer overlay",
+      "childrenDigest": "z-modal + dark background + centered content"
+    }
+  ],
+  "anatomy": {
+    "parts": ["backdrop", "container", "header", "title", "close-button", "body", "footer"],
+    "structurePatterns": ["overlay-container"]
+  },
+  "usageHints": {
+    "priorityHint": 63,
+    "context": "Full-screen views: code editor, image viewer, diff viewer"
+  },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "inset-0 fixed/absolute, bg-bg-elevated, flex-col, overflow-hidden body, focus trap, safe-area padding"
+}

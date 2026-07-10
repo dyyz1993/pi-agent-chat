@@ -1,0 +1,28 @@
+{
+  "slug": "fallback-card",
+  "schemaVersion": 2,
+  "name": "FallbackCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "content", "evidence": "Fallback display for unsupported content types" }
+  ],
+  "variantDimensions": [],
+  "representativeVariants": [
+    {
+      "name": "Fallback",
+      "traits": { "mimeType": "application/zip", "fileName": "archive.zip", "size": "2.4 MB" },
+      "whySelected": "Unsupported file type",
+      "childrenDigest": "File icon + filename + size + download button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["file-icon", "filename", "size", "download-button"],
+    "structurePatterns": ["content-preview"]
+  },
+  "usageHints": { "priorityHint": 52, "context": "Fallback for unsupported file types" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Generic file icon, filename and size display, download action"
+}

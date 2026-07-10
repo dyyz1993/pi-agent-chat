@@ -8,7 +8,12 @@ import { useAppStore } from "./use-app-store";
 import { useChatStore } from "./use-chat-store";
 import { useGitStore } from "./use-git-store";
 import { useStatusStore } from "./use-status-store";
-import { formatProjectStartError, getErrorMessage } from "./session-start-error";
+import {
+  formatDisconnectedRemoteProjectError,
+  formatProjectStartError,
+  getErrorMessage,
+  isDisconnectedRemoteProject,
+} from "./session-start-error";
 import {
   requestRulesSnapshot,
   setupSubscriptions,
@@ -30,6 +35,8 @@ interface ActiveSessionState extends SubscriptionMaps {
   projectStartError: Record<string, string>;
   currentModel: ModelInfo | null;
   modelBySession: Record<string, ModelInfo>;
+  currentThinkingLevel: string;
+  thinkingLevelBySession: Record<string, string>;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
   fetchInitialState: (sessionId: string, options?: { force?: boolean }) => void;
 }
@@ -156,6 +163,7 @@ export function createSetActiveSessionAction({
   isAgentStarted,
   markAgentStarted,
   clearAgentStarted,
+  clearActiveSubsessionSelection,
 }: {
   get: GetState;
   set: SetState;
@@ -165,6 +173,7 @@ export function createSetActiveSessionAction({
   isAgentStarted: (sessionId: string) => boolean;
   markAgentStarted: (sessionId: string) => void;
   clearAgentStarted: (sessionId: string) => void;
+  clearActiveSubsessionSelection: () => void;
 }): ActiveSessionState["activeSessionId"] extends string | null
   ? (
       id: string | null,
@@ -185,6 +194,10 @@ export function createSetActiveSessionAction({
     trace?.mark("begin");
 
     const skipCleanup = options?.skipCleanup ?? false;
+
+    if (prevId !== id) {
+      clearActiveSubsessionSelection();
+    }
 
     perfLog.info("[switch] === SESSION SWITCH START ===", {
       from: prevId ?? "(none)",
@@ -222,6 +235,9 @@ export function createSetActiveSessionAction({
         (m: { role: string; tokenUsage?: unknown }) =>
           m.role === "user" || (m.role === "assistant" && m.tokenUsage),
       );
+    const nextThinkingLevel = id
+      ? (get().thinkingLevelBySession[id] ?? get().currentThinkingLevel)
+      : get().currentThinkingLevel;
 
     set({
       activeSessionId: id,
@@ -233,6 +249,7 @@ export function createSetActiveSessionAction({
         : get().sessionReady,
       // Restore cached model immediately to avoid showing stale model from previous session
       ...(id ? { currentModel: get().modelBySession[id] ?? null } : {}),
+      currentThinkingLevel: nextThinkingLevel,
       ...(id && curTab
         ? {
             lastActiveSessionByProject: {
@@ -250,6 +267,22 @@ export function createSetActiveSessionAction({
     const { projectTabs, activeProjectId } = get();
     const tab = projectTabs.find((t) => t.id === activeProjectId);
     if (!tab) return;
+
+    if (isDisconnectedRemoteProject(tab)) {
+      const errMsg = formatDisconnectedRemoteProjectError(tab);
+      useAppStore.getState().addLog(`Remote project disconnected: ${tab.name}`);
+      set((s) => {
+        const projectId = s.activeProjectId;
+        if (!projectId) return {};
+        return {
+          sessionReady: { ...s.sessionReady, [id]: false },
+          agentReady: { ...s.agentReady, [id]: false },
+          projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+          projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+        };
+      });
+      return;
+    }
 
     const ensureSession = async (): Promise<SessionMeta | null> => {
       for (const sessions of Object.values(get().sessionsByProject)) {

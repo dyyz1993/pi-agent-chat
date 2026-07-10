@@ -10,7 +10,7 @@ import {
 } from "../../../src/shared/agent/agent-channel-registration";
 
 describe("agent channel registration", () => {
-  it("registers all supported channels and routes coordinator channels separately", () => {
+  it("registers all supported channels and routes the coordinator channel separately", () => {
     const handlers = new Map<string, (data: unknown) => void>();
     const client: ChannelRegistrableClient = {
       channel: (name: string) => ({
@@ -32,7 +32,6 @@ describe("agent channel registration", () => {
     expect(count).toBe(AGENT_CHANNEL_NAMES.length);
     handlers.get("bash")?.({ type: "list" });
     handlers.get("coordinator")?.({ __call: "session_delegate_list" });
-    handlers.get("coordinator_client")?.({ __call: "session_delegate_status" });
 
     expect(handleChannelData).toHaveBeenCalledWith("sess-1", {
       type: "channel_data",
@@ -44,11 +43,7 @@ describe("agent channel registration", () => {
       { __call: "session_delegate_list" },
       "coordinator",
     );
-    expect(handleCoordinatorCall).toHaveBeenCalledWith(
-      "sess-1",
-      { __call: "session_delegate_status" },
-      "coordinator_client",
-    );
+    expect(handleCoordinatorCall).toHaveBeenCalledTimes(1);
   });
 
   it("skips unsupported channels without failing registration", () => {

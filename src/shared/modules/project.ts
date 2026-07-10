@@ -454,23 +454,6 @@ export interface ProjectMethods {
       remote: RemoteProjectRecord;
     };
   };
-  "project.saveTierConfig": {
-    params: {
-      projectPath: string;
-      tierModels: Record<string, string>;
-      currentTier: string | null;
-    };
-    result: { ok: boolean };
-  };
-  "project.loadTierConfig": {
-    params: { projectPath: string };
-    result: {
-      config: {
-        tierModels: Record<string, string>;
-        currentTier: string | null;
-      } | null;
-    };
-  };
 }
 
 export interface RecentProject {
@@ -514,6 +497,7 @@ export interface SessionMeta {
   parentSessionPath: string | null;
   delegateParentSessionId: string | null;
   delegateType: string | null;
+  agent?: string;
   messageCount: number;
   firstMessage: string;
   createdAt: number;

@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe("TokenStatusBar", () => {
-  it("shows cumulative session token stats next to current context usage", () => {
+  it("keeps cumulative session token stats inside the details dialog", () => {
     useSessionStore.setState({
       sessionContextMap: {
         "sess-ctx": { tokens: 12000, contextWindow: 200000, percent: 6 },
@@ -62,6 +62,10 @@ describe("TokenStatusBar", () => {
 
     render(<TokenStatusBar sessionId="sess-ctx" />);
 
+    expect(document.body.textContent ?? "").not.toContain("tokenStatus.sessionInput");
+
+    fireEvent.click(screen.getByRole("button", { name: "tokenStatus.breakdown" }));
+
     const text = document.body.textContent ?? "";
     expect(text).toContain("tokenStatus.cumulative");
     expect(text).toContain("tokenStatus.sessionInput");
@@ -70,11 +74,45 @@ describe("TokenStatusBar", () => {
     expect(text).toContain("23K");
     expect(text).toContain("tokenStatus.sessionCache");
     expect(text).toContain("15K");
+    expect(text).toContain("tokenStatus.sessionCost");
     expect(text).toContain("$0.012");
     expect(text).toContain("tokenStatus.sessionTools");
     expect(text).toContain("7");
     expect(text).toContain("tokenStatus.sessionMessages");
     expect(text).toContain("11");
+  });
+
+  it("formats million-scale context windows as M instead of 1000K", () => {
+    useSessionStore.setState({
+      sessionContextMap: {
+        "sess-ctx": { tokens: 131000, contextWindow: 1000000, percent: 13 },
+      },
+      sessionStatusMap: { "sess-ctx": "idle" },
+    });
+
+    render(<TokenStatusBar sessionId="sess-ctx" />);
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("131K");
+    expect(text).toContain("1M");
+    expect(text).not.toContain("1000K");
+  });
+
+  it("keeps mobile token usage compact while preserving the full accessible label", () => {
+    useSessionStore.setState({
+      sessionContextMap: {
+        "sess-ctx": { tokens: 131000, contextWindow: 1000000, percent: 13 },
+      },
+      sessionStatusMap: { "sess-ctx": "idle" },
+    });
+
+    render(<TokenStatusBar sessionId="sess-ctx" />);
+
+    expect(
+      screen.getByTitle("tokenStatus.used 131K / tokenStatus.available 1M (13%)"),
+    ).toBeTruthy();
+    expect(screen.getByText("131K / 1M")).toBeTruthy();
+    expect(screen.getByText("13%")).toBeTruthy();
   });
 
   it("groups memory, rules, and LSP context under message history", () => {

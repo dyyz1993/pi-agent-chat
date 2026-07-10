@@ -1,0 +1,37 @@
+{
+  "slug": "bash-background-process-card",
+  "schemaVersion": 2,
+  "name": "BashBackgroundProcessCard",
+  "category": "agent",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "process",
+      "evidence": "Long-running background bash process with PID and stop control"
+    }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["running", "stopped"] }],
+  "representativeVariants": [
+    {
+      "name": "Running",
+      "traits": { "status": "running", "command": "npm run dev", "pid": 12345, "uptime": "5m 32s" },
+      "whySelected": "Active background process",
+      "childrenDigest": "Terminal icon + command + PID + uptime + stop button"
+    },
+    {
+      "name": "Stopped",
+      "traits": { "status": "stopped", "command": "npm run dev", "pid": 12345, "exitCode": 0 },
+      "whySelected": "Stopped background process",
+      "childrenDigest": "Terminal icon + command + exit code + restart button"
+    }
+  ],
+  "anatomy": {
+    "parts": ["terminal-icon", "command", "pid-badge", "uptime", "stop-button", "output-preview"],
+    "structurePatterns": ["stacked-header-content-actions"]
+  },
+  "usageHints": { "priorityHint": 27, "context": "Background process management in agent session" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Persistent process card in sidebar or panel, PID badge, stop/restart controls, live output preview"
+}

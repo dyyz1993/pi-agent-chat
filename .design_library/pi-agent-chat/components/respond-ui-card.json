@@ -1,0 +1,31 @@
+{
+  "slug": "respond-ui-card",
+  "schemaVersion": 2,
+  "name": "RespondUICard",
+  "category": "ui-interaction",
+  "sourceKind": "from-scratch",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    { "type": "response", "evidence": "Agent response to a UI interaction" }
+  ],
+  "variantDimensions": [{ "name": "status", "values": ["success", "error", "cancelled"] }],
+  "representativeVariants": [
+    {
+      "name": "Success Response",
+      "traits": { "status": "success", "message": "Permission granted for file write" },
+      "whySelected": "Successful UI interaction response",
+      "childrenDigest": "Check icon + message + green accent"
+    },
+    {
+      "name": "Error Response",
+      "traits": { "status": "error", "message": "Permission denied by user" },
+      "whySelected": "Denied interaction response",
+      "childrenDigest": "X icon + message + red accent"
+    }
+  ],
+  "anatomy": { "parts": ["status-icon", "message"], "structurePatterns": ["inline-status"] },
+  "usageHints": { "priorityHint": 41, "context": "Agent response after user interaction" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Compact inline status, mirrors parent interaction card style"
+}

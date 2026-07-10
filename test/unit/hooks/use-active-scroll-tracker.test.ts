@@ -27,6 +27,7 @@ vi.mock("../../../src/mainview/hooks/use-scroll-intent", () => ({
 }));
 
 import {
+  buildActiveTargetIndex,
   chooseActiveTargetKeyForScroll,
   getActiveTargetAnchorY,
   useActiveScrollTracker,
@@ -70,6 +71,29 @@ function createMockHandle(overrides?: Partial<MockHandle>): MockHandle {
 const mockHandleRef: { current: MockHandle | null } = { current: null };
 
 const MESSAGE_IDS = ["msg-1", "msg-2", "msg-3", "msg-4", "msg-5"];
+
+describe("useActiveScrollTracker — active target index", () => {
+  it("precomputes target lookup maps for scroll-time active detection", () => {
+    const index = buildActiveTargetIndex([
+      { key: "msg-1", messageId: "msg-1" },
+      { key: "msg-1-0", messageId: "msg-1", blockId: "msg-1-0" },
+      { key: "msg-1-1", messageId: "msg-1", blockId: "msg-1-1" },
+      { key: "msg-2", messageId: "msg-2" },
+    ]);
+
+    expect(index?.firstKey).toBe("msg-1");
+    expect(index?.lastKey).toBe("msg-2");
+    expect(index?.messageToKey.get("msg-1")).toBe("msg-1");
+    expect(index?.messageToKey.get("msg-2")).toBe("msg-2");
+    expect(index?.blockToKey.get("msg-1-1")).toBe("msg-1-1");
+    expect(index?.targetOrder.get("msg-1-1")).toBe(2);
+  });
+
+  it("returns null for empty active targets", () => {
+    expect(buildActiveTargetIndex(undefined)).toBeNull();
+    expect(buildActiveTargetIndex([])).toBeNull();
+  });
+});
 
 describe("useActiveScrollTracker — active target anchor", () => {
   it("uses a lower reading anchor instead of the very top edge", () => {
@@ -161,26 +185,50 @@ describe("useActiveScrollTracker — initialization", () => {
     mockHandleRef.current = mockHandle;
 
     const setActive = vi.fn();
-    renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: true,
-          onInitComplete,
-        });
-      },
-    );
+    renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: true,
+        onInitComplete,
+      });
+    });
 
     // scheduleScrollToBottom runs on next rAF
     act(() => {
       vi.advanceTimersByTime(100);
+    });
+
+    expect(onInitComplete).toHaveBeenCalled();
+  });
+
+  it("calls onInitComplete after retrying when the virtualizer handle is unavailable", () => {
+    const onInitComplete = vi.fn();
+    const setActive = vi.fn();
+
+    renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef<MockHandle | null>(null);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: true,
+        onInitComplete,
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1_000);
     });
 
     expect(onInitComplete).toHaveBeenCalled();
@@ -194,21 +242,19 @@ describe("useActiveScrollTracker — initialization", () => {
     });
     mockHandleRef.current = mockHandle;
 
-    renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: true,
-        });
-      },
-    );
+    renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: true,
+      });
+    });
 
     act(() => {
       vi.advanceTimersByTime(100);
@@ -234,21 +280,19 @@ describe("useActiveScrollTracker — programmatic scroll guard", () => {
     const mockHandle = createMockHandle();
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false, // prevent init scroll
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false, // prevent init scroll
+      });
+    });
 
     act(() => {
       result.current.scrollToMessage("msg-3");
@@ -267,21 +311,19 @@ describe("useActiveScrollTracker — programmatic scroll guard", () => {
     });
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     // Clear any init calls
     setActive.mockClear();
@@ -313,21 +355,19 @@ describe("useActiveScrollTracker — programmatic scroll guard", () => {
     });
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     // Wait for double-rAF to release programmatic guard
     act(() => {
@@ -367,26 +407,24 @@ describe("useActiveScrollTracker — edge active targets", () => {
     });
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          activeTargets: [
-            { key: "msg-1", messageId: "msg-1" },
-            { key: "msg-1-0", messageId: "msg-1", blockId: "msg-1-0" },
-            { key: "msg-5", messageId: "msg-5" },
-          ],
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        activeTargets: [
+          { key: "msg-1", messageId: "msg-1" },
+          { key: "msg-1-0", messageId: "msg-1", blockId: "msg-1-0" },
+          { key: "msg-5", messageId: "msg-5" },
+        ],
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     act(() => vi.advanceTimersByTime(20));
     act(() => result.current.handleScroll());
@@ -403,26 +441,24 @@ describe("useActiveScrollTracker — edge active targets", () => {
     });
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          activeTargets: [
-            { key: "msg-1", messageId: "msg-1" },
-            { key: "msg-5", messageId: "msg-5" },
-            { key: "msg-5-0", messageId: "msg-5", blockId: "msg-5-0" },
-          ],
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        activeTargets: [
+          { key: "msg-1", messageId: "msg-1" },
+          { key: "msg-5", messageId: "msg-5" },
+          { key: "msg-5-0", messageId: "msg-5", blockId: "msg-5-0" },
+        ],
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     act(() => vi.advanceTimersByTime(20));
     act(() => result.current.handleScroll());
@@ -669,21 +705,19 @@ describe("useActiveScrollTracker — auto-scroll recovery (C)", () => {
     const mockHandle = createMockHandle({ scrollSize: 2000, viewportSize: 500 });
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     // Suspend
     act(() => result.current.suspendAutoScroll());
@@ -703,21 +737,19 @@ describe("useActiveScrollTracker — auto-scroll recovery (C)", () => {
     const mockHandle = createMockHandle({ scrollSize: 2000, viewportSize: 500 });
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     // Initially auto-scroll is enabled
     expect(result.current.autoScrollEnabled).toBe(true);
@@ -748,21 +780,19 @@ describe("useActiveScrollTracker — edge cases (D/E)", () => {
     const mockHandle = createMockHandle();
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: [],
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: [],
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     // These should not crash
     act(() => result.current.scrollToMessage("nonexistent"));
@@ -777,21 +807,19 @@ describe("useActiveScrollTracker — edge cases (D/E)", () => {
     const mockHandle = createMockHandle();
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: ["only-msg"],
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: ["only-msg"],
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     act(() => result.current.scrollToMessage("only-msg"));
     expect(setActive).toHaveBeenCalledWith("only-msg");
@@ -813,21 +841,19 @@ describe("useActiveScrollTracker — scrollToEdge (I)", () => {
     const mockHandle = createMockHandle();
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     act(() => result.current.scrollToEdge("top"));
     expect(mockHandle.scrollToIndex).toHaveBeenCalledWith(0);
@@ -839,27 +865,22 @@ describe("useActiveScrollTracker — scrollToEdge (I)", () => {
     const mockHandle = createMockHandle();
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     act(() => result.current.scrollToEdge("bottom"));
-    expect(mockHandle.scrollToIndex).toHaveBeenCalledWith(
-      MESSAGE_IDS.length - 1,
-      { align: "end" },
-    );
+    expect(mockHandle.scrollToIndex).toHaveBeenCalledWith(MESSAGE_IDS.length - 1, { align: "end" });
     expect(setActive).toHaveBeenCalledWith(MESSAGE_IDS[MESSAGE_IDS.length - 1]);
   });
 });
@@ -878,21 +899,19 @@ describe("useActiveScrollTracker — rapid consecutive clicks (H)", () => {
     const mockHandle = createMockHandle();
     mockHandleRef.current = mockHandle;
 
-    const { result } = renderHook(
-      () => {
-        const scrollRef = useRef<HTMLDivElement | null>(null);
-        const vlistRef = useRef(mockHandle);
-        return useActiveScrollTracker({
-          scrollRef,
-          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
-          messageIds: MESSAGE_IDS,
-          sessionId: "test-session",
-          setActive,
-          streamVersion: 0,
-          initialScrollReady: false,
-        });
-      },
-    );
+    const { result } = renderHook(() => {
+      const scrollRef = useRef<HTMLDivElement | null>(null);
+      const vlistRef = useRef(mockHandle);
+      return useActiveScrollTracker({
+        scrollRef,
+        vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+        messageIds: MESSAGE_IDS,
+        sessionId: "test-session",
+        setActive,
+        streamVersion: 0,
+        initialScrollReady: false,
+      });
+    });
 
     // Rapid fire two clicks
     act(() => {
@@ -904,7 +923,8 @@ describe("useActiveScrollTracker — rapid consecutive clicks (H)", () => {
     expect(setActive).toHaveBeenCalledWith("msg-1");
     expect(setActive).toHaveBeenCalledWith("msg-3");
     // Last call wins for scroll position
-    const lastCall = mockHandle.scrollToIndex.mock.calls[mockHandle.scrollToIndex.mock.calls.length - 1];
+    const lastCall =
+      mockHandle.scrollToIndex.mock.calls[mockHandle.scrollToIndex.mock.calls.length - 1];
     expect(lastCall[0]).toBe(2); // msg-3 index
   });
 });

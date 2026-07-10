@@ -22,6 +22,7 @@ import { useStatusStore } from "../../stores/use-status-store";
 import { AnchoredPopover, IconButton } from "../primitives";
 import {
   PermissionActionButtons,
+  findOneTimePermissionActionValue,
 } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 import { jumpToSessionById } from "./primitives/useJumpToSession";
@@ -270,11 +271,8 @@ type BatchApprovalAction = {
 
 function buildBatchApprovalAction(req: UIPendingRequest): BatchApprovalAction | null {
   if (req.method === "select" && req.permissionMeta) {
-    const options = req.options as Array<{ label?: string; value?: unknown }>;
-    const allowEntry = options.find((o) => o.label?.toLowerCase() === "allow");
-    const denyEntry = options.find((o) => o.label?.toLowerCase() === "deny");
-    const allowValue = allowEntry?.value;
-    const denyValue = denyEntry?.value;
+    const allowValue = findOneTimePermissionActionValue(req.options, "allow");
+    const denyValue = findOneTimePermissionActionValue(req.options, "deny");
     if (!allowValue && !denyValue) return null;
     return {
       requestId: req.requestId,
@@ -870,7 +868,7 @@ function SessionGroup({
                 )}
                 <button
                   onClick={() => onGotoSession(sessionId, req.requestId)}
-                  className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-semantic-accent transition-colors hover:bg-semantic-accent/10"
+                  className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-accent transition-colors hover:bg-accent/10"
                   title={t("uiPending.gotoSession")}
                 >
                   {t("uiPending.gotoSession")}
@@ -1033,7 +1031,7 @@ export function UIPendingCenter() {
             </IconButton>
           </div>
           <BatchApprovalToolbar requests={projectPending} />
-          <div className="max-h-[min(520px,70dvh)] space-y-2.5 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-2">
+          <div className="max-h-[min(520px,70dvh)] space-y-2.5 overflow-y-auto px-3 pb-3 pt-2">
             {pendingCount === 0 ? (
               <div className="py-8 text-center text-[11px] text-text-tertiary">
                 {t("uiPending.noPendingRequests")}
@@ -1147,7 +1145,7 @@ export function ProjectRuntimePendingRequests({
             {sessionPending.length}
           </span>
         </div>
-        <div className={`${bodyMaxHeightClassName} overflow-y-auto overflow-x-hidden px-2.5 py-2`}>
+        <div className={`${bodyMaxHeightClassName} overflow-y-auto px-2.5 py-2`}>
           <PanelCard req={primary} sessionName={primarySessionName} />
         </div>
         {secondary.length > 0 && (

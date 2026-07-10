@@ -1,0 +1,38 @@
+{
+  "slug": "memory-card",
+  "schemaVersion": 2,
+  "name": "MemoryCard",
+  "category": "agent",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "memory", "evidence": "Memory/knowledge entry stored by agent" }
+  ],
+  "variantDimensions": [{ "name": "type", "values": ["preference", "fact", "context"] }],
+  "representativeVariants": [
+    {
+      "name": "Preference",
+      "traits": {
+        "type": "preference",
+        "key": "code-style",
+        "value": "Prefer functional components"
+      },
+      "whySelected": "User preference memory",
+      "childrenDigest": "Memory icon + key-value pair + teal accent"
+    },
+    {
+      "name": "Fact",
+      "traits": { "type": "fact", "key": "project-type", "value": "React + TypeScript SPA" },
+      "whySelected": "Project fact memory",
+      "childrenDigest": "Brain icon + key-value pair + cyan accent"
+    }
+  ],
+  "anatomy": {
+    "parts": ["type-icon", "key", "value", "delete-action"],
+    "structurePatterns": ["inline-key-value"]
+  },
+  "usageHints": { "priorityHint": 26, "context": "Agent memory entries display" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Teal/cyan accent for memory entries, compact key-value layout, subtle delete action"
+}

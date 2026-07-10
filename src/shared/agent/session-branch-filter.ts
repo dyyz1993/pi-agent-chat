@@ -58,6 +58,67 @@ export function filterCustomEntriesToBranch(
   );
 }
 
+export function filterCustomEntriesToPaginatedMessages(
+  customEntries: ParsedCustomEntry[],
+  messages: unknown[],
+  options: PaginationOptions,
+  parentById: Map<string, string | null>,
+  leafId: string | null,
+  allMessageEntryIds: string[] = [],
+): ParsedCustomEntry[] {
+  if (options.limit === undefined) return customEntries;
+  if (messages.length === 0) return [];
+
+  const pathOrder = new Map<string, number>();
+  const path: string[] = [];
+  if (leafId && parentById.has(leafId)) {
+    let curId: string | null = leafId;
+    while (curId) {
+      path.push(curId);
+      curId = parentById.get(curId) ?? null;
+    }
+    path.reverse();
+  } else {
+    path.push(...parentById.keys());
+  }
+  path.forEach((id, index) => pathOrder.set(id, index));
+
+  let min = Number.POSITIVE_INFINITY;
+  let messageMax = Number.NEGATIVE_INFINITY;
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    const entryId = (message as Record<string, unknown>).entryId;
+    if (typeof entryId !== "string") continue;
+    const order = pathOrder.get(entryId);
+    if (order === undefined) continue;
+    min = Math.min(min, order);
+    messageMax = Math.max(messageMax, order);
+  }
+  if (!Number.isFinite(min)) return [];
+  const cursorOrder =
+    typeof options.afterEntryId === "string" ? pathOrder.get(options.afterEntryId) : undefined;
+  const nextMessageOrderAfterWindow =
+    options.fromStart === true
+      ? allMessageEntryIds
+          .map((entryId) => pathOrder.get(entryId))
+          .filter((order): order is number => order !== undefined && order > messageMax)
+          .sort((a, b) => a - b)[0]
+      : undefined;
+  const max =
+    options.fromStart === true
+      ? nextMessageOrderAfterWindow !== undefined
+        ? nextMessageOrderAfterWindow - 1
+        : pathOrder.size - 1
+      : cursorOrder === undefined
+        ? pathOrder.size - 1
+        : cursorOrder - 1;
+
+  return customEntries.filter((entry) => {
+    const order = pathOrder.get(entry.id);
+    return order !== undefined && order >= min && order <= max;
+  });
+}
+
 /**
  * Inject entryId into a message object for frontend consumption.
  */
@@ -150,6 +211,7 @@ function expandToolPairWindow(
 export interface PaginationOptions {
   limit?: number;
   afterEntryId?: string;
+  fromStart?: boolean;
 }
 
 export interface PaginationResult {
@@ -161,6 +223,7 @@ export interface PaginationResult {
 /**
  * Apply pagination to filtered messages.
  *
+ * With fromStart=true, returns the oldest page.
  * Without a cursor (afterEntryId=null), returns the newest page.
  * With afterEntryId, returns the page immediately before that entry
  * (for prepending older history).
@@ -172,6 +235,7 @@ export function applyPagination(
   const totalCount = filteredMessages.length;
   const limit = options.limit;
   const afterEntryId = options.afterEntryId;
+  const fromStart = options.fromStart === true;
   let hasMore = false;
   let nextCursor: string | null = null;
 
@@ -185,6 +249,14 @@ export function applyPagination(
   if (afterEntryId != null && cursorIndex < 0) {
     // afterEntryId not found — return empty page
     slicedMessages = [];
+  } else if (limit !== undefined && fromStart) {
+    const startIndex = 0;
+    const endIndex = Math.min(totalCount, limit);
+    slicedMessages = expandToolPairWindow(filteredMessages, startIndex, endIndex).map(
+      injectEntryId,
+    );
+    hasMore = false;
+    nextCursor = null;
   } else if (limit !== undefined) {
     const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
     const startIndex = Math.max(0, endIndex - limit);

@@ -2,6 +2,11 @@ import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
 import type { ProjectTab, SessionMeta, SessionStatus } from "../types";
 import { useAppStore } from "./use-app-store";
+import {
+  formatDisconnectedRemoteProjectError,
+  isDisconnectedRemoteProject,
+} from "./session-start-error";
+import { useTierStore } from "./use-tier-store";
 
 interface ProjectSessionState {
   activeProjectId: string | null;
@@ -10,6 +15,9 @@ interface ProjectSessionState {
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
   sessionStatusMap: Record<string, SessionStatus>;
+  projectStartFailed: Record<string, boolean>;
+  projectStartError: Record<string, string>;
+  currentModel: { provider: string; id: string; name?: string } | null;
   newSessionCreatedAt: number;
   setActiveSession: (
     id: string | null,
@@ -119,6 +127,12 @@ export function createLoadSessionsForProjectAction({
   };
 }
 
+export interface CreateNewSessionResult {
+  status: "created" | "reused";
+  sessionId: string;
+  projectPath: string;
+}
+
 export function createCreateNewSessionAction({
   get,
   set,
@@ -129,16 +143,35 @@ export function createCreateNewSessionAction({
   set: SetState;
   log: ProjectActionLogger;
   insertAfterPinned: (sessions: SessionMeta[], newSession: SessionMeta) => SessionMeta[];
-}): (projectPath?: string) => Promise<void> {
+}): (projectPath?: string) => Promise<CreateNewSessionResult> {
   return async (_projectPath?: string) => {
     const { projectTabs, activeProjectId } = get();
+    const sourceSessionId = get().activeSessionId;
     const tab = projectTabs.find((t) => t.id === activeProjectId);
     if (!tab) {
       log.error("createNewSession: no active tab");
-      return;
+      throw new Error("No active project");
     }
 
-    const targetPath = _projectPath || tab.path;
+    const targetPath = _projectPath ?? tab.path;
+    const targetsActiveRemote =
+      !_projectPath ||
+      targetPath === tab.path ||
+      targetPath === tab.remote?.localPath ||
+      targetPath === tab.remote?.remotePath;
+    if (targetsActiveRemote && isDisconnectedRemoteProject(tab)) {
+      const errMsg = formatDisconnectedRemoteProjectError(tab);
+      log.warn("createNewSession blocked because remote project is disconnected", {
+        projectId: tab.id,
+        projectPath: targetPath,
+      });
+      useAppStore.getState().addLog(`Remote project disconnected: ${tab.name}`);
+      set((s) => ({
+        projectStartFailed: { ...s.projectStartFailed, [tab.id]: true },
+        projectStartError: { ...s.projectStartError, [tab.id]: errMsg },
+      }));
+      throw new Error(errMsg);
+    }
 
     const existing = get().sessionsByProject[targetPath];
     const blankSession = existing?.find(
@@ -150,50 +183,106 @@ export function createCreateNewSessionAction({
     );
     if (blankSession) {
       log.info("Reusing existing blank session", { sessionId: blankSession.sessionId });
+      const now = Date.now();
+      set((s) => {
+        const sessions = s.sessionsByProject[targetPath] || [];
+        const remaining = sessions.filter(
+          (session) => session.sessionId !== blankSession.sessionId,
+        );
+        const refreshedBlankSession: SessionMeta = {
+          ...blankSession,
+          updatedAt: now,
+          status: "idle",
+        };
+
+        return {
+          sessionsByProject: {
+            ...s.sessionsByProject,
+            [targetPath]: insertAfterPinned(remaining, refreshedBlankSession),
+          },
+        };
+      });
       get().setActiveSession(blankSession.sessionId);
       set({ newSessionCreatedAt: Date.now() });
-      return;
+      return { status: "reused", sessionId: blankSession.sessionId, projectPath: targetPath };
     }
 
     log.info("Creating session", { targetPath });
 
+    let result: { sessionId: string; sessionPath: string };
     try {
-      const result = await apiClient.call("session.create", { projectPath: targetPath });
-
-      const now = Date.now();
-      const newSession: SessionMeta = {
-        sessionId: result.sessionId,
-        name: "",
-        sessionPath: result.sessionPath,
-        projectPath: targetPath,
-        parentSessionPath: null,
-        delegateParentSessionId: null,
-        delegateType: null,
-        messageCount: 0,
-        firstMessage: "",
-        createdAt: now,
-        updatedAt: now,
-        status: "idle",
-      };
-
-      set((s) => {
-        const existing = s.sessionsByProject[targetPath] || [];
-        if (existing.some((sess) => sess.sessionId === result.sessionId)) return {};
-        return {
-          sessionsByProject: {
-            ...s.sessionsByProject,
-            [targetPath]: insertAfterPinned(existing, newSession),
-          },
-        };
-      });
-
-      get().setActiveSession(result.sessionId);
-      set({ newSessionCreatedAt: Date.now() });
-
+      result = await apiClient.call("session.create", { projectPath: targetPath });
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       log.error("Failed to create session", { error: errMsg });
       useAppStore.getState().addLog(`Failed to create session: ${errMsg}`);
+      throw error instanceof Error ? error : new Error(errMsg);
     }
+
+    const now = Date.now();
+    const newSession: SessionMeta = {
+      sessionId: result.sessionId,
+      name: "",
+      sessionPath: result.sessionPath,
+      projectPath: targetPath,
+      parentSessionPath: null,
+      delegateParentSessionId: null,
+      delegateType: null,
+      messageCount: 0,
+      firstMessage: "",
+      createdAt: now,
+      updatedAt: now,
+      status: "idle",
+    };
+
+    set((s) => {
+      const existing = s.sessionsByProject[targetPath] || [];
+      if (existing.some((sess) => sess.sessionId === result.sessionId)) return {};
+      return {
+        sessionsByProject: {
+          ...s.sessionsByProject,
+          [targetPath]: insertAfterPinned(existing, newSession),
+        },
+      };
+    });
+
+    get().setActiveSession(result.sessionId);
+    set({ newSessionCreatedAt: Date.now() });
+
+    // 新会话默认复制当前会话的模型档位配置，方便连续任务复用；项目本身不持有 Tier 配置。
+    try {
+      const tierStore = useTierStore.getState();
+      const sourceTier = sourceSessionId
+        ? tierStore.getCurrentTierForSession(sourceSessionId, targetPath)
+        : null;
+      const sourceModels = sourceSessionId
+        ? tierStore.getTierModelsForSession(sourceSessionId, targetPath)
+        : tierStore.globalDefaults;
+      const prevModel = get().currentModel;
+
+      if (sourceSessionId && Object.keys(sourceModels).length > 0) {
+        tierStore.setSessionTierModels(result.sessionId, targetPath, sourceModels);
+      }
+
+      if (sourceTier) {
+        tierStore.setSessionCurrentTier(result.sessionId, targetPath, sourceTier);
+        await tierStore.saveTierModelsForSession(result.sessionId, targetPath, sourceModels);
+      } else if (prevModel) {
+        await apiClient.call("agent.setModel", {
+          sessionId: result.sessionId,
+          model: `${prevModel.provider}/${prevModel.id}`,
+        });
+        await tierStore.saveSessionTierConfig(result.sessionId);
+      }
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      log.warn("Failed to sync model for new session", {
+        sessionId: result.sessionId,
+        error: errMsg,
+      });
+      useAppStore.getState().addLog(`Session created, but model sync failed: ${errMsg}`);
+    }
+
+    return { status: "created", sessionId: result.sessionId, projectPath: targetPath };
   };
 }

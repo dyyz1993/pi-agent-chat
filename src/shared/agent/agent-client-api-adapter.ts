@@ -13,7 +13,12 @@ import {
   setThinkingLevelOperation,
   switchTierOperation,
 } from "./agent-client-model-operations";
-import { getMessagesOperation, getFullMessagesOperation } from "./agent-client-message-operations";
+import {
+  getMessagesOperation,
+  getFullMessagesOperation,
+  getFullMessagesAroundOperation,
+  getMessageNavPageOperation,
+} from "./agent-client-message-operations";
 import {
   abortRetryOperation,
   clearQueueOperation,
@@ -94,13 +99,37 @@ export interface AgentClientApiAdapter {
   getFullMessages: (
     sessionId: string,
     sessionPath?: string,
-    options?: { limit?: number; afterEntryId?: string },
+    options?: { limit?: number; afterEntryId?: string; fromStart?: boolean },
   ) => Promise<{
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
     hasMore: boolean;
     totalCount: number;
     nextCursor: string | null;
+  }>;
+  getMessageNavPage: (
+    sessionId: string,
+    sessionPath?: string,
+    options?: { limit?: number; afterEntryId?: string; fromStart?: boolean },
+  ) => Promise<{
+    messages: AgentMessageForUI[];
+    hasMore: boolean;
+    totalCount: number;
+    nextCursor: string | null;
+  }>;
+  getFullMessagesAround: (
+    sessionId: string,
+    sessionPath: string | undefined,
+    options: { targetEntryId: string; before?: number; after?: number },
+  ) => Promise<{
+    messages: AgentMessageForUI[];
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMoreBefore: boolean;
+    hasMoreAfter: boolean;
+    beforeCursor: string | null;
+    afterCursor: string | null;
+    targetFound: boolean;
+    totalCount: number;
   }>;
   getAvailableModels: (
     sessionId: string,
@@ -267,6 +296,46 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
         sessionId,
         sessionPath,
         pagination: options,
+        getActiveManaged: deps.getActiveManaged,
+        resolveSessionPath: deps.resolveSessionPath,
+        leafIds: deps.leafIds,
+        getSessionCache: deps.getSessionCache,
+        setSessionCache: deps.setSessionCache,
+        readSandboxFile: sandboxManager
+          ? async (pathToRead) => {
+              const userId = deps.getSandboxUserId(sessionId);
+              return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
+            }
+          : undefined,
+      });
+    },
+    getMessageNavPage(sessionId, sessionPath, options) {
+      const sandboxManager = getSandboxManager();
+      return getMessageNavPageOperation({
+        sessionId,
+        sessionPath,
+        pagination: options,
+        getActiveManaged: deps.getActiveManaged,
+        resolveSessionPath: deps.resolveSessionPath,
+        leafIds: deps.leafIds,
+        getSessionCache: deps.getSessionCache,
+        setSessionCache: deps.setSessionCache,
+        readSandboxFile: sandboxManager
+          ? async (pathToRead) => {
+              const userId = deps.getSandboxUserId(sessionId);
+              return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
+            }
+          : undefined,
+      });
+    },
+    getFullMessagesAround(sessionId, sessionPath, options) {
+      const sandboxManager = getSandboxManager();
+      return getFullMessagesAroundOperation({
+        sessionId,
+        sessionPath,
+        targetEntryId: options.targetEntryId,
+        before: options.before,
+        after: options.after,
         getActiveManaged: deps.getActiveManaged,
         resolveSessionPath: deps.resolveSessionPath,
         leafIds: deps.leafIds,

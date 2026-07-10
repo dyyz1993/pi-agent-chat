@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Card Preview</title>
+    <link rel="stylesheet" href="../colors_and_type.css" />
+    <style>
+      /* Page scaffold — NOT extracted */
+      body {
+        margin: 0;
+        padding: var(--space-3);
+        background: var(--color-background);
+        font-family: var(--font-body);
+        color: var(--color-on-surface);
+      }
+      .specimen {
+        max-width: 520px;
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+      }
+      .story {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+      .story-label {
+        font-family: var(--font-body);
+        font-size: var(--font-size-eyebrow);
+        font-weight: var(--font-weight-eyebrow);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-on-surface-variant);
+      }
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid var(--color-outline-variant);
+        margin: var(--space-2) 0;
+      }
+
+      /* @component-css-start */
+      .card {
+        background: var(--card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-2);
+        overflow: hidden;
+      }
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+      }
+      .card-header-ruled {
+        border-bottom: 1px solid var(--color-outline-variant);
+      }
+      .card-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--size-icon-lg);
+        height: var(--size-icon-lg);
+        border-radius: var(--radius-md);
+        flex-shrink: 0;
+      }
+      .card-icon.memory {
+        background: var(--pi-memory-50);
+      }
+      .card-icon.tool {
+        background: var(--pi-tool-50);
+      }
+      .card-icon img {
+        width: var(--size-icon-sm);
+        height: var(--size-icon-sm);
+      }
+      .card-title {
+        font-family: var(--font-heading);
+        font-size: var(--font-size-h4);
+        font-weight: var(--font-weight-h4);
+        color: var(--color-on-surface);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+      .card-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px var(--space-2);
+        border-radius: var(--radius-full);
+        font-size: var(--font-size-eyebrow);
+        font-weight: var(--font-weight-eyebrow);
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-left: auto;
+      }
+      .card-badge.done {
+        background: var(--pi-success-50);
+        color: var(--color-success);
+      }
+      .card-badge.running {
+        background: var(--pi-blue-50);
+        color: var(--primary);
+      }
+      .card-tool-header {
+        background: var(--pi-tool-50);
+      }
+      .card-body {
+        padding: var(--space-3) var(--space-4);
+      }
+      .card-desc {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-body);
+        line-height: var(--line-height-body);
+        color: var(--color-on-surface-variant);
+        margin: 0;
+      }
+      .card-meta {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-2) var(--space-4);
+        border-top: 1px solid var(--color-outline-variant);
+      }
+      .card-meta-item {
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-caption);
+        color: var(--color-on-surface-variant);
+      }
+      .card-section {
+        padding: var(--space-2) var(--space-4) var(--space-3);
+        border-bottom: 1px solid var(--color-outline-variant);
+      }
+      .card-section:last-of-type {
+        border-bottom: none;
+      }
+      .card-section-title {
+        font-size: var(--font-size-eyebrow);
+        font-weight: var(--font-weight-eyebrow);
+        color: var(--color-on-surface-variant);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: var(--space-1);
+      }
+      .card-section-code {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-mono);
+        line-height: var(--line-height-mono);
+        color: var(--color-on-surface);
+        background: var(--color-surface-dim);
+        border-radius: var(--radius-sm);
+        padding: var(--space-2);
+        white-space: pre;
+        overflow-x: auto;
+        margin: 0;
+      }
+      .card-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4);
+        border-top: 1px solid var(--color-outline-variant);
+      }
+      .card-action-link {
+        font-size: var(--font-size-caption);
+        font-weight: var(--font-weight-body);
+        color: var(--color-primary);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .card-action-link:hover {
+        text-decoration: underline;
+      }
+      /* @component-css-end */
+    </style>
+  </head>
+  <body>
+    <div class="specimen">
+      <div class="stage">
+        <div class="story">
+          <span class="story-label">Default Card</span>
+          <div class="rail">
+            <div class="card" data-evidence-sample="Default Card">
+              <div class="card-header card-header-ruled">
+                <div class="card-icon memory">
+                  <img
+                    src="https://cdn.jsdelivr.net/npm/lucide-static@1.8.0/icons/database.svg"
+                    alt="database"
+                  />
+                </div>
+                <span class="card-title">Memory Entry</span>
+              </div>
+              <div class="card-body">
+                <p class="card-desc">TypeScript strict mode configuration</p>
+              </div>
+              <div class="card-meta">
+                <span class="card-meta-item">TypeScript</span>
+                <span class="card-meta-item">配置项</span>
+              </div>
+              <div class="card-actions">
+                <a href="#" class="card-action-link">编辑</a>
+                <a href="#" class="card-action-link">删除</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="story">
+          <span class="story-label">Tool Execution</span>
+          <div class="rail">
+            <div class="card" data-evidence-sample="Tool Execution Card">
+              <div class="card-header card-tool-header">
+                <div class="card-icon tool">
+                  <img
+                    src="https://cdn.jsdelivr.net/npm/lucide-static@1.8.0/icons/terminal.svg"
+                    alt="terminal"
+                  />
+                </div>
+                <span class="card-title">bash</span>
+                <span class="card-badge done">done</span>
+              </div>
+              <div class="card-section">
+                <div class="card-section-title">Command</div>
+                <p class="card-section-code">npm run build</p>
+              </div>
+              <div class="card-section">
+                <div class="card-section-title">Output</div>
+                <p class="card-section-code">Build completed successfully</p>
+              </div>
+              <div class="card-meta">
+                <span class="card-meta-item">1.2s</span>
+              </div>
+            </div>
+
+            <div class="card" data-evidence-sample="Tool Execution Card">
+              <div class="card-header card-tool-header">
+                <div class="card-icon tool">
+                  <img
+                    src="https://cdn.jsdelivr.net/npm/lucide-static@1.8.0/icons/pencil.svg"
+                    alt="edit"
+                  />
+                </div>
+                <span class="card-title">edit</span>
+                <span class="card-badge running">running</span>
+              </div>
+              <div class="card-section">
+                <div class="card-section-title">File</div>
+                <p class="card-section-code">src/index.ts</p>
+              </div>
+              <div class="card-meta">
+                <span class="card-meta-item">处理中...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

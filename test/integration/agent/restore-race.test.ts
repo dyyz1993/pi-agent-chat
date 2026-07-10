@@ -92,13 +92,13 @@ vi.mock("../../../src/mainview/stores/use-retry-store", () => ({
 vi.mock("../../../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
     getState: vi.fn(() => ({
-      syncTierFromModel: vi.fn(),
-      setProjectCurrentTier: vi.fn(),
+      syncTierFromModelForSession: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
       setGlobalDefaults: vi.fn(),
-      setProjectTierModels: vi.fn(),
+      setSessionTierModels: vi.fn(),
       fetchTierConfig: vi.fn().mockResolvedValue(undefined),
-      getCurrentTier: vi.fn(() => null),
-      getTierModels: vi.fn(() => ({})),
+      getCurrentTierForSession: vi.fn(() => null),
+      getTierModelsForSession: vi.fn(() => ({})),
       dataBySession: {},
       globalDefaults: {},
     })),
@@ -264,6 +264,30 @@ describe("fetchInitialState agent restoration", () => {
     expect((switchCalls[0] as unknown[])[1]).toEqual(
       expect.objectContaining({ agentName: "pi-expert", sessionId: SID }),
     );
+  });
+
+  it("does not switch again when the persisted agent is already active", async () => {
+    baseMocks({
+      "agent.getCurrentAgent": () => ({ agentName: "frontend-dev" }),
+      "agent.getLatestAgentChange": () => ({
+        agentName: "frontend-dev",
+        timestamp: "2026-05-20T05:00:00.000Z",
+      }),
+      "agent.getAgentDetail": () => ({ agent: { name: "frontend-dev", description: "Frontend" } }),
+      "agent.getAllTools": () => ({ tools: [{ name: "read" }] }),
+    });
+
+    useSessionStore.getState().fetchInitialState(SID);
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const switchCalls = mockedCall.mock.calls.filter((c) => c[0] === "agent.switchAgent");
+    expect(switchCalls).toHaveLength(0);
+    expect(mockedCall).toHaveBeenCalledWith("agent.getAgentDetail", {
+      agentName: "frontend-dev",
+      sessionId: SID,
+    });
+    expect(mockedCall).toHaveBeenCalledWith("agent.getAllTools", { sessionId: SID });
+    expect(useAgentStore.getState().currentAgentBySession[SID]).toBe("frontend-dev");
   });
 
   it("uses build as fallback when no agent_change exists", async () => {

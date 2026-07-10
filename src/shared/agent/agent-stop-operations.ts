@@ -51,6 +51,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>;
   deleteLspState: (sessionId: string) => void;
   clearSessionCache: (sessionId: string) => void;
+  emitAgentEndTimeoutMs?: number;
 }): Promise<boolean> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) return false;
@@ -60,7 +61,11 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
     ? ({ type: "agent_end", reason: options.crashReason } as unknown as SanitizedEvent)
     : ({ type: "agent_end" } as SanitizedEvent);
   try {
-    await options.emitAgentEvent(options.sessionId, endEvent);
+    await withTimeout(
+      options.emitAgentEvent(options.sessionId, endEvent),
+      options.emitAgentEndTimeoutMs ?? 1_500,
+      "emitAgentEvent-stop",
+    );
   } catch (err: unknown) {
     log.warn("emitAgentEvent(agent_end) error", {
       sessionId: options.sessionId,

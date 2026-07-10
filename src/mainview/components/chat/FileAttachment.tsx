@@ -60,7 +60,7 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
       data-testid="attachment-chip"
     >
       {att.status === "uploading" && (
-        <Loader2 className="w-3 h-3 text-semantic-accent animate-spin shrink-0" />
+        <Loader2 className="w-3 h-3 text-accent animate-spin shrink-0" />
       )}
       {att.status === "error" && <AlertCircle className="w-3 h-3 text-status-error shrink-0" />}
       {att.status === "done" && (
@@ -180,11 +180,11 @@ export function AttachmentButtons({
 
   const goalStatus = supervisorStatus?.goal?.status;
   const goalColor = (() => {
-    if (mode === "goal") return "text-semantic-accent";
+    if (mode === "goal") return "text-accent";
     if (!supervisorStatus?.goal) return "text-text-tertiary";
     if (goalStatus === "complete") return "text-status-success";
     if (goalStatus === "blocked" || goalStatus === "needs_user") return "text-status-warning";
-    return "text-semantic-accent";
+    return "text-accent";
   })();
 
   const isPulsing =
@@ -258,7 +258,7 @@ export function AttachmentButtons({
         key: "goal",
         title: mode === "goal" ? t("goal.composerMode") : t("composerState.goalTitle"),
         Icon: Target,
-        className: `${goalColor} border-semantic-accent/30 bg-semantic-accent/10`,
+        className: `${goalColor} border-accent/30 bg-accent/10`,
         onClick: mode === "goal" ? () => undefined : openGoalComposer,
         onRemove: mode === "goal" ? onExitGoalMode : undefined,
         pulse: isPulsing,

@@ -1,0 +1,41 @@
+{
+  "slug": "tag",
+  "schemaVersion": 2,
+  "name": "Tag",
+  "category": "data-display",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "badge", "evidence": "small label indicating status or category" },
+    { "type": "tag", "evidence": "categorical label for content filtering" }
+  ],
+  "variantDimensions": [
+    { "name": "semantic", "values": ["success", "warning", "error", "info", "neutral"] },
+    { "name": "variant", "values": ["filled", "outline"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Success Filled",
+      "traits": { "semantic": "success", "variant": "filled", "label": "done" },
+      "whySelected": "Tool execution status indicator",
+      "childrenDigest": "Text label only"
+    },
+    {
+      "name": "Error Outline",
+      "traits": { "semantic": "error", "variant": "outline", "label": "Rolled Back" },
+      "whySelected": "Turn state tag in timeline",
+      "childrenDigest": "Text label only"
+    }
+  ],
+  "anatomy": {
+    "parts": ["label"],
+    "structurePatterns": ["inline-flex-label"]
+  },
+  "usageHints": {
+    "priorityHint": 5,
+    "context": "Tool status, session states, bookmarks tags, model selection"
+  },
+  "doNotInvent": ["removable-tag", "clickable-tag-filter"],
+  "unknowns": [],
+  "keyInsightSeed": "Semantic color-coded status tags (success/warning/error/info) for tool states"
+}

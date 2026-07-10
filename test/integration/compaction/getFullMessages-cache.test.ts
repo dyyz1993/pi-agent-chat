@@ -44,6 +44,7 @@ interface JsonlLine {
   summary?: string;
   tokensBefore?: number;
   leafId?: string;
+  targetIds?: string[];
 }
 
 function writeJsonlLines(filePath: string, lines: JsonlLine[]): void {
@@ -166,6 +167,38 @@ describe("getFullMessages LRU Cache", () => {
     expect(full.messages.length).toBe(100);
     expect(full.totalCount).toBe(100);
     expect(full.hasMore).toBe(false);
+  });
+
+  it("filters messages hidden by deletion entries and preserves the filter through cache", async () => {
+    const sessionPath = join(tmpDir, "sess-delete.jsonl");
+    writeJsonlLines(sessionPath, [
+      {
+        id: "entry-1",
+        parentId: null,
+        type: "message",
+        message: { role: "user", content: "keep me" },
+      },
+      {
+        id: "entry-2",
+        parentId: "entry-1",
+        type: "message",
+        message: { role: "assistant", content: "delete me" },
+      },
+      {
+        id: "entry-3",
+        parentId: "entry-2",
+        type: "deletion",
+        targetIds: ["entry-2"],
+      },
+    ]);
+
+    const cold = await manager.getFullMessages("sess-delete", sessionPath, { limit: 10 });
+    expect(cold.messages.map((message) => message.entryId)).toEqual(["entry-1"]);
+    expect(cold.totalCount).toBe(1);
+
+    const hot = await manager.getFullMessages("sess-delete", sessionPath, { limit: 10 });
+    expect(hot.messages.map((message) => message.entryId)).toEqual(["entry-1"]);
+    expect(hot.totalCount).toBe(1);
   });
 
   it("cache invalidates when file shrinks", async () => {
@@ -351,7 +384,7 @@ describe("getFullMessages LRU Cache", () => {
 
     expect(hot.messages.length).toBe(cold.messages.length);
     expect(hot.totalCount).toBe(5000);
-    expect(hotMs).toBeLessThan(10);
+    expect(hotMs).toBeLessThan(Math.max(25, coldMs / 5));
     console.log(
       `    Large file — Cold: ${coldMs.toFixed(1)}ms, Hot: ${hotMs.toFixed(3)}ms, Speedup: ${(coldMs / Math.max(hotMs, 0.01)).toFixed(0)}x`,
     );

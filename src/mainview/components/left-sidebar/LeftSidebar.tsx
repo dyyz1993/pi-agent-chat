@@ -29,9 +29,9 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
   return (
     <div
-      className={`flex flex-col bg-bg-secondary border-r border-border-primary overflow-x-hidden z-20 ${
+      className={`flex flex-col bg-bg-secondary border-r border-border-primary z-20 ${
         overlay
-          ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform"
+          ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform overflow-hidden"
           : ""
       }`}
       style={overlay ? { position: "absolute", left: 0, top: 0, bottom: 0, width } : { width }}
@@ -55,8 +55,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               const state = useSessionStore.getState();
 
               try {
-                await state.createNewSession();
-                setSuccessToastKey("sessionCreated");
+                const result = await state.createNewSession();
+                setSuccessToastKey(
+                  result.status === "created" ? "sessionCreated" : "sessionReused",
+                );
                 setShowSuccessToast(true);
                 setTimeout(() => setShowSuccessToast(false), 2000);
               } catch (error) {
@@ -75,7 +77,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
             <Plus className="w-3.5 h-3.5" />
             {isCreating && (
               <div className="absolute inset-0 flex items-center justify-center bg-bg-elevated/80 rounded">
-                <div className="w-2.5 h-2.5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin" />
+                <div className="w-2.5 h-2.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </button>

@@ -142,6 +142,7 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
       options?: { force?: boolean; preserveStreaming?: boolean },
     ) => Promise<void>;
     incrementStreamVersion: () => void;
+    setIsStreaming: (value: boolean) => void;
   }
   const useChatStore = create<ChatState>((set) => ({
     messagesBySession: {},
@@ -171,6 +172,7 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
     loadSessionMessages,
     incrementStreamVersion: () =>
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
+    setIsStreaming: (value) => set({ isStreaming: value }),
   }));
   function getMemorySemanticTimestamp(data: unknown, fallback: number): number {
     const record = data as Record<string, unknown> | undefined;
@@ -266,6 +268,7 @@ import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-q
 import { useUIDialogStore } from "../../../src/mainview/stores/use-ui-dialog-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
+import { notificationGateway } from "../../../src/mainview/lib/notification-gateway";
 
 const SID = "test-session-1";
 const TCID = "tc-bash-1";
@@ -319,6 +322,74 @@ beforeEach(() => {
   useSessionStore.getState().scheduleWorkspaceResourceRefresh = vi.fn();
   Object.keys(toolCallNameMap).forEach((k) => delete toolCallNameMap[k]);
   (useUIDialogStore.getState as ReturnType<typeof vi.fn>).mockClear();
+  (notificationGateway.emit as ReturnType<typeof vi.fn>).mockClear();
+});
+
+describe("assistant message_end status recovery", () => {
+  it("releases streaming session when a plain assistant response ends", () => {
+    setMessages([
+      {
+        id: "assistant-live",
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useChatStore.setState({ isStreaming: true });
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "streaming" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+        stopReason: "stop",
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(getLastAssistant()?.isStreaming).toBe(false);
+    expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
+    expect(useChatStore.getState().isStreaming).toBe(false);
+  });
+
+  it("keeps session streaming when assistant ends on a tool-use boundary", () => {
+    setMessages([
+      {
+        id: "assistant-tool",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "pwd",
+            status: "running",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useChatStore.setState({
+      isStreaming: true,
+      activeToolCallIdsBySession: { [SID]: [TCID] },
+    });
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "streaming" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", id: TCID, name: "bash", input: { command: "pwd" } }],
+        stopReason: "toolUse",
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(getLastAssistant()?.isStreaming).toBe(false);
+    expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("streaming");
+    expect(useChatStore.getState().isStreaming).toBe(true);
+  });
 });
 
 describe("agent_start / agent_end", () => {
@@ -1373,10 +1444,150 @@ describe("message_end tool card closure", () => {
     const msgs = getMessages();
     expect(msgs).toHaveLength(2);
     expect(msgs[1].role).toBe("error");
-    expect(msgs[1].content).toEqual([
-      { type: "text", text: "LLM 未返回有效响应\nLLM 返回了错误响应" },
-    ]);
+    expect(msgs[1].content).toEqual([{ type: "text", text: "LLM 响应失败\nLLM 返回了错误响应" }]);
     expect(useChatStore.getState().loadSessionMessages).not.toHaveBeenCalled();
+  });
+
+  it("adds a visible error card when LLM fails after partial assistant content", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "write a long answer" }],
+        timestamp: Date.now() - 2,
+      },
+      {
+        id: "assistant-partial",
+        role: "assistant",
+        content: [{ type: "text", text: "partial response before provider failed" }],
+        timestamp: Date.now() - 1,
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-quota-error",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "partial response before provider failed" }],
+        stopReason: "error",
+        errorMessage: "HTTP 402 insufficient_quota: quota exceeded",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs).toHaveLength(3);
+    expect(msgs[1]).toMatchObject({
+      id: "assistant-partial",
+      role: "assistant",
+      isStreaming: false,
+      stopReason: "error",
+      entryId: "entry-quota-error",
+    });
+    expect(msgs[2]).toMatchObject({
+      id: "error_llm_entry-quota-error",
+      role: "error",
+      stopReason: "error",
+    });
+    expect(msgs[2].content).toEqual([
+      {
+        type: "text",
+        text: "模型额度或账单异常\nHTTP 402 insufficient_quota: quota exceeded",
+      },
+    ]);
+    expect(notificationGateway.emit).toHaveBeenCalledWith({
+      type: "session_error",
+      sessionId: SID,
+      title: "模型额度或账单异常",
+      body: "HTTP 402 insufficient_quota: quota exceeded",
+      level: "error",
+    });
+  });
+
+  it("attaches latest provider request diagnostics to live LLM error cards", () => {
+    const providerRequest = {
+      version: 1,
+      provider: "opencode-go",
+      modelId: "deepseek-v4-flash",
+      api: "openai-completions",
+      timestamp: new Date().toISOString(),
+      payloadChars: 423283,
+      payloadTokens: 105821,
+      topLevelKeys: ["messages", "model", "tools", "thinking"],
+      sections: [
+        { id: "messages", label: "Messages", chars: 389425, tokens: 97357, count: 386 },
+        { id: "tools", label: "Tools", chars: 33695, tokens: 8424, count: 47 },
+      ],
+    };
+    useSessionStore.setState({
+      sessionContextMap: {
+        [SID]: {
+          tokens: 105821,
+          contextWindow: 1_000_000,
+          providerRequest,
+        },
+      },
+    });
+    setMessages([
+      {
+        id: "assistant-partial",
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        timestamp: Date.now() - 1,
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-provider-400",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        stopReason: "error",
+        errorMessage: "400 Error from provider (Console Go): Upstream request failed",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs[1]).toMatchObject({
+      id: "error_llm_entry-provider-400",
+      role: "error",
+      providerRequest,
+    });
+  });
+
+  it("dedupes repeated LLM error message_end replays by entryId", () => {
+    setMessages([
+      {
+        id: "assistant-partial",
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        timestamp: Date.now() - 1,
+        isStreaming: true,
+      },
+    ]);
+    const event = {
+      type: "message_end",
+      entryId: "entry-provider-error",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        stopReason: "error",
+        errorMessage: "provider returned HTTP 500",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1];
+
+    handleAgentEvent(SID, event);
+    handleAgentEvent(SID, event);
+
+    const errors = getMessages().filter((msg) => msg.role === "error");
+    expect(errors).toHaveLength(1);
+    expect(notificationGateway.emit).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1446,6 +1657,41 @@ describe("agent_end cleanup", () => {
     ]);
   });
 
+  it("appends an inline provider error card when agent_end carries a prompt failure reason", () => {
+    setMessages([
+      {
+        id: "user-provider-error",
+        role: "user",
+        content: [{ type: "text", text: "use the selected model" }],
+        timestamp: Date.now() - 1,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, {
+      type: "agent_end",
+      reason: "HTTP 429 rate_limit_exceeded: model unavailable",
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs).toHaveLength(2);
+    expect(msgs[1].role).toBe("error");
+    expect(msgs[1].stopReason).toBe("error");
+    expect(msgs[1].content).toEqual([
+      {
+        type: "text",
+        text: "LLM 响应失败\nHTTP 429 rate_limit_exceeded: model unavailable",
+      },
+    ]);
+    expect(notificationGateway.emit).toHaveBeenCalledWith({
+      type: "session_error",
+      sessionId: SID,
+      title: "响应失败",
+      body: "HTTP 429 rate_limit_exceeded: model unavailable",
+      level: "error",
+    });
+  });
+
   it("closes running tool blocks when the agent ends without a tool end event", () => {
     setMessages([
       {
@@ -1491,6 +1737,198 @@ describe("agent_end cleanup", () => {
 
     const msg = getLastAssistant();
     expect(msg!.isStreaming).toBe(false);
+  });
+
+  it("does not emit session_complete when the final assistant message failed", () => {
+    setMessages([
+      {
+        id: "assistant-error",
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        timestamp: Date.now(),
+        isStreaming: true,
+        stopReason: "error",
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(notificationGateway.emit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "session_complete" }),
+    );
+    expect(notificationGateway.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session_error",
+        sessionId: SID,
+        title: "响应失败",
+      }),
+    );
+  });
+
+  it("does not duplicate the LLM error notification after message_end already surfaced it", () => {
+    setMessages([
+      {
+        id: "assistant-partial",
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        timestamp: Date.now() - 1,
+        isStreaming: true,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-error-before-end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+        stopReason: "error",
+        errorMessage: "provider returned HTTP 500",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(notificationGateway.emit).toHaveBeenCalledTimes(1);
+    expect(notificationGateway.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session_error",
+        sessionId: SID,
+        title: "响应失败",
+      }),
+    );
+    expect(notificationGateway.emit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "session_complete" }),
+    );
+  });
+
+  it("merges duplicate LLM error cards in the same turn and keeps provider diagnostics", () => {
+    setMessages([
+      {
+        id: "user-provider-error",
+        role: "user",
+        content: [{ type: "text", text: "继续继续" }],
+        timestamp: Date.now() - 3,
+      },
+      {
+        id: "assistant-partial",
+        role: "assistant",
+        content: [{ type: "text", text: "partial response" }],
+        timestamp: Date.now() - 2,
+        isStreaming: true,
+      },
+      {
+        id: "error-existing",
+        role: "error",
+        content: [
+          {
+            type: "text",
+            text: "LLM 响应失败\n400 Error from provider (Console Go): Upstream request failed",
+          },
+        ],
+        timestamp: Date.now() - 1,
+        stopReason: "error",
+      },
+    ]);
+    useSessionStore.setState({
+      sessionsByProject: { "/tmp": [] },
+      sessionContextMap: {
+        [SID]: {
+          tokens: 552000,
+          contextWindow: 1000000,
+          providerRequest: {
+            version: 1,
+            provider: "opencode-go",
+            modelId: "deepseek-v4-flash",
+            api: "openai-completions",
+            timestamp: new Date().toISOString(),
+            payloadChars: 2_000_000,
+            payloadTokens: 552_000,
+            topLevelKeys: ["messages", "tools"],
+            sections: [
+              {
+                id: "messages",
+                label: "Messages",
+                chars: 1_800_000,
+                tokens: 500_000,
+                count: 2003,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-provider-error",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "partial response" }],
+        stopReason: "error",
+        errorMessage: "400 Error from provider (Console Go): Upstream request failed",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const errors = getMessages().filter((msg) => msg.role === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].id).toBe("error-existing");
+    expect((errors[0] as { providerRequest?: { payloadTokens?: number } }).providerRequest).toEqual(
+      expect.objectContaining({ payloadTokens: 552000 }),
+    );
+  });
+
+  it("replaces an empty-response fallback with the real provider error", () => {
+    setMessages([
+      {
+        id: "user-provider-error",
+        role: "user",
+        content: [{ type: "text", text: "继续继续" }],
+        timestamp: Date.now() - 3,
+      },
+      {
+        id: "assistant-empty",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now() - 2,
+        isStreaming: true,
+      },
+      {
+        id: "error-empty-fallback",
+        role: "error",
+        content: [{ type: "text", text: "Agent 未返回有效响应\n本轮 Agent 已结束" }],
+        timestamp: Date.now() - 1,
+        stopReason: "empty_response",
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-provider-error",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "error",
+        errorMessage:
+          "400 Error from provider (DeepSeek): Messages with role 'tool' must be a response to a preceding message with 'tool_calls'",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const errors = getMessages().filter((msg) => msg.role === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].stopReason).toBe("error");
+    expect(errors[0].content).toEqual([
+      {
+        type: "text",
+        text: expect.stringContaining("Messages with role 'tool'"),
+      },
+    ]);
+    expect(getMessages().some((msg) => msg.stopReason === "empty_response")).toBe(false);
   });
 
   it("clears isStreaming on empty assistant message when agent ends", () => {

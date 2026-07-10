@@ -26,6 +26,7 @@ export interface FullscreenOverlayProps {
   headerClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  headerSafeAreaTop?: boolean;
   bodyRef?: Ref<HTMLDivElement>;
   bodyStyle?: CSSProperties;
   testId?: string;
@@ -57,6 +58,7 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
   headerClassName,
   bodyClassName,
   footerClassName,
+  headerSafeAreaTop,
   bodyRef,
   bodyStyle,
   testId,
@@ -64,6 +66,7 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
 }: FullscreenOverlayProps) {
   const titleId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
+  const shouldApplyHeaderSafeAreaTop = headerSafeAreaTop ?? position === "fixed";
 
   useFocusTrap(containerRef, { onEscape: onClose });
 
@@ -88,6 +91,7 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
         titleId={titleId}
         closeLabel={closeLabel}
         closeButtonSize={closeButtonSize}
+        safeAreaTop={shouldApplyHeaderSafeAreaTop}
         icon={icon}
         actions={actions}
         className={headerClassName}

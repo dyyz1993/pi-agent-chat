@@ -172,7 +172,7 @@ export const AnchoredPopover = forwardRef<HTMLDivElement, AnchoredPopoverProps>(
         ref={setPopoverRef}
         data-model-picker-dropdown={dataModelPickerDropdown}
         data-testid={dataTestId}
-        className={cx("fixed z-popover", className)}
+        className={cx("fixed z-[90]", className)}
         style={{ ...positionStyle, ...style }}
       >
         {children}

@@ -1,0 +1,95 @@
+{
+  "color": {
+    "bg-primary": { "hex": "#0d1117", "opacity": "1", "isPrimary": true },
+    "bg-secondary": { "hex": "#161b22", "opacity": "1", "isPrimary": true },
+    "bg-tertiary": { "hex": "#161b22", "opacity": "1", "isPrimary": true },
+    "bg-elevated": { "hex": "#1c2128", "opacity": "1", "isPrimary": true },
+    "bg-overlay": { "hex": "#000000", "opacity": "0.5", "isPrimary": true },
+    "bg-input": { "hex": "#0d1117", "opacity": "1", "isPrimary": true },
+
+    "text-primary": { "hex": "#e6edf3", "opacity": "1", "isPrimary": true },
+    "text-secondary": { "hex": "#8b949e", "opacity": "1", "isPrimary": true },
+    "text-tertiary": { "hex": "#6e7681", "opacity": "1", "isPrimary": true },
+    "text-muted": { "hex": "#484f58", "opacity": "1", "isPrimary": true },
+    "text-inverse": { "hex": "#0d1117", "opacity": "1", "isPrimary": true },
+
+    "border-primary": { "hex": "#30363d", "opacity": "1", "isPrimary": true },
+    "border-secondary": { "hex": "#484f58", "opacity": "1", "isPrimary": true },
+    "border-focus": { "hex": "#388bfd", "opacity": "1", "isPrimary": true },
+    "border-muted": { "hex": "#21262d", "opacity": "1", "isPrimary": true },
+
+    "accent": { "hex": "#58a6ff", "opacity": "1", "isPrimary": true },
+    "accent-hover": { "hex": "#79c0ff", "opacity": "1", "isPrimary": true },
+    "accent-muted": { "hex": "#58a6ff", "opacity": "0.1", "isPrimary": true },
+    "accent-text": { "hex": "#58a6ff", "opacity": "1", "isPrimary": true },
+    "accent-brand": { "hex": "#58a6ff", "opacity": "1", "isPrimary": true },
+    "accent-idle": { "hex": "#3fb950", "opacity": "1", "isPrimary": true },
+    "accent-agent": { "hex": "#bc8cff", "opacity": "1", "isPrimary": true },
+
+    "status-success": { "rgb": "63 185 80", "isPrimary": true },
+    "status-warning": { "rgb": "210 153 34", "isPrimary": true },
+    "status-error": { "rgb": "248 81 73", "isPrimary": true },
+    "status-info": { "rgb": "88 166 255", "isPrimary": true },
+
+    "semantic-agent": { "rgb": "188 140 255", "isPrimary": true },
+    "semantic-tool": { "rgb": "57 211 83", "isPrimary": true },
+    "semantic-memory": { "rgb": "57 211 83", "isPrimary": true },
+    "semantic-notify": { "rgb": "210 153 34", "isPrimary": true },
+    "semantic-media": { "rgb": "248 81 73", "isPrimary": true },
+    "semantic-line": { "hex": "#21262d", "opacity": "1", "isPrimary": true }
+  },
+  "font": {
+    "family": {
+      "font-body": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans\", Helvetica, Arial, sans-serif",
+      "font-mono": "ui-monospace, \"SF Mono\", \"Fira Code\", \"Fira Mono\", \"Roboto Mono\", Menlo, Monaco, Consolas, monospace"
+    },
+    "size": {
+      "font-size-xs": "11px",
+      "font-size-caption": "12px",
+      "font-size-body": "14px",
+      "font-size-lead": "15px",
+      "font-size-h3": "16px",
+      "font-size-h2": "20px",
+      "font-size-h1": "24px"
+    },
+    "weight": {
+      "font-weight-normal": "400",
+      "font-weight-medium": "500",
+      "font-weight-semibold": "600"
+    },
+    "lineHeight": {
+      "line-height-body": "1.5",
+      "line-height-heading": "1.25",
+      "line-height-mono": "1.5"
+    }
+  },
+  "shadow": {
+    "shadow-sm": { "xOffset": "0px", "yOffset": "1px", "blur": "3px", "spread": "0px", "color": { "hex": "#000000", "opacity": "0.3" } },
+    "shadow-md": { "xOffset": "0px", "yOffset": "3px", "blur": "6px", "spread": "0px", "color": { "hex": "#000000", "opacity": "0.2" } },
+    "shadow-lg": { "xOffset": "0px", "yOffset": "3px", "blur": "6px", "spread": "0px", "color": { "hex": "#000000", "opacity": "0.2" } },
+    "shadow-xl": { "xOffset": "0px", "yOffset": "3px", "blur": "6px", "spread": "0px", "color": { "hex": "#000000", "opacity": "0.2" } },
+    "shadow-subtle": { "xOffset": "0px", "yOffset": "1px", "blur": "2px", "spread": "0px", "color": { "hex": "#000000", "opacity": "0.2" } },
+    "shadow-floating": { "xOffset": "0px", "yOffset": "3px", "blur": "6px", "spread": "0px", "color": { "hex": "#000000", "opacity": "0.2" } }
+  },
+  "radius": {
+    "radius-sm": "6px",
+    "radius-md": "8px",
+    "radius-lg": "10px",
+    "radius-xl": "12px",
+    "radius-full": "9999px"
+  },
+  "spacing": {
+    "space-1": "4px",
+    "space-2": "8px",
+    "space-3": "12px",
+    "space-4": "16px",
+    "space-5": "20px",
+    "space-6": "24px",
+    "space-7": "32px",
+    "space-8": "48px",
+    "spacing-indent": "24px",
+    "input-font-size": "16px",
+    "touch-target-min": "44px"
+  },
+  "size": {}
+}

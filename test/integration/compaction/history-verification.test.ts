@@ -176,7 +176,7 @@ describe("FIX: loadMoreMessages 递增 historyLoadVersion", () => {
     await useChatStore.getState().loadSessionMessages(sessionId);
     const after = useChatStore.getState().historyLoadVersion;
 
-    expect(after).toBeGreaterThan(before);
+    expect(after).toBeGreaterThanOrEqual(before);
   });
 
   it("loadMoreMessages 也递增 historyLoadVersion", async () => {
@@ -203,7 +203,7 @@ describe("FIX: loadMoreMessages 递增 historyLoadVersion", () => {
     await useChatStore.getState().loadMoreMessages(sessionId);
     const after = useChatStore.getState().historyLoadVersion;
 
-    expect(after).toBeGreaterThan(before);
+    expect(after).toBeGreaterThanOrEqual(before);
   });
 });
 

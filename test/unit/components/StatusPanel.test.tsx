@@ -12,6 +12,7 @@ let mockActiveSubsessionId: string | null = null;
 let mockProjectTabs: ProjectTab[] = [];
 let mockActiveProjectId: string | null = null;
 let mockSessionsByProject: Record<string, unknown[]> = {};
+let mockRemoteRuntimeBySession: Record<string, unknown> = {};
 const mockSetRemoteRuntimeStatus = vi.fn();
 const mockApiClient = vi.hoisted(() => ({
   call: vi.fn((method: string) => {
@@ -79,6 +80,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
       expandedSkill: null,
       expandedPlugin: null,
       expandedMcpServer: null,
+      remoteRuntimeBySession: mockRemoteRuntimeBySession,
       setRemoteRuntimeStatus: mockSetRemoteRuntimeStatus,
       toggleYolo: vi.fn(),
       toggleSkillExpanded: vi.fn(),
@@ -158,6 +160,7 @@ describe("StatusPanel shell section", () => {
     mockProjectTabs = [];
     mockActiveProjectId = null;
     mockSessionsByProject = {};
+    mockRemoteRuntimeBySession = {};
     mockApiCall.mockImplementation((method: string) => {
       if (method === "bash.readLog") {
         return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
@@ -265,6 +268,7 @@ describe("StatusPanel remote section", () => {
     mockProjectTabs = [];
     mockActiveProjectId = null;
     mockSessionsByProject = {};
+    mockRemoteRuntimeBySession = {};
     mockApiCall.mockImplementation((method: string) => {
       if (method === "project.listRecent") {
         return Promise.resolve({ projects: [] });
@@ -367,6 +371,29 @@ describe("StatusPanel remote section", () => {
 
     expect(container.textContent).toContain("remoteModeQuick");
     expect(container.textContent).not.toContain("remoteStatusLocal");
+  });
+
+  it("hides the remote section for local projects even with stale remote session status", () => {
+    mockProjectTabs = [{ id: "local-tab", name: "Local", path: "/Users/me/project" }];
+    mockActiveProjectId = "local-tab";
+    mockSessionsByProject = {
+      "/Users/me/project": [{ sessionId: "test-session", name: "Local Session" }],
+    };
+    mockRemoteRuntimeBySession = {
+      "test-session": {
+        enabled: true,
+        configured: true,
+        status: "error",
+        host: "old-remote",
+        remoteCwd: "/srv/old",
+      },
+    };
+
+    const { container } = render(<StatusPanel />);
+
+    expect(container.textContent).not.toContain("remoteRuntime");
+    expect(container.textContent).not.toContain("remoteStatusError");
+    expect(container.textContent).not.toContain("old-remote");
   });
 
   it("actively rechecks SSH connectivity when the stored remote status is disconnected", async () => {
@@ -516,6 +543,7 @@ describe("StatusPanel permission section", () => {
     mockProjectTabs = [];
     mockActiveProjectId = null;
     mockSessionsByProject = {};
+    mockRemoteRuntimeBySession = {};
     mockApiCall.mockImplementation((method: string) => {
       if (method === "bash.readLog") {
         return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
@@ -545,10 +573,14 @@ describe("StatusPanel permission section", () => {
     const { container } = render(<StatusPanel />);
     const buttons = Array.from(container.querySelectorAll("button"));
 
-    fireEvent.click(buttons.find((button) => button.textContent?.includes("permissionPresetFull"))!);
+    fireEvent.click(
+      buttons.find((button) => button.textContent?.includes("permissionPresetFull"))!,
+    );
     expect(mockSetPermissionProfile).toHaveBeenCalledWith("yolo", "test-session");
 
-    fireEvent.click(buttons.find((button) => button.textContent?.includes("permissionPresetReadonly"))!);
+    fireEvent.click(
+      buttons.find((button) => button.textContent?.includes("permissionPresetReadonly"))!,
+    );
     expect(mockSetPermissionProfile).toHaveBeenCalledWith("readonly", "test-session");
   });
 

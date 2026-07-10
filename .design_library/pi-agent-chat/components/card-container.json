@@ -1,0 +1,40 @@
+{
+  "slug": "card-container",
+  "schemaVersion": 2,
+  "name": "CardContainer",
+  "category": "primitive",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    {
+      "type": "container",
+      "evidence": "Base card wrapper providing consistent padding, border, and background"
+    }
+  ],
+  "variantDimensions": [
+    { "name": "density", "values": ["compact", "default", "spacious"] },
+    { "name": "accent", "values": ["none", "left", "top"] }
+  ],
+  "representativeVariants": [
+    {
+      "name": "Default",
+      "traits": { "density": "default", "accent": "left" },
+      "whySelected": "Standard card container",
+      "childrenDigest": "Border container with left accent stripe and padding"
+    },
+    {
+      "name": "Compact",
+      "traits": { "density": "compact", "accent": "none" },
+      "whySelected": "Minimal container for inline content",
+      "childrenDigest": "Thin border container with reduced padding"
+    }
+  ],
+  "anatomy": {
+    "parts": ["border", "accent-stripe", "padding-area", "content-slot"],
+    "structurePatterns": ["wrapper"]
+  },
+  "usageHints": { "priorityHint": 35, "context": "Base wrapper for all card types" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Primitive container: provides border, background, left/top accent stripe, density variants"
+}

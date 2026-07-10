@@ -119,6 +119,11 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
         : {}),
     } as unknown as TManaged;
 
+    options.sessionPaths.set(options.sessionId, options.sessionPath);
+    options.sessionProjectPaths.set(options.sessionId, options.projectPath);
+    options.clients.set(options.sessionId, managed);
+    options.addToPool(poolKey, managed);
+
     const bridge = (event: unknown): void => {
       options.handleEvent(managed._activeSessionId, event as AgentEvent);
     };
@@ -149,10 +154,6 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
     });
 
     log.info("RpcClient started", { sessionId: options.sessionId });
-    options.sessionPaths.set(options.sessionId, options.sessionPath);
-    options.sessionProjectPaths.set(options.sessionId, options.projectPath);
-    options.clients.set(options.sessionId, managed);
-    options.addToPool(poolKey, managed);
     options.drainPendingDelegates?.();
     options.broadcastSessionStatus(options.sessionId, "idle");
     return { agentId: options.sessionId, status: "started" };

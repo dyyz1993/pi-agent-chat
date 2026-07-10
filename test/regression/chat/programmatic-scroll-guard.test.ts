@@ -129,20 +129,30 @@ describe("scroll tracking — does not mutate SideNav selection", () => {
 
   it("scheduleScrollToBottom calls onInitComplete on settle", () => {
     const source = readSource("src/mainview/hooks/use-active-scroll-tracker.ts");
+    const completeSection = source.slice(
+      source.indexOf("const completeInitialScroll"),
+      source.indexOf("const findVisibleIndex"),
+    );
     const scheduleSection = source.slice(
       source.indexOf("const scheduleScrollToBottom"),
       source.indexOf("const doScrollToBottom"),
     );
-    expect(scheduleSection).toContain("onInitComplete?.()");
+    expect(completeSection).toContain("onInitComplete?.()");
+    expect(scheduleSection).toContain("completeInitialScroll()");
   });
 
   it("scheduleScrollToBottom includes onInitComplete in dependency array", () => {
     const source = readSource("src/mainview/hooks/use-active-scroll-tracker.ts");
+    const completeSection = source.slice(
+      source.indexOf("const completeInitialScroll"),
+      source.indexOf("const findVisibleIndex"),
+    );
     const scheduleSection = source.slice(
       source.indexOf("const scheduleScrollToBottom"),
       source.indexOf("const doScrollToBottom"),
     );
-    expect(scheduleSection).toContain("onInitComplete");
+    expect(completeSection).toContain("onInitComplete");
+    expect(scheduleSection).toContain("completeInitialScroll");
   });
 
   it("ChatPanel does not bridge scroll activeId into selectedNavId", () => {
@@ -164,5 +174,19 @@ describe("scroll tracking — does not mutate SideNav selection", () => {
     expect(source).not.toContain("loadMoreMessages");
     expect(source).not.toContain("hasMoreMessagesBySession");
     expect(source).not.toContain("isLoadingMoreBySession");
+  });
+});
+
+describe("MessageListView virtualization — lazy item rendering", () => {
+  /**
+   * Long sessions can contain hundreds or thousands of tool-heavy messages.
+   * The Virtualizer must receive data and a render function so React only
+   * creates MessageCard elements for the rendered window.
+   */
+  it("passes processedMessages as data instead of mapping all rows into elements", () => {
+    const source = readSource("src/mainview/components/chat/MessageListView.tsx");
+    expect(source).toContain("data={processedMessages}");
+    expect(source).toContain("{(item) => {");
+    expect(source).not.toContain("{processedMessages.map((item)");
   });
 });

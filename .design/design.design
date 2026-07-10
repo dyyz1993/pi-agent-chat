@@ -1,0 +1,275 @@
+{
+  "data": [
+    {
+      "id": "page-main-chat",
+      "title": "PC 主聊天",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1719976800000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/main-chat.html",
+        "interactions": [
+          {
+            "domId": "settings-gear-btn",
+            "targetPageId": "page-settings-modal",
+            "transitionLabel": "Open settings"
+          },
+          {
+            "domId": "new-chat-btn",
+            "targetPageId": "page-main-chat",
+            "hideEdge": true,
+            "transitionLabel": "New chat"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-settings-modal",
+      "title": "PC 设置弹窗",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1719976800000,
+      "canvasData": {
+        "x": 620,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings-modal.html",
+        "interactions": [
+          {
+            "domId": "modal-backdrop-close",
+            "targetPageId": "page-main-chat",
+            "hideEdge": true,
+            "transitionLabel": "Close settings"
+          },
+          {
+            "domId": "modal-close-btn",
+            "targetPageId": "page-main-chat",
+            "hideEdge": true,
+            "transitionLabel": "Close settings"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-tablet-chat",
+      "title": "平板 聊天",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783038400000,
+      "canvasData": {
+        "x": 0,
+        "y": 611,
+        "group": 1
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/tablet-chat.html",
+        "interactions": [
+          {
+            "domId": "hamburger-menu-btn",
+            "targetPageId": "page-tablet-chat",
+            "hideEdge": true,
+            "transitionLabel": "Toggle drawer"
+          },
+          {
+            "domId": "drawer-backdrop",
+            "targetPageId": "page-tablet-chat",
+            "hideEdge": true,
+            "transitionLabel": "Close drawer"
+          },
+          {
+            "domId": "settings-gear-btn",
+            "targetPageId": "page-tablet-chat",
+            "hideEdge": true,
+            "transitionLabel": "Settings"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-mobile-chat",
+      "title": "手机 聊天",
+      "type": "page",
+      "version": 2,
+      "createdAt": 1783038400000,
+      "canvasData": {
+        "x": 620,
+        "y": 611,
+        "group": 2
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/mobile-chat.html",
+        "interactions": [
+          {
+            "domId": "hamburger-btn",
+            "targetPageId": "page-mobile-chat",
+            "hideEdge": true,
+            "transitionLabel": "Open left drawer"
+          },
+          {
+            "domId": "left-drawer-backdrop",
+            "targetPageId": "page-mobile-chat",
+            "hideEdge": true,
+            "transitionLabel": "Close left drawer"
+          },
+          {
+            "domId": "panel-toggle-btn",
+            "targetPageId": "page-mobile-chat",
+            "hideEdge": true,
+            "transitionLabel": "Open right drawer"
+          },
+          {
+            "domId": "right-drawer-backdrop",
+            "targetPageId": "page-mobile-chat",
+            "hideEdge": true,
+            "transitionLabel": "Close right drawer"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-login",
+      "title": "登录页",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783041000000,
+      "canvasData": {
+        "x": 1240,
+        "y": 611,
+        "group": 3
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/login.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-welcome",
+      "title": "欢迎页",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783041000000,
+      "canvasData": {
+        "x": 1860,
+        "y": 611,
+        "group": 3
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/welcome.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-variant-cursor",
+      "title": "Cursor 风格",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783182392162,
+      "canvasData": {
+        "x": 2480,
+        "y": 611,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/variant-cursor.html"
+      }
+    },
+    {
+      "id": "page-variant-apple",
+      "title": "Apple HIG 风格",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783182392162,
+      "canvasData": {
+        "x": 3100,
+        "y": 611,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/variant-apple.html"
+      }
+    },
+    {
+      "id": "page-variant-linear",
+      "title": "Linear 风格",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783182392162,
+      "canvasData": {
+        "x": 3720,
+        "y": 611,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/variant-linear.html"
+      }
+    },
+    {
+      "id": "page-color-reference",
+      "title": "🎨 颜色对照表",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783330572000,
+      "canvasData": {
+        "x": 4340,
+        "y": 611,
+        "group": 9
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/color-reference.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-card-slot-spec",
+      "title": "折叠卡片 Slot 规范",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783384418000,
+      "canvasData": {
+        "x": 4960,
+        "y": 611,
+        "group": 10
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/card-slot-spec.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-design-audit",
+      "title": "设计系统 Token 对账 — 源码 vs 规范",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783485000000,
+      "canvasData": {
+        "x": 5580,
+        "y": 611,
+        "group": 11
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/design-audit.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "pi-agent-chat 三端界面设计",
+    "designLibrary": {
+      "name": "pi-agent-chat-design",
+      "id": null,
+      "version": null,
+      "scope": "workspace",
+      "path": "/Users/xuyingzhou/Project/temporary/pi-agent-chat/.design_library/pi-agent-chat",
+      "versionSource": null
+    }
+  }
+}

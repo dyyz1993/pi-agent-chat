@@ -22,11 +22,9 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
 // Mock virtua - Virtualizer component renders children directly in test env
 vi.mock("virtua", async () => {
   const { forwardRef } = await import("react");
-  const MockVirtualizer = forwardRef(
-    ({ children }: { children: React.ReactNode }) => {
-      return <div data-testid="mock-virtualizer">{children}</div>;
-    }
-  );
+  const MockVirtualizer = forwardRef(({ children }: { children: React.ReactNode }) => {
+    return <div data-testid="mock-virtualizer">{children}</div>;
+  });
   return { Virtualizer: MockVirtualizer };
 });
 
@@ -215,7 +213,13 @@ describe("LogViewer stdin input", () => {
 
     await settle();
 
-    const commandCalls = mockCall.mock.calls.filter((c: unknown[]) => c[0] === "bash.command");
+    const commandCalls = mockCall.mock.calls.filter(
+      (c: unknown[]) =>
+        c[0] === "bash.command" &&
+        typeof c[1] === "object" &&
+        c[1] !== null &&
+        (c[1] as { action?: string }).action === "write_stdin",
+    );
     expect(commandCalls.length).toBe(0);
   });
 });
@@ -261,6 +265,80 @@ describe("LogViewer real-time streaming", () => {
     const countSpan = Array.from(allSpans).find((s) => s.textContent?.includes("5/"));
     expect(countSpan).toBeTruthy();
     expect(countSpan!.textContent).toBe("5/5");
+  });
+
+  it("subscribes to bash.event output for the viewer session", async () => {
+    const { container } = render(<LogViewer {...defaultProps} sessionId="sub-session" />);
+    await settle();
+
+    expect(mockSubscribe).toHaveBeenCalledWith(
+      "bash.event",
+      expect.any(Function),
+      expect.objectContaining({ sessionId: "sub-session" }),
+    );
+    expect(mockCall).toHaveBeenCalledWith("bash.command", {
+      sessionId: "sub-session",
+      action: "subscribe_output",
+      toolCallId: "tc-1",
+    });
+
+    const bashEventCallback = mockSubscribe.mock.calls.find(
+      (call) => call[0] === "bash.event",
+    )?.[1] as
+      | ((payload: {
+          sessionId: string;
+          event: { type: string; toolCallId: string; data: string; timestamp: number };
+        }) => void)
+      | undefined;
+
+    expect(bashEventCallback).toBeDefined();
+
+    act(() => {
+      bashEventCallback?.({
+        sessionId: "sub-session",
+        event: {
+          type: "output",
+          toolCallId: "tc-1",
+          data: "live line 4\nlive line 5\n",
+          timestamp: Date.now(),
+        },
+      });
+    });
+
+    await settle();
+
+    expect(container.textContent).toContain("live line 4");
+    expect(container.textContent).toContain("live line 5");
+  });
+
+  it("ignores bash.event output from other tool calls", async () => {
+    const { container } = render(<LogViewer {...defaultProps} sessionId="sub-session" />);
+    await settle();
+
+    const bashEventCallback = mockSubscribe.mock.calls.find(
+      (call) => call[0] === "bash.event",
+    )?.[1] as
+      | ((payload: {
+          sessionId: string;
+          event: { type: string; toolCallId: string; data: string; timestamp: number };
+        }) => void)
+      | undefined;
+
+    act(() => {
+      bashEventCallback?.({
+        sessionId: "sub-session",
+        event: {
+          type: "output",
+          toolCallId: "other-tool",
+          data: "wrong output\n",
+          timestamp: Date.now(),
+        },
+      });
+    });
+
+    await settle();
+
+    expect(container.textContent).not.toContain("wrong output");
   });
 });
 

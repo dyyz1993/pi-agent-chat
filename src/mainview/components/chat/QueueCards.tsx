@@ -35,7 +35,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
     const preview = item.text.split(/\r?\n/, 1)[0] || item.text;
     const colorClass = isSteering
       ? "text-amber-600 dark:text-amber-400/90"
-      : "text-blue-600 dark:text-blue-400/90";
+      : "text-accent";
 
     return (
       <div key={key} className={`rounded-md ${isExpanded ? "bg-surface-hover/40" : ""}`}>
@@ -62,7 +62,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
             onClick={() => {
               void insertQueuedMessageNow(item);
             }}
-            className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+            className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-accent transition-colors"
             title={t("insertQueuedMessageNow", { text: preview })}
             aria-label={t("insertQueuedMessageNow", { text: preview })}
           >

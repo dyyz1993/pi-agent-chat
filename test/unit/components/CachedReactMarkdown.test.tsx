@@ -92,6 +92,26 @@ describe("CachedReactMarkdown clickable file paths", () => {
     );
   });
 
+  it("adds a file icon to clickable hidden-directory paths", () => {
+    const openFile = vi.fn();
+    useExplorerStore.setState({ openFile });
+
+    render(<CachedReactMarkdown>{"Open `.ion/workflow.md`"}</CachedReactMarkdown>);
+
+    const button = screen.getByRole("button", { name: ".ion/workflow.md" });
+    expect(button.querySelector("svg")).toBeTruthy();
+    fireEvent.click(button);
+
+    expect(openFile).toHaveBeenCalledWith(
+      {
+        name: "workflow.md",
+        path: "/project/.ion/workflow.md",
+        type: "file",
+      },
+      false,
+    );
+  });
+
   it("turns absolute file paths into clickable file preview entries", () => {
     const openFile = vi.fn();
     useExplorerStore.setState({ openFile });

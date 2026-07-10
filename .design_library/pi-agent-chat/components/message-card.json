@@ -1,0 +1,34 @@
+{
+  "slug": "message-card",
+  "schemaVersion": 2,
+  "name": "MessageCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "message", "evidence": "chat message bubble with role indicator and content" }
+  ],
+  "variantDimensions": [{ "name": "role", "values": ["user", "assistant"] }],
+  "representativeVariants": [
+    {
+      "name": "User Message",
+      "traits": { "role": "user", "text": "帮我重构这个函数" },
+      "whySelected": "User input in chat",
+      "childrenDigest": "Avatar + message text + timestamp"
+    },
+    {
+      "name": "Assistant Message",
+      "traits": { "role": "assistant", "text": "我来帮你分析..." },
+      "whySelected": "AI response with markdown content",
+      "childrenDigest": "Agent avatar + name badge + markdown content + action buttons"
+    }
+  ],
+  "anatomy": {
+    "parts": ["avatar", "role-label", "content", "actions", "timestamp"],
+    "structurePatterns": ["inline-header-content"]
+  },
+  "usageHints": { "priorityHint": 10, "context": "Chat conversation message bubbles" },
+  "doNotInvent": ["voice-message-card", "video-message-card"],
+  "unknowns": [],
+  "keyInsightSeed": "Minimal bubble style: user right-aligned, assistant left-aligned with avatar and agent name tag"
+}

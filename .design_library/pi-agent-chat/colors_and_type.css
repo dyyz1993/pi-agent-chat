@@ -1,0 +1,292 @@
+/* pi-agent-chat Design Tokens — 统一命名 schema 规范版
+ * Generated: 2026-07-08
+ * Source of truth: src/mainview/index.css
+ *
+ * 命名规则:
+ *   背景:   --bg-primary/secondary/tertiary/elevated/overlay/input
+ *   文字:   --text-primary/secondary/tertiary/muted/inverse
+ *   边框:   --border-primary/secondary/focus/muted
+ *   强调:   --accent/hover/muted/text + --accent-brand/idle/agent
+ *   状态:   --status-success/warning/error/info (RGB 三元组格式)
+ *   语义:   --semantic-agent/tool/memory/notify/media/line
+ *   表面:   --surface-code/hover/dim
+ *   间距:   --space-1~8 (4/8/12/16/20/24/32/48)
+ *   圆角:   --radius-sm/md/lg/xl/full
+ *   阴影:   --shadow-sm/md/lg/xl/subtle/floating
+ *   过渡:   --transition-fast/normal/slow
+ *   层级:   --z-base/float/header/drawer/modal/popover/toast/tooltip
+ *   字体:   --font-body/mono + --font-size-xs/caption/body/lead/h3/h2/h1
+ *
+ * 注意:
+ *   - 状态色/语义色统一用 RGB 三元组 (如 "22 132 95")，Tailwind 用 rgb(var(--status-success) / 0.1)
+ *   - 无任何向后兼容别名 (shadcn/pi-scale/tw-* 等已全部移除)
+ *   - 设计稿页面如需引用旧变量名，请单独维护映射
+ */
+
+/* ================================
+   1. Background Colors
+   ================================ */
+:root {
+  --bg-primary: #edf1f6;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #e7edf4;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(12, 18, 28, 0.48);
+  --bg-input: #edf1f6;
+}
+.dark {
+  --bg-primary: #0b111a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #142033;
+  --bg-elevated: #121b28;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --bg-input: #0d1520;
+}
+
+/* ================================
+   2. Text Colors
+   ================================ */
+:root {
+  --text-primary: #17202e;
+  --text-secondary: #4f5f72;
+  --text-tertiary: #7d8a9c;
+  --text-muted: #7d8a9c;
+  --text-inverse: #f7fafc;
+}
+.dark {
+  --text-primary: #f2f6fb;
+  --text-secondary: #c1cad6;
+  --text-tertiary: #8a96a8;
+  --text-muted: #8a96a8;
+  --text-inverse: #0a0c10;
+}
+
+/* ================================
+   3. Border Colors
+   ================================ */
+:root {
+  --border-primary: #dce4ee;
+  --border-secondary: #c7d2df;
+  --border-focus: #246df3;
+  --border-muted: #eef2f8;
+}
+.dark {
+  --border-primary: #334155;
+  --border-secondary: #475569;
+  --border-focus: #746cff;
+  --border-muted: #1e293b;
+}
+
+/* ================================
+   4. Accent Colors
+   ================================ */
+:root {
+  --accent: #746cff;
+  --accent-hover: #8d88ff;
+  --accent-muted: rgba(116, 108, 255, 0.12);
+  --accent-text: #6b4cf0;
+  --accent-brand: #246df3;
+  --accent-idle: #16845f;
+  --accent-agent: #7f55cc;
+}
+.dark {
+  --accent: #746cff;
+  --accent-hover: #8d88ff;
+  --accent-muted: rgba(116, 108, 255, 0.18);
+  --accent-text: #a8b0ff;
+  --accent-brand: #2db6e8;
+  --accent-idle: #46dd89;
+  --accent-agent: #ae7aff;
+}
+
+/* ================================
+   5. Status Colors (RGB 三元组格式, 用于 Tailwind alpha 语法)
+   用法: rgb(var(--status-success) / 0.1)
+   ================================ */
+:root {
+  --status-success: 22 132 95;
+  --status-warning: 179 107 0;
+  --status-error: 207 54 84;
+  --status-info: 36 109 243;
+}
+.dark {
+  --status-success: 70 221 137;
+  --status-warning: 234 179 8;
+  --status-error: 248 113 113;
+  --status-info: 45 182 232;
+}
+
+/* ================================
+   6. Semantic Colors (RGB 三元组格式)
+   用法: rgb(var(--semantic-agent) / 0.1)
+   ================================ */
+:root {
+  --semantic-agent: 127 85 204;
+  --semantic-tool: 0 128 149;
+  --semantic-memory: 30 140 113;
+  --semantic-notify: 186 86 36;
+  --semantic-media: 236 72 153;
+  --semantic-line: #dce4ee;
+}
+.dark {
+  --semantic-agent: 174 122 255;
+  --semantic-tool: 45 212 232;
+  --semantic-memory: 45 212 191;
+  --semantic-notify: 251 146 60;
+  --semantic-media: 244 114 182;
+  --semantic-line: #2b394d;
+}
+
+/* ================================
+   7. Diff Colors
+   ================================ */
+:root {
+  --diff-bg: #f4f7fb;
+  --diff-color: #17202e;
+  --diff-added-bg: #dff6ea;
+  --diff-added-color: #0e6e4e;
+  --diff-removed-bg: #ffe2e9;
+  --diff-removed-color: #b42345;
+  --diff-word-added-bg: #c4ecd5;
+  --diff-word-removed-bg: #ffc6d2;
+  --diff-gutter-bg: #e8eef6;
+  --diff-gutter-color: #69778a;
+  --diff-highlight-bg: #dce6f1;
+}
+.dark {
+  --diff-bg: #111b2a;
+  --diff-color: #d6deea;
+  --diff-added-bg: #102719;
+  --diff-added-color: #72df9d;
+  --diff-removed-bg: #2f151e;
+  --diff-removed-color: #ff8a9c;
+  --diff-word-added-bg: #183d28;
+  --diff-word-removed-bg: #48202b;
+  --diff-gutter-bg: #182538;
+  --diff-gutter-color: #94a3b8;
+  --diff-highlight-bg: #24344a;
+}
+
+/* ================================
+   8. Surface Colors
+   ================================ */
+:root {
+  --surface-code: #eef4fa;
+  --surface-hover: #eef3f9;
+  --surface-dim: #f4f7fb;
+}
+.dark {
+  --surface-code: #0e1724;
+  --surface-hover: #1a2638;
+  --surface-dim: #121b28;
+}
+
+/* ================================
+   9. Typography
+   ================================ */
+:root {
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --font-size-xs: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 13px;
+  --font-size-lead: 14px;
+  --font-size-h3: 16px;
+  --font-size-h2: 18px;
+  --font-size-h1: 22px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-mono: 1.5;
+}
+
+/* ================================
+   10. Spacing (4px grid, --space-N)
+   ================================ */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  --spacing-indent: 24px;
+  --input-font-size: 16px;
+  --touch-target-min: 44px;
+}
+
+/* ================================
+   11. Border Radius
+   ================================ */
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+}
+
+/* ================================
+   12. Shadows
+   ================================ */
+:root {
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 10px 24px -18px rgba(16, 24, 40, 0.3);
+  --shadow-lg: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+  --shadow-xl: 0 28px 64px -34px rgba(16, 24, 40, 0.45);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-floating: 0 18px 42px -26px rgba(16, 24, 40, 0.38);
+}
+.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+/* ================================
+   13. Transitions
+   ================================ */
+:root {
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 220ms cubic-bezier(0.2, 0, 0, 1);
+  --transition-slow: 320ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ================================
+   14. Z-Index
+   ================================ */
+:root {
+  --z-base: 0;
+  --z-float: 10;
+  --z-header: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
+  --z-fullscreen: 200;
+  --z-system: 300;
+}
+
+/* ================================
+   15. Safe Area
+   ================================ */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}

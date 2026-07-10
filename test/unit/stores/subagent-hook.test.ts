@@ -52,8 +52,10 @@ vi.mock("../../shared/lib/logger", () => ({
 import { useSubagentStore } from "../../../src/mainview/stores/use-subagent-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
+import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 
 const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
+const mockGetSessionState = useSessionStore.getState as ReturnType<typeof vi.fn>;
 const PARENT_PATH = "/sessions/parent-1.jsonl";
 
 function makeSub(overrides: Partial<SubagentSessionInfo> = {}): SubagentSessionInfo {
@@ -69,6 +71,12 @@ function makeSub(overrides: Partial<SubagentSessionInfo> = {}): SubagentSessionI
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetSessionState.mockReturnValue({
+    sessionStatusMap: {},
+    sessionContextMap: {},
+    updateSessionStatus: vi.fn(),
+    restoreContextFromHistory: vi.fn(),
+  });
   useChatStore.setState({
     messagesBySession: {},
     activeToolCallIdsBySession: {},
@@ -141,6 +149,30 @@ describe("useSubagentStore", () => {
     expect(useSubagentStore.getState().loadingByParent[PARENT_PATH]).toBe(false);
   });
 
+  it("loadSubsessions reuses the in-flight load for the same parent session", async () => {
+    const subs = [makeSub()];
+    let resolveList: ((value: { subsessions: SubagentSessionInfo[] }) => void) | null = null;
+    mockCall.mockImplementation((method: string) => {
+      if (method === "subagent.listBySession") {
+        return new Promise((resolve) => {
+          resolveList = resolve;
+        });
+      }
+      if (method === "agent.getState") return Promise.resolve(null);
+      return Promise.resolve({});
+    });
+
+    const first = useSubagentStore.getState().loadSubsessions(PARENT_PATH);
+    const second = useSubagentStore.getState().loadSubsessions(PARENT_PATH);
+
+    expect(first).toBe(second);
+    expect(
+      mockCall.mock.calls.filter(([method]) => method === "subagent.listBySession"),
+    ).toHaveLength(1);
+    resolveList?.({ subsessions: subs });
+    await expect(Promise.all([first, second])).resolves.toEqual([subs, subs]);
+  });
+
   it("loadSubsessions returns cached if not forced", async () => {
     const cached = [makeSub()];
     useSubagentStore.setState({ subsessionsByParent: { [PARENT_PATH]: cached } });
@@ -196,6 +228,40 @@ describe("useSubagentStore", () => {
 
     expect(useSubagentStore.getState().messagesBySubsession["sub-1"] ?? []).toEqual([]);
     expect(useChatStore.getState().messagesBySession["sub-1"] ?? []).toEqual([]);
+  });
+
+  it("setActiveSubsession loads history from session metadata when subagent cache is not ready", async () => {
+    mockGetSessionState.mockReturnValue({
+      sessionStatusMap: {},
+      sessionContextMap: {},
+      sessionsByProject: {
+        "/project": [
+          {
+            sessionId: "sub-from-sidebar",
+            sessionPath: "/sessions/sub-from-sidebar.jsonl",
+          },
+        ],
+      },
+      updateSessionStatus: vi.fn(),
+      restoreContextFromHistory: vi.fn(),
+    });
+    mockCall.mockResolvedValue({ messages: [], customEntries: [], hasMore: false, totalCount: 0 });
+
+    useSubagentStore.getState().setActiveSubsession("parent-1", "sub-from-sidebar");
+
+    await vi.waitFor(() => {
+      expect(mockCall).toHaveBeenCalledWith(
+        "agent.getFullMessages",
+        expect.objectContaining({
+          sessionId: "sub-from-sidebar",
+          sessionPath: "/sessions/sub-from-sidebar.jsonl",
+        }),
+      );
+    });
+    expect(mockCall).not.toHaveBeenCalledWith(
+      "subagent.listBySession",
+      expect.objectContaining({ sessionPath: PARENT_PATH }),
+    );
   });
 
   it("loads active subagent history after refreshed subsession list restores its sessionPath", async () => {

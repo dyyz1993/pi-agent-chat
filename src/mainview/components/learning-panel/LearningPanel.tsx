@@ -263,7 +263,7 @@ function MemoryMarkdownPreview({ filePath, index = false }: { filePath: string; 
   if (loading) {
     return (
       <div className="mt-1 flex items-center gap-1.5 rounded border border-border-secondary/60 bg-surface-code/40 px-2 py-1.5 text-[10px] text-text-tertiary">
-        <div className="h-3 w-3 rounded-full border-2 border-semantic-accent border-t-transparent animate-spin" />
+        <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
         正在读取
       </div>
     );
@@ -406,7 +406,7 @@ function ToneBadge({
         : tone === "warning"
           ? "bg-status-warning/10 text-status-warning"
           : tone === "accent"
-            ? "bg-semantic-accent/10 text-semantic-accent"
+            ? "bg-accent/10 text-accent"
             : "bg-text-tertiary/10 text-text-tertiary";
   return (
     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] leading-none ${toneClass}`}>
@@ -972,7 +972,7 @@ export function LearningPanel() {
     >
       <div className="min-w-0 shrink-0 overflow-hidden border-b border-border-secondary dark:border-surface-code/50">
         <div className="flex items-center gap-2 px-2.5 py-1.5">
-          <Brain className="h-3.5 w-3.5 shrink-0 text-semantic-accent" />
+          <Brain className="h-3.5 w-3.5 shrink-0 text-accent" />
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="truncate text-[11px] font-medium text-text-secondary">Learning</div>
             <div className="truncate text-[9px] text-text-tertiary">{displayProjectPath}</div>
@@ -1007,7 +1007,7 @@ export function LearningPanel() {
               onClick={() => setActiveTab(sessionId, tab.id)}
               className={`flex h-7 items-center gap-1 border-b px-2 text-[11px] font-medium transition-colors ${
                 activeTab === tab.id
-                  ? "border-semantic-accent text-semantic-accent"
+                  ? "border-accent text-accent"
                   : "border-transparent text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary"
               }`}
             >
@@ -1054,7 +1054,7 @@ export function LearningPanel() {
                 collapsed={collapsedSections.has("memory-files")}
                 onToggle={() => toggleSection("memory-files")}
                 icon={Brain}
-                iconCls="text-semantic-accent"
+                iconCls="text-accent"
                 label="记忆条目"
                 badge={snapshot.memory.files.length}
               />
@@ -1219,7 +1219,7 @@ export function LearningPanel() {
                 collapsed={collapsedSections.has("memory-curator")}
                 onToggle={() => toggleSection("memory-curator")}
                 icon={Brain}
-                iconCls="text-semantic-accent"
+                iconCls="text-accent"
                 label="记忆整理"
               />
               {!collapsedSections.has("memory-curator") && (

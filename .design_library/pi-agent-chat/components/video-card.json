@@ -1,0 +1,34 @@
+{
+  "slug": "video-card",
+  "schemaVersion": 2,
+  "name": "VideoCard",
+  "category": "preview",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "media", "evidence": "Video preview card with poster frame and play button" }
+  ],
+  "variantDimensions": [{ "name": "state", "values": ["loading", "ready", "playing", "error"] }],
+  "representativeVariants": [
+    {
+      "name": "Ready",
+      "traits": { "state": "ready", "poster": "frame.jpg", "duration": "2:34" },
+      "whySelected": "Video ready to play",
+      "childrenDigest": "Poster frame + play button overlay + duration badge"
+    },
+    {
+      "name": "Error",
+      "traits": { "state": "error" },
+      "whySelected": "Video load failure",
+      "childrenDigest": "Video icon + error message"
+    }
+  ],
+  "anatomy": {
+    "parts": ["poster-frame", "play-button", "duration-badge", "controls"],
+    "structurePatterns": ["media-preview"]
+  },
+  "usageHints": { "priorityHint": 45, "context": "Video preview in chat" },
+  "doNotInvent": [],
+  "unknowns": [],
+  "keyInsightSeed": "Poster frame with centered play button, duration badge, rounded-lg corners"
+}

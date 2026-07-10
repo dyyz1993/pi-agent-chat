@@ -160,7 +160,7 @@ function OpenableCode({
       type="button"
       onClick={() => onOpen(path)}
       data-testid="hook-command-code"
-      className={`inline-flex min-w-0 max-w-full flex-wrap items-center gap-1 rounded px-0.5 text-left whitespace-normal break-words [overflow-wrap:anywhere] text-semantic-accent/80 hover:text-semantic-accent transition-colors ${className}`}
+      className={`inline-flex min-w-0 max-w-full flex-wrap items-center gap-1 rounded px-0.5 text-left whitespace-normal break-words [overflow-wrap:anywhere] text-accent/80 hover:text-accent transition-colors ${className}`}
       title={`Open ${path}`}
     >
       <ExternalLink className="h-2.5 w-2.5 shrink-0" />
@@ -253,7 +253,7 @@ function EntryRow({
           </span>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 pl-6">
-          <code className="text-[9px] text-semantic-accent/70 truncate min-w-0">
+          <code className="text-[9px] text-accent/70 truncate min-w-0">
             {entry.matcher}
           </code>
           <span className="text-text-secondary dark:text-text-tertiary shrink-0">|</span>
@@ -434,7 +434,7 @@ function ConfigEvents({
           {evt.groups.map((group, gi) => (
             <div key={`${group.matcher}-${gi}`} className="pl-3 space-y-0.5">
               <div className="flex items-center gap-1 text-[9px]">
-                <code className="text-semantic-accent/70 truncate">{group.matcher}</code>
+                <code className="text-accent/70 truncate">{group.matcher}</code>
                 <span className="text-text-tertiary">|</span>
                 <span className="text-text-tertiary">{group.source}</span>
               </div>
@@ -581,7 +581,7 @@ export function HooksPanel() {
           onClick={() => setActiveTab("activity")}
           className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors border-b-2 ${
             activeTab === "activity"
-              ? "text-semantic-accent border-semantic-accent"
+              ? "text-accent border-accent"
               : "text-text-tertiary border-transparent hover:text-text-primary"
           }`}
         >
@@ -591,7 +591,7 @@ export function HooksPanel() {
           onClick={() => setActiveTab("rules")}
           className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors border-b-2 ${
             activeTab === "rules"
-              ? "text-semantic-accent border-semantic-accent"
+              ? "text-accent border-accent"
               : "text-text-tertiary border-transparent hover:text-text-primary"
           }`}
         >

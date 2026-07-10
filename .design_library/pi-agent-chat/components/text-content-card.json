@@ -1,0 +1,34 @@
+{
+  "slug": "text-content-card",
+  "schemaVersion": 2,
+  "name": "TextContentCard",
+  "category": "message",
+  "sourceKind": "from-scratch",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    { "type": "content", "evidence": "Markdown rendered text content block within message" }
+  ],
+  "variantDimensions": [{ "name": "format", "values": ["markdown", "plain"] }],
+  "representativeVariants": [
+    {
+      "name": "Markdown Content",
+      "traits": { "format": "markdown", "content": "## Title\n\nParagraph with **bold** text" },
+      "whySelected": "Standard markdown rendering",
+      "childrenDigest": "Rendered markdown with headings, lists, code blocks"
+    },
+    {
+      "name": "Plain Text",
+      "traits": { "format": "plain", "content": "Simple text response" },
+      "whySelected": "Basic text without formatting",
+      "childrenDigest": "Plain text paragraph"
+    }
+  ],
+  "anatomy": {
+    "parts": ["content-body", "code-blocks", "headings", "lists"],
+    "structurePatterns": ["content-only"]
+  },
+  "usageHints": { "priorityHint": 11, "context": "Rich text content in assistant messages" },
+  "doNotInvent": ["rich-media-text-card"],
+  "unknowns": [],
+  "keyInsightSeed": "Markdown rendered inline, code blocks with copy button, custom scrollbar for overflow"
+}
