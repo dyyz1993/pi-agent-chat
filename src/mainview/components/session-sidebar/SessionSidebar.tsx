@@ -14,6 +14,7 @@ import {
   GitBranch,
   Pin,
   PinOff,
+  RefreshCw,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -28,6 +29,9 @@ import { agentColorStyle } from "../../utils/agent-color";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { jumpToSessionById } from "../chat/primitives/useJumpToSession";
 import { ChatReloadButton } from "../chat/SessionReloadButton";
+import { createLogger } from "../../../shared/lib/logger";
+import { apiClient } from "../../lib/api-client";
+import { useNotificationStore } from "../../stores/use-notification-store";
 
 const EMPTY: never[] = [];
 
@@ -907,6 +911,31 @@ function SessionItem({
     },
     [copyWithFeedback, session.sessionId],
   );
+  const pushNotif = useNotificationStore((s) => s.push);
+  const [isReloading, setIsReloading] = useState(false);
+  const reloadLog = createLogger("chat");
+
+  const handleReload = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (isReloading) return;
+      setIsReloading(true);
+      try {
+        await apiClient.call("agent.reload", { sessionId: session.sessionId });
+        useSessionStore.getState().fetchInitialState(session.sessionId);
+        pushNotif({ message: t("chat:reloadSuccess"), level: "info" });
+      } catch (err) {
+        reloadLog.warn("agent.reload failed", {
+          sessionId: session.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        pushNotif({ message: t("chat:reloadFailed"), level: "error" });
+      } finally {
+        setIsReloading(false);
+      }
+    },
+    [isReloading, pushNotif, session.sessionId, t],
+  );
 
   const handleStartRename = useCallback(
     (e: React.MouseEvent) => {
@@ -1075,6 +1104,14 @@ function SessionItem({
             <StatusBadge badgeStatus={badgeStatus} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={handleReload}
+                disabled={isReloading}
+                className={`p-1 rounded-md hover:bg-surface-hover/60 transition-colors ${isReloading ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
+                title={t("chat:reloadTitle")}
+              >
+                <RefreshCw className={`w-3 h-3 ${isReloading ? "animate-spin" : ""}`} />
+              </button>
               <button
                 onClick={handleTogglePin}
                 className={`p-1 rounded-md hover:bg-surface-hover/60 transition-colors ${session.pinned ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
