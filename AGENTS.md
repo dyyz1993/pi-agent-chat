@@ -1045,3 +1045,57 @@ main().catch(console.error);
 - **异步操作不阻塞 UI**：store 方法用 `(async () => { ... })()` 模式，不返回 Promise，避免 UI 层需要 await
 - **避免循环依赖**：`session-initial-state.ts` 不能 import `use-session-store`（会被 use-session-store import），需要时通过 `get().sessionsByProject` 获取数据
 - **Store 职责单一**：每个 store 管理一个领域（status、chat、session、settings 等），跨 store 调用用 `xxxStore.getState().method()`
+
+## Branch & Worktree Inventory
+
+As of 2026-07-09, after cleanup removing 81 stale branches and 2 orphaned worktrees across both repos.
+
+### pi-agent-chat (8 branches, 3 worktrees)
+
+```
+master (cherry-picked)                                    ← 主干（已含部署改动）
+├── codex/show-provider-error-history    [worktree]       ← 当前分支，PR #159 待合并
+├── feat-empty-input-MsBgZ0             [worktree]       ← .trae-cn/worktrees/
+├── app-android                         [worktree]       ← .codenomad/worktrees/
+│
+├── fix/issue-39-delegate-reply-card-truncate [游离]     ← DelegateReplyCard 高度上限+展开（22行）
+├── fix/issue-5-delegate-permission-entry      [游离]     ← 子会话权限提示父会话可见（132行+测试）
+├── codex/fix-streaming-markdown-import        [游离]     ← 流式 markdown + agent 修复（混合）
+└── sandbox                                     [游离]     ← 沙箱多用户隔离（163文件，6月暂停）
+```
+
+### pi-momo-fork (18 branches, 4 worktrees)
+
+```
+main                                                     ← 主干
+├── codex/delegate-reply-tool-rebase       [worktree]     ← 当前分支
+├── codex/delegate-system-reply-tool       [worktree]     ← fork-system-prompt
+├── codex/issue-151-subagent-timeout       [worktree]     ← fork-issue151
+├── publish/remote-child-ssh               [worktree]     ← fork-publish
+│
+├── codex/issue-14-ui-request-timeout       [游离]        ← Extension UI 超时 ★推荐合并
+├── codex/issue-19-delegate-status-detail   [游离]        ← Delegate 状态详情 ★推荐合并
+├── codex/issue-batch-coordinator-learning  [游离]        ← 批量 coordinator + learning
+├── codex/system-prompt-model-context       [游离]        ← system prompt 含模型上下文 ★推荐合并
+├── feat/cli-rpc-channel-subscribe          [游离]        ← CLI RPC 通道订阅（7/9最新）★推荐合并
+│
+├── codex/issue-10-readonly-permission      [游离]        ← Read-only 路径检查
+├── codex/issue-28-goal-checklist           [游离]        ← Supervisor checklist
+├── codex/issue-4-autopilot-no-prompts      [游离]        ← Autopilot 非阻塞权限
+├── issue-10-readonly-permission            [游离]        ← 保护 cwd 外凭据（不同实现）
+├── issue-28-goal-checklist                [游离]        ← 验证 checklist evidence（不同实现）
+│
+├── pr/estimate-context-after-compaction    [游离]        ← 上游 PR（6/8）
+├── pr/require-bash-descriptions            [游离]        ← 上游 PR
+└── pr/reuse-services-same-cwd             [游离]        ← 上游 PR
+```
+
+### Cleanup Log
+
+| Batch     | Repo          | Branches Deleted    | Worktrees Removed       |
+| --------- | ------------- | ------------------- | ----------------------- |
+| 1         | pi-agent-chat | 20 merged/stale     | 2 (`.codex/worktrees/`) |
+| 2         | pi-agent-chat | 4 uncertain         | 0                       |
+| 3         | pi-momo-fork  | 28 merged into main | 0                       |
+| 4         | pi-momo-fork  | 4 stale/empty       | 0                       |
+| **Total** | Both          | **56**              | **2**                   |

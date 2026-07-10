@@ -690,6 +690,31 @@ export function createFetchInitialStateAction({
                   );
               }
             }
+
+            // Deferred tier switch for blank sessions: if syncTierFromModel
+            // didn't match any tier (current model is not in the tier map),
+            // auto-select the "fast" tier so the CLI has a valid tier mapping.
+            if (!projectPath) return;
+            const isBlankSession =
+              currentSessionMeta &&
+              (currentSessionMeta.messageCount ?? 0) === 0 &&
+              !currentSessionMeta.firstMessage;
+            if (!isBlankSession) return;
+            const existingTier = useTierStore.getState().getCurrentTier(projectPath);
+            if (existingTier) return;
+            const tierModels = useTierStore.getState().getTierModels(projectPath);
+            if (Object.keys(tierModels).length > 0 && tierModels.fast) {
+              void useTierStore
+                .getState()
+                .switchToTier("fast", sessionId)
+                .catch((err) => {
+                  log.warn("delayed tier switch failed after initial state", {
+                    sessionId,
+                    tier: "fast",
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                });
+            }
           })
           .catch(() => {});
 

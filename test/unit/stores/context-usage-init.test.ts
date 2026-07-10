@@ -247,6 +247,72 @@ describe("fetchInitialState context usage retry", () => {
     expect(calls.filter(([method]) => method === "agent.switchTier")).toHaveLength(0);
   });
 
+  it("applies the fast tier for a blank session via deferred switch", async () => {
+    const sid = nextSid();
+    seedSessionProject(sid);
+    // Pre-populate global defaults so fetchTierConfig skips the API call
+    // and uses the cached mapping. This simulates the scenario where
+    // the CLI already has tier models configured.
+    useTierStore.setState({
+      globalDefaults: {
+        fast: "test-provider/fast-model",
+        pro: "test-provider/pro-model",
+        max: "test-provider/max-model",
+      },
+      hasGlobalDefaults: true,
+    });
+    setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
+
+    await useSessionStore.getState().fetchInitialState(sid);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const calls = (apiClient.call as ReturnType<typeof vi.fn>).mock.calls;
+    const switchCalls = calls.filter(
+      ([method, params]: [string, object]) =>
+        method === "agent.switchTier" &&
+        (params as { sessionId: string; tier: string }).tier === "fast",
+    );
+    expect(switchCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("skips deferred tier switch when blank session already has a current tier set", async () => {
+    const sid = nextSid();
+    seedSessionProject(sid);
+    useTierStore.setState({
+      globalDefaults: {
+        fast: "test-provider/fast-model",
+        pro: "test-provider/pro-model",
+        max: "test-provider/max-model",
+      },
+      hasGlobalDefaults: true,
+      // Simulate a previous session that already set a tier for this session
+      dataBySession: {
+        [sid]: {
+          projectPath: "/tmp/pi-agent-chat-test",
+          tierModels: {
+            fast: "test-provider/fast-model",
+            pro: "test-provider/pro-model",
+            max: "test-provider/max-model",
+          },
+          currentTier: "pro",
+        },
+      },
+    });
+    setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
+
+    await useSessionStore.getState().fetchInitialState(sid);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const calls = (apiClient.call as ReturnType<typeof vi.fn>).mock.calls;
+    // Should NOT auto-switch to "fast" because "pro" is already set
+    const fastSwitchCalls = calls.filter(
+      ([method, params]: [string, object]) =>
+        method === "agent.switchTier" &&
+        (params as { sessionId: string; tier: string }).tier === "fast",
+    );
+    expect(fastSwitchCalls).toHaveLength(0);
+  });
+
   it("calls agent.getContextUsage and agent.getSessionStats for startup usage snapshots", async () => {
     const sid = nextSid();
     setupMock(() => Promise.resolve({ tokens: 5000, contextWindow: 200000, percent: 0.025 }));

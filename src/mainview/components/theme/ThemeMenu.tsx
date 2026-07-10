@@ -1,9 +1,9 @@
 import { Moon, Sun, Check, Languages } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useThemeStore, THEME_META } from "../../stores/use-theme-store";
 import type { Theme } from "../../stores/use-theme-store";
-import { Button } from "../primitives";
+import { Button, AnchoredPopover } from "../primitives";
 
 const THEME_DOT_COLORS: Record<Theme, string> = {
   light: "bg-white border border-border-secondary",
@@ -19,7 +19,7 @@ export function ThemeMenu() {
   const language = useThemeStore((s) => s.language);
   const setLanguage = useThemeStore((s) => s.setLanguage);
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const THEME_OPTIONS: { value: Theme; icon: typeof Moon; label: string }[] = [
     { value: "light", icon: Sun, label: THEME_META.light.label },
@@ -31,31 +31,12 @@ export function ThemeMenu() {
     { value: "en", label: t("english") },
   ];
 
-  useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
   const current = THEME_OPTIONS.find((o) => o.value === theme) ?? THEME_OPTIONS[1];
   const Icon = current.icon;
   return (
-    <div className="relative w-full" ref={ref}>
+    <div className="relative w-full">
       <button
+        ref={buttonRef}
         data-testid="theme-menu-toggle"
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -68,8 +49,15 @@ export function ThemeMenu() {
           {t("switchLabel")} {current.label}
         </span>
       </button>
-      {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated border border-border-secondary rounded-lg shadow-floating py-1">
+      <AnchoredPopover
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        placement="top"
+        align="stretch"
+        className="bg-bg-elevated border border-border-secondary rounded-lg shadow-floating overflow-hidden"
+      >
+        <div className="py-1">
           <div className="px-3 py-1 text-xs font-medium text-text-tertiary uppercase tracking-wider">
             Theme
           </div>
@@ -85,7 +73,7 @@ export function ThemeMenu() {
                 size="sm"
                 className={`w-full justify-start rounded-none px-3 py-1.5 text-left ${
                   isActive
-                    ? "bg-accent/10 text-accent-text"
+                    ? "bg-semantic-accent/10 text-accent-text"
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 }`}
                 onClick={() => {
@@ -120,7 +108,7 @@ export function ThemeMenu() {
                 size="sm"
                 className={`w-full justify-start rounded-none px-3 py-1.5 text-left ${
                   isActive
-                    ? "bg-accent/10 text-accent-text"
+                    ? "bg-semantic-accent/10 text-accent-text"
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 }`}
                 onClick={(e) => {
@@ -140,7 +128,7 @@ export function ThemeMenu() {
             );
           })}
         </div>
-      )}
+      </AnchoredPopover>
     </div>
   );
 }

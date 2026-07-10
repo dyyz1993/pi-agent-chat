@@ -75,7 +75,7 @@ export function WelcomePage({
             onClick={onOpenRemoteProject}
             className="group flex min-h-36 flex-col items-start rounded-lg border border-border-secondary bg-bg-elevated p-5 text-left transition-colors hover:border-border-focus hover:bg-surface-hover/40"
           >
-            <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-status-info/12 text-status-info">
+            <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-runtime-ssh/12 text-runtime-ssh">
               <Server className="h-5 w-5" />
             </span>
             <span className="text-base font-medium text-text-primary">
@@ -84,7 +84,7 @@ export function WelcomePage({
             <span className="mt-1 text-sm leading-5 text-text-secondary">
               {t("welcome.remoteDescription")}
             </span>
-            <span className="mt-auto flex items-center gap-1 pt-4 text-sm font-medium text-status-info">
+            <span className="mt-auto flex items-center gap-1 pt-4 text-sm font-medium text-runtime-ssh">
               {t("welcome.connectRemote")}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </span>
@@ -106,7 +106,7 @@ export function WelcomePage({
                   className="flex items-center gap-3 rounded-lg border border-border-secondary bg-bg-elevated/60 px-3 py-2.5 text-left transition-colors hover:border-border-focus hover:bg-surface-hover/40"
                 >
                   {project.runtime === "ssh" ? (
-                    <Server className="h-4 w-4 shrink-0 text-status-info/80" />
+                    <Server className="h-4 w-4 shrink-0 text-runtime-ssh/80" />
                   ) : (
                     <FolderOpen className="h-4 w-4 shrink-0 text-accent/80" />
                   )}

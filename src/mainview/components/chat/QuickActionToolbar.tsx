@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import { formatFilePath } from "../../lib/format-path";
 import {
@@ -105,6 +106,8 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
   const panelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [popupStyle, setPopupStyle] = useState<CSSProperties>({});
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
@@ -122,7 +125,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
       return "text-status-warning border border-status-warning/40 bg-status-warning/10";
     }
     if (supervisorStatus.goal) {
-      return "text-accent border border-accent/40 bg-accent/10";
+      return "text-semantic-accent border border-semantic-accent/40 bg-semantic-accent/10";
     }
     return "text-text-tertiary border border-transparent";
   })();
@@ -195,6 +198,34 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
     setCachedItems([]);
     setItems([]);
   }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setPopupStyle({
+      position: "fixed",
+      left: rect.left + 12,
+      width: rect.width - 24,
+      bottom: window.innerHeight - rect.top + 4,
+      maxHeight: Math.max(80, rect.top - 16),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!popupMode) {
+      setPopupStyle({});
+      return;
+    }
+    updatePosition();
+    const onResize = () => updatePosition();
+    const onScroll = () => updatePosition();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [popupMode, updatePosition]);
 
   const fetchAtAgents = useCallback(() => {
     if (!activeSessionId) return;
@@ -531,7 +562,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   };
 
   return (
-    <div className="relative px-2.5 pt-0.5" data-testid="quick-action-toolbar">
+    <div ref={containerRef} className="relative px-2.5 pt-0.5" data-testid="quick-action-toolbar">
       <div className="flex min-h-8 items-center gap-1">
         <div className="flex items-center gap-0.5">
           <input
@@ -575,7 +606,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             aria-label={t("quickAction.atMention")}
             className={`${toolbarButtonClass} whitespace-nowrap ${
               popupMode === "at"
-                ? "bg-accent/30 text-accent border border-accent/50"
+                ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
                 : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
             }`}
             title={t("quickAction.atMention")}
@@ -633,11 +664,12 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
         </div>
       </div>
 
-      {popupMode && (
+      {popupMode && createPortal(
         <div
           ref={panelRef}
           data-testid={popupMode === "at" ? "mention-popup" : "command-popup"}
-          className="absolute left-3 right-3 bottom-full mb-1 bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-popover"
+          className="bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-[90]"
+          style={popupStyle}
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
             <div className="flex items-center gap-2 min-w-0">
@@ -655,7 +687,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                       }}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
-                          ? "bg-accent/30 text-accent"
+                          ? "bg-semantic-accent/30 text-semantic-accent"
                           : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                       }`}
                     >
@@ -695,7 +727,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             <div className="flex items-center gap-1 px-3 py-1 border-b border-border-secondary/40 text-[11px] overflow-x-auto">
               <button
                 onClick={() => handleBreadcrumb(-1)}
-                className="text-accent hover:text-accent shrink-0"
+                className="text-semantic-accent hover:text-semantic-accent shrink-0"
               >
                 {t("quickAction.rootDir")}
               </button>
@@ -704,7 +736,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                   <ChevronRight className="w-3 h-3 text-text-tertiary" />
                   <button
                     onClick={() => handleBreadcrumb(i)}
-                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-accent hover:text-accent"}`}
+                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-semantic-accent hover:text-semantic-accent"}`}
                   >
                     {bc.label}
                   </button>
@@ -713,7 +745,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             </div>
           )}
 
-          <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
+          <div className="max-h-[240px] min-h-[80px] overflow-y-auto overflow-x-hidden" role="listbox">
             {items.length === 0 && !loading && (
               <div className="px-3 py-6 text-center text-xs text-text-tertiary">
                 {query ? t("quickAction.noMatchResults") : t("common:noData")}
@@ -748,7 +780,8 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

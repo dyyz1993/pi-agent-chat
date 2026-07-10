@@ -19,6 +19,7 @@ import { register as hooks } from "./hooks";
 import { register as snapshot } from "./snapshot";
 import { register as changeReview } from "./change-review";
 import { register as supervisor } from "./supervisor";
+import { register as updater } from "./updater";
 import { unregister as agentCleanup } from "./agent";
 
 type RegisterFn = (server: RPCServer, options: HandlerOptions) => void;
@@ -44,6 +45,7 @@ export const handlerMap: Record<string, RegisterFn> = {
   snapshot,
   changeReview,
   supervisor,
+  updater,
 };
 
 export const cleanupMap: Record<string, CleanupFn> = {

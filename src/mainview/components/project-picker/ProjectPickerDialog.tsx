@@ -844,7 +844,7 @@ export function ProjectPickerDialog({
         {onOpenRemoteProject && (
           <button
             onClick={handleOpenRemote}
-            className="mx-3 mt-2 flex items-center justify-center gap-2 rounded-xl border border-status-info/30 bg-status-info/10 px-4 py-2.5 text-sm font-medium text-status-info active:bg-status-info/15"
+            className="mx-3 mt-2 flex items-center justify-center gap-2 rounded-xl border border-runtime-ssh/30 bg-runtime-ssh/10 px-4 py-2.5 text-sm font-medium text-runtime-ssh active:bg-runtime-ssh/15"
           >
             <Server className="w-4 h-4" />
             {t("picker.openRemoteProject")}

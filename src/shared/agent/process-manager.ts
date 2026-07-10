@@ -1172,20 +1172,34 @@ export class AgentProcessManager {
   }
 
   async send(sessionId: string, content: string, images?: ImageContent[]): Promise<boolean> {
-    return sendPromptOperation({
-      sessionId,
-      content,
-      images,
-      getActiveManaged: (sid) => this.getActiveManaged(sid),
-      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
-      isClientAlive: (sid, m) => this.isClientAlive(sid, m),
-      cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
-      emitAgentEnd: (sid, reason) =>
-        this.emitAgentEvent(
-          sid,
-          (reason ? { type: "agent_end", reason } : { type: "agent_end" }) as SanitizedEvent,
-        ),
-    });
+    // Auto-fallback to steer when agent is already streaming.
+    // This handles the race condition where the UI checks isStreaming (from
+    // sessionStatusMap) as false but the managed client status has since
+    // transitioned to "streaming" before sendPromptOperation runs.
+    // See commit 83e14260f (sendPromptOperation guard) and 863de889 (regression).
+    try {
+      return await sendPromptOperation({
+        sessionId,
+        content,
+        images,
+        getActiveManaged: (sid) => this.getActiveManaged(sid),
+        ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+        isClientAlive: (sid, m) => this.isClientAlive(sid, m),
+        cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
+        emitAgentEnd: (sid, reason) =>
+          this.emitAgentEvent(
+            sid,
+            (reason ? { type: "agent_end", reason } : { type: "agent_end" }) as SanitizedEvent,
+          ),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("follow-up or steer")) {
+        log.info("send: agent is streaming, falling back to steer", { sessionId });
+        this.steer(sessionId, content, images);
+        return true;
+      }
+      throw err;
+    }
   }
 
   steer(
@@ -1200,38 +1214,12 @@ export class AgentProcessManager {
       images,
       promote: options?.promote,
       immediate: options?.immediate,
-      getActiveManaged: (sid) => {
-        const managed = this.getActiveManaged(sid);
-        if (!managed) return null;
-        return {
-          client: {
-            steer: (
-              value:
-                | string
-                | {
-                    text?: string;
-                    images?: ImageContent[];
-                    promote?: number;
-                    immediate?: boolean;
-                  },
-              valueImages?: ImageContent[],
-            ) => {
-              const steer = managed.client.steer as unknown as (
-                arg:
-                  | string
-                  | {
-                      text?: string;
-                      images?: ImageContent[];
-                      promote?: number;
-                      immediate?: boolean;
-                    },
-                images?: ImageContent[],
-              ) => Promise<void>;
-              return typeof value === "string" ? steer(value, valueImages) : steer(value);
-            },
-          },
-        };
-      },
+      // Pass the managed client directly. RpcClientAPI already satisfies
+      // SteeringClientLike (it has both steer(string, images?) and
+      // steer({text,images,promote,immediate}) overloads). Wrapping it in
+      // an adapter object loses the `this` binding on RpcClient.steer(),
+      // which calls this.send() internally — see commit 05d9bec7 regression.
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
@@ -1290,6 +1278,7 @@ export class AgentProcessManager {
       syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers,
       subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,
       syncDelegateLastText: this.coordinatorHandler.syncDelegateLastText,
+      syncDelegateTimedOut: this.coordinatorHandler.syncDelegateTimedOut,
       leafIds: this.leafIds,
       getPoolKey: (cwd, userId) => this.getPoolKey(cwd, userId),
       removeFromPool: (k, m) => this.removeFromPool(k, m),
@@ -2048,31 +2037,19 @@ export class AgentProcessManager {
   async getAgentDetail(sessionId: string, agentName: string) {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return (
-      managed.client as unknown as {
-        getAgentDetail: (name: string) => Promise<unknown>;
-      }
-    ).getAgentDetail(agentName);
+    return managed.client.getAgentDetail(agentName);
   }
 
   async getAllTools(sessionId: string) {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return (
-      managed.client as unknown as {
-        getAllTools: () => Promise<unknown>;
-      }
-    ).getAllTools();
+    return managed.client.getAllTools();
   }
 
   async getSystemPrompt(sessionId: string) {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error(`No client for session ${sessionId}`);
-    return (
-      managed.client as unknown as {
-        getSystemPrompt: () => Promise<unknown>;
-      }
-    ).getSystemPrompt();
+    return managed.client.getSystemPrompt();
   }
 
   async getLatestAgentChange(sessionId: string) {

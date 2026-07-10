@@ -29,4 +29,22 @@ describe("useLayoutStore", () => {
     expect(useLayoutStore.getState().statusPanel).toBe("visible");
     expect(useLayoutStore.getState().activePanelTab).toBe("hooks");
   });
+
+  it("preserves pinned state when opening status panel", () => {
+    useLayoutStore.setState({ statusPanel: "pinned", activePanelTab: "status" });
+
+    useLayoutStore.getState().openStatusPanel("changeReview");
+
+    expect(useLayoutStore.getState().statusPanel).toBe("pinned");
+    expect(useLayoutStore.getState().activePanelTab).toBe("changeReview");
+  });
+
+  it("preserves visible state when opening status panel", () => {
+    useLayoutStore.setState({ statusPanel: "visible", activePanelTab: "git" });
+
+    useLayoutStore.getState().openStatusPanel("supervisor");
+
+    expect(useLayoutStore.getState().statusPanel).toBe("visible");
+    expect(useLayoutStore.getState().activePanelTab).toBe("supervisor");
+  });
 });

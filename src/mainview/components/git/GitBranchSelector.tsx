@@ -57,7 +57,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
 
   return (
     <div
-      className="max-h-full overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
+      className="max-h-full overflow-y-auto overflow-x-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
       role="menu"
     >
       {loadingBranches ? (

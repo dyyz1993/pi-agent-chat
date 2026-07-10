@@ -842,7 +842,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                 {step === "resources" && showResourceSync && (
                   <section className="rounded-lg border border-border-secondary bg-bg-elevated">
                     <div className="flex items-start gap-3 border-b border-border-secondary px-5 py-4">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-status-info/30 bg-status-info/10 text-status-info">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-runtime-ssh/30 bg-runtime-ssh/10 text-runtime-ssh">
                         <UploadCloud className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
@@ -1081,7 +1081,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                             onClick={() => browseRemoteDirectory(entry.path)}
                             className="flex w-full items-center gap-3 border-b border-border-secondary px-4 py-2.5 text-left text-sm last:border-b-0 hover:bg-surface-hover"
                           >
-                            <Folder className="h-4 w-4 text-status-info" />
+                            <Folder className="h-4 w-4 text-runtime-ssh" />
                             <span className="truncate text-text-primary">{entry.name}</span>
                           </button>
                         ))
@@ -1093,7 +1093,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                 {step === "opening" && (
                   <section className="rounded-lg border border-border-secondary bg-bg-elevated p-6">
                     <div className="flex items-start gap-4">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-md bg-status-info/10 text-status-info">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-md bg-runtime-ssh/10 text-runtime-ssh">
                         <Loader2 className="h-5 w-5 animate-spin" />
                       </span>
                       <div>

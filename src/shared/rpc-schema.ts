@@ -18,6 +18,7 @@ import type { SnapshotMethods } from "./modules/snapshot";
 import type { ChangeReviewMethods } from "./modules/change-review";
 import type { CoordinatorEvents } from "./modules/coordinator";
 import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
+import type { UpdaterMethods } from "./modules/updater";
 
 export interface RPCMethods
   extends
@@ -39,7 +40,8 @@ export interface RPCMethods
     HooksMethods,
     SnapshotMethods,
     ChangeReviewMethods,
-    SupervisorMethods {}
+    SupervisorMethods,
+    UpdaterMethods {}
 
 export interface RPCEvents
   extends

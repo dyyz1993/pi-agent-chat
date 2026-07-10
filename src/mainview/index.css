@@ -257,6 +257,12 @@ button {
   --color-semantic-accent: 116 108 255;
   --color-semantic-notify: 186 86 36;
 
+  /* Runtime/connection type colors (fixed, theme-independent) */
+  --runtime-ssh: 45 182 232;
+  --runtime-sandbox: 245 158 11;
+  --runtime-docker: 36 150 237;
+  --runtime-local: 202 138 4;
+
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
@@ -392,6 +398,12 @@ html[data-theme="dark"] {
   --color-semantic-memory: 45 212 191;
   --color-semantic-accent: 116 108 255;
   --color-semantic-notify: 251 146 60;
+
+  /* Runtime/connection type colors (fixed, theme-independent) */
+  --runtime-ssh: 45 182 232;
+  --runtime-sandbox: 245 158 11;
+  --runtime-docker: 36 150 237;
+  --runtime-local: 212 168 83;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
