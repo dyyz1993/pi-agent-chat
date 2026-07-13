@@ -320,8 +320,8 @@ export class SandboxRpcClient {
 
   async getFileDiff(options: {
     filePath: string;
-    fromEntryId?: string;
-    toEntryId?: string;
+    fromHash?: string;
+    toHash?: string;
   }): Promise<{
     path: string;
     oldContent: string | null;

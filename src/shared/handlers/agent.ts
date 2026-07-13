@@ -664,8 +664,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return m.getFileDiff(
       params.sessionId,
       params.filePath,
-      params.fromEntryId,
-      params.toEntryId,
+      params.fromHash,
+      params.toHash,
     ) as Promise<R<"agent.getFileDiff">>;
   });
 

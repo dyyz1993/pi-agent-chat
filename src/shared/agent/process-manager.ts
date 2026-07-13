@@ -2200,6 +2200,7 @@ export class AgentProcessManager {
       entryId: string;
     }>;
     resolvedFromEntryId: string | null;
+    targetTreeHash?: string | null;
   }> {
     return getModifiedFilesOperation({
       sessionId,
@@ -2213,8 +2214,8 @@ export class AgentProcessManager {
   async getFileDiff(
     sessionId: string,
     filePath: string,
-    fromEntryId?: string,
-    toEntryId?: string,
+    fromHash?: string,
+    toHash?: string,
   ): Promise<{
     path: string;
     oldContent: string | null;
@@ -2224,8 +2225,8 @@ export class AgentProcessManager {
     return getFileDiffOperation({
       sessionId,
       filePath,
-      fromEntryId,
-      toEntryId,
+      fromHash,
+      toHash,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }

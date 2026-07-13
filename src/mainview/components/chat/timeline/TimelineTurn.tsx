@@ -6,7 +6,6 @@ import {
   Trash2,
   GitFork,
   RotateCcw,
-  MessageSquare,
   Check,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +16,6 @@ import { useChatNavStore } from "../../../stores/use-chat-nav-store";
 import { useClipboard } from "../preview/use-clipboard";
 import { useRollbackStore } from "../../../stores/use-rollback-store";
 import type { ModifiedFile } from "../../../stores/use-rollback-store";
-import { useChatStore } from "../../../stores/use-chat-store";
 import { useForkDialogStore } from "../../../stores/use-fork-dialog-store";
 import { apiClient } from "../../../lib/api-client";
 import { useActiveSessionActionGuard } from "../../../hooks/use-active-session-action-guard";
@@ -69,9 +67,9 @@ export const TimelineTurn = memo(function TimelineTurn({
   const toggleSelectAll = () => useChatNavStore.getState().toggleTurnSelect(turn.id, allItemIds);
 
   const handleRollback = useCallback(
-    async (mode: "message" | "withFiles") => {
+    async () => {
       const sessionId = activeSessionGuard.guard({
-        requireReady: mode === "withFiles",
+        requireReady: false,
         readyMessage: t("chat:messageCard.rollbackRequiresActiveSession", {
           defaultValue: "File rollback requires an active session. Please wait for reconnect.",
         }),
@@ -104,16 +102,7 @@ export const TimelineTurn = memo(function TimelineTurn({
 
         if (!targetId) return;
 
-        const currentInput = useChatStore.getState().inputText;
-        if (currentInput.trim()) {
-          try {
-            localStorage.setItem(`pi-draft:${sessionId}`, currentInput);
-          } catch {
-            /* ignore */
-          }
-        }
-
-        if (mode === "withFiles") {
+        if (isSessionReady) {
           try {
             log.info("rollback getModifiedFiles params", {
               sessionId,
@@ -136,10 +125,9 @@ export const TimelineTurn = memo(function TimelineTurn({
             const rawFiles = isArr
               ? (modResult as unknown[])
               : ((modResult as { files?: unknown[] }).files ?? []);
-            const resolvedFromEntryId = isArr
+            const targetTreeHash = isArr
               ? null
-              : ((modResult as { resolvedFromEntryId?: string | null }).resolvedFromEntryId ??
-                null);
+              : ((modResult as { targetTreeHash?: string | null }).targetTreeHash ?? null);
             const files: ModifiedFile[] = await Promise.all(
               rawFiles.map(async (raw) => {
                 const f = raw as {
@@ -152,7 +140,7 @@ export const TimelineTurn = memo(function TimelineTurn({
                   const diffResult = await apiClient.call("agent.getFileDiff", {
                     sessionId,
                     filePath: f.path,
-                    fromEntryId: resolvedFromEntryId ?? undefined,
+                    ...(targetTreeHash ? { fromHash: targetTreeHash } : {}),
                   });
                   const diff = diffResult as {
                     oldContent?: string | null;
@@ -208,36 +196,30 @@ export const TimelineTurn = memo(function TimelineTurn({
               modified: files.filter((f) => f.status === "modified").length,
               deleted: deleted.length,
             };
-            useRollbackStore
-              .getState()
-              .openRollback({ targetId, mode: "withFiles" }, { restored, deleted, files, summary });
+            if (files.length > 0) {
+              useRollbackStore
+                .getState()
+                .openRollback({ targetId, mode: "withFiles", userText: turn.userText }, { restored, deleted, files, summary });
+              return;
+            }
           } catch {
-            useRollbackStore.getState().openRollback(
-              { targetId, mode: "withFiles" },
-              {
-                restored: [],
-                deleted: [],
-                files: [],
-                summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
-              },
-            );
+            /* 降级为 message 模式 */
           }
-        } else {
-          useRollbackStore.getState().openRollback(
-            { targetId, mode: "message" },
-            {
-              restored: [],
-              deleted: [],
-              files: [],
-              summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
-            },
-          );
         }
+        useRollbackStore.getState().openRollback(
+          { targetId, mode: "message", userText: turn.userText },
+          {
+            restored: [],
+            deleted: [],
+            files: [],
+            summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
+          },
+        );
       } catch (e) {
         logger.warn("Rollback operation failed", { error: String(e) });
       }
     },
-    [activeSessionGuard, t, turn.userEntryId, turn.userMessageId],
+    [activeSessionGuard, isSessionReady, t, turn.userEntryId, turn.userMessageId],
   );
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
@@ -373,16 +355,9 @@ export const TimelineTurn = memo(function TimelineTurn({
                 />
                 <TurnActionButton
                   icon={<RotateCcw size={12} />}
-                  label={t("chat:rollbackCode")}
-                  onClick={() => handleRollback("withFiles")}
-                  variant="warning"
-                  disabled={isSessionBusy || !isSessionReady}
-                />
-                <TurnActionButton
-                  icon={<MessageSquare size={12} />}
                   label={t("chat:rollbackChat")}
-                  onClick={() => handleRollback("message")}
-                  variant="info"
+                  onClick={() => handleRollback()}
+                  variant="warning"
                   disabled={isSessionBusy}
                 />
               </div>

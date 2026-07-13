@@ -30,6 +30,7 @@ type ModifiedFilesResult = {
     entryId: string;
   }>;
   resolvedFromEntryId: string | null;
+  targetTreeHash?: string | null;
 };
 
 type CopyForkResult = {
@@ -62,12 +63,16 @@ function normalizeModifiedFilesResult(
   result: ModifiedFilesResult | ModifiedFilesResult["files"],
 ): ModifiedFilesResult {
   if (Array.isArray(result)) {
-    return { files: result, resolvedFromEntryId: null };
+    return { files: result, resolvedFromEntryId: null, targetTreeHash: null };
   }
   return {
     files: Array.isArray(result.files) ? result.files : [],
     resolvedFromEntryId:
       typeof result.resolvedFromEntryId === "string" ? result.resolvedFromEntryId : null,
+    targetTreeHash:
+      typeof (result as { targetTreeHash?: unknown }).targetTreeHash === "string"
+        ? (result as { targetTreeHash: string }).targetTreeHash
+        : null,
   };
 }
 
@@ -167,6 +172,7 @@ export async function getModifiedFilesOperation<TManaged extends ManagedClientLi
     entryId: string;
   }>;
   resolvedFromEntryId: string | null;
+  targetTreeHash?: string | null;
 }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (managed) {
@@ -221,8 +227,8 @@ export async function getModifiedFilesOperation<TManaged extends ManagedClientLi
 export async function getFileDiffOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
   filePath: string;
-  fromEntryId?: string;
-  toEntryId?: string;
+  fromHash?: string;
+  toHash?: string;
   getActiveManaged: (sessionId: string) => TManaged | null;
 }): Promise<{
   path: string;
@@ -235,8 +241,8 @@ export async function getFileDiffOperation<TManaged extends ManagedClientLike>(o
     return withTimeout(
       managed.client.getFileDiff({
         filePath: options.filePath,
-        fromEntryId: options.fromEntryId,
-        toEntryId: options.toEntryId,
+        fromHash: options.fromHash,
+        toHash: options.toHash,
       }),
       15_000,
       "getFileDiff",

@@ -1,7 +1,6 @@
 import { memo, useCallback, useRef } from "react";
-import { RotateCcw, Undo2, GitFork } from "lucide-react";
+import { Undo2, GitFork } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useRollbackStore } from "../../stores/use-rollback-store";
@@ -191,17 +190,18 @@ export const HeaderActions = memo(function HeaderActions({
   }, [sessionId, fetchTree, resolveEntryId]);
 
   const requestRollback = useCallback(
-    async (mode: "message" | "withFiles") => {
+    async () => {
       if (rollingBackRef.current) return;
       rollingBackRef.current = true;
-      log.info("rollback requested", { sessionId, mode });
+      log.info("rollback requested", { sessionId });
+      let rollbackUserText: string | undefined;
       try {
         if (!sessionId) {
           log.warn("rollback aborted: no active session");
           return;
         }
         const guardedSessionId = activeSessionGuard.guard({
-          requireReady: mode === "withFiles",
+          requireReady: false,
           readyMessage: t("messageCard.rollbackRequiresActiveSession", {
             defaultValue: "File rollback requires an active session. Please wait for reconnect.",
           }),
@@ -227,24 +227,11 @@ export const HeaderActions = memo(function HeaderActions({
           return;
         }
         if (message.role === "user") {
-          const currentInput = useChatStore.getState().inputText;
-          if (currentInput.trim()) {
-            const sid = useSessionStore.getState().activeSessionId;
-            if (sid) {
-              try {
-                localStorage.setItem(`pi-draft:${sid}`, currentInput);
-              } catch {
-                /* ignore storage errors */
-              }
-            }
-          }
           const userText = message.content
             .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
             .map((b) => b.text)
             .join("\n");
-          if (userText) {
-            useChatStore.getState().setInputText(userText);
-          }
+          rollbackUserText = userText || undefined;
         }
         const emptyPreview = {
           restored: [] as string[],
@@ -252,10 +239,10 @@ export const HeaderActions = memo(function HeaderActions({
           files: [] as never[],
           summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
         };
-        const preview =
-          mode === "withFiles"
-            ? await (async () => {
-                try {
+        // 检测该 turn 是否有文件改动；session 未就绪时降级为 message 模式
+        const filePreview = isSessionReady
+          ? await (async () => {
+              try {
                   // Let the backend resolve fromEntryId from toUserMsgEntryId.
                   // Previously the frontend set fromEntryId to the snapshot
                   // BEFORE the target turn, but getModifiedFiles uses inclusive
@@ -283,10 +270,9 @@ export const HeaderActions = memo(function HeaderActions({
                   const rawFiles = isArray
                     ? (modResponse as unknown[])
                     : ((modResponse as { files?: unknown[] }).files ?? []);
-                  const resolvedFromEntryId = isArray
+                  const targetTreeHash = isArray
                     ? null
-                    : ((modResponse as { resolvedFromEntryId?: string | null })
-                        .resolvedFromEntryId ?? null);
+                    : ((modResponse as { targetTreeHash?: string | null }).targetTreeHash ?? null);
                   const files: ModifiedFile[] = await Promise.all(
                     rawFiles.map(async (raw) => {
                       const f = raw as {
@@ -296,19 +282,27 @@ export const HeaderActions = memo(function HeaderActions({
                         entryId: string;
                       };
                       try {
-                        // Compare rollback target (fromEntryId) against
-                        // the LATEST file state (no toEntryId → backend uses
-                        // lastCommittedTreeHash / working tree).
+                        // 用 getModifiedFiles 返回的 targetTreeHash（由后端
+                        // resolveTargetTreeHash 解析得到）作为 fromHash 直接
+                        // 读取快照树，绕过 snapshotIndex 查不到消息 entryId 的
+                        // 问题（审批路径也是用 tree hash 而非 entryId）。
                         const diffResult = await apiClient.call("agent.getFileDiff", {
                           sessionId,
                           filePath: f.path,
-                          fromEntryId: resolvedFromEntryId ?? undefined,
+                          ...(targetTreeHash ? { fromHash: targetTreeHash } : {}),
                         });
                         const diff = diffResult as {
                           oldContent?: string | null;
                           newContent?: string | null;
                           unifiedDiff?: string;
                         } | null;
+                        log.info("getFileDiff result", {
+                          filePath: f.path,
+                          fromHash: targetTreeHash,
+                          oldContentLen: diff?.oldContent?.length ?? null,
+                          newContentLen: diff?.newContent?.length ?? null,
+                          hasUnifiedDiff: !!diff?.unifiedDiff,
+                        });
                         if (diff) {
                           const oldLines = diff.oldContent?.split("\n").length ?? 0;
                           const newLines = diff.newContent?.split("\n").length ?? 0;
@@ -375,20 +369,23 @@ export const HeaderActions = memo(function HeaderActions({
                     },
                   };
                 } catch (err) {
-                  log.warn("getModifiedFiles failed, using empty preview", {
+                  log.warn("getModifiedFiles failed, using message mode", {
                     err: err instanceof Error ? err.message : String(err),
                   });
                   return emptyPreview;
                 }
               })()
-            : emptyPreview;
+          : emptyPreview;
+        const hasFiles = filePreview.files.length > 0;
+        const mode: "message" | "withFiles" = hasFiles ? "withFiles" : "message";
+        const preview = hasFiles ? filePreview : emptyPreview;
         log.info("opening rollback overlay", {
           sessionId,
           mode,
           targetId: result.targetId,
           fileCount: preview.files.length,
         });
-        useRollbackStore.getState().openRollback({ targetId: result.targetId, mode }, preview);
+        useRollbackStore.getState().openRollback({ targetId: result.targetId, mode, userText: rollbackUserText }, preview);
       } catch (err) {
         log.error("rollback request failed unexpectedly", {
           err: err instanceof Error ? err.message : String(err),
@@ -400,6 +397,7 @@ export const HeaderActions = memo(function HeaderActions({
     [
       sessionId,
       activeSessionGuard,
+      isSessionReady,
       resolveRollbackTarget,
       message.id,
       message.role,
@@ -414,14 +412,8 @@ export const HeaderActions = memo(function HeaderActions({
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}
-        onClick={() => requestRollback("message")}
+        onClick={() => requestRollback()}
         disabled={rollingBackRef.current || isSessionBusy}
-      />
-      <ActionBtn
-        icon={RotateCcw}
-        title={t("messageCard.rollbackMessageAndCode")}
-        onClick={() => requestRollback("withFiles")}
-        disabled={rollingBackRef.current || isSessionBusy || !isSessionReady}
       />
     </>
   );
