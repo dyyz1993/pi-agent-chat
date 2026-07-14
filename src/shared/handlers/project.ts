@@ -31,6 +31,8 @@ import {
   removeSshProfile,
   openRemoteProject,
   listRemoteProjects,
+  getDefaultProjectDir,
+  setDefaultProjectDir,
 } from "../lib/project-config";
 import {
   scanSessionsForProject,
@@ -77,6 +79,22 @@ const REMOTE_RESOURCE_TYPES = new Set<RemoteSyncResourceType>(["skills", "agents
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * 把任意字符串清洗为文件系统安全的 kebab-case 文件夹名。
+ * 用于快速创建项目时对 LLM 生成名做兜底处理。
+ */
+function sanitizeFolderName(input: string): string {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return "";
+  // 非 [a-z0-9-] 字符统一替换为 -
+  const replaced = trimmed.replace(/[^a-z0-9-]+/g, "-");
+  // 合并连续的 -
+  const collapsed = replaced.replace(/-+/g, "-");
+  // 去掉首尾 -
+  const trimmed2 = collapsed.replace(/^-+|-+$/g, "");
+  return trimmed2.slice(0, 40);
 }
 
 function normalizeRemoteDirectoryPath(path?: string): string {
@@ -667,5 +685,176 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       profile: opened.profile,
       remote: opened.remote,
     };
+  });
+
+  // ------------------------------------------------------------------
+  // 快速创建项目相关 RPC
+  // ------------------------------------------------------------------
+
+  /**
+   * 读取已配置的默认项目目录。
+   * 首次使用快速创建时若返回 null，前端会引导用户选择并写入。
+   */
+  r("project.getDefaultProjectDir", async () => {
+    const dir = await getDefaultProjectDir();
+    return { dir };
+  });
+
+  /**
+   * 持久化默认项目目录（写入 ~/.pi/chat/config.json）。
+   */
+  r("project.setDefaultProjectDir", async (params) => {
+    await setDefaultProjectDir(params.dir);
+    return { ok: true };
+  });
+
+  /**
+   * 调用 pi CLI 的 print 模式 + output-schema，用轻量模型根据需求文本
+   * 生成一个项目名 + 一句话描述。
+   *
+   * 关键点：
+   * - `--output-schema` 会强制开启 print 模式，stdout 只输出 JSON 一行
+   *   （takeOverStdout 把其他日志都重定向到 stderr），可直接 JSON.parse
+   * - `--model fast` 走 tier 别名，不需要 provider/model 全名
+   * - `--no-session` 避免在 ~/.pi 下留下一次性 session 痕迹
+   * - 失败（如模型输出无法通过 schema 校验）时 exit code=1，stdout 为空，
+   *   错误信息在 stderr，因此必须先看 exit code 再 parse
+   */
+  r("project.generateName", async (params) => {
+    const requirement = params.requirement?.trim() ?? "";
+    if (!requirement) {
+      throw new Error("requirement must not be empty");
+    }
+    const tier = params.tier ?? "fast";
+    const cliPath = config.piCliPath;
+    if (!cliPath) {
+      throw new Error("pi CLI path is not configured (PI_CLI_PATH unset)");
+    }
+
+    const systemPrompt =
+      "You are a senior software architect. Given a project requirement, " +
+      "produce a concise, filesystem-safe project folder name (lowercase, " +
+      "kebab-case, no spaces, ASCII letters/digits/dashes only, max 40 chars, " +
+      "no leading/trailing dash) and a one-sentence description in the same " +
+      "language as the requirement. The name must reflect the project's core " +
+      "purpose, not be a generic word like 'project' or 'app'.";
+
+    const schema = JSON.stringify({
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$",
+          maxLength: 40,
+        },
+        description: { type: "string", maxLength: 200 },
+      },
+      required: ["name", "description"],
+      additionalProperties: false,
+    });
+
+    const args = [
+      "--model",
+      tier,
+      "--system-prompt",
+      systemPrompt,
+      "--no-session",
+      "--output-schema",
+      schema,
+      requirement,
+    ];
+
+    let stdout = "";
+    let stderr = "";
+    try {
+      const result = await execFileAsync(cliPath, args, {
+        maxBuffer: 8 * 1024 * 1024,
+        timeout: 60_000,
+      });
+      stdout = result.stdout ?? "";
+      stderr = result.stderr ?? "";
+    } catch (err) {
+      const e = err as { stdout?: string; stderr?: string; message?: string };
+      stdout = e.stdout ?? "";
+      stderr = e.stderr ?? e.message ?? String(err);
+      log.warn("project.generateName: pi CLI failed", {
+        tier,
+        stderr: stderr.slice(0, 500),
+      });
+      throw new Error(
+        `Failed to generate project name: ${stderr.slice(0, 300) || "pi CLI error"}`,
+      );
+    }
+
+    const trimmed = stdout.trim();
+    if (!trimmed) {
+      log.warn("project.generateName: empty stdout", {
+        stderr: stderr.slice(0, 500),
+      });
+      throw new Error(
+        `Failed to generate project name (empty output): ${stderr.slice(0, 300)}`,
+      );
+    }
+
+    let parsed: { name?: string; description?: string };
+    try {
+      parsed = JSON.parse(trimmed) as { name?: string; description?: string };
+    } catch {
+      log.warn("project.generateName: invalid JSON", {
+        stdout: trimmed.slice(0, 300),
+      });
+      throw new Error(
+        `Failed to parse generated name: ${trimmed.slice(0, 200)}`,
+      );
+    }
+
+    // 兜底清洗：即便 schema 校验通过，仍可能含有不合规字符
+    const safeName = sanitizeFolderName(parsed.name ?? "");
+    if (!safeName) {
+      throw new Error("Generated project name is invalid");
+    }
+    return {
+      name: safeName,
+      description: (parsed.description ?? "").trim().slice(0, 200),
+    };
+  });
+
+  /**
+   * 确认快速创建：在指定父目录下创建文件夹并执行 git init。
+   * 成功后返回完整路径，前端拿到后调 project.open 进入开发。
+   */
+  r("project.confirmQuickCreate", async (params) => {
+    const parentDir = params.parentDir?.trim() ?? "";
+    const folderName = sanitizeFolderName(params.folderName ?? "");
+    if (!parentDir) {
+      return { ok: false, error: "Parent directory is required" };
+    }
+    if (!folderName) {
+      return { ok: false, error: "Invalid folder name" };
+    }
+    if (!existsSync(parentDir)) {
+      return { ok: false, error: `Parent directory does not exist: ${parentDir}` };
+    }
+
+    const created = await createDirectory(parentDir, folderName);
+    if (!created.ok) {
+      return { ok: false, error: created.error ?? "Failed to create directory" };
+    }
+    const projectPath = created.path;
+
+    try {
+      await execFileAsync("git", ["init", projectPath], {
+        maxBuffer: 1024 * 1024,
+        timeout: 15_000,
+      });
+    } catch (err) {
+      const e = err as { stderr?: string; message?: string };
+      log.warn("project.confirmQuickCreate: git init failed (non-fatal)", {
+        projectPath,
+        error: (e.stderr ?? e.message ?? String(err)).slice(0, 300),
+      });
+      // git init 失败不阻塞，目录已创建，仍然返回 ok 让用户继续
+    }
+    return { ok: true, path: projectPath };
   });
 }

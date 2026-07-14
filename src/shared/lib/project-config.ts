@@ -74,6 +74,8 @@ interface ProjectConfig {
   sshProfiles: SshProfile[];
   /** remote project metadata keyed by local shadow project path */
   remoteProjects: RemoteProjectRecord[];
+  /** 默认项目目录（快速创建项目时使用） */
+  defaultProjectDir?: string;
 }
 
 function emptyConfig(): ProjectConfig {
@@ -129,6 +131,8 @@ function parseConfig(raw: string): ProjectConfig {
       typeof parsed.localProxyEnabled === "boolean" ? parsed.localProxyEnabled : undefined,
     sshProfiles: parsed.sshProfiles ?? [],
     remoteProjects: parsed.remoteProjects ?? [],
+    defaultProjectDir:
+      typeof parsed.defaultProjectDir === "string" ? parsed.defaultProjectDir : undefined,
   };
 }
 
@@ -823,6 +827,27 @@ export async function setLocalProxyPreference(enabled: boolean): Promise<boolean
   return loadAndSave((config) => {
     config.localProxyEnabled = enabled;
     return config.localProxyEnabled;
+  });
+}
+
+/**
+ * 读取"快速创建项目"使用的默认目录。
+ * 用户首次使用快速创建时若未配置，前端会引导选择并写入。
+ */
+export async function getDefaultProjectDir(): Promise<string | null> {
+  const config = await load();
+  const dir = config.defaultProjectDir?.trim();
+  return dir && dir.length > 0 ? dir : null;
+}
+
+/**
+ * 持久化默认项目目录。dir 为空字符串则视为清除。
+ */
+export async function setDefaultProjectDir(dir: string): Promise<boolean> {
+  return loadAndSave((config) => {
+    const trimmed = dir?.trim() ?? "";
+    config.defaultProjectDir = trimmed.length > 0 ? trimmed : undefined;
+    return true;
   });
 }
 
