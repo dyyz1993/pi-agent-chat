@@ -71,7 +71,29 @@ function FilePathLink({
   const notify = useNotificationStore((s) => s.push);
   const filePath = dataFilePath ?? dataFilePathAttr;
 
-  if (!filePath) return <a {...props}>{children}</a>;
+  if (!filePath) {
+    // 非 http(s) 链接（如 mailto:、#锚点）直接放行
+    const href = (props as { href?: string }).href ?? "";
+    const isExternal = /^https?:\/\//i.test(href) && !href.startsWith("http://localhost:5173") && !href.startsWith("http://127.0.0.1:5173");
+    return (
+      <a
+        {...props}
+        href={isExternal ? undefined : href}
+        onClick={isExternal ? async (e) => {
+          e.preventDefault();
+          try {
+            const { apiClient } = await import("../../lib/api-client");
+            await apiClient.call("system.openExternal", { url: href });
+          } catch {
+            // fallback: 尝试 window.open
+            window.open(href, "_blank", "noopener,noreferrer");
+          }
+        } : undefined}
+      >
+        {children}
+      </a>
+    );
+  }
   const absoluteFileName = basename(filePath);
   const iconNode: TreeNode = { name: absoluteFileName, path: filePath, type: "file" };
 

@@ -8,4 +8,5 @@ export interface SystemMethods {
   "system.writeClipboard": { params: { text: string }; result: { ok: boolean } };
   "system.readClipboard": { params: {}; result: { text: string | null } };
   "system.readClipboardImage": { params: {}; result: { pngBase64: string | null } };
+  "system.openExternal": { params: { url: string }; result: { ok: boolean } };
 }

@@ -18,8 +18,9 @@ import {
   setReadClipboardTextFn,
   setWriteClipboardTextFn,
 } from "../shared/lib/native-clipboard";
+import { setOpenExternalFn } from "../shared/lib/native-open-external";
 
-const { openFileDialog, clipboardReadImage, clipboardReadText, clipboardWriteText } = Utils as {
+const { openFileDialog, clipboardReadImage, clipboardReadText, clipboardWriteText, openExternal } = Utils as {
   openFileDialog: (opts: {
     startingFolder: string;
     canChooseFiles: boolean;
@@ -29,6 +30,7 @@ const { openFileDialog, clipboardReadImage, clipboardReadText, clipboardWriteTex
   clipboardReadText: () => string | null;
   clipboardReadImage: () => Uint8Array | null;
   clipboardWriteText: (text: string) => void;
+  openExternal: (url: string) => boolean;
 };
 
 const desktopApplicationMenu = ApplicationMenu as unknown as {
@@ -55,6 +57,14 @@ setReadClipboardImageFn(() => {
   return Buffer.from(image).toString("base64");
 });
 
+setOpenExternalFn((url) => {
+  try {
+    return openExternal(url);
+  } catch {
+    return false;
+  }
+});
+
 configureLogDir("logs");
 setLogSink(writeLogLine);
 const log = createLogger("server");
@@ -75,6 +85,39 @@ async function getMainViewUrl(): Promise<string> {
 }
 
 const url = await getMainViewUrl();
+
+// 主视图初始加载的 URL，用于被外部链接覆盖后拉回
+const mainViewUrl = url;
+
+/**
+ * 判断目标 URL 是否属于"内部导航"（不应交给系统浏览器）。
+ * 包括：自有 scheme（views://）、dev server、about/blob/data 等本地资源。
+ */
+function isInternalNavigation(targetUrl: string): boolean {
+  if (!targetUrl) return true;
+  if (
+    targetUrl.startsWith("views://") ||
+    targetUrl.startsWith("about:") ||
+    targetUrl.startsWith("blob:") ||
+    targetUrl.startsWith("data:")
+  ) {
+    return true;
+  }
+  try {
+    const u = new URL(targetUrl);
+    // dev server（Vite HMR 端口）
+    if (
+      (u.hostname === "localhost" || u.hostname === "127.0.0.1") &&
+      u.port === "5173"
+    ) {
+      return true;
+    }
+  } catch {
+    // 非 http(s) 标准 URL（如 mailto:、自定义 scheme）—— 不视为内部 webview 导航，
+    // 交给 openExternal 由系统处理
+  }
+  return false;
+}
 
 const transport = new ElectrobunTransport();
 const server = new RPCServer(transport);
@@ -126,6 +169,44 @@ const windowOptions = {
 } satisfies ConstructorParameters<typeof BrowserWindow>[0];
 
 const mainWindow = new BrowserWindow(windowOptions);
+
+// ── 外部链接拦截 ──
+// Electrobun 的 will-navigate / new-window-open 事件无法阻止导航（导航决策在 native
+// 侧同步完成），因此这里在检测到外部 URL 时：1) 用系统默认浏览器打开；2) 把 webview
+// 拉回主视图，避免外部网页覆盖当前 UI。内部导航（dev server / views://）放行。
+// will-navigate: 普通 <a href> 点击 / location 跳转
+// new-window-open: target=_blank 链接 / window.open() —— 这类是当前覆盖问题的主因
+function interceptExternalUrl(targetUrl: string, source: string): void {
+  if (!targetUrl || isInternalNavigation(targetUrl)) return;
+  log.info("Intercepting external navigation, opening in system browser", { source, targetUrl });
+  try {
+    openExternal(targetUrl);
+  } catch (err) {
+    log.warn("openExternal failed", { source, targetUrl, err: err instanceof Error ? err.message : String(err) });
+  }
+  // 拉回主视图，防止外部网页覆盖当前页面
+  (mainWindow.webview as unknown as { loadURL: (url: string) => void }).loadURL(mainViewUrl);
+}
+
+mainWindow.webview.on("will-navigate", (event: unknown) => {
+  const detail = (event as { detail?: unknown }).detail;
+  const targetUrl = typeof detail === "string" ? detail : (detail as { url?: string })?.url ?? "";
+  interceptExternalUrl(targetUrl, "will-navigate");
+});
+
+// new-window-open 不在 BrowserView.on 的公开类型签名里，但 native 侧会广播
+(mainWindow.webview as unknown as { on: (name: string, handler: (event: unknown) => void) => void }).on(
+  "new-window-open",
+  (event: unknown) => {
+    const detail = (event as { detail?: unknown }).detail;
+    // detail 可能是 string 或 { url, isCmdClick, ... }
+    const targetUrl =
+      typeof detail === "string"
+        ? detail
+        : (detail as { url?: string })?.url ?? "";
+    interceptExternalUrl(targetUrl, "new-window-open");
+  },
+);
 
 type DesktopEditCommand = "copy" | "cut" | "paste" | "selectAll" | "undo" | "redo";
 

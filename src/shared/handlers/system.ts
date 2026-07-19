@@ -2,6 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { readClipboardImage, readClipboardText, writeClipboardText } from "../lib/native-clipboard";
+import { openExternal } from "../lib/native-open-external";
 
 export function register(server: RPCServer, options: HandlerOptions): void {
   const r = createRegister(server);
@@ -38,5 +39,10 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       return { pngBase64: null };
     }
     return { pngBase64: await readClipboardImage() };
+  });
+
+  r("system.openExternal", async (params) => {
+    const ok = await openExternal(params.url);
+    return { ok };
   });
 }
