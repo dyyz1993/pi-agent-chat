@@ -6,11 +6,19 @@ import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
 import { forwardToChannel } from "./channel-helpers";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { getSessionsRoot } from "../lib/pi-agent-paths";
 
 const log = createLogger("supervisor");
 const STATUS_TIMEOUT_MS = 2500;
 const CHANNEL_TIMEOUT_MS = 5_000;
 const REFINE_TIMEOUT_MS = 60_000;
+const GOAL_RUNTIME_FILE = "supervisor-goal-runtime.json";
+const TRIGGER_LOG_DIR = "supervisor-logs";
+
+// sessionId → dataDir 缓存，避免每次请求都扫 7999 个 bucket
+const sessionDataDirCache = new Map<string, string | null>();
 
 function disabledStatus(): SupervisorStatus {
   return {
@@ -33,12 +41,116 @@ async function getSupervisorStatus(
     );
     return result as SupervisorStatus;
   } catch (err: unknown) {
-    log.warn("getStatus channel call failed", {
+    log.warn("getStatus channel call failed, falling back to disk", {
+      sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return await readPersistedStatus(sessionId);
+  }
+}
+
+// ── 磁盘 fallback（进程不在线时从持久化文件恢复状态）──
+
+/** 异步遍历 sessions bucket 查找 sessionId 对应的 supervisor 数据目录
+ *  supervisor 扩展的 extName = basename(入口文件 index.ts) = "index"，
+ *  所以实际 sessionDataDir = .../data/<sessionId>/index/
+ *  结果缓存到 sessionDataDirCache，避免每次请求都扫全部 bucket */
+async function findSessionDataDir(sessionId: string): Promise<string | null> {
+  if (sessionDataDirCache.has(sessionId)) {
+    return sessionDataDirCache.get(sessionId) ?? null;
+  }
+  const sessionsRoot = getSessionsRoot();
+  let buckets: string[];
+  try {
+    buckets = await readdir(sessionsRoot);
+  } catch {
+    sessionDataDirCache.set(sessionId, null);
+    return null;
+  }
+  for (const bucket of buckets) {
+    const sessionDir = join(sessionsRoot, bucket, "data", sessionId);
+    try {
+      await stat(sessionDir);
+    } catch {
+      continue;
+    }
+    // supervisor 扩展的 extName = "index"，数据在 index/ 子目录下
+    const indexDir = join(sessionDir, "index");
+    try {
+      await stat(indexDir);
+      sessionDataDirCache.set(sessionId, indexDir);
+      return indexDir;
+    } catch {
+      // index/ 不存在，fallback 到 sessionDir 本身
+      sessionDataDirCache.set(sessionId, sessionDir);
+      return sessionDir;
+    }
+  }
+  sessionDataDirCache.set(sessionId, null);
+  return null;
+}
+
+interface PersistedGoalRuntime {
+  activeGoal?: GoalState;
+  lastGoldResult?: SupervisorStatus["lastGoldResult"];
+  enabled?: boolean;
+}
+
+/** 读 supervisor-goal-runtime.json 构造静态状态（进程不在线时使用） */
+async function readPersistedStatus(sessionId: string): Promise<SupervisorStatus> {
+  const dataDir = await findSessionDataDir(sessionId);
+  if (!dataDir) return disabledStatus();
+
+  const runtimePath = join(dataDir, GOAL_RUNTIME_FILE);
+  try {
+    const content = await readFile(runtimePath, "utf-8");
+    const parsed = JSON.parse(content) as PersistedGoalRuntime;
+    if (!parsed.activeGoal && !parsed.enabled) return disabledStatus();
+
+    return {
+      enabled: parsed.enabled === true,
+      state: "idle",
+      continueCount: parsed.activeGoal?.continuationCount ?? 0,
+      maxContinueCount: 0,
+      activeGuards: [],
+      goal: parsed.activeGoal,
+      lastGoldResult: parsed.lastGoldResult,
+    };
+  } catch (err) {
+    log.warn("readPersistedStatus failed", {
       sessionId,
       err: err instanceof Error ? err.message : String(err),
     });
     return disabledStatus();
   }
+}
+
+/** 读 supervisor-logs/trigger-*.json 构造 trigger 历史（进程不在线时使用） */
+async function readTriggerHistoryFromDisk(sessionId: string, limit: number): Promise<TriggerRecord[]> {
+  const dataDir = await findSessionDataDir(sessionId);
+  if (!dataDir) return [];
+
+  const triggerDir = join(dataDir, TRIGGER_LOG_DIR);
+  let files: string[];
+  try {
+    files = (await readdir(triggerDir)).filter((f) => f.endsWith(".json"));
+  } catch {
+    return [];
+  }
+
+  const records: TriggerRecord[] = [];
+  for (const file of files) {
+    try {
+      const content = await readFile(join(triggerDir, file), "utf-8");
+      const record = JSON.parse(content) as TriggerRecord;
+      if (typeof record.seq === "number") records.push(record);
+    } catch {
+      // skip bad files
+    }
+  }
+
+  records.sort((a, b) => a.seq - b.seq);
+  return records.slice(-limit);
 }
 
 function blockedGoal(objective: string, summary: string): { goal: GoalState } {
@@ -257,7 +369,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       STATUS_TIMEOUT_MS,
       { skipHasSessionCheck: true },
     );
-    if (!result) log.warn("supervisor.getTriggerHistory channel call failed", { sessionId });
-    return result ?? { triggers: [] };
+    if (result) return result;
+    log.warn("supervisor.getTriggerHistory channel call failed, falling back to disk", {
+      sessionId,
+    });
+    return { triggers: await readTriggerHistoryFromDisk(sessionId, limit ?? 50) };
   });
 }
