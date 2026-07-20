@@ -731,6 +731,12 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       throw new Error("pi CLI path is not configured (PI_CLI_PATH unset)");
     }
 
+    // tier ("fast"|"pro"|"max") is an application-level alias, not a real
+    // model id that pi CLI understands. Resolve it to a concrete model via
+    // PI_QUICK_CREATE_MODEL (accepts "provider/id" or a raw model id).
+    // When unset, omit --model entirely so pi CLI uses its own default.
+    const quickCreateModel = process.env.PI_QUICK_CREATE_MODEL?.trim() ?? "";
+
     const systemPrompt =
       "You are a senior software architect. Given a project requirement, " +
       "produce a concise, filesystem-safe project folder name (lowercase, " +
@@ -754,8 +760,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     });
 
     const args = [
-      "--model",
-      tier,
+      ...(quickCreateModel ? ["--model", quickCreateModel] : []),
       "--system-prompt",
       systemPrompt,
       "--no-session",
@@ -763,6 +768,11 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       schema,
       requirement,
     ];
+
+    log.info("project.generateName: invoking pi CLI", {
+      tier,
+      model: quickCreateModel || "(pi default)",
+    });
 
     let stdout = "";
     let stderr = "";
