@@ -11,7 +11,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoalState, GoldResult, TriggerRecord } from "../../../shared/modules/supervisor";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -142,6 +142,7 @@ export function GoalActionCard({
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
   const [now, setNow] = useState(() => Date.now());
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const clearingRef = useRef(false);
 
   const goal = status?.goal as GoalWithLegacyFields | undefined;
   const lastGoldResult =
@@ -175,7 +176,11 @@ export function GoalActionCard({
 
   const handleClearGoal = (event?: MouseEvent<HTMLButtonElement>) => {
     event?.stopPropagation();
-    void clearGoal(sessionId, "user_cancelled");
+    if (clearingRef.current) return;
+    clearingRef.current = true;
+    void clearGoal(sessionId, "user_cancelled").finally(() => {
+      clearingRef.current = false;
+    });
   };
 
   return (

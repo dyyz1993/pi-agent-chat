@@ -7,6 +7,7 @@ import { useRollbackStore } from "../../stores/use-rollback-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { useActiveSessionActionGuard } from "../../hooks/use-active-session-action-guard";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 import { createLogger } from "../../../shared/lib/logger";
 import type { TreeEntry } from "../../../shared/modules/agent";
 import type { ChatMessage, ContentBlock } from "../../types";
@@ -14,6 +15,34 @@ import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { EMPTY_MSGS } from "./message-card-helpers";
 
 const log = createLogger("chat");
+
+/** 检查指定 user 消息所在 turn 是否包含工具调用。
+ *  若该 turn 无任何工具调用，则不可能修改文件，回滚时可直接走 message 模式，
+ *  避免后端 getModifiedFiles 因 snapshotIndex 查不到 user message entryId
+ *  而误返回所有 turn 的文件（findIndex -1 → end = snapshots.length-1）。 */
+function turnHasToolCalls(messageId: string, sessionId: string | null, isUserCard?: boolean): boolean {
+  // 无法判断（无 sessionId / 非 user card）时保守认为有工具调用
+  if (!sessionId || !isUserCard) return true;
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || EMPTY_MSGS;
+  const currentIdx = msgs.findIndex((m) => m.id === messageId);
+  if (currentIdx === -1) return true;
+  // turn 范围：当前 user 消息 → 下一个 user 消息（或消息末尾）
+  let endIdx = msgs.length;
+  for (let i = currentIdx + 1; i < msgs.length; i++) {
+    if (msgs[i].role === "user") {
+      endIdx = i;
+      break;
+    }
+  }
+  for (let i = currentIdx; i < endIdx; i++) {
+    if (
+      msgs[i].content.some((b) => b.type === "toolCall" || b.type === "toolExecution")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const ActionBtn = memo(function ActionBtn({
   icon: Icon,
@@ -138,9 +167,21 @@ export const HeaderActions = memo(function HeaderActions({
   );
 
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
-    // The backend's navigateTree handles the parentId jump for all message types
-    // (user, assistant, etc.), so the frontend just passes the clicked entryId directly.
-    void entries;
+    const target = entries.find((e) => e.id === entryId);
+    if (!target) return entryId;
+    if (target.type === "message" && target.label === "user") {
+      return entryId;
+    }
+    const byId = new Map(entries.map((e) => [e.id, e] as const));
+    let cur: string | null = entryId;
+    while (cur !== null) {
+      const entry = byId.get(cur);
+      if (!entry) break;
+      if (entry.type === "message" && entry.label === "user") {
+        return cur;
+      }
+      cur = entry.parentId ?? null;
+    }
     return entryId;
   }, []);
 
@@ -178,16 +219,18 @@ export const HeaderActions = memo(function HeaderActions({
     return targetId ? { targetId, tree } : null;
   }, [sessionId, fetchTree, resolveEntryId, findTurnBoundary]);
 
-  const handleFork = useCallback(async () => {
-    const tree = await fetchTree();
-    const entryId = await resolveEntryId(tree);
-    if (!sessionId || !entryId) return;
-    useForkDialogStore.getState().openDialog({
-      sessionId,
-      entryId,
-      source: "messageCard",
-    });
-  }, [sessionId, fetchTree, resolveEntryId]);
+  const [handleFork, isForking] = useAsyncGuard(
+    useCallback(async () => {
+      const tree = await fetchTree();
+      const entryId = await resolveEntryId(tree);
+      if (!sessionId || !entryId) return;
+      useForkDialogStore.getState().openDialog({
+        sessionId,
+        entryId,
+        source: "messageCard",
+      });
+    }, [sessionId, fetchTree, resolveEntryId]),
+  );
 
   const requestRollback = useCallback(
     async () => {
@@ -214,7 +257,6 @@ export const HeaderActions = memo(function HeaderActions({
         if (!result) {
           log.warn("rollback aborted: resolveRollbackTarget returned null", {
             sessionId,
-            mode,
             messageId: message.id,
             hasEntryId: !!message.entryId,
             messagesCount: (useChatStore.getState().messagesBySession[sessionId ?? ""] ?? [])
@@ -239,8 +281,12 @@ export const HeaderActions = memo(function HeaderActions({
           files: [] as never[],
           summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
         };
-        // 检测该 turn 是否有文件改动；session 未就绪时降级为 message 模式
-        const filePreview = isSessionReady
+        // 检测该 turn 是否有文件改动；session 未就绪或该 turn 无工具调用时降级为 message 模式。
+        // turnHasToolCalls 校验：若该 turn 没有任何工具调用，则不可能修改文件，
+        // 跳过 getModifiedFiles 避免后端因 snapshotIndex 查不到 user message entryId
+        // 而误返回所有 turn 的文件（findIndex -1 → end = snapshots.length-1）。
+        const hasToolCalls = turnHasToolCalls(message.id, sessionId, isUserCard);
+        const filePreview = isSessionReady && hasToolCalls
           ? await (async () => {
               try {
                   // Let the backend resolve fromEntryId from toUserMsgEntryId.
@@ -273,6 +319,9 @@ export const HeaderActions = memo(function HeaderActions({
                   const targetTreeHash = isArray
                     ? null
                     : ((modResponse as { targetTreeHash?: string | null }).targetTreeHash ?? null);
+                  const currentTreeHash = isArray
+                    ? null
+                    : ((modResponse as { currentTreeHash?: string | null }).currentTreeHash ?? null);
                   const files: ModifiedFile[] = await Promise.all(
                     rawFiles.map(async (raw) => {
                       const f = raw as {
@@ -282,14 +331,14 @@ export const HeaderActions = memo(function HeaderActions({
                         entryId: string;
                       };
                       try {
-                        // 用 getModifiedFiles 返回的 targetTreeHash（由后端
-                        // resolveTargetTreeHash 解析得到）作为 fromHash 直接
-                        // 读取快照树，绕过 snapshotIndex 查不到消息 entryId 的
-                        // 问题（审批路径也是用 tree hash 而非 entryId）。
+                        // 用 getModifiedFiles 返回的 targetTreeHash/currentTreeHash
+                        // 作为 fromHash/toHash 直接读取快照树，确保 diff 与
+                        // getRollbackPreviewFiles 使用完全一致的 baseline。
                         const diffResult = await apiClient.call("agent.getFileDiff", {
                           sessionId,
                           filePath: f.path,
                           ...(targetTreeHash ? { fromHash: targetTreeHash } : {}),
+                          ...(currentTreeHash ? { toHash: currentTreeHash } : {}),
                         });
                         const diff = diffResult as {
                           oldContent?: string | null;
@@ -299,6 +348,7 @@ export const HeaderActions = memo(function HeaderActions({
                         log.info("getFileDiff result", {
                           filePath: f.path,
                           fromHash: targetTreeHash,
+                          toHash: currentTreeHash,
                           oldContentLen: diff?.oldContent?.length ?? null,
                           newContentLen: diff?.newContent?.length ?? null,
                           hasUnifiedDiff: !!diff?.unifiedDiff,
@@ -398,6 +448,7 @@ export const HeaderActions = memo(function HeaderActions({
       sessionId,
       activeSessionGuard,
       isSessionReady,
+      isUserCard,
       resolveRollbackTarget,
       message.id,
       message.role,
@@ -408,7 +459,7 @@ export const HeaderActions = memo(function HeaderActions({
 
   return (
     <>
-      <ActionBtn icon={GitFork} title={t("fork")} onClick={handleFork} disabled={isSessionBusy} />
+      <ActionBtn icon={GitFork} title={t("fork")} onClick={handleFork} disabled={isSessionBusy || isForking} />
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}

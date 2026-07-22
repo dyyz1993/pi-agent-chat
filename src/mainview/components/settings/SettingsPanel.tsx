@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Brain,
   CheckCircle2,
+  FolderOpen,
   Network,
   RotateCcw,
   SlidersHorizontal,
@@ -43,6 +44,7 @@ import {
   type ProxyStatus,
 } from "../../lib/proxy";
 import { createLogger } from "../../../shared/lib/logger";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 
 const log = createLogger("settings");
 
@@ -93,8 +95,8 @@ const MAX_DELAY_OPTIONS = [
   { value: 3600000, label: "60min" },
 ];
 
-type SettingsTabId = "display" | "retry" | "models" | "network" | "usage";
-type SettingsGroupId = "conversation" | "agent" | "connection";
+type SettingsTabId = "display" | "retry" | "models" | "network" | "usage" | "project";
+type SettingsGroupId = "conversation" | "agent" | "connection" | "workspace";
 
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
@@ -104,8 +106,9 @@ const SETTINGS_TABS: Array<{
   { id: "display", icon: SlidersHorizontal, label: "显示" },
   { id: "retry", icon: Activity, label: "重试" },
   { id: "models", icon: Brain, label: "模型" },
-  { id: "network", icon: Network, label: "网络" },
   { id: "usage", icon: Trophy, label: "战绩" },
+  { id: "project", icon: FolderOpen, label: "项目" },
+  { id: "network", icon: Network, label: "网络" },
 ];
 
 const SETTINGS_GROUPS: Array<{
@@ -116,6 +119,7 @@ const SETTINGS_GROUPS: Array<{
 }> = [
   { id: "conversation", icon: SlidersHorizontal, label: "对话", items: ["display", "retry"] },
   { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage"] },
+  { id: "workspace", icon: FolderOpen, label: "工作区", items: ["project"] },
   { id: "connection", icon: Network, label: "连接", items: ["network"] },
 ];
 
@@ -187,26 +191,28 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     setLocalTierModels({ ...effectiveTierModels });
   }, [effectiveTierModels]);
 
-  const handleSaveTierConfig = useCallback(async () => {
-    setTierSaveMessage(null);
-    if (!sessionId) {
-      setTierSaveMessage({ type: "error", text: t("tierSaveNoSession") });
-      return;
-    }
-    setTierSaving(true);
-    try {
-      void projectPath;
-      await saveGlobalTierModels(sessionId, localTierModels);
-      setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
-    } catch (err) {
-      log.warn("save tier config failed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      setTierSaveMessage({ type: "error", text: t("tierSaveFailed") });
-    } finally {
-      setTierSaving(false);
-    }
-  }, [sessionId, projectPath, localTierModels, saveGlobalTierModels, t]);
+  const [handleSaveTierConfig, isSavingTierConfig] = useAsyncGuard(
+    useCallback(async () => {
+      setTierSaveMessage(null);
+      if (!sessionId) {
+        setTierSaveMessage({ type: "error", text: t("tierSaveNoSession") });
+        return;
+      }
+      setTierSaving(true);
+      try {
+        void projectPath;
+        await saveGlobalTierModels(sessionId, localTierModels);
+        setTierSaveMessage({ type: "success", text: t("tierSaveSuccess") });
+      } catch (err) {
+        log.warn("save tier config failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setTierSaveMessage({ type: "error", text: t("tierSaveFailed") });
+      } finally {
+        setTierSaving(false);
+      }
+    }, [sessionId, projectPath, localTierModels, saveGlobalTierModels, t]),
+  );
 
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
   const [proxyStatusLoading, setProxyStatusLoading] = useState(false);
@@ -415,7 +421,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     setLocalTierModels((prev) => ({ ...prev, [tier]: v }));
                   }}
                   placeholder={t("tierConfigDefault", "默认")}
-                  placement="up"
+                  placement="down"
                 />
               </div>
             </div>
@@ -441,9 +447,94 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <span className="min-w-0">{tierSaveMessage.text}</span>
           </div>
         )}
-        <Button size="sm" variant="primary" onClick={handleSaveTierConfig} loading={tierSaving}>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={handleSaveTierConfig}
+          loading={tierSaving}
+          disabled={isSavingTierConfig}
+        >
           {t("saveTier")}
         </Button>
+      </div>
+    </SettingsSection>
+  );
+
+  const [defaultProjectDir, setDefaultProjectDir] = useState<string | null>(null);
+  const [defaultProjectDirLoaded, setDefaultProjectDirLoaded] = useState(false);
+  const [defaultProjectDirSaving, setDefaultProjectDirSaving] = useState(false);
+
+  useEffect(() => {
+    if (!defaultProjectDirLoaded) {
+      apiClient
+        .call("project.getDefaultProjectDir", {})
+        .then((res) => setDefaultProjectDir((res.dir as string | null) ?? null))
+        .catch(() => setDefaultProjectDir(null))
+        .finally(() => setDefaultProjectDirLoaded(true));
+    }
+  }, [defaultProjectDirLoaded]);
+
+  const [handleChangeDefaultProjectDir, isChangingDefaultProjectDir] = useAsyncGuard(
+    useCallback(async () => {
+      try {
+        setDefaultProjectDirSaving(true);
+        const picked = await apiClient.call("project.browseFolder", {
+          defaultPath: defaultProjectDir ?? undefined,
+        });
+        if (!("cancelled" in picked)) {
+          const dir = (picked.path as string) || null;
+          if (dir) {
+            await apiClient.call("project.setDefaultProjectDir", { dir });
+            setDefaultProjectDir(dir);
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        setDefaultProjectDirSaving(false);
+      }
+      // Web 模式：browseFolder 返回 cancelled，静默返回。
+      // 用户应在「快速创建」面板里设置默认目录（那里有目录浏览器）。
+    }, [defaultProjectDir]),
+  );
+
+  const projectContent = (
+    <SettingsSection title={t("projectSettingsTitle", "项目")}>
+      <div className="rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium text-text-primary">
+              {t("defaultProjectDirLabel", "默认项目目录")}
+            </div>
+            <div className="mt-0.5 text-[11px] leading-4 text-text-tertiary">
+              {t("defaultProjectDirDesc", "快速创建项目时的默认父目录")}
+            </div>
+            <div
+              className={`mt-1.5 text-[12px] break-all ${
+                defaultProjectDir ? "text-text-secondary" : "text-status-warning"
+              }`}
+            >
+              {defaultProjectDir ?? t("defaultProjectDirNotSet", "未设置")}
+            </div>
+            <div className="mt-1.5 text-[10px] leading-3 text-text-tertiary">
+              {t(
+                "defaultProjectDirWebHint",
+                "Web 模式下请到「快速创建」面板设置此目录。",
+              )}
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleChangeDefaultProjectDir}
+            disabled={defaultProjectDirSaving || isChangingDefaultProjectDir}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            {defaultProjectDir
+              ? t("defaultProjectDirChange", "更改")
+              : t("defaultProjectDirSet", "设置")}
+          </Button>
+        </div>
       </div>
     </SettingsSection>
   );
@@ -501,6 +592,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     models: modelsContent,
     network: networkContent,
     usage: usageContent,
+    project: projectContent,
   };
   const activeGroup =
     SETTINGS_GROUPS.find((group) => group.items.includes(activeTab)) ?? SETTINGS_GROUPS[0];

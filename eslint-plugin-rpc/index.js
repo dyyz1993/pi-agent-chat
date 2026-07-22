@@ -29,6 +29,7 @@ const validChannelMethod = require("./rules/valid-channel-method");
 const compactionEntriesSync = require("./rules/compaction-entries-sync");
 const compactionReloadPairing = require("./rules/compaction-reload-pairing");
 const requireChannelTimeout = require("./rules/require-channel-timeout");
+const requireAsyncOnClickGuard = require("./rules/require-async-onclick-guard");
 
 module.exports = {
   meta: {
@@ -48,6 +49,7 @@ module.exports = {
     "compaction-entries-sync": compactionEntriesSync,
     "compaction-reload-pairing": compactionReloadPairing,
     "require-channel-timeout": requireChannelTimeout,
+    "require-async-onclick-guard": requireAsyncOnClickGuard,
   },
   configs: {
     recommended: {
@@ -65,6 +67,7 @@ module.exports = {
         "rpc/compaction-entries-sync": "error",
         "rpc/compaction-reload-pairing": "error",
         "rpc/require-channel-timeout": "warn",
+        "rpc/require-async-onclick-guard": "warn",
       },
     },
   },

@@ -27,6 +27,7 @@ import { createLogger } from "../../../shared/lib/logger";
 import { apiClient } from "../../lib/api-client";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 import { IconButton } from "../primitives";
 
 interface ProjectPickerDialogProps {
@@ -154,6 +155,8 @@ export function ProjectPickerDialog({
   const [loading, setLoading] = useState(false);
 
   const [leftView, setLeftView] = useState<LeftView>("default");
+  // null = 正常选项目模式；"defaultDir" = 浏览器用来选默认项目目录
+  const [browseMode, setBrowseMode] = useState<"defaultDir" | null>(null);
   const [currentPath, setCurrentPath] = useState<string>("");
   const [directoryEntries, setDirectoryEntries] = useState<DirectoryEntry[]>([]);
   const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([]);
@@ -171,6 +174,12 @@ export function ProjectPickerDialog({
   const [qcGenError, setQcGenError] = useState<string | null>(null);
   const [qcName, setQcName] = useState("");
   const [qcDescription, setQcDescription] = useState("");
+  const [qcPlan, setQcPlan] = useState<{
+    goal: string;
+    techStack: string[];
+    steps: string[];
+    testing: string;
+  } | null>(null);
   const [qcDefaultDir, setQcDefaultDir] = useState<string | null>(null);
   const [qcDefaultDirLoaded, setQcDefaultDirLoaded] = useState(false);
   const [qcCreating, setQcCreating] = useState(false);
@@ -242,6 +251,7 @@ export function ProjectPickerDialog({
       setQcGenError(null);
       setQcName("");
       setQcDescription("");
+      setQcPlan(null);
       setQcCreating(false);
       setQcCreateError(null);
       setQcMobileStep("input");
@@ -286,11 +296,13 @@ export function ProjectPickerDialog({
   }, []);
 
   const exitBrowse = useCallback(() => {
-    setLeftView("default");
+    const wasPickingDefaultDir = browseMode === "defaultDir";
+    setBrowseMode(null);
+    setLeftView(wasPickingDefaultDir ? "quickcreate" : "default");
     setCurrentPath("");
     setDirectoryEntries([]);
     setBrowserSearchQuery("");
-  }, []);
+  }, [browseMode]);
 
   const navigateUp = useCallback(() => {
     if (!currentPath) return;
@@ -305,35 +317,56 @@ export function ProjectPickerDialog({
 
   const handleSelectCurrentFolder = useCallback(() => {
     if (!currentPath) return;
+    // 选默认项目目录模式：保存到配置，不进入项目
+    if (browseMode === "defaultDir") {
+      apiClient
+        .call("project.setDefaultProjectDir", { dir: currentPath })
+        .then(() => {
+          setQcDefaultDir(currentPath);
+          setQcCreateError(null);
+        })
+        .catch((err) => {
+          logger.warn("setDefaultProjectDir failed", { error: String(err) });
+          setQcCreateError(t("picker.qc.defaultDirSaveFailed", "保存默认目录失败"));
+        })
+        .finally(() => {
+          setBrowseMode(null);
+          setLeftView("quickcreate");
+        });
+      return;
+    }
+    // 正常模式：选当前目录作为项目打开
     const name = pathBasename(currentPath);
     onSelect(currentPath, name);
     onClose();
-  }, [currentPath, onSelect, onClose]);
+  }, [currentPath, browseMode, onSelect, onClose, t]);
 
-  const handleCreateFolder = useCallback(async () => {
-    const name = newFolderName.trim().replace(/[/\\]/g, "");
-    if (!name || !currentPath) return;
-    setCreating(true);
-    try {
-      const result = await apiClient.call("project.createDirectory", {
-        parentPath: currentPath,
-        folderName: name,
-      });
-      if (result.ok) {
-        navigateTo(result.path as string);
-        setShowCreateFolder(false);
-        setNewFolderName("");
+  const [handleCreateFolder, isCreatingFolder] = useAsyncGuard(
+    useCallback(async () => {
+      const name = newFolderName.trim().replace(/[/\\]/g, "");
+      if (!name || !currentPath) return;
+      setCreating(true);
+      try {
+        const result = await apiClient.call("project.createDirectory", {
+          parentPath: currentPath,
+          folderName: name,
+        });
+        if (result.ok) {
+          navigateTo(result.path as string);
+          setShowCreateFolder(false);
+          setNewFolderName("");
+        }
+      } catch (e) {
+        logger.warn("Failed to create directory", {
+          parentPath: currentPath,
+          folderName: name,
+          error: String(e),
+        });
+      } finally {
+        setCreating(false);
       }
-    } catch (e) {
-      logger.warn("Failed to create directory", {
-        parentPath: currentPath,
-        folderName: name,
-        error: String(e),
-      });
-    } finally {
-      setCreating(false);
-    }
-  }, [newFolderName, currentPath, navigateTo]);
+    }, [newFolderName, currentPath, navigateTo]),
+  );
 
   const handleSelectFolder = useCallback(
     (path: string) => {
@@ -359,84 +392,110 @@ export function ProjectPickerDialog({
     }
   }, [qcDefaultDirLoaded]);
 
-  const handleQcPickDefaultDir = useCallback(async () => {
-    try {
-      const picked = await apiClient.call("project.browseFolder", {
-        defaultPath: qcDefaultDir ?? undefined,
-      });
-      if ("cancelled" in picked) return;
-      const dir = picked.path as string;
-      await apiClient.call("project.setDefaultProjectDir", { dir });
-      setQcDefaultDir(dir);
+  const [handleQcPickDefaultDir, isPickingDefaultDir] = useAsyncGuard(
+    useCallback(async () => {
+      // 先试原生 openFolder（桌面端）
+      try {
+        const picked = await apiClient.call("project.browseFolder", {
+          defaultPath: qcDefaultDir ?? undefined,
+        });
+        if (!("cancelled" in picked)) {
+          const dir = (picked.path as string) || null;
+          if (dir) {
+            await apiClient.call("project.setDefaultProjectDir", { dir });
+            setQcDefaultDir(dir);
+            setQcCreateError(null);
+            return;
+          }
+        }
+      } catch (err) {
+        logger.warn("browseFolder RPC failed", { error: String(err) });
+      }
+
+      // Web 模式 fallback：进入应用内目录浏览器让用户点选
+      // 复用 renderLeftBrowse，切到 browse 视图 + 标记 defaultDir 模式
+      setBrowseMode("defaultDir");
+      navigateTo(qcDefaultDir ?? homePathRef.current ?? "/");
+      setLeftView("browse");
+    }, [qcDefaultDir, navigateTo]),
+  );
+
+  const [handleQcGenerate, isGenerating] = useAsyncGuard(
+    useCallback(async () => {
+      const requirement = qcRequirement.trim();
+      if (!requirement) return;
+      setQcGenerating(true);
+      setQcGenError(null);
+      try {
+        const result = await apiClient.call("project.generateName", {
+          requirement,
+          tier: qcTier,
+        });
+        const name = (result.name as string) ?? "";
+        const description = (result.description as string) ?? "";
+        const plan = result.plan as {
+          goal: string;
+          techStack: string[];
+          steps: string[];
+          testing: string;
+        } | undefined;
+        if (!name) {
+          setQcGenError(t("picker.qc.generateFailed"));
+          return;
+        }
+        setQcName(name);
+        setQcDescription(description);
+        setQcPlan(plan ?? null);
+        setQcMobileStep("confirm");
+      } catch (err) {
+        logger.warn("generateName failed", { error: String(err) });
+        setQcGenError(
+          err instanceof Error ? err.message : t("picker.qc.generateFailed"),
+        );
+      } finally {
+        setQcGenerating(false);
+      }
+    }, [qcRequirement, qcTier, t]),
+  );
+
+  const [handleQcConfirm, isConfirming] = useAsyncGuard(
+    useCallback(async () => {
+      const parentDir = qcDefaultDir;
+      const folderName = qcName.trim();
+      if (!parentDir) {
+        setQcCreateError(t("picker.qc.noDefaultDir"));
+        return;
+      }
+      if (!folderName) {
+        setQcCreateError(t("picker.qc.invalidName"));
+        return;
+      }
+      setQcCreating(true);
       setQcCreateError(null);
-    } catch (err) {
-      logger.warn("pick default project dir failed", { error: String(err) });
-    }
-  }, [qcDefaultDir]);
-
-  const handleQcGenerate = useCallback(async () => {
-    const requirement = qcRequirement.trim();
-    if (!requirement) return;
-    setQcGenerating(true);
-    setQcGenError(null);
-    try {
-      const result = await apiClient.call("project.generateName", {
-        requirement,
-        tier: qcTier,
-      });
-      const name = (result.name as string) ?? "";
-      const description = (result.description as string) ?? "";
-      if (!name) {
-        setQcGenError(t("picker.qc.generateFailed"));
-        return;
+      try {
+        const result = await apiClient.call("project.confirmQuickCreate", {
+          parentDir,
+          folderName,
+          ...(qcPlan ? { plan: qcPlan } : {}),
+          ...(qcDescription ? { description: qcDescription } : {}),
+        });
+        if (!result.ok) {
+          setQcCreateError((result.error as string) ?? t("picker.qc.createFailed"));
+          return;
+        }
+        const projectPath = result.path as string;
+        onSelect(projectPath, folderName);
+        onClose();
+      } catch (err) {
+        logger.warn("confirmQuickCreate failed", { error: String(err) });
+        setQcCreateError(
+          err instanceof Error ? err.message : t("picker.qc.createFailed"),
+        );
+      } finally {
+        setQcCreating(false);
       }
-      setQcName(name);
-      setQcDescription(description);
-      setQcMobileStep("confirm");
-    } catch (err) {
-      logger.warn("generateName failed", { error: String(err) });
-      setQcGenError(
-        err instanceof Error ? err.message : t("picker.qc.generateFailed"),
-      );
-    } finally {
-      setQcGenerating(false);
-    }
-  }, [qcRequirement, qcTier, t]);
-
-  const handleQcConfirm = useCallback(async () => {
-    const parentDir = qcDefaultDir;
-    const folderName = qcName.trim();
-    if (!parentDir) {
-      setQcCreateError(t("picker.qc.noDefaultDir"));
-      return;
-    }
-    if (!folderName) {
-      setQcCreateError(t("picker.qc.invalidName"));
-      return;
-    }
-    setQcCreating(true);
-    setQcCreateError(null);
-    try {
-      const result = await apiClient.call("project.confirmQuickCreate", {
-        parentDir,
-        folderName,
-      });
-      if (!result.ok) {
-        setQcCreateError((result.error as string) ?? t("picker.qc.createFailed"));
-        return;
-      }
-      const projectPath = result.path as string;
-      onSelect(projectPath, folderName);
-      onClose();
-    } catch (err) {
-      logger.warn("confirmQuickCreate failed", { error: String(err) });
-      setQcCreateError(
-        err instanceof Error ? err.message : t("picker.qc.createFailed"),
-      );
-    } finally {
-      setQcCreating(false);
-    }
-  }, [qcDefaultDir, qcName, onSelect, onClose, t]);
+    }, [qcDefaultDir, qcName, onSelect, onClose, t]),
+  );
 
   // 触发加载默认目录的 effect
   useEffect(() => {
@@ -445,6 +504,12 @@ export function ProjectPickerDialog({
       ensureQcDefaultDirLoaded();
     }
   }, [open, mobileTab, leftView, ensureQcDefaultDirLoaded]);
+
+  // 主页也要加载默认目录，因为主页现在显示目录状态条
+  useEffect(() => {
+    if (!open) return;
+    ensureQcDefaultDirLoaded();
+  }, [open, ensureQcDefaultDirLoaded]);
 
   const handleToggleFavoriteFolder = useCallback(
     async (e: React.MouseEvent, folderPath: string) => {
@@ -882,7 +947,7 @@ export function ProjectPickerDialog({
             />
             <button
               onClick={handleCreateFolder}
-              disabled={!newFolderName.trim() || creating}
+              disabled={!newFolderName.trim() || creating || isCreatingFolder}
               className="p-1.5 rounded-md bg-accent hover:bg-accent-hover text-white disabled:opacity-40 shrink-0"
             >
               {creating ? (
@@ -913,7 +978,9 @@ export function ProjectPickerDialog({
             className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover rounded-md text-[11px] font-medium text-white transition-colors"
           >
             <FolderOpen className="w-3.5 h-3.5" />
-            {t("picker.selectCurrentFolder")}
+            {browseMode === "defaultDir"
+              ? t("picker.qc.setAsDefaultDir", "设为默认目录")
+              : t("picker.selectCurrentFolder")}
           </button>
         </div>
       </div>
@@ -970,7 +1037,7 @@ export function ProjectPickerDialog({
       <div className="shrink-0 px-4 py-2.5 border-t border-border-secondary dark:border-surface-code">
         <button
           onClick={handleQcGenerate}
-          disabled={!qcRequirement.trim() || qcGenerating}
+          disabled={!qcRequirement.trim() || qcGenerating || isGenerating}
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs text-white font-medium transition-colors"
         >
           {qcGenerating ? (
@@ -1007,7 +1074,7 @@ export function ProjectPickerDialog({
             <p className="text-[10px] text-text-tertiary">{t("picker.qc.nameLabel")}</p>
             <button
               onClick={handleQcGenerate}
-              disabled={qcGenerating || !qcRequirement.trim()}
+              disabled={qcGenerating || !qcRequirement.trim() || isGenerating}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-accent hover:bg-accent/10 disabled:opacity-40 transition-colors"
               title={t("picker.qc.regenerate")}
             >
@@ -1032,28 +1099,85 @@ export function ProjectPickerDialog({
           )}
         </div>
 
+        {qcPlan && (
+          <div className="rounded-md border border-border-secondary dark:border-border-secondary/50 bg-surface-code/40 dark:bg-surface-dim/30 p-3 space-y-2.5">
+            {qcPlan.goal && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-0.5">{t("picker.qc.planGoalLabel")}</p>
+                <p className="text-[11px] text-text-primary leading-relaxed">{qcPlan.goal}</p>
+              </div>
+            )}
+            {qcPlan.techStack.length > 0 && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-1">{t("picker.qc.planStackLabel")}</p>
+                <div className="flex flex-wrap gap-1">
+                  {qcPlan.techStack.map((tech, i) => (
+                    <span
+                      key={`tech-${i}-${tech}`}
+                      className="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-[10px] font-medium"
+                    >
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {qcPlan.steps.length > 0 && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-1">{t("picker.qc.planStepsLabel")}</p>
+                <ol className="space-y-1">
+                  {qcPlan.steps.map((step, i) => (
+                    <li key={`step-${i}-${step.slice(0, 8)}`} className="flex gap-1.5 text-[11px] text-text-secondary leading-relaxed">
+                      <span className="text-accent font-medium shrink-0">{i + 1}.</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {qcPlan.testing && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-0.5">{t("picker.qc.planTestingLabel")}</p>
+                <p className="text-[11px] text-text-secondary leading-relaxed">{qcPlan.testing}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] text-text-tertiary">{t("picker.qc.defaultDirLabel")}</p>
             <button
               onClick={handleQcPickDefaultDir}
+              disabled={isPickingDefaultDir}
               className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-accent hover:bg-accent/10 transition-colors"
             >
               <FolderOpen className="w-3 h-3" />
               {t("picker.qc.changeDir")}
             </button>
           </div>
-          <div className="px-3 py-2 rounded-md bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 text-[11px] text-text-secondary break-all">
-            {qcDefaultDir ?? t("picker.qc.noDefaultDirSet")}
-          </div>
+          {qcDefaultDir ? (
+            <div className="px-3 py-2 rounded-md bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 text-[11px] text-text-secondary break-all">
+              {qcDefaultDir}
+            </div>
+          ) : (
+            <button
+              onClick={handleQcPickDefaultDir}
+              disabled={isPickingDefaultDir}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-status-warning/10 border border-status-warning/40 text-[11px] text-status-warning hover:bg-status-warning/20 transition-colors text-left"
+            >
+              <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+              <span>{t("picker.qc.noDefaultDirSet")}</span>
+            </button>
+          )}
         </div>
 
-        {mobile && (
-          <div className="px-3 py-2 rounded-md bg-surface-code dark:bg-surface-dim/40 text-[10px] text-text-tertiary">
-            {t("picker.qc.previewPath", {
-              dir: qcDefaultDir ?? "~",
-              name: qcName || "project-name",
-            })}
+        {qcDefaultDir && (
+          <div className="px-3 py-2 rounded-md bg-accent/5 dark:bg-accent/10 border border-accent/20 text-[10px] text-text-tertiary break-all">
+            <span className="text-text-tertiary">{t("picker.qc.previewPathLabel", "将创建于")}：</span>
+            <span className="text-text-secondary font-medium">
+              {qcDefaultDir}/{qcName || "project-name"}
+            </span>
           </div>
         )}
 
@@ -1076,7 +1200,7 @@ export function ProjectPickerDialog({
         )}
         <button
           onClick={handleQcConfirm}
-          disabled={!qcName.trim() || !qcDefaultDir || qcCreating}
+          disabled={!qcName.trim() || !qcDefaultDir || qcCreating || isConfirming}
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs text-white font-medium transition-colors"
         >
           {qcCreating ? (
@@ -1379,7 +1503,7 @@ export function ProjectPickerDialog({
                     />
                     <button
                       onClick={handleCreateFolder}
-                      disabled={!newFolderName.trim() || creating}
+                      disabled={!newFolderName.trim() || creating || isCreatingFolder}
                       className="p-2 rounded-xl bg-accent active:bg-accent-hover text-white disabled:opacity-40 shrink-0"
                     >
                       {creating ? (

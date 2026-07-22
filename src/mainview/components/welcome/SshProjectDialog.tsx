@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import { classifySshErrorMessage } from "../../../shared/lib/ssh-error-classification";
 import { apiClient } from "../../lib/api-client";
 import { cx } from "../../lib/classes";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 import { Button, DropdownSelect, IconButton } from "../primitives";
 import type {
   DetectedSshHost,
@@ -431,7 +432,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     }
   };
 
-  const handleCreateDirectory = async () => {
+  const [handleCreateDirectory, isCreatingDirectory] = useAsyncGuard(async () => {
     const folderName = newFolderName.trim();
     if (!folderName || !canConnect) return;
     const nextPath = joinRemotePath(firstNonEmpty(browsePath, remotePath), folderName);
@@ -459,9 +460,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     } finally {
       setBusy(null);
     }
-  };
+  });
 
-  const handleOpen = async () => {
+  const [handleOpen, isOpening] = useAsyncGuard(async () => {
     if (!canOpen) return;
     setStep("opening");
     setBusy("open");
@@ -495,7 +496,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     } finally {
       setBusy(null);
     }
-  };
+  });
 
   const renderStepBadge = (target: WizardStep, label: string, hint: string, index: number) => {
     const currentIndex = visibleStepOrder.indexOf(step);
@@ -1036,7 +1037,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         />
                         <Button
                           onClick={handleCreateDirectory}
-                          disabled={!newFolderName.trim() || busy === "create"}
+                          disabled={!newFolderName.trim() || busy === "create" || isCreatingDirectory}
                           loading={busy === "create"}
                           leadingIcon={<FolderPlus className="h-4 w-4" />}
                           size="md"
@@ -1195,7 +1196,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                   variant="primary"
                   size="md"
                   onClick={handleOpen}
-                  disabled={!canOpen || busy !== null}
+                  disabled={!canOpen || busy !== null || isOpening}
                 >
                   {t("welcome.remoteSelectDirectory")}
                 </Button>

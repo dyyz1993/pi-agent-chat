@@ -22,6 +22,7 @@ import { useActiveSessionActionGuard } from "../../../hooks/use-active-session-a
 import { getCustomEntryMeta } from "../../../lib/custom-entry-registry";
 import { pickForkEntryIdForTurn, pickForkFallbackMessageIds } from "../../../lib/fork-entry-target";
 import { getMemoryConfig, getMemorySummary, isMemoryEntryType } from "../memory-config";
+import { useAsyncGuard } from "../../../hooks/use-async-guard";
 
 const log = createLogger("chat");
 
@@ -120,6 +121,11 @@ export const TimelineTurn = memo(function TimelineTurn({
               resolvedFromEntryId: Array.isArray(modResult)
                 ? null
                 : (modResult as { resolvedFromEntryId?: unknown }).resolvedFromEntryId,
+              targetTreeHash: Array.isArray(modResult)
+                ? null
+                : (modResult as { targetTreeHash?: unknown }).targetTreeHash,
+              modResultKeys: Array.isArray(modResult) ? "array" : Object.keys(modResult as object),
+              modResultRaw: JSON.stringify(modResult)?.slice(0, 500),
             });
             const isArr = Array.isArray(modResult);
             const rawFiles = isArr
@@ -221,6 +227,33 @@ export const TimelineTurn = memo(function TimelineTurn({
     },
     [activeSessionGuard, isSessionReady, t, turn.userEntryId, turn.userMessageId],
   );
+
+  const [handleFork, isForking] = useAsyncGuard(async () => {
+    const sessionId = activeSessionGuard.guard({ requireReady: false });
+    if (!sessionId) return;
+    try {
+      let entryId: string | null = pickForkEntryIdForTurn(turn);
+      if (!entryId) {
+        const result = await apiClient.call("agent.getTree", { sessionId });
+        const entries: Array<{ id: string; type: string; label?: string }> =
+          result.entries ?? result ?? [];
+        if (!Array.isArray(entries) || entries.length === 0) return;
+        const byId = new Map(entries.map((e) => [e.id, e]));
+        for (const messageId of pickForkFallbackMessageIds(turn)) {
+          const entry = byId.get(messageId);
+          if (entry) entryId = entry.id;
+          if (entryId) break;
+        }
+      }
+      if (!entryId) return;
+      useForkDialogStore
+        .getState()
+        .openDialog({ sessionId, entryId, source: "timelineTurn" });
+    } catch {
+      /* skip */
+    }
+  });
+
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
       {/* ── Left Timeline Line & Dots ── */}
@@ -326,32 +359,8 @@ export const TimelineTurn = memo(function TimelineTurn({
                 <TurnActionButton
                   icon={<GitFork size={12} />}
                   label={t("chat:fork")}
-                  onClick={async () => {
-                    const sessionId = activeSessionGuard.guard({ requireReady: false });
-                    if (!sessionId) return;
-                    try {
-                      let entryId: string | null = pickForkEntryIdForTurn(turn);
-                      if (!entryId) {
-                        const result = await apiClient.call("agent.getTree", { sessionId });
-                        const entries: Array<{ id: string; type: string; label?: string }> =
-                          result.entries ?? result ?? [];
-                        if (!Array.isArray(entries) || entries.length === 0) return;
-                        const byId = new Map(entries.map((e) => [e.id, e]));
-                        for (const messageId of pickForkFallbackMessageIds(turn)) {
-                          const entry = byId.get(messageId);
-                          if (entry) entryId = entry.id;
-                          if (entryId) break;
-                        }
-                      }
-                      if (!entryId) return;
-                      useForkDialogStore
-                        .getState()
-                        .openDialog({ sessionId, entryId, source: "timelineTurn" });
-                    } catch {
-                      /* skip */
-                    }
-                  }}
-                  disabled={isSessionBusy}
+                  onClick={handleFork}
+                  disabled={isSessionBusy || isForking}
                 />
                 <TurnActionButton
                   icon={<RotateCcw size={12} />}

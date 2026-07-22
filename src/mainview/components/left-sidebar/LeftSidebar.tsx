@@ -6,6 +6,7 @@ import { SessionSidebar } from "../session-sidebar/SessionSidebar";
 import { SidebarBottomControls } from "./SidebarBottomControls";
 import { PanelPinButton } from "../primitives/PanelPinButton";
 import { useState } from "react";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 
 interface LeftSidebarProps {
   width: number;
@@ -27,6 +28,27 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
   const [showErrorToast, setShowErrorToast] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
+  const [handleNewSession, isCreatingSession] = useAsyncGuard(async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    const state = useSessionStore.getState();
+
+    try {
+      const result = await state.createNewSession();
+      setSuccessToastKey(
+        result.status === "created" ? "sessionCreated" : "sessionReused",
+      );
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 2000);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      setShowErrorToast(errMsg);
+      setTimeout(() => setShowErrorToast(""), 3000);
+    } finally {
+      setIsCreating(false);
+    }
+  });
+
   return (
     <div
       className={`flex flex-col bg-bg-secondary border-r border-border-primary z-20 ${
@@ -47,29 +69,11 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         <div className="flex items-center gap-0.5">
           <button
             data-testid="new-session-button"
-            onClick={async (e) => {
+            onClick={(e) => {
               e.stopPropagation();
-              if (isCreating) return;
-
-              setIsCreating(true);
-              const state = useSessionStore.getState();
-
-              try {
-                const result = await state.createNewSession();
-                setSuccessToastKey(
-                  result.status === "created" ? "sessionCreated" : "sessionReused",
-                );
-                setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 2000);
-              } catch (error) {
-                const errMsg = error instanceof Error ? error.message : String(error);
-                setShowErrorToast(errMsg);
-                setTimeout(() => setShowErrorToast(""), 3000);
-              } finally {
-                setIsCreating(false);
-              }
+              handleNewSession();
             }}
-            disabled={isCreating}
+            disabled={isCreating || isCreatingSession}
             className="p-1.5 rounded-md hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
             title={t("newSession")}
             aria-label={t("newSession")}

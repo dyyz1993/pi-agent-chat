@@ -37,6 +37,7 @@ import { useStatusStore } from "../../stores/use-status-store";
 import { apiClient } from "../../lib/api-client";
 import { messageToChatMessage } from "../../lib/message-mapper";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 import type { VirtualizerHandle } from "virtua";
 import { SideNav, getCachedFlatItems, type SideNavPagination, type SideNavTarget } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
@@ -714,35 +715,37 @@ export function ChatPanel() {
     }
   }, [isStreaming, isAborting]);
 
-  const handleAbort = useCallback(async () => {
-    if (!activeSessionId) return;
-    if (activeSubId) return;
-    if (isAborting) return;
-    setIsAborting(true);
-    try {
-      const result = await apiClient.call("agent.abort", { sessionId: activeSessionId });
-      if (!result.ok) {
-        useSessionStore.getState().updateSessionStatus(activeSessionId, "idle");
-        pushNotif({ message: "Agent already stopped", level: "info" });
-        setIsAborting(false);
-        return;
-      }
-      pushNotif({ message: "Agent stopped", level: "info" });
-      abortFallbackRef.current = setTimeout(() => {
-        abortFallbackRef.current = undefined;
-        const sessionId = activeSessionId as string;
-        const status = useSessionStore.getState().sessionStatusMap[sessionId];
-        if (status === "streaming" || status === "retrying") {
-          useSessionStore.getState().updateSessionStatus(sessionId, "idle");
-          log.warn("Abort fallback forced session idle", { sessionId, status });
+  const [handleAbort, isAbortRunning] = useAsyncGuard(
+    useCallback(async () => {
+      if (!activeSessionId) return;
+      if (activeSubId) return;
+      if (isAborting) return;
+      setIsAborting(true);
+      try {
+        const result = await apiClient.call("agent.abort", { sessionId: activeSessionId });
+        if (!result.ok) {
+          useSessionStore.getState().updateSessionStatus(activeSessionId, "idle");
+          pushNotif({ message: "Agent already stopped", level: "info" });
+          setIsAborting(false);
+          return;
         }
+        pushNotif({ message: "Agent stopped", level: "info" });
+        abortFallbackRef.current = setTimeout(() => {
+          abortFallbackRef.current = undefined;
+          const sessionId = activeSessionId as string;
+          const status = useSessionStore.getState().sessionStatusMap[sessionId];
+          if (status === "streaming" || status === "retrying") {
+            useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+            log.warn("Abort fallback forced session idle", { sessionId, status });
+          }
+          setIsAborting(false);
+        }, 10000);
+      } catch {
         setIsAborting(false);
-      }, 10000);
-    } catch {
-      setIsAborting(false);
-      pushNotif({ message: "Failed to stop agent, please try again", level: "error" });
-    }
-  }, [activeSessionId, activeSubId, isAborting, pushNotif]);
+        pushNotif({ message: "Failed to stop agent, please try again", level: "error" });
+      }
+    }, [activeSessionId, activeSubId, isAborting, pushNotif]),
+  );
 
   const handleDeleteSelectedMessages = useCallback(
     async (ids: string[]) => {
@@ -840,27 +843,29 @@ export function ChatPanel() {
     ],
   );
 
-  const handleSubagentFork = useCallback(async () => {
-    const parentSessionId = useSessionStore.getState().activeSessionId;
-    if (!parentSessionId) return;
+  const [handleSubagentFork, isForking] = useAsyncGuard(
+    useCallback(async () => {
+      const parentSessionId = useSessionStore.getState().activeSessionId;
+      if (!parentSessionId) return;
 
-    try {
-      const treeResult = await apiClient.call("agent.getTree", {
-        sessionId: parentSessionId,
-      });
-      const entries = treeResult.entries ?? [];
-      if (entries.length === 0) return;
-      const lastEntry = entries[entries.length - 1];
+      try {
+        const treeResult = await apiClient.call("agent.getTree", {
+          sessionId: parentSessionId,
+        });
+        const entries = treeResult.entries ?? [];
+        if (entries.length === 0) return;
+        const lastEntry = entries[entries.length - 1];
 
-      useForkDialogStore.getState().openDialog({
-        sessionId: parentSessionId,
-        entryId: lastEntry.id,
-        source: "chatPanel",
-      });
-    } catch (err) {
-      log.warn("[ChatPanel] subagent fork error:", { err });
-    }
-  }, []);
+        useForkDialogStore.getState().openDialog({
+          sessionId: parentSessionId,
+          entryId: lastEntry.id,
+          source: "chatPanel",
+        });
+      } catch (err) {
+        log.warn("[ChatPanel] subagent fork error:", { err });
+      }
+    }, []),
+  );
 
   const setNavId = useTurnStore((s) => s.setNavId);
   const lastSetNavIdRef = useRef<string | null>(null);
@@ -1273,8 +1278,27 @@ export function ChatPanel() {
     if (!activeSessionId || !objective || isCreatingGoal) return;
     setIsCreatingGoal(true);
     try {
-      await setGoal(activeSessionId, objective);
-      if (effectiveStatus === "idle") {
+      // The supervisor channel is only available after the pi subprocess is
+      // running. If the session is idle (no pi process), sendMessage first
+      // to bootstrap the subprocess, then retry setGoal until the channel
+      // is ready (up to ~10s).
+      const needsBootstrap = effectiveStatus === "idle" || effectiveStatus === undefined;
+      if (needsBootstrap) {
+        // Send the goal text as the bootstrap message — the agent will see
+        // it and start working. setGoal below registers it with supervisor.
+        await sendMessage();
+        // Retry setGoal until the pi subprocess channel is ready.
+        // callChannel in process-manager already waits 1.6s internally,
+        // but the subprocess may need more time on first spawn.
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const result = await setGoal(activeSessionId, objective);
+          if (result === "ok") break;
+          // "blocked" or "error" → channel not ready yet, retry
+        }
+      } else {
+        // Session already active — set goal first, then send message
+        await setGoal(activeSessionId, objective);
         await sendMessage();
       }
       setInputText("");
@@ -1319,10 +1343,10 @@ export function ChatPanel() {
     }
   }, [activeSessionId, inputText, isRefiningGoal, refineGoal, setInputText]);
 
-  const handleFollowUp = async () => {
+  const [handleFollowUp, isFollowUpRunning] = useAsyncGuard(async () => {
     if (!inputText.trim() || !isStreaming) return;
     await sendFollowUp();
-  };
+  });
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
@@ -1675,7 +1699,8 @@ export function ChatPanel() {
                     ) : isStreaming && inputText.trim() ? (
                       <button
                         onClick={handleFollowUp}
-                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
+                        disabled={isFollowUpRunning}
+                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         title={t("sendFollowUp")}
                         aria-label={t("sendFollowUp")}
                       >
@@ -1684,7 +1709,7 @@ export function ChatPanel() {
                     ) : isStreaming ? (
                       <button
                         onClick={handleAbort}
-                        disabled={isAborting}
+                        disabled={isAborting || isAbortRunning}
                         className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
                         title={isAborting ? t("stopping") : t("stop")}
                         aria-label={isAborting ? t("stopping") : t("stop")}
@@ -1757,9 +1782,10 @@ export function ChatPanel() {
               <ReturnToSourceButton variant="bottom" />
               <button
                 onClick={handleSubagentFork}
+                disabled={isForking}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
                 bg-accent/15 text-accent hover:bg-accent/25 hover:text-accent
-                border border-accent/20 transition-colors"
+                border border-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title={t("enterChat", "进入聊天")}
               >
                 <GitFork className="w-3 h-3" />

@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import rpcPlugin from './eslint-plugin-rpc/index.js';
 import themePlugin from './eslint-plugin-theme/index.js';
+import noHardcodedPortPlugin from './eslint-plugin-no-hardcoded-port/index.js';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -14,6 +15,7 @@ export default tseslint.config(
       'dist/**',
       'eslint-plugin-rpc/**',
       'eslint-plugin-theme/**',
+      'eslint-plugin-no-hardcoded-port/**',
       'postcss.config.js',
       'probe-compaction.mjs',
       'tailwind.config.js',
@@ -55,6 +57,7 @@ export default tseslint.config(
     plugins: {
       rpc: rpcPlugin,
       theme: themePlugin,
+      'no-hardcoded-port': noHardcodedPortPlugin,
     },
     rules: {
       // TS 类型安全规则
@@ -146,9 +149,13 @@ export default tseslint.config(
       'rpc/compaction-entries-sync': 'error',
       'rpc/compaction-reload-pairing': 'error',
       'rpc/require-channel-timeout': 'warn',
+      'rpc/require-async-onclick-guard': 'warn',
 
       // 主题/颜色约束规则
       'theme/color-pairing': 'error',
+
+      // 禁止写死后端端口（应从 VITE_API_TARGET 解析）
+      'no-hardcoded-port/no-hardcoded-port': 'error',
     },
   },
   {

@@ -27,7 +27,7 @@ interface SupervisorState {
   bySession: Record<string, SupervisorSessionState>;
 
   fetchStatus: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
-  setGoal: (sessionId: string, objective: string) => Promise<void>;
+  setGoal: (sessionId: string, objective: string) => Promise<"ok" | "blocked" | "error">;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
   refineGoal: (
     sessionId: string,
@@ -114,12 +114,13 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
     return promise;
   },
 
-  setGoal: async (sessionId: string, objective: string) => {
+  setGoal: async (sessionId: string, objective: string): Promise<"ok" | "blocked" | "error"> => {
     try {
       const result = (await apiClient.call("supervisor.setGoal", {
         sessionId,
         objective,
       })) as { goal: SupervisorStatus["goal"] };
+      const goalStatus = result.goal?.status;
       set((s) => ({
         bySession: updateSession(s.bySession, sessionId, (session) => ({
           ...session,
@@ -135,11 +136,13 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
               },
         })),
       }));
+      return goalStatus === "blocked" ? "blocked" : "ok";
     } catch (err) {
       log.warn("setGoal failed", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
+      return "error";
     }
   },
 

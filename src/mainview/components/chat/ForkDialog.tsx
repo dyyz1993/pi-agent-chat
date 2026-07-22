@@ -14,6 +14,7 @@ import { createLogger } from "../../../shared/lib/logger";
 import { Button, FullscreenOverlay } from "../primitives";
 import { agentColorStyle } from "../../utils/agent-color";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 
 const log = createLogger("fork-dialog");
 
@@ -67,92 +68,94 @@ export const ForkDialog = memo(function ForkDialog() {
     }
   }, [open, config, projectPath]);
 
-  const handleFork = useCallback(async () => {
-    const cfg = useForkDialogStore.getState().config;
-    if (!cfg) return;
+  const [handleFork, isForking] = useAsyncGuard(
+    useCallback(async () => {
+      const cfg = useForkDialogStore.getState().config;
+      if (!cfg) return;
 
-    setForking(true);
-    try {
-      const result = await apiClient
-        .call("agent.fork", { sessionId: cfg.sessionId, entryId: cfg.entryId, position: "at" })
-        .catch((err) => {
-          log.warn("fork failed", { err });
-          return undefined;
-        });
+      setForking(true);
+      try {
+        const result = await apiClient
+          .call("agent.fork", { sessionId: cfg.sessionId, entryId: cfg.entryId, position: "at" })
+          .catch((err) => {
+            log.warn("fork failed", { err });
+            return undefined;
+          });
 
-      if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) {
-        setForking(false);
-        return;
-      }
+        if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) {
+          setForking(false);
+          return;
+        }
 
-      const state = useSessionStore.getState();
-      const activeTab = state.projectTabs.find(
-        (t: { id: string }) => t.id === state.activeProjectId,
-      );
-      if (!activeTab) {
-        setForking(false);
-        return;
-      }
+        const state = useSessionStore.getState();
+        const activeTab = state.projectTabs.find(
+          (t: { id: string }) => t.id === state.activeProjectId,
+        );
+        if (!activeTab) {
+          setForking(false);
+          return;
+        }
 
-      const allSessions = state.sessionsByProject[activeTab.path] ?? [];
-      const originalSession = allSessions.find((s) => s.sessionId === cfg.sessionId);
-      const originalName = originalSession
-        ? originalSession.name || originalSession.firstMessage || ""
-        : "";
+        const allSessions = state.sessionsByProject[activeTab.path] ?? [];
+        const originalSession = allSessions.find((s) => s.sessionId === cfg.sessionId);
+        const originalName = originalSession
+          ? originalSession.name || originalSession.firstMessage || ""
+          : "";
 
-      const now = Date.now();
-      const forkedSession: SessionMeta = {
-        sessionId: result.newSessionId,
-        name: originalName ? `fork: ${originalName}` : "",
-        sessionPath: result.newSessionFile,
-        projectPath: activeTab.path,
-        parentSessionPath: null,
-        delegateParentSessionId: null,
-        delegateType: null,
-        messageCount: 0,
-        firstMessage: "",
-        createdAt: now,
-        updatedAt: now,
-        status: "idle",
-      };
-
-      useSessionStore.setState((s) => ({
-        sessionsByProject: {
-          ...s.sessionsByProject,
-          [activeTab.path]: insertAfterPinned(
-            s.sessionsByProject[activeTab.path] || [],
-            forkedSession,
-          ),
-        },
-      }));
-
-      state.setActiveSession(result.newSessionId, undefined, {
-        skipCleanup: true,
-        forceNewProcess: true,
-      });
-      useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
-
-      const currentAgentName = useAgentStore.getState().getCurrentAgentForSession(cfg.sessionId);
-      if (selectedAgent !== currentAgentName) {
-        await apiClient.call("agent.switchAgent", {
+        const now = Date.now();
+        const forkedSession: SessionMeta = {
           sessionId: result.newSessionId,
-          agentName: selectedAgent,
+          name: originalName ? `fork: ${originalName}` : "",
+          sessionPath: result.newSessionFile,
+          projectPath: activeTab.path,
+          parentSessionPath: null,
+          delegateParentSessionId: null,
+          delegateType: null,
+          messageCount: 0,
+          firstMessage: "",
+          createdAt: now,
+          updatedAt: now,
+          status: "idle",
+        };
+
+        useSessionStore.setState((s) => ({
+          sessionsByProject: {
+            ...s.sessionsByProject,
+            [activeTab.path]: insertAfterPinned(
+              s.sessionsByProject[activeTab.path] || [],
+              forkedSession,
+            ),
+          },
+        }));
+
+        state.setActiveSession(result.newSessionId, undefined, {
+          skipCleanup: true,
+          forceNewProcess: true,
         });
+        useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
+
+        const currentAgentName = useAgentStore.getState().getCurrentAgentForSession(cfg.sessionId);
+        if (selectedAgent !== currentAgentName) {
+          await apiClient.call("agent.switchAgent", {
+            sessionId: result.newSessionId,
+            agentName: selectedAgent,
+          });
+        }
+
+        const tierStore = useTierStore.getState();
+        tierStore.setSessionTierModels(result.newSessionId, activeTab.path, tierModels);
+        tierStore.setSessionCurrentTier(result.newSessionId, activeTab.path, selectedTier);
+        await tierStore.saveTierModelsForSession(result.newSessionId, activeTab.path, tierModels);
+
+        useNotificationStore.getState().push({ message: t("messageCard.forked"), level: "info" });
+        closeDialog();
+      } catch (err) {
+        log.warn("fork error", { err });
+      } finally {
+        setForking(false);
       }
-
-      const tierStore = useTierStore.getState();
-      tierStore.setSessionTierModels(result.newSessionId, activeTab.path, tierModels);
-      tierStore.setSessionCurrentTier(result.newSessionId, activeTab.path, selectedTier);
-      await tierStore.saveTierModelsForSession(result.newSessionId, activeTab.path, tierModels);
-
-      useNotificationStore.getState().push({ message: t("messageCard.forked"), level: "info" });
-      closeDialog();
-    } catch (err) {
-      log.warn("fork error", { err });
-    } finally {
-      setForking(false);
-    }
-  }, [selectedAgent, selectedTier, tierModels, t, closeDialog, setForking]);
+    }, [selectedAgent, selectedTier, tierModels, t, closeDialog, setForking]),
+  );
 
   if (!open || !config) return null;
 
@@ -171,6 +174,7 @@ export const ForkDialog = memo(function ForkDialog() {
             size="md"
             variant="primary"
             onClick={handleFork}
+            disabled={isForking}
             loading={forking}
             leadingIcon={<GitFork className="w-3.5 h-3.5" />}
           >
