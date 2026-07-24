@@ -81,6 +81,11 @@ interface InternalAPM {
   processByCwd: Map<string, Set<ManagedClientShape>>;
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
+  lastLspState: Map<
+    string,
+    { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }
+  >;
+  evictLRU: (currentPoolKey: string) => void;
 }
 
 function internals(manager: APM): InternalAPM {
@@ -331,5 +336,35 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(
       vi.mocked(managed.client.abort).mock.invocationCallOrder[0],
     ).toBeLessThan(vi.mocked(managed.client.reload).mock.invocationCallOrder[0]);
+  });
+
+  it("clears cached LSP state when an idle process is evicted", () => {
+    const m = internals(manager);
+    const evicted = makeManaged("sess-evicted", "/old-project", "/fake/sessions/evicted.jsonl");
+    evicted.lastActiveAt = 1;
+    m.clients.set(evicted._activeSessionId, evicted);
+    m.processByCwd.set("/old-project", new Set([evicted]));
+    m.lastLspState.set(evicted._activeSessionId, {
+      state: "ready",
+      servers: [{ name: "typescript" }],
+    });
+
+    const currentEntries = Array.from({ length: 4 }, (_, index) => {
+      const managed = makeManaged(
+        `sess-current-${index}`,
+        "/current-project",
+        `/fake/sessions/current-${index}.jsonl`,
+      );
+      managed.lastActiveAt = 10 + index;
+      m.clients.set(managed._activeSessionId, managed);
+      return managed;
+    });
+    m.processByCwd.set("/current-project", new Set(currentEntries));
+
+    m.evictLRU("/current-project");
+
+    expect(m.clients.has(evicted._activeSessionId)).toBe(false);
+    expect(m.lastLspState.has(evicted._activeSessionId)).toBe(false);
+    expect(evicted.client.stop).toHaveBeenCalledTimes(1);
   });
 });

@@ -775,6 +775,7 @@ export class AgentProcessManager {
     oldest.unsubscribe();
     oldest.client.stop().catch(() => {});
     this.clients.delete(sid);
+    this.lastLspState.delete(sid);
     removeFromProcessPool(this.processByCwd, poolKey, oldest);
   }
 
