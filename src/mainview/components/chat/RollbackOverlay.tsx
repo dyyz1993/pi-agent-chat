@@ -267,7 +267,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
     });
   }, []);
 
-  const confirmRollback = useCallback(async () => {
+  const confirmRollback = useCallback(async (overrideMode?: "message" | "withFiles") => {
     if (confirmingRef.current) return;
     confirmingRef.current = true;
     const state = useRollbackStore.getState();
@@ -276,6 +276,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       confirmingRef.current = false;
       return;
     }
+    const effectiveMode = overrideMode ?? currentTarget.mode;
     state.setLoading(true);
     try {
       const sessionState = useSessionStore.getState();
@@ -286,7 +287,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       }
 
       const guardedSessionId = activeSessionGuard.guard({
-        requireReady: currentTarget.mode === "withFiles",
+        requireReady: effectiveMode === "withFiles",
         readyMessage: t("messageCard.rollbackRequiresActiveSession", {
           defaultValue: "File rollback requires an active session. Please wait for reconnect.",
         }),
@@ -305,7 +306,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         sessionPath = session?.sessionPath;
       }
 
-      const skipFiles = currentTarget.mode === "message";
+      const skipFiles = effectiveMode === "message";
       const result = await apiClient.call("agent.navigateTree", {
         sessionId,
         targetId: currentTarget.targetId,
@@ -359,7 +360,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       } else {
         log.info("rollback executed from overlay", {
           sessionId,
-          mode: currentTarget.mode,
+          mode: effectiveMode,
           targetId: currentTarget.targetId,
           beforeCount,
           afterCount,
@@ -402,9 +403,30 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           <Button size="md" variant="secondary" onClick={closeRollback} disabled={loading}>
             {t("rollbackOverlay.cancel")}
           </Button>
-          <Button size="md" variant="danger" onClick={confirmRollback} loading={loading}>
-            {t("rollbackOverlay.confirm")}
-          </Button>
+          {isWithFiles ? (
+            <>
+              <Button
+                size="md"
+                variant="primary"
+                onClick={() => confirmRollback("message")}
+                disabled={loading}
+              >
+                {t("messageCard.rollbackMessage")}
+              </Button>
+              <Button
+                size="md"
+                variant="danger"
+                onClick={() => confirmRollback("withFiles")}
+                loading={loading}
+              >
+                {t("messageCard.rollbackMessageAndCode")}
+              </Button>
+            </>
+          ) : (
+            <Button size="md" variant="danger" onClick={() => confirmRollback()} loading={loading}>
+              {t("rollbackOverlay.confirm")}
+            </Button>
+          )}
         </>
       }
     >

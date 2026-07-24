@@ -126,6 +126,19 @@ describe("RollbackOverlay", () => {
       expect(screen.getByText("rollbackOverlay.cancel")).toBeInTheDocument();
     });
 
+    it("case 3b: withFiles mode offers separate message-only and message-plus-code actions", () => {
+      useRollbackStore
+        .getState()
+        .openRollback({ targetId: "t1", mode: "withFiles" }, makePreview([
+          makeFile("src/a.ts", "modified"),
+        ]));
+      renderOverlay();
+      expect(screen.queryByText("rollbackOverlay.confirm")).not.toBeInTheDocument();
+      expect(screen.getByText("messageCard.rollbackMessage")).toBeInTheDocument();
+      expect(screen.getByText("messageCard.rollbackMessageAndCode")).toBeInTheDocument();
+      expect(screen.getByText("rollbackOverlay.cancel")).toBeInTheDocument();
+    });
+
     it("case 4: overlay has close (X) button", () => {
       useRollbackStore.getState().openRollback({ targetId: "t1", mode: "message" }, makePreview());
       renderOverlay();
