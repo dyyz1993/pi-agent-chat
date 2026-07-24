@@ -131,10 +131,24 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
   cleanupSession: vi.fn(),
   cleanupSessionData: vi.fn(),
   cleanupSessionLight: vi.fn(),
-  clearSubscriptionState: (s: Record<string, unknown>) => {
-    delete (s as Record<string, unknown>).agentSubscriptions;
-    delete (s as Record<string, unknown>).batchSubscriptions;
-    return {};
+  clearSubscriptionState: (s: Record<string, unknown>, sessionId: string) => {
+    const omitSession = (value: unknown) => {
+      const map = (value ?? {}) as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(map).filter(([key]) => key !== sessionId));
+    };
+    return {
+      agentSubscriptions: omitSession(s.agentSubscriptions),
+      subagentSubscriptions: omitSession(s.subagentSubscriptions),
+      todoSubscriptions: omitSession(s.todoSubscriptions),
+      bashSubscriptions: omitSession(s.bashSubscriptions),
+      lspSubscriptions: omitSession(s.lspSubscriptions),
+      rulesSubscriptions: omitSession(s.rulesSubscriptions),
+      notifySubscriptions: omitSession(s.notifySubscriptions),
+      memorySubscriptions: omitSession(s.memorySubscriptions),
+      coordinatorSubscriptions: omitSession(s.coordinatorSubscriptions),
+      supervisorSubscriptions: omitSession(s.supervisorSubscriptions),
+      sessionReady: omitSession(s.sessionReady),
+    };
   },
   syncTabsToBackend: vi.fn(),
   requestRulesSnapshot: vi.fn(),
@@ -146,6 +160,10 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
+import {
+  cleanupSession,
+  setupSubscriptions,
+} from "../../../src/mainview/stores/session-subscriptions";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
 const mockedLoadSessionMessages = vi.fn(() => Promise.resolve());
@@ -283,6 +301,46 @@ describe("onReconnect - session list refresh", () => {
       expect(mockedCall).toHaveBeenCalledWith("project.scanSessions", {
         projectPath: "/project-a",
       });
+    });
+  });
+
+  it("should drop stale active subscriptions and resubscribe after reconnect", async () => {
+    const oldSession = makeSession({ sessionId: "sess-old" });
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-old",
+      sessionsByProject: { "/project-a": [oldSession] },
+      agentSubscriptions: { "sess-old": "stale-agent-sub" },
+      subagentSubscriptions: { "sess-old": "stale-subagent-sub" },
+      sessionReady: { "sess-old": true },
+    });
+
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.start") return Promise.resolve({ status: "already_running" });
+      if (method === "project.scanSessions") return Promise.resolve({ sessions: [oldSession] });
+      return Promise.resolve({});
+    });
+
+    getReconnectCallback()();
+
+    await vi.waitFor(() => {
+      expect(cleanupSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentSubscriptions: expect.objectContaining({ "sess-old": "stale-agent-sub" }),
+        }),
+        "sess-old",
+      );
+      expect(setupSubscriptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentSubscriptions: {},
+          subagentSubscriptions: {},
+          sessionReady: {},
+        }),
+        expect.any(Function),
+        "sess-old",
+        expect.objectContaining({ sessionId: "sess-old" }),
+      );
     });
   });
 

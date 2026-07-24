@@ -1161,15 +1161,12 @@ apiClient.onReconnect(() => {
       useSessionStore.setState(fn(useSessionStore.getState()));
 
     for (const sid of Object.keys(state.agentSubscriptions)) {
-      if (sid !== activeSessionId) {
-        clearStatusWatchdog(sid);
-        cleanupSession(state, sid);
-      }
+      clearStatusWatchdog(sid);
+      cleanupSession(state, sid);
     }
 
-    if (!state.agentSubscriptions[activeSessionId]) {
-      setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
-    }
+    useSessionStore.setState((s) => clearSubscriptionState(s, activeSessionId));
+    setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
 
     apiClient
       .call("agent.start", {
