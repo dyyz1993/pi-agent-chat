@@ -20,6 +20,7 @@ import { SettingsPanel } from "../settings/SettingsPanel";
 import { Button, ModalDialog } from "../primitives";
 import { resolveDotClass, hasPermissionPending } from "./tab-dot";
 import { getSessionIdentity, type SessionIdentity } from "../../lib/session-identity";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 
 const log = createLogger("tab-bar");
 
@@ -322,7 +323,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     });
   };
 
-  const handleStopAndClose = async () => {
+  const [handleStopAndClose, isStoppingAndClosing] = useAsyncGuard(async () => {
     if (!closeConfirmTab) return;
     for (const sid of closeConfirmTab.runningSessionIds) {
       try {
@@ -333,7 +334,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     }
     removeProjectTab(closeConfirmTab.id);
     setCloseConfirmTab(null);
-  };
+  });
 
   const handleKeepRunning = () => {
     if (!closeConfirmTab) return;
@@ -574,7 +575,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <Button size="md" variant="secondary" onClick={handleKeepRunning}>
                   {t("closeProjectContinue")}
                 </Button>
-                <Button size="md" variant="danger" onClick={handleStopAndClose}>
+                <Button size="md" variant="danger" onClick={handleStopAndClose} disabled={isStoppingAndClosing}>
                   {t("closeProjectStop")}
                 </Button>
               </>

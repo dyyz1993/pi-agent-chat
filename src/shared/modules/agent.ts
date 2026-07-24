@@ -561,14 +561,15 @@ export interface AgentMethods {
         entryId: string;
       }>;
       resolvedFromEntryId: string | null;
+      targetTreeHash?: string | null;
     };
   };
   "agent.getFileDiff": {
     params: {
       sessionId: string;
       filePath: string;
-      fromEntryId?: string;
-      toEntryId?: string;
+      fromHash?: string;
+      toHash?: string;
     };
     result: {
       path: string;

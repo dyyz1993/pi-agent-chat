@@ -122,7 +122,7 @@ const FileItem = memo(function FileItem({
       </div>
       {expanded && (
         <div className="px-3 pb-2 ml-4">
-          {details != null && (oldContent != null || newContent != null) ? (
+          {(oldContent != null || newContent != null) && (oldContent !== "" || newContent !== "") ? (
             <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
               <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
                 <span
@@ -329,6 +329,19 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       }
 
       await useChatStore.getState().loadSessionMessages(sessionId, { force: true, sessionPath });
+
+      // 回滚成功后：保存当前输入到 draft，再把目标消息文本填入输入框
+      const currentInput = useChatStore.getState().inputText;
+      if (currentInput.trim()) {
+        try {
+          localStorage.setItem(`pi-draft:${sessionId}`, currentInput);
+        } catch {
+          /* ignore storage errors */
+        }
+      }
+      if (currentTarget.userText) {
+        useChatStore.getState().setInputText(currentTarget.userText);
+      }
 
       const afterCount = useChatStore.getState().messagesBySession[sessionId]?.length ?? 0;
 

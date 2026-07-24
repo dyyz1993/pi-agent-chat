@@ -454,6 +454,22 @@ export interface ProjectMethods {
       remote: RemoteProjectRecord;
     };
   };
+  "project.generateName": {
+    params: { requirement: string; tier?: "fast" | "pro" | "max" };
+    result: { name: string; description: string };
+  };
+  "project.confirmQuickCreate": {
+    params: { parentDir: string; folderName: string };
+    result: { ok: boolean; path?: string; error?: string };
+  };
+  "project.getDefaultProjectDir": {
+    params: {};
+    result: { dir: string | null };
+  };
+  "project.setDefaultProjectDir": {
+    params: { dir: string };
+    result: { ok: boolean };
+  };
 }
 
 export interface RecentProject {

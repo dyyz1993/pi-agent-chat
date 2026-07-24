@@ -6,6 +6,7 @@
  * 扩展路径从全局目录 ~/.pi/agent/extensions/ 自动发现，无需逐个配置。
  */
 
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -161,8 +162,28 @@ export function resolvePiCliPath(
     }
   }
 
+  const fromPath = lookupPiInPath(env);
+  if (fromPath) return fromPath;
+
   MISSING_PI_VARS.push("PI_CLI_PATH");
   return "";
+}
+
+function lookupPiInPath(env: NodeJS.ProcessEnv): string {
+  try {
+    const cmd = process.platform === "win32" ? "where pi" : "command -v pi";
+    const stdout = execSync(cmd, {
+      env,
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+      timeout: 3000,
+    })?.trim();
+    if (!stdout) return "";
+    const first = stdout.split(/\r?\n/)[0]?.trim();
+    return first && existsSync(first) ? resolve(first) : "";
+  } catch {
+    return "";
+  }
 }
 
 export const config = {

@@ -22,6 +22,8 @@ export interface RollbackPreview {
 interface RollbackTarget {
   targetId: string;
   mode: "message" | "withFiles";
+  /** 回滚目标用户消息文本；确认回滚成功后填入输入框 */
+  userText?: string;
 }
 
 interface RollbackOverlayState {

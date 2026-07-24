@@ -7,6 +7,7 @@ import {
   requestNotificationPermission,
   getNotificationPermission,
 } from "../../lib/channels/pwa-channel";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 
 const LEVEL_ICON: Record<AppNotification["level"], typeof Info> = {
   info: Info,
@@ -32,10 +33,10 @@ export function NotificationCenter() {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pwaPerm, setPwaPerm] = useState(() => getNotificationPermission());
 
-  const handleEnablePwa = async () => {
+  const [handleEnablePwa, isEnablingPwa] = useAsyncGuard(async () => {
     const result = await requestNotificationPermission();
     setPwaPerm(result);
-  };
+  });
 
   const handleNotificationClick = (n: AppNotification) => {
     if (n.requestId && n.sessionId) {
@@ -165,6 +166,7 @@ export function NotificationCenter() {
             <div className="px-3 py-2 border-t border-border-secondary">
               <button
                 onClick={handleEnablePwa}
+                disabled={isEnablingPwa}
                 className="w-full flex items-center justify-center gap-1.5 text-[11px] text-accent hover:text-accent transition-colors py-1"
               >
                 <BellRing className="w-3 h-3" />

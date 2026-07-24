@@ -79,8 +79,8 @@ describe("agent client history operations", () => {
     await getFileDiffOperation({
       sessionId: "sess-1",
       filePath: "a.ts",
-      fromEntryId: "e1",
-      toEntryId: "e2",
+      fromHash: "e1",
+      toHash: "e2",
       getActiveManaged,
     });
     await getBatchDiffsOperation({
@@ -97,8 +97,8 @@ describe("agent client history operations", () => {
     });
     expect(getFileDiff).toHaveBeenCalledWith({
       filePath: "a.ts",
-      fromEntryId: "e1",
-      toEntryId: "e2",
+      fromHash: "e1",
+      toHash: "e2",
     });
     expect(getBatchDiffs).toHaveBeenCalledWith({ fromEntryId: "e1", toEntryId: "e2" });
   });

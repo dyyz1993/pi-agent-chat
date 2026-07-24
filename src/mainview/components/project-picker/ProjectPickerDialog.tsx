@@ -17,12 +17,17 @@ import {
   Clock,
   Server,
   PlugZap,
+  Sparkles,
+  RefreshCw,
+  Check,
+  ArrowLeft,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
 import { apiClient } from "../../lib/api-client";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 import { IconButton } from "../primitives";
 
 interface ProjectPickerDialogProps {
@@ -32,7 +37,10 @@ interface ProjectPickerDialogProps {
   onOpenRemoteProject?: () => void;
 }
 
-type LeftView = "default" | "browse";
+type LeftView = "default" | "browse" | "quickcreate";
+type MobileTab = "recents" | "favorites" | "browse" | "quickcreate";
+type QcTier = "fast" | "pro" | "max";
+type QcMobileStep = "input" | "confirm";
 
 const CACHE_KEY_RECENTS = "pi-picker-recents";
 const CACHE_KEY_FAVORITES = "pi-picker-favorites";
@@ -133,7 +141,7 @@ export function ProjectPickerDialog({
 }: ProjectPickerDialogProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileTab, setMobileTab] = useState<"recents" | "favorites" | "browse">("recents");
+  const [mobileTab, setMobileTab] = useState<MobileTab>("recents");
 
   function timeAgo(ts: number): string {
     const diff = Date.now() - ts;
@@ -147,6 +155,8 @@ export function ProjectPickerDialog({
   const [loading, setLoading] = useState(false);
 
   const [leftView, setLeftView] = useState<LeftView>("default");
+  // null = 正常选项目模式；"defaultDir" = 浏览器用来选默认项目目录
+  const [browseMode, setBrowseMode] = useState<"defaultDir" | null>(null);
   const [currentPath, setCurrentPath] = useState<string>("");
   const [directoryEntries, setDirectoryEntries] = useState<DirectoryEntry[]>([]);
   const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([]);
@@ -156,6 +166,25 @@ export function ProjectPickerDialog({
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // 快速创建项目相关状态
+  const [qcRequirement, setQcRequirement] = useState("");
+  const [qcTier, setQcTier] = useState<QcTier>("fast");
+  const [qcGenerating, setQcGenerating] = useState(false);
+  const [qcGenError, setQcGenError] = useState<string | null>(null);
+  const [qcName, setQcName] = useState("");
+  const [qcDescription, setQcDescription] = useState("");
+  const [qcPlan, setQcPlan] = useState<{
+    goal: string;
+    techStack: string[];
+    steps: string[];
+    testing: string;
+  } | null>(null);
+  const [qcDefaultDir, setQcDefaultDir] = useState<string | null>(null);
+  const [qcDefaultDirLoaded, setQcDefaultDirLoaded] = useState(false);
+  const [qcCreating, setQcCreating] = useState(false);
+  const [qcCreateError, setQcCreateError] = useState<string | null>(null);
+  const [qcMobileStep, setQcMobileStep] = useState<QcMobileStep>("input");
 
   const homePathRef = useRef<string>("");
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,6 +244,17 @@ export function ProjectPickerDialog({
       setShowCreateFolder(false);
       setNewFolderName("");
       setCreating(false);
+      // 重置快速创建状态
+      setQcRequirement("");
+      setQcTier("fast");
+      setQcGenerating(false);
+      setQcGenError(null);
+      setQcName("");
+      setQcDescription("");
+      setQcPlan(null);
+      setQcCreating(false);
+      setQcCreateError(null);
+      setQcMobileStep("input");
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
@@ -256,11 +296,13 @@ export function ProjectPickerDialog({
   }, []);
 
   const exitBrowse = useCallback(() => {
-    setLeftView("default");
+    const wasPickingDefaultDir = browseMode === "defaultDir";
+    setBrowseMode(null);
+    setLeftView(wasPickingDefaultDir ? "quickcreate" : "default");
     setCurrentPath("");
     setDirectoryEntries([]);
     setBrowserSearchQuery("");
-  }, []);
+  }, [browseMode]);
 
   const navigateUp = useCallback(() => {
     if (!currentPath) return;
@@ -275,35 +317,56 @@ export function ProjectPickerDialog({
 
   const handleSelectCurrentFolder = useCallback(() => {
     if (!currentPath) return;
+    // 选默认项目目录模式：保存到配置，不进入项目
+    if (browseMode === "defaultDir") {
+      apiClient
+        .call("project.setDefaultProjectDir", { dir: currentPath })
+        .then(() => {
+          setQcDefaultDir(currentPath);
+          setQcCreateError(null);
+        })
+        .catch((err) => {
+          logger.warn("setDefaultProjectDir failed", { error: String(err) });
+          setQcCreateError(t("picker.qc.defaultDirSaveFailed", "保存默认目录失败"));
+        })
+        .finally(() => {
+          setBrowseMode(null);
+          setLeftView("quickcreate");
+        });
+      return;
+    }
+    // 正常模式：选当前目录作为项目打开
     const name = pathBasename(currentPath);
     onSelect(currentPath, name);
     onClose();
-  }, [currentPath, onSelect, onClose]);
+  }, [currentPath, browseMode, onSelect, onClose, t]);
 
-  const handleCreateFolder = useCallback(async () => {
-    const name = newFolderName.trim().replace(/[/\\]/g, "");
-    if (!name || !currentPath) return;
-    setCreating(true);
-    try {
-      const result = await apiClient.call("project.createDirectory", {
-        parentPath: currentPath,
-        folderName: name,
-      });
-      if (result.ok) {
-        navigateTo(result.path as string);
-        setShowCreateFolder(false);
-        setNewFolderName("");
+  const [handleCreateFolder, isCreatingFolder] = useAsyncGuard(
+    useCallback(async () => {
+      const name = newFolderName.trim().replace(/[/\\]/g, "");
+      if (!name || !currentPath) return;
+      setCreating(true);
+      try {
+        const result = await apiClient.call("project.createDirectory", {
+          parentPath: currentPath,
+          folderName: name,
+        });
+        if (result.ok) {
+          navigateTo(result.path as string);
+          setShowCreateFolder(false);
+          setNewFolderName("");
+        }
+      } catch (e) {
+        logger.warn("Failed to create directory", {
+          parentPath: currentPath,
+          folderName: name,
+          error: String(e),
+        });
+      } finally {
+        setCreating(false);
       }
-    } catch (e) {
-      logger.warn("Failed to create directory", {
-        parentPath: currentPath,
-        folderName: name,
-        error: String(e),
-      });
-    } finally {
-      setCreating(false);
-    }
-  }, [newFolderName, currentPath, navigateTo]);
+    }, [newFolderName, currentPath, navigateTo]),
+  );
 
   const handleSelectFolder = useCallback(
     (path: string) => {
@@ -312,6 +375,141 @@ export function ProjectPickerDialog({
     },
     [onSelect, onClose],
   );
+
+  // -------- 快速创建项目 --------
+
+  const ensureQcDefaultDirLoaded = useCallback(async () => {
+    if (qcDefaultDirLoaded) return;
+    try {
+      const result = await apiClient.call("project.getDefaultProjectDir", {});
+      const dir = (result.dir as string | null) ?? null;
+      setQcDefaultDir(dir);
+    } catch (err) {
+      logger.warn("getDefaultProjectDir failed", { error: String(err) });
+      setQcDefaultDir(null);
+    } finally {
+      setQcDefaultDirLoaded(true);
+    }
+  }, [qcDefaultDirLoaded]);
+
+  const [handleQcPickDefaultDir, isPickingDefaultDir] = useAsyncGuard(
+    useCallback(async () => {
+      // 先试原生 openFolder（桌面端）
+      try {
+        const picked = await apiClient.call("project.browseFolder", {
+          defaultPath: qcDefaultDir ?? undefined,
+        });
+        if (!("cancelled" in picked)) {
+          const dir = (picked.path as string) || null;
+          if (dir) {
+            await apiClient.call("project.setDefaultProjectDir", { dir });
+            setQcDefaultDir(dir);
+            setQcCreateError(null);
+            return;
+          }
+        }
+      } catch (err) {
+        logger.warn("browseFolder RPC failed", { error: String(err) });
+      }
+
+      // Web 模式 fallback：进入应用内目录浏览器让用户点选
+      // 复用 renderLeftBrowse，切到 browse 视图 + 标记 defaultDir 模式
+      setBrowseMode("defaultDir");
+      navigateTo(qcDefaultDir ?? homePathRef.current ?? "/");
+      setLeftView("browse");
+    }, [qcDefaultDir, navigateTo]),
+  );
+
+  const [handleQcGenerate, isGenerating] = useAsyncGuard(
+    useCallback(async () => {
+      const requirement = qcRequirement.trim();
+      if (!requirement) return;
+      setQcGenerating(true);
+      setQcGenError(null);
+      try {
+        const result = await apiClient.call("project.generateName", {
+          requirement,
+          tier: qcTier,
+        });
+        const name = (result.name as string) ?? "";
+        const description = (result.description as string) ?? "";
+        const plan = result.plan as {
+          goal: string;
+          techStack: string[];
+          steps: string[];
+          testing: string;
+        } | undefined;
+        if (!name) {
+          setQcGenError(t("picker.qc.generateFailed"));
+          return;
+        }
+        setQcName(name);
+        setQcDescription(description);
+        setQcPlan(plan ?? null);
+        setQcMobileStep("confirm");
+      } catch (err) {
+        logger.warn("generateName failed", { error: String(err) });
+        setQcGenError(
+          err instanceof Error ? err.message : t("picker.qc.generateFailed"),
+        );
+      } finally {
+        setQcGenerating(false);
+      }
+    }, [qcRequirement, qcTier, t]),
+  );
+
+  const [handleQcConfirm, isConfirming] = useAsyncGuard(
+    useCallback(async () => {
+      const parentDir = qcDefaultDir;
+      const folderName = qcName.trim();
+      if (!parentDir) {
+        setQcCreateError(t("picker.qc.noDefaultDir"));
+        return;
+      }
+      if (!folderName) {
+        setQcCreateError(t("picker.qc.invalidName"));
+        return;
+      }
+      setQcCreating(true);
+      setQcCreateError(null);
+      try {
+        const result = await apiClient.call("project.confirmQuickCreate", {
+          parentDir,
+          folderName,
+          ...(qcPlan ? { plan: qcPlan } : {}),
+          ...(qcDescription ? { description: qcDescription } : {}),
+        });
+        if (!result.ok) {
+          setQcCreateError((result.error as string) ?? t("picker.qc.createFailed"));
+          return;
+        }
+        const projectPath = result.path as string;
+        onSelect(projectPath, folderName);
+        onClose();
+      } catch (err) {
+        logger.warn("confirmQuickCreate failed", { error: String(err) });
+        setQcCreateError(
+          err instanceof Error ? err.message : t("picker.qc.createFailed"),
+        );
+      } finally {
+        setQcCreating(false);
+      }
+    }, [qcDefaultDir, qcName, onSelect, onClose, t]),
+  );
+
+  // 触发加载默认目录的 effect
+  useEffect(() => {
+    if (!open) return;
+    if (mobileTab === "quickcreate" || leftView === "quickcreate") {
+      ensureQcDefaultDirLoaded();
+    }
+  }, [open, mobileTab, leftView, ensureQcDefaultDirLoaded]);
+
+  // 主页也要加载默认目录，因为主页现在显示目录状态条
+  useEffect(() => {
+    if (!open) return;
+    ensureQcDefaultDirLoaded();
+  }, [open, ensureQcDefaultDirLoaded]);
 
   const handleToggleFavoriteFolder = useCallback(
     async (e: React.MouseEvent, folderPath: string) => {
@@ -670,6 +868,13 @@ export function ProjectPickerDialog({
       <div className="shrink-0 px-4 py-2.5 border-t border-border-secondary dark:border-surface-code">
         <div className="space-y-2">
           <button
+            onClick={() => setLeftView("quickcreate")}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg text-xs text-white font-medium transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {t("picker.qc.entry")}
+          </button>
+          <button
             onClick={() => navigateTo(homePathRef.current || "/")}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent/10 hover:bg-accent/15 border border-accent/30 rounded-lg text-xs text-accent transition-colors"
           >
@@ -742,7 +947,7 @@ export function ProjectPickerDialog({
             />
             <button
               onClick={handleCreateFolder}
-              disabled={!newFolderName.trim() || creating}
+              disabled={!newFolderName.trim() || creating || isCreatingFolder}
               className="p-1.5 rounded-md bg-accent hover:bg-accent-hover text-white disabled:opacity-40 shrink-0"
             >
               {creating ? (
@@ -773,16 +978,254 @@ export function ProjectPickerDialog({
             className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent-hover rounded-md text-[11px] font-medium text-white transition-colors"
           >
             <FolderOpen className="w-3.5 h-3.5" />
-            {t("picker.selectCurrentFolder")}
+            {browseMode === "defaultDir"
+              ? t("picker.qc.setAsDefaultDir", "设为默认目录")
+              : t("picker.selectCurrentFolder")}
           </button>
         </div>
       </div>
     </>
   );
 
+  // -------- 快速创建：左侧输入面板（也用于移动端 input 步） --------
+
+  const renderQuickCreateInput = (mobile: boolean) => (
+    <div className="flex flex-col h-full">
+      <div className={`${mobile ? "px-4 py-3" : "px-4 py-3"} border-b border-border-secondary dark:border-surface-code shrink-0`}>
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-accent" />
+          <p className="text-xs font-medium text-text-secondary">{t("picker.qc.inputTitle")}</p>
+        </div>
+        <p className="text-[10px] text-text-tertiary mt-0.5">{t("picker.qc.inputHint")}</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <textarea
+          value={qcRequirement}
+          onChange={(e) => setQcRequirement(e.target.value)}
+          placeholder={t("picker.qc.requirementPlaceholder")}
+          rows={mobile ? 5 : 7}
+          className="w-full px-3 py-2 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 resize-none"
+        />
+
+        <div>
+          <p className="text-[10px] text-text-tertiary mb-1.5">{t("picker.qc.tierLabel")}</p>
+          <div className="flex gap-1.5">
+            {(["fast", "pro", "max"] as QcTier[]).map((tier) => (
+              <button
+                key={tier}
+                onClick={() => setQcTier(tier)}
+                className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
+                  qcTier === tier
+                    ? "bg-accent/15 text-accent border border-accent/40"
+                    : "bg-surface-code dark:bg-surface-dim/60 text-text-tertiary border border-border-secondary dark:border-border-secondary/50 hover:text-text-secondary"
+                }`}
+              >
+                {t(`picker.qc.tier.${tier}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {qcGenError && (
+          <div className="px-3 py-2 rounded-md bg-status-error/10 border border-status-error/30 text-[11px] text-status-error">
+            {qcGenError}
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 px-4 py-2.5 border-t border-border-secondary dark:border-surface-code">
+        <button
+          onClick={handleQcGenerate}
+          disabled={!qcRequirement.trim() || qcGenerating || isGenerating}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs text-white font-medium transition-colors"
+        >
+          {qcGenerating ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {t("picker.qc.generating")}
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-3.5 h-3.5" />
+              {t("picker.qc.generate")}
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  // -------- 快速创建：右侧确认面板（也用于移动端 confirm 步） --------
+
+  const renderQuickCreateConfirm = (mobile: boolean) => (
+    <div className="flex flex-col h-full">
+      <div className="px-4 py-3 border-b border-border-secondary dark:border-surface-code shrink-0">
+        <div className="flex items-center gap-1.5">
+          <Check className="w-3.5 h-3.5 text-status-success" />
+          <p className="text-xs font-medium text-text-secondary">{t("picker.qc.confirmTitle")}</p>
+        </div>
+        <p className="text-[10px] text-text-tertiary mt-0.5">{t("picker.qc.confirmHint")}</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[10px] text-text-tertiary">{t("picker.qc.nameLabel")}</p>
+            <button
+              onClick={handleQcGenerate}
+              disabled={qcGenerating || !qcRequirement.trim() || isGenerating}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-accent hover:bg-accent/10 disabled:opacity-40 transition-colors"
+              title={t("picker.qc.regenerate")}
+            >
+              {qcGenerating ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              {t("picker.qc.regenerate")}
+            </button>
+          </div>
+          <input
+            value={qcName}
+            onChange={(e) => setQcName(e.target.value)}
+            placeholder={t("picker.qc.namePlaceholder")}
+            className="w-full px-3 py-2 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
+          />
+          {qcDescription && (
+            <p className="mt-1.5 text-[11px] text-text-secondary leading-relaxed">
+              {qcDescription}
+            </p>
+          )}
+        </div>
+
+        {qcPlan && (
+          <div className="rounded-md border border-border-secondary dark:border-border-secondary/50 bg-surface-code/40 dark:bg-surface-dim/30 p-3 space-y-2.5">
+            {qcPlan.goal && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-0.5">{t("picker.qc.planGoalLabel")}</p>
+                <p className="text-[11px] text-text-primary leading-relaxed">{qcPlan.goal}</p>
+              </div>
+            )}
+            {qcPlan.techStack.length > 0 && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-1">{t("picker.qc.planStackLabel")}</p>
+                <div className="flex flex-wrap gap-1">
+                  {qcPlan.techStack.map((tech, i) => (
+                    <span
+                      key={`tech-${i}-${tech}`}
+                      className="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-[10px] font-medium"
+                    >
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {qcPlan.steps.length > 0 && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-1">{t("picker.qc.planStepsLabel")}</p>
+                <ol className="space-y-1">
+                  {qcPlan.steps.map((step, i) => (
+                    <li key={`step-${i}-${step.slice(0, 8)}`} className="flex gap-1.5 text-[11px] text-text-secondary leading-relaxed">
+                      <span className="text-accent font-medium shrink-0">{i + 1}.</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {qcPlan.testing && (
+              <div>
+                <p className="text-[10px] font-medium text-text-tertiary mb-0.5">{t("picker.qc.planTestingLabel")}</p>
+                <p className="text-[11px] text-text-secondary leading-relaxed">{qcPlan.testing}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[10px] text-text-tertiary">{t("picker.qc.defaultDirLabel")}</p>
+            <button
+              onClick={handleQcPickDefaultDir}
+              disabled={isPickingDefaultDir}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-accent hover:bg-accent/10 transition-colors"
+            >
+              <FolderOpen className="w-3 h-3" />
+              {t("picker.qc.changeDir")}
+            </button>
+          </div>
+          {qcDefaultDir ? (
+            <div className="px-3 py-2 rounded-md bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 text-[11px] text-text-secondary break-all">
+              {qcDefaultDir}
+            </div>
+          ) : (
+            <button
+              onClick={handleQcPickDefaultDir}
+              disabled={isPickingDefaultDir}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-status-warning/10 border border-status-warning/40 text-[11px] text-status-warning hover:bg-status-warning/20 transition-colors text-left"
+            >
+              <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+              <span>{t("picker.qc.noDefaultDirSet")}</span>
+            </button>
+          )}
+        </div>
+
+        {qcDefaultDir && (
+          <div className="px-3 py-2 rounded-md bg-accent/5 dark:bg-accent/10 border border-accent/20 text-[10px] text-text-tertiary break-all">
+            <span className="text-text-tertiary">{t("picker.qc.previewPathLabel", "将创建于")}：</span>
+            <span className="text-text-secondary font-medium">
+              {qcDefaultDir}/{qcName || "project-name"}
+            </span>
+          </div>
+        )}
+
+        {qcCreateError && (
+          <div className="px-3 py-2 rounded-md bg-status-error/10 border border-status-error/30 text-[11px] text-status-error">
+            {qcCreateError}
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 px-4 py-2.5 border-t border-border-secondary dark:border-surface-code space-y-2">
+        {mobile && (
+          <button
+            onClick={() => setQcMobileStep("input")}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-surface-code dark:bg-surface-dim/60 text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover rounded-lg text-xs font-medium transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            {t("picker.qc.backToInput")}
+          </button>
+        )}
+        <button
+          onClick={handleQcConfirm}
+          disabled={!qcName.trim() || !qcDefaultDir || qcCreating || isConfirming}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs text-white font-medium transition-colors"
+        >
+          {qcCreating ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {t("picker.qc.creating")}
+            </>
+          ) : (
+            <>
+              <FolderPlus className="w-3.5 h-3.5" />
+              {t("picker.qc.confirmAndOpen")}
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
   const renderLeftPanel = () => (
     <div className="w-[45%] min-w-[260px] border-r border-border-secondary dark:border-surface-code flex flex-col">
-      {leftView === "browse" ? renderLeftBrowse() : renderLeftDefault()}
+      {leftView === "browse"
+        ? renderLeftBrowse()
+        : leftView === "quickcreate"
+          ? renderQuickCreateInput(false)
+          : renderLeftDefault()}
     </div>
   );
 
@@ -839,6 +1282,19 @@ export function ProjectPickerDialog({
             }`}
           >
             {t("picker.browse")}
+          </button>
+          <button
+            onClick={() => {
+              setMobileTab("quickcreate");
+              setQcMobileStep("input");
+            }}
+            className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
+              mobileTab === "quickcreate"
+                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary shadow-sm"
+                : "text-text-tertiary"
+            }`}
+          >
+            {t("picker.qc.tab")}
           </button>
         </div>
         {onOpenRemoteProject && (
@@ -1047,7 +1503,7 @@ export function ProjectPickerDialog({
                     />
                     <button
                       onClick={handleCreateFolder}
-                      disabled={!newFolderName.trim() || creating}
+                      disabled={!newFolderName.trim() || creating || isCreatingFolder}
                       className="p-2 rounded-xl bg-accent active:bg-accent-hover text-white disabled:opacity-40 shrink-0"
                     >
                       {creating ? (
@@ -1084,6 +1540,14 @@ export function ProjectPickerDialog({
               </div>
             </div>
           )}
+
+          {mobileTab === "quickcreate" && (
+            <div className="flex-1 flex flex-col min-h-0 -mx-3 -mt-2 -mb-4">
+              {qcMobileStep === "input"
+                ? renderQuickCreateInput(true)
+                : renderQuickCreateConfirm(true)}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1108,32 +1572,38 @@ export function ProjectPickerDialog({
           <div className="flex-1 flex overflow-hidden min-h-0">
             {renderLeftPanel()}
 
-            {/* Right — Recent & Pinned */}
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="px-4 py-3 border-b border-border-secondary dark:border-surface-code flex items-center justify-between shrink-0">
-                <div>
-                  <p className="text-xs font-medium text-text-secondary">
-                    {t("picker.recentFolders")}
-                  </p>
-                  <p className="text-[10px] text-text-tertiary">
-                    {t("picker.foldersAvailable", { count: sortedRecents.length })}
-                  </p>
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-tertiary" />
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t("picker.searchPlaceholder")}
-                    className="pl-7 pr-3 py-1 w-36 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-tertiary dark:placeholder:text-text-secondary outline-none focus:border-accent/50"
-                  />
-                </div>
+            {/* Right — Recent & Pinned / 快速创建确认面板 */}
+            {leftView === "quickcreate" ? (
+              <div className="flex-1 flex flex-col min-w-0">
+                {renderQuickCreateConfirm(false)}
               </div>
+            ) : (
+              <div className="flex-1 flex flex-col min-w-0">
+                <div className="px-4 py-3 border-b border-border-secondary dark:border-surface-code flex items-center justify-between shrink-0">
+                  <div>
+                    <p className="text-xs font-medium text-text-secondary">
+                      {t("picker.recentFolders")}
+                    </p>
+                    <p className="text-[10px] text-text-tertiary">
+                      {t("picker.foldersAvailable", { count: sortedRecents.length })}
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-tertiary" />
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t("picker.searchPlaceholder")}
+                      className="pl-7 pr-3 py-1 w-36 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-tertiary dark:placeholder:text-text-secondary outline-none focus:border-accent/50"
+                    />
+                  </div>
+                </div>
 
-              <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
-                {renderProjectList(sortedRecents)}
+                <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+                  {renderProjectList(sortedRecents)}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

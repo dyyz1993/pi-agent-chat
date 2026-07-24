@@ -30,10 +30,12 @@ import { ThemeMenu } from "../theme/ThemeMenu";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { CopyButton } from "../chat/CopyButton";
 import { DropdownSelect } from "../primitives";
+import { AnchoredPopover } from "../primitives/AnchoredPopover";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
+import { useAsyncGuard } from "../../hooks/use-async-guard";
 
 const log = createLogger("chat");
 const EMPTY_AVAILABLE_MODELS: ReturnType<typeof useSessionStore.getState>["availableModels"] = [];
@@ -147,6 +149,7 @@ export function SidebarBottomControls() {
   const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
   const [tierConfigSaving, setTierConfigSaving] = useState(false);
   const tierConfigRef = useRef<HTMLDivElement>(null);
+  const tierConfigAnchorRef = useRef<HTMLDivElement>(null);
 
   const currentAgent = useAgentStore((s) =>
     activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
@@ -240,35 +243,20 @@ export function SidebarBottomControls() {
   }, [activeTabPath, refreshGitAll, workspaceRefreshing]);
 
   useEffect(() => {
-    if (!agentOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
+    if (!tierConfigOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (agentRef.current && !agentRef.current.contains(e.target as Node)) setAgentOpen(false);
-      if (thinkingRef.current && !thinkingRef.current.contains(e.target as Node))
-        setThinkingOpen(false);
-      if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node))
-        setWorkspaceOpen(false);
-      if (tierConfigRef.current && !tierConfigRef.current.contains(e.target as Node)) {
-        const el = e.target as HTMLElement;
-        if (!el.closest?.("[data-model-picker-dropdown]")) {
-          setTierConfigOpen(false);
-        }
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setAgentOpen(false);
-        setThinkingOpen(false);
-        setWorkspaceOpen(false);
-        setTierConfigOpen(false);
-      }
+      const target = e.target as Node;
+      if (tierConfigRef.current?.contains(target)) return;
+      if (tierConfigAnchorRef.current?.contains(target)) return;
+      const el = target as HTMLElement;
+      if (el.closest?.("[data-model-picker-dropdown]")) return;
+      setTierConfigOpen(false);
     };
     document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
     };
-  }, [agentOpen, thinkingOpen, workspaceOpen, tierConfigOpen]);
+  }, [tierConfigOpen]);
 
   const handleSwitchWorkspace = useCallback((wt: { path: string }) => {
     const state = useSessionStore.getState();
@@ -278,25 +266,27 @@ export function SidebarBottomControls() {
     setWorkspaceOpen(false);
   }, []);
 
-  const handleCreateWorktree = useCallback(async () => {
-    if (!newBranch.trim() || !activeTabPath || creating) return;
-    setCreating(true);
-    try {
-      const wt = await addWorktreeAction(
-        activeTabPath,
-        newBranch.trim(),
-        sourceBranch || undefined,
-      );
-      setShowCreateDialog(false);
-      setNewBranch("");
-      setSourceBranch("");
-      setWorkspaceOpen(false);
-      await useSessionStore.getState().createNewSession(wt.path);
-    } catch (err) {
-      log.warn("worktree add failed", { error: String(err) });
-    }
-    setCreating(false);
-  }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]);
+  const [handleCreateWorktree, isCreatingWorktree] = useAsyncGuard(
+    useCallback(async () => {
+      if (!newBranch.trim() || !activeTabPath || creating) return;
+      setCreating(true);
+      try {
+        const wt = await addWorktreeAction(
+          activeTabPath,
+          newBranch.trim(),
+          sourceBranch || undefined,
+        );
+        setShowCreateDialog(false);
+        setNewBranch("");
+        setSourceBranch("");
+        setWorkspaceOpen(false);
+        await useSessionStore.getState().createNewSession(wt.path);
+      } catch (err) {
+        log.warn("worktree add failed", { error: String(err) });
+      }
+      setCreating(false);
+    }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]),
+  );
 
   const handleSwitchTier = useCallback(
     async (tier: TierKey) => {
@@ -329,18 +319,20 @@ export function SidebarBottomControls() {
     setTierConfigOpen(true);
   }, [activeSessionId, refreshModelsForActiveSession, tierModels]);
 
-  const handleSaveTierConfig = useCallback(async () => {
-    if (!activeSessionId || !projectPath) return;
-    setTierConfigSaving(true);
-    try {
-      await saveTierModelsForSession(activeSessionId, projectPath, tierConfigModels);
-      setTierConfigOpen(false);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("save tier config failed", { error: msg });
-    }
-    setTierConfigSaving(false);
-  }, [activeSessionId, projectPath, tierConfigModels, saveTierModelsForSession]);
+  const [handleSaveTierConfig, isSavingTierConfig] = useAsyncGuard(
+    useCallback(async () => {
+      if (!activeSessionId || !projectPath) return;
+      setTierConfigSaving(true);
+      try {
+        await saveTierModelsForSession(activeSessionId, projectPath, tierConfigModels);
+        setTierConfigOpen(false);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn("save tier config failed", { error: msg });
+      }
+      setTierConfigSaving(false);
+    }, [activeSessionId, projectPath, tierConfigModels, saveTierModelsForSession]),
+  );
 
   const handleSelectModel = useCallback(
     async (key: string) => {
@@ -404,6 +396,15 @@ export function SidebarBottomControls() {
       setThinkingOpen(false);
     },
     [activeSessionId, switching, currentThinkingLevel, setThinkingLevel],
+  );
+
+  const [handleSelectAgent, isSelectingAgent] = useAsyncGuard(
+    async (agentName: string, agentActive: boolean) => {
+      if (activeSessionId && agentReady && !agentSwitching && !agentActive) {
+        await switchAgent(agentName, activeSessionId);
+      }
+      setAgentOpen(false);
+    },
   );
 
   const modelDisplay = currentModel
@@ -483,8 +484,17 @@ export function SidebarBottomControls() {
             className={`w-3 h-3 shrink-0 transition-transform ${agentOpen ? "rotate-180" : ""}`}
           />
         </button>
-        {agentOpen && (
-          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[260px] max-w-[320px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
+        <AnchoredPopover
+          anchorRef={agentRef}
+          open={agentOpen}
+          onClose={() => setAgentOpen(false)}
+          placement="top"
+          align="start"
+          className="rounded-md border border-border-secondary bg-bg-elevated shadow-xl dark:bg-surface-dim"
+          minWidth={260}
+          maxWidth={320}
+        >
+          <div className="py-1">
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
@@ -505,12 +515,8 @@ export function SidebarBottomControls() {
                         ? "bg-accent/10"
                         : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                     }`}
-                    onClick={async () => {
-                      if (activeSessionId && agentReady && !agentSwitching && !isActive) {
-                        await switchAgent(agent.name, activeSessionId);
-                      }
-                      setAgentOpen(false);
-                    }}
+                    onClick={() => handleSelectAgent(agent.name, isActive)}
+                    aria-disabled={isSelectingAgent}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
@@ -590,7 +596,7 @@ export function SidebarBottomControls() {
               })}
             </div>
           </div>
-        )}
+        </AnchoredPopover>
       </div>
 
       <div className="relative" ref={workspaceRef}>
@@ -639,8 +645,18 @@ export function SidebarBottomControls() {
             />
           </button>
         )}
-        {isGitRepo && workspaceOpen && (
-          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[240px] max-w-[300px] max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col">
+        <AnchoredPopover
+          anchorRef={workspaceRef}
+          open={isGitRepo && workspaceOpen}
+          onClose={() => setWorkspaceOpen(false)}
+          placement="top"
+          align="start"
+          className="rounded-md border border-border-secondary bg-bg-elevated shadow-xl dark:bg-surface-dim"
+          minWidth={240}
+          maxWidth={300}
+          maxHeight={256}
+        >
+          <div className="max-h-64 overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 py-1">
               {worktrees.map((wt) => {
                 const isActive = currentWorkspace?.path === wt.path;
@@ -682,9 +698,17 @@ export function SidebarBottomControls() {
               </button>
             </div>
           </div>
-        )}
-        {showCreateDialog && (
-          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[260px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2">
+        </AnchoredPopover>
+        <AnchoredPopover
+          anchorRef={workspaceRef}
+          open={showCreateDialog}
+          onClose={() => setShowCreateDialog(false)}
+          placement="top"
+          align="start"
+          className="rounded-md border border-border-secondary bg-bg-elevated shadow-xl dark:bg-surface-dim"
+          minWidth={260}
+        >
+          <div className="p-3 space-y-2">
             <div className="text-xs font-medium text-text-primary">{t("newWorkspaceTitle")}</div>
             <div className="space-y-1.5">
               <div>
@@ -726,14 +750,14 @@ export function SidebarBottomControls() {
               </button>
               <button
                 onClick={handleCreateWorktree}
-                disabled={!newBranch.trim() || creating}
+                disabled={!newBranch.trim() || creating || isCreatingWorktree}
                 className="px-2 py-1 rounded text-xs bg-accent text-white hover:bg-accent/90 disabled:opacity-40"
               >
                 {creating ? t("creating") : t("create")}
               </button>
             </div>
           </div>
-        )}
+        </AnchoredPopover>
       </div>
 
       <div>
@@ -772,7 +796,7 @@ export function SidebarBottomControls() {
         />
       </div>
 
-      <div className="relative flex items-center gap-1 px-2 py-0.5">
+      <div ref={tierConfigAnchorRef} className="relative flex items-center gap-1 px-2 py-0.5">
         {TIER_KEYS.map((tier: TierKey) => {
           const isActive = currentTier === tier;
           const icons: Record<TierKey, React.ComponentType<{ className?: string }>> = {
@@ -822,11 +846,18 @@ export function SidebarBottomControls() {
           <Settings2 className="w-3 h-3" />
         </button>
 
-        {tierConfigOpen && (
-          <div
-            ref={tierConfigRef}
-            className="absolute bottom-full left-0 mb-1 z-[90] min-w-[340px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
-          >
+        <AnchoredPopover
+          ref={tierConfigRef}
+          anchorRef={tierConfigAnchorRef}
+          open={tierConfigOpen}
+          onClose={() => setTierConfigOpen(false)}
+          placement="top"
+          align="start"
+          className="rounded-md border border-border-secondary bg-bg-elevated shadow-xl dark:bg-surface-dim"
+          minWidth={340}
+          closeOnOutsideClick={false}
+        >
+          <div className="p-3 space-y-2">
             <div className="text-xs font-medium text-text-primary">
               {t("tierConfigTitle", "Configure tier models")}
             </div>
@@ -861,6 +892,7 @@ export function SidebarBottomControls() {
                       placement="up"
                       dropdownMinWidth={420}
                       dropdownMaxWidth={520}
+                      dropdownZIndex="z-[100]"
                       placeholder={
                         currentModel
                           ? t("tierConfigDefault", "默认 ({{model}})", {
@@ -883,14 +915,14 @@ export function SidebarBottomControls() {
               </button>
               <button
                 onClick={handleSaveTierConfig}
-                disabled={tierConfigSaving}
+                disabled={tierConfigSaving || isSavingTierConfig}
                 className="px-2 py-1 rounded text-[11px] bg-accent text-white hover:bg-accent/90 disabled:opacity-40 whitespace-nowrap"
               >
                 {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
               </button>
             </div>
           </div>
-        )}
+        </AnchoredPopover>
       </div>
 
       <div className="relative" ref={thinkingRef}>
@@ -917,8 +949,16 @@ export function SidebarBottomControls() {
             className={`w-3 h-3 shrink-0 transition-transform ${thinkingOpen ? "rotate-180" : ""}`}
           />
         </button>
-        {thinkingOpen && (
-          <div className="absolute bottom-full left-0 mb-1 z-[90] min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
+        <AnchoredPopover
+          anchorRef={thinkingRef}
+          open={thinkingOpen}
+          onClose={() => setThinkingOpen(false)}
+          placement="top"
+          align="start"
+          className="rounded-md border border-border-secondary bg-bg-elevated shadow-xl dark:bg-surface-dim"
+          minWidth={200}
+        >
+          <div className="py-1">
             {THINKING_LEVEL_VALUES.map((value, idx) => {
               const isActive = currentThinkingLevel === value;
               return (
@@ -944,7 +984,7 @@ export function SidebarBottomControls() {
               );
             })}
           </div>
-        )}
+        </AnchoredPopover>
       </div>
 
       <ThemeMenu />

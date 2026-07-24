@@ -235,10 +235,10 @@ describe("getModifiedFiles should pass fromEntryId to scope file range", () => {
     expect(findFromEntryId("e1", entries)).toBeNull();
   });
 
-  it("getFileDiff returns diff content when resolvedFromEntryId is provided", async () => {
+  it("getFileDiff returns diff content when fromHash is provided", async () => {
     const getFileDiff = vi.fn(
-      async (params: { filePath: string; fromEntryId?: string; toEntryId: string }) => {
-        if (!params.fromEntryId) {
+      async (params: { filePath: string; fromHash?: string; toHash?: string }) => {
+        if (!params.fromHash) {
           return null;
         }
         return {
@@ -252,15 +252,15 @@ describe("getModifiedFiles should pass fromEntryId to scope file range", () => {
 
     const result = await getFileDiff({
       filePath: "A.ts",
-      fromEntryId: "snap-1",
-      toEntryId: "snap-2",
+      fromHash: "tree-1",
+      toHash: "tree-2",
     });
     expect(result).not.toBeNull();
     expect(result.unifiedDiff).toContain("+new content");
 
     const noResult = await getFileDiff({
       filePath: "A.ts",
-      toEntryId: "snap-2",
+      toHash: "tree-2",
     });
     expect(noResult).toBeNull();
   });
