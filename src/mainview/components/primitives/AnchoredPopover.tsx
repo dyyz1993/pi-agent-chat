@@ -33,6 +33,8 @@ export interface AnchoredPopoverProps {
   style?: CSSProperties;
   closeOnOutsideClick?: boolean;
   closeOnEscape?: boolean;
+  /** Override the default z-index when this popover is opened from inside another layer. */
+  zIndex?: string;
   "data-model-picker-dropdown"?: boolean | string;
   "data-testid"?: string;
 }
@@ -64,6 +66,7 @@ export const AnchoredPopover = forwardRef<HTMLDivElement, AnchoredPopoverProps>(
       style,
       closeOnOutsideClick = true,
       closeOnEscape = true,
+      zIndex,
       "data-model-picker-dropdown": dataModelPickerDropdown,
       "data-testid": dataTestId,
     },
@@ -172,7 +175,7 @@ export const AnchoredPopover = forwardRef<HTMLDivElement, AnchoredPopoverProps>(
         ref={setPopoverRef}
         data-model-picker-dropdown={dataModelPickerDropdown}
         data-testid={dataTestId}
-        className={cx("fixed z-[90]", className)}
+        className={cx("fixed", zIndex ?? "z-[90]", className)}
         style={{ ...positionStyle, ...style }}
       >
         {children}

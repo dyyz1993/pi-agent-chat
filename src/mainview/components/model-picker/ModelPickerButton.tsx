@@ -23,6 +23,8 @@ interface ModelPickerButtonProps {
   dropdownMaxWidth?: number;
   renderTrigger?: (props: { open: boolean }) => React.ReactNode;
   onOpenChange?: (open: boolean) => void;
+  /** Override z-index for nested dropdowns, for example inside another popover. */
+  dropdownZIndex?: string;
 }
 
 function modelKey(m: ModelItem): string {
@@ -44,10 +46,11 @@ export function ModelPickerButton({
   dropdownMaxWidth,
   renderTrigger,
   onOpenChange,
+  dropdownZIndex,
 }: ModelPickerButtonProps) {
   const [open, _setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [favoritesFilter, setFavoritesFilter] = useState<"sort" | "only">("sort");
   const favorites = useSessionStore((s) => s.modelFavorites);
   const toggleFavorite = useSessionStore((s) => s.toggleModelFavorite);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -59,9 +62,6 @@ export function ModelPickerButton({
         const next = typeof v === "function" ? v(prev) : v;
         if (next && !prev) {
           setSearchQuery("");
-          if (useSessionStore.getState().modelFavorites.size > 0) {
-            setShowFavoritesOnly(true);
-          }
         }
         if (next !== prev) onOpenChange?.(next);
         return next;
@@ -77,7 +77,7 @@ export function ModelPickerButton({
     }
   }, [open]);
 
-  let displayModels = models;
+  let displayModels = [...models];
   if (searchQuery.trim()) {
     const q = searchQuery.toLowerCase();
     displayModels = displayModels.filter(
@@ -88,8 +88,14 @@ export function ModelPickerButton({
         m.provider.toLowerCase().includes(q),
     );
   }
-  if (showFavoritesOnly) {
+  if (favoritesFilter === "only") {
     displayModels = displayModels.filter((m) => favorites.has(modelKey(m)));
+  } else {
+    displayModels.sort((a, b) => {
+      const aFav = favorites.has(modelKey(a)) ? 1 : 0;
+      const bFav = favorites.has(modelKey(b)) ? 1 : 0;
+      return bFav - aFav;
+    });
   }
 
   const selectedModel = models.find((m) => modelKey(m) === value);
@@ -109,7 +115,9 @@ export function ModelPickerButton({
         ) : (
           <button
             type="button"
-            onClick={() => !disabled && setOpen(!open)}
+            onClick={() => {
+              if (!disabled) setOpen(!open);
+            }}
             disabled={disabled}
             className={`w-full flex items-center gap-1.5 h-7 px-2 rounded-md border text-[12px] transition-colors
               ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-accent"}
@@ -143,6 +151,7 @@ export function ModelPickerButton({
         minWidth={dropdownMinWidth}
         maxWidth={dropdownMaxWidth}
         maxHeight={280}
+        zIndex={dropdownZIndex}
         className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col"
         data-model-picker-dropdown
       >
@@ -160,15 +169,27 @@ export function ModelPickerButton({
             />
             <button
               type="button"
-              onClick={() => setShowFavoritesOnly((v) => !v)}
+              onClick={() =>
+                setFavoritesFilter((v) => (v === "sort" ? "only" : "sort"))
+              }
               className={`p-0.5 rounded transition-colors shrink-0 ${
-                showFavoritesOnly
+                favoritesFilter === "only"
                   ? "text-accent"
-                  : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
+                  : favoritesFilter === "sort" && favorites.size > 0
+                    ? "text-accent/60"
+                    : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
               }`}
-              title={showFavoritesOnly ? "显示全部" : "仅显示收藏"}
+              title={favoritesFilter === "only" ? "收藏置顶" : "仅显示收藏"}
             >
-              <Star className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-accent" : ""}`} />
+              <Star
+                className={`w-3.5 h-3.5 ${
+                  favoritesFilter === "only"
+                    ? "fill-accent"
+                    : favoritesFilter === "sort" && favorites.size > 0
+                      ? "fill-accent/30"
+                      : ""
+                }`}
+              />
             </button>
           </div>
         </div>
@@ -179,7 +200,7 @@ export function ModelPickerButton({
             <div className="text-text-tertiary text-xs text-center py-3">没有可用模型</div>
           ) : displayModels.length === 0 ? (
             <div className="text-text-tertiary text-xs text-center py-3">
-              {showFavoritesOnly ? "没有收藏的模型" : "无匹配结果"}
+              {favoritesFilter === "only" ? "没有收藏的模型" : "无匹配结果"}
             </div>
           ) : (
             displayModels.map((m) => {
