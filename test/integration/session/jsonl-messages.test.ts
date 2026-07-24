@@ -175,6 +175,21 @@ describe("session JSONL message helpers", () => {
       hasMore: false,
       nextCursor: null,
     });
+
+    expect(paginateEntryMessages({ filteredMessages, limit: 2, beforeEntryId: "m1" })).toEqual({
+      slicedMessages: [
+        { role: "assistant", entryId: "m2" },
+        { role: "user", entryId: "m3" },
+      ],
+      hasMore: true,
+      nextCursor: "m3",
+    });
+
+    expect(paginateEntryMessages({ filteredMessages, limit: 2, beforeEntryId: "m3" })).toEqual({
+      slicedMessages: [{ role: "assistant", entryId: "m4" }],
+      hasMore: false,
+      nextCursor: null,
+    });
   });
 
   it("expands a paginated toolCall window with its matching toolResult", () => {

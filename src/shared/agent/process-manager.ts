@@ -1600,7 +1600,7 @@ export class AgentProcessManager {
   async getMessageNavPage(
     sessionId: string,
     sessionPath?: string,
-    options?: { limit?: number; afterEntryId?: string; fromStart?: boolean },
+    options?: { limit?: number; afterEntryId?: string; beforeEntryId?: string; fromStart?: boolean },
   ): Promise<{
     messages: AgentMessageForUI[];
     hasMore: boolean;

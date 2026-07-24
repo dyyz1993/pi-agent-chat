@@ -1,7 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { HandlerOptions, R } from "../rpc-schema";
+import type { HandlerOptions, P, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
 import { RemoteSshConfigureGuard } from "../agent/remote-ssh-config-guard";
@@ -302,10 +302,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     } as R<"agent.getFullMessagesAround">;
   });
 
-  r("agent.getMessageNavPage", async (params) => {
+  r("agent.getMessageNavPage", async (params: P<"agent.getMessageNavPage">) => {
+    const rawBeforeEntryId = (params as Record<string, unknown>).beforeEntryId;
+    const beforeEntryId =
+      typeof rawBeforeEntryId === "string" ? rawBeforeEntryId : undefined;
     const result = await m.getMessageNavPage(params.sessionId, params.sessionPath, {
       limit: params.limit,
       afterEntryId: params.afterEntryId,
+      beforeEntryId,
       fromStart: params.fromStart,
     });
     return {

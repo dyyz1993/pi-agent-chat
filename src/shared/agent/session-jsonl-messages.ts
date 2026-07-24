@@ -682,10 +682,30 @@ export function paginateEntryMessages(options: {
   filteredMessages: EntryMessage[];
   limit?: number;
   afterEntryId?: string;
+  beforeEntryId?: string;
   fromStart?: boolean;
 }): PaginatedMessages {
-  const { filteredMessages, limit, afterEntryId, fromStart } = options;
+  const { filteredMessages, limit, afterEntryId, beforeEntryId, fromStart } = options;
   const totalCount = filteredMessages.length;
+
+  if (beforeEntryId != null && limit !== undefined) {
+    const cursorIndex = filteredMessages.findIndex((entry) => entry.entryId === beforeEntryId);
+    if (cursorIndex < 0) {
+      return { slicedMessages: [], hasMore: false, nextCursor: null };
+    }
+    const startIndex = cursorIndex + 1;
+    const endIndex = Math.min(totalCount, startIndex + limit);
+    const slicedMessages = expandToolPairWindow(filteredMessages, startIndex, endIndex).map(
+      injectEntryId,
+    );
+    const hasMore = endIndex < totalCount;
+    return {
+      slicedMessages,
+      hasMore,
+      nextCursor: hasMore ? (filteredMessages[endIndex - 1]?.entryId ?? null) : null,
+    };
+  }
+
   const cursorIndex =
     afterEntryId != null
       ? filteredMessages.findIndex((entry) => entry.entryId === afterEntryId)

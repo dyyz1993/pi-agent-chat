@@ -225,6 +225,31 @@ describe("agent client message operations", () => {
     expect(result.hasMore).toBe(true);
   });
 
+  it("loads newer lightweight side nav messages after a beforeEntryId cursor", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "one"),
+        messageEntry("m2", "m1", "assistant", "two"),
+        messageEntry("m3", "m2", "user", "three"),
+        messageEntry("m4", "m3", "assistant", "four"),
+      ].join("\n"),
+    );
+
+    const result = await getMessageNavPageOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map([["sess-1", "m4"]]),
+      pagination: { limit: 2, beforeEntryId: "m1" },
+    });
+
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["m2", "m3"]);
+    expect(result.nextCursor).toBe("m3");
+    expect(result.hasMore).toBe(true);
+  });
+
   it("loads a full message window around a side nav target entry", async () => {
     writeFileSync(
       sessionPath,

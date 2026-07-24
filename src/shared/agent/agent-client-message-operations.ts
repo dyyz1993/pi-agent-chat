@@ -479,7 +479,7 @@ export async function getMessageNavPageOperation<
 >(options: {
   sessionId: string;
   sessionPath?: string;
-  pagination?: { limit?: number; afterEntryId?: string; fromStart?: boolean };
+  pagination?: { limit?: number; afterEntryId?: string; beforeEntryId?: string; fromStart?: boolean };
   getActiveManaged: (sessionId: string) => TManaged | null;
   resolveSessionPath: (sessionId: string) => string;
   leafIds: Map<string, string | null>;
@@ -532,6 +532,7 @@ export async function getMessageNavPageOperation<
     filteredMessages,
     limit: options.pagination?.limit,
     afterEntryId: options.pagination?.afterEntryId,
+    beforeEntryId: options.pagination?.beforeEntryId,
     fromStart: options.pagination?.fromStart,
   });
 
