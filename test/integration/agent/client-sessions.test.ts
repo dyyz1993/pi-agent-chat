@@ -1,11 +1,12 @@
 /**
  * @vitest-environment node
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   abortRetryOperation,
   clearQueueOperation,
+  compactOperation,
   getActiveToolsOperation,
   getContextUsageOperation,
   getMcpServersOperation,
@@ -22,6 +23,10 @@ function makeManaged(client: Record<string, unknown>, info: Record<string, unkno
 }
 
 describe("agent client session operations", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("forwards retry, permission, tools, and queue calls", async () => {
     const client = {
       setAutoRetry: vi.fn().mockResolvedValue(undefined),
@@ -180,5 +185,29 @@ describe("agent client session operations", () => {
 
     expect(isClientAlive).toHaveBeenCalledWith("sess-1", managed);
     expect(cleanupDeadClient).not.toHaveBeenCalled();
+  });
+
+  it("allows compaction to run up to five minutes before timing out", async () => {
+    vi.useFakeTimers();
+    const client = {
+      compact: vi.fn().mockReturnValue(new Promise(() => {})),
+    };
+    const managed = makeManaged(client);
+    const result = compactOperation({
+      sessionId: "sess-compact",
+      customInstructions: "keep file edits",
+      getActiveManaged: () => managed,
+    });
+    let rejection: unknown;
+    result.catch((err: unknown) => {
+      rejection = err;
+    });
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(rejection).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(180_000);
+    await expect(result).rejects.toThrow("compact timed out (300000ms)");
+    expect(client.compact).toHaveBeenCalledWith("keep file edits");
   });
 });

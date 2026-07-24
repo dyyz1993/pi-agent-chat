@@ -83,7 +83,7 @@ export async function compactOperation<TManaged extends ManagedClientLike>(optio
 }): Promise<{ summary: string; tokensBefore: number }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) throw new Error("Client not found");
-  return withTimeout(managed.client.compact(options.customInstructions), 120_000, "compact");
+  return withTimeout(managed.client.compact(options.customInstructions), 300_000, "compact");
 }
 
 export async function setAutoCompactionOperation<TManaged extends ManagedClientLike>(options: {
