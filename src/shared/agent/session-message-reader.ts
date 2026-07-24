@@ -753,7 +753,7 @@ export class SessionMessageReader {
     let totalCount = filteredMessages.length;
     const paginationResult = applyPagination(filteredMessages, options ?? {});
     const slicedMessages = paginationResult.messages;
-    const customEntries = filterCustomEntriesToPaginatedMessages(
+    let customEntries = filterCustomEntriesToPaginatedMessages(
       branchCustomEntries,
       slicedMessages,
       options ?? {},
@@ -761,8 +761,8 @@ export class SessionMessageReader {
       leafId,
       filteredMessages.map((entry) => entry.entryId),
     );
-    const hasMore = paginationResult.hasMore;
-    const nextCursor = paginationResult.nextCursor;
+    let hasMore = paginationResult.hasMore;
+    let nextCursor = paginationResult.nextCursor;
 
     const totalMs = Math.round(performance.now() - t0);
 
@@ -867,6 +867,32 @@ export class SessionMessageReader {
           }
           if (useCliMemoryAsPrimarySource) {
             totalCount = Math.max(totalCount, slicedMessages.length);
+          }
+          const mergeLimit = options?.limit;
+          if (
+            mergeLimit !== undefined &&
+            slicedMessages.length > mergeLimit &&
+            !useCliMemoryAsPrimarySource
+          ) {
+            if (options?.fromStart === true) {
+              slicedMessages.splice(mergeLimit);
+            } else {
+              slicedMessages.splice(0, slicedMessages.length - mergeLimit);
+              hasMore = true;
+              const firstEntryId = (slicedMessages[0] as { entryId?: unknown } | undefined)
+                ?.entryId;
+              if (typeof firstEntryId === "string") {
+                nextCursor = firstEntryId;
+              }
+            }
+            customEntries = filterCustomEntriesToPaginatedMessages(
+              branchCustomEntries,
+              slicedMessages,
+              options ?? {},
+              parentById,
+              leafId,
+              filteredMessages.map((entry) => entry.entryId),
+            );
           }
           perfLog.info("[getFullMessages] memory merge: added from CLI memory", {
             sessionId,

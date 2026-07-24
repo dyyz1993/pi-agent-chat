@@ -362,13 +362,16 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
       totalCount,
     });
   }
-  const { slicedMessages, hasMore, nextCursor } = paginateEntryMessages({
+  const { slicedMessages, hasMore: initialHasMore, nextCursor: initialNextCursor } =
+    paginateEntryMessages({
     filteredMessages,
     limit,
     afterEntryId,
     fromStart,
   });
-  const customEntries = filterCustomEntriesToPaginatedMessages({
+  let hasMore = initialHasMore;
+  let nextCursor = initialNextCursor;
+  let customEntries = filterCustomEntriesToPaginatedMessages({
     customEntries: branchCustomEntries,
     messages: slicedMessages,
     allMessageEntryIds: filteredMessages.map((entry) => entry.entryId),
@@ -441,6 +444,28 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
         }
         if (useCliMemoryAsPrimarySource) {
           totalCount = Math.max(totalCount, slicedMessages.length);
+        }
+        if (limit !== undefined && slicedMessages.length > limit && !useCliMemoryAsPrimarySource) {
+          if (fromStart === true) {
+            slicedMessages.splice(limit);
+          } else {
+            slicedMessages.splice(0, slicedMessages.length - limit);
+            hasMore = true;
+            const firstEntryId = (slicedMessages[0] as { entryId?: unknown } | undefined)?.entryId;
+            if (typeof firstEntryId === "string") {
+              nextCursor = firstEntryId;
+            }
+          }
+          customEntries = filterCustomEntriesToPaginatedMessages({
+            customEntries: branchCustomEntries,
+            messages: slicedMessages,
+            allMessageEntryIds: filteredMessages.map((entry) => entry.entryId),
+            limit,
+            afterEntryId,
+            fromStart,
+            parentById: accumulator.parentById,
+            leafId,
+          });
         }
         perfLog.info("[getFullMessages] memory merge: added from CLI memory", {
           sessionId: options.sessionId,

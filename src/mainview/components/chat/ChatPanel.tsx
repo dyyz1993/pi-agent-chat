@@ -1004,7 +1004,7 @@ export function ChatPanel() {
       setSideNavCursor(oldestMessages[0]?.id ?? null);
       setSideNavHasMore(false);
       setSideNavNewestExtraCursor(oldestMessages[oldestMessages.length - 1]?.id ?? null);
-      setSideNavHasMoreNewer(result.hasMore === true);
+      setSideNavHasMoreNewer(oldestMessages.length >= SIDE_NAV_WINDOW_SIZE);
     } catch (err) {
       log.warn("Failed to seek side nav to oldest", {
         sessionId,

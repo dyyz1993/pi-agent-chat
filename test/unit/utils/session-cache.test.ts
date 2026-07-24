@@ -35,8 +35,35 @@ function makeMessageLine(role: string, text: string, entryId?: string): string {
   });
 }
 
+function makeMessageLineWithParent(
+  id: string,
+  parentId: string | null,
+  role: string,
+  text: string,
+): string {
+  return JSON.stringify({
+    type: "message",
+    id,
+    parentId,
+    message: {
+      role,
+      content: [{ type: "text", text }],
+    },
+  });
+}
+
 function makeLeafPointerLine(leafId: string): string {
   return JSON.stringify({ type: "leaf_pointer", leafId });
+}
+
+function makeCustomLine(id: string, parentId: string | null, customType: string): string {
+  return JSON.stringify({
+    type: "custom",
+    id,
+    parentId,
+    customType,
+    data: { ok: true },
+  });
 }
 
 describe("SessionMessageReader cache", () => {
@@ -98,6 +125,49 @@ describe("SessionMessageReader cache", () => {
       const cache0 = reader.getSessionCache("session-0", join(tmpDir, "session-0.jsonl"));
       expect(cache0).not.toBeNull();
       expect(cache0!.messages.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("streaming memory merge pagination", () => {
+    it("keeps merged streaming messages within the requested page and realigns custom entries", async () => {
+      const filePath = writeJsonl("session-merge", [
+        makeMessageLineWithParent("m1", null, "user", "one"),
+        makeCustomLine("c1", "m1", "bash_background_process"),
+        makeMessageLineWithParent("m2", "c1", "assistant", "two"),
+        makeCustomLine("c2", "m2", "bash_background_process"),
+        makeMessageLineWithParent("m3", "c2", "user", "three"),
+        makeCustomLine("c3", "m3", "bash_background_process"),
+        makeMessageLineWithParent("m4", "c3", "assistant", "four"),
+        makeCustomLine("c4", "m4", "bash_background_process"),
+        makeLeafPointerLine("c4"),
+      ]);
+      deps.getActiveManaged = vi.fn().mockReturnValue({
+        client: {
+          getMessages: vi
+            .fn()
+            .mockResolvedValue([
+              { role: "assistant", content: [{ type: "text", text: "streaming five" }] },
+            ]),
+        },
+        info: {
+          status: "streaming",
+          sessionPath: filePath,
+        },
+        _activeSessionId: "session-merge",
+      });
+
+      const result = await reader.getFullMessages("session-merge", filePath, { limit: 2 });
+
+      expect(
+        result.messages.map((m) =>
+          ((m as { content?: Array<{ text?: string }> }).content ?? [])
+            .map((block) => block.text ?? "")
+            .join(""),
+        ),
+      ).toEqual(["four", "streaming five"]);
+      expect(result.customEntries.map((entry) => entry.id)).toEqual(["c4"]);
+      expect(result.hasMore).toBe(true);
+      expect(result.nextCursor).toBe("m4");
     });
   });
 });

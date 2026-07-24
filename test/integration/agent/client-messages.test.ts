@@ -374,6 +374,85 @@ describe("agent client message operations", () => {
     ]);
   });
 
+  it("keeps streaming memory merge within the requested latest page", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "one"),
+        customEntry("c1", "m1", "bash_background_process"),
+        messageEntry("m2", "c1", "assistant", "two"),
+        customEntry("c2", "m2", "bash_background_process"),
+        messageEntry("m3", "c2", "user", "three"),
+        customEntry("c3", "m3", "bash_background_process"),
+        messageEntry("m4", "c3", "assistant", "four"),
+        customEntry("c4", "m4", "bash_background_process"),
+      ].join("\n"),
+    );
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([
+          { role: "assistant", content: [{ type: "text", text: "streaming five" }] },
+        ]),
+      },
+      info: {
+        status: "streaming",
+        sessionPath,
+      },
+    };
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+      pagination: { limit: 2 },
+    });
+
+    expect(
+      result.messages.map((m) =>
+        ((m as { content?: Array<{ text?: string }> }).content ?? [])
+          .map((block) => block.text ?? "")
+          .join(""),
+      ),
+    ).toEqual(["four", "streaming five"]);
+    expect(result.customEntries.map((entry) => entry.id)).toEqual(["c4"]);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBe("m4");
+  });
+
+  it("does not truncate streaming memory merge when no limit is requested", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "one"),
+        messageEntry("m2", "m1", "assistant", "two"),
+        messageEntry("m3", "m2", "user", "three"),
+      ].join("\n"),
+    );
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([
+          { role: "assistant", content: [{ type: "text", text: "streaming four" }] },
+        ]),
+      },
+      info: {
+        status: "streaming",
+        sessionPath,
+      },
+    };
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+    });
+
+    expect(result.messages).toHaveLength(4);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+  });
+
   it("uses idle active runtime messages when local JSONL has no messages", async () => {
     writeFileSync(sessionPath, "");
     const managed = {
