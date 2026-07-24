@@ -906,14 +906,18 @@ export function ChatPanel() {
   }, [hasMoreMessages, isSideNavLoadingMore, messageNextCursor, sideNavExtraMessages.length]);
 
   useEffect(() => {
-    setInitialScrollRevealFallbackSessionId(null);
     if (
       !effectiveScrollSessionId ||
       messageIds.length === 0 ||
       initialScrollCompleteSessionId === effectiveScrollSessionId
     ) {
+      setInitialScrollRevealFallbackSessionId(null);
       return;
     }
+
+    setInitialScrollRevealFallbackSessionId((prev) =>
+      prev === effectiveScrollSessionId ? prev : null,
+    );
 
     const timeout = window.setTimeout(() => {
       setInitialScrollRevealFallbackSessionId(effectiveScrollSessionId);
