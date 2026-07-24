@@ -1915,6 +1915,20 @@ export class AgentProcessManager {
   }
 
   async reload(sessionId: string): Promise<void> {
+    const managed = this.getActiveManaged(sessionId);
+    const status = managed?.info?.status;
+    if (managed && status && status !== "idle") {
+      log.info("reload: aborting active agent before reload", { sessionId, status });
+      try {
+        await this.abort(sessionId);
+      } catch (err: unknown) {
+        log.warn("reload: pre-reload abort failed; continuing with reload", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     return reloadOperation({
       sessionId,
       getActiveManaged: (sid) => this.getActiveManaged(sid),

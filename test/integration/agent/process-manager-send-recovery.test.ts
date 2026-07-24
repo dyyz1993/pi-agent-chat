@@ -58,7 +58,10 @@ import { AgentProcessManager } from "../../../src/shared/agent/process-manager";
 interface ManagedClientShape {
   client: {
     prompt: (content: string, images?: unknown[]) => Promise<void>;
+    abort: () => Promise<void>;
+    reload: () => Promise<void>;
     stop?: () => Promise<void>;
+    steer?: (content: string, images?: unknown[]) => Promise<void>;
   };
   info: {
     sessionId: string;
@@ -100,6 +103,8 @@ function makeManaged(sessionId: string, projectPath: string, sessionPath: string
   return {
     client: {
       prompt: vi.fn().mockResolvedValue(undefined),
+      abort: vi.fn().mockResolvedValue(undefined),
+      reload: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
     },
     info: {
@@ -307,5 +312,24 @@ describe("AgentProcessManager.send stale-session recovery", () => {
 
     expect(ok).toBe(true);
     expect(managed.client.prompt).toHaveBeenCalledWith("normal message", undefined);
+  });
+
+  it("aborts an active agent before reload so the session returns to idle", async () => {
+    const sessionId = "sess-streaming-reload";
+    const projectPath = "/fake/project";
+    const sessionPath = "/fake/sessions/sess-streaming-reload.jsonl";
+    const m = internals(manager);
+    const managed = makeManaged(sessionId, projectPath, sessionPath);
+    managed.info.status = "streaming";
+    m.clients.set(sessionId, managed);
+
+    await manager.reload(sessionId);
+
+    expect(managed.client.abort).toHaveBeenCalledTimes(1);
+    expect(managed.client.reload).toHaveBeenCalledTimes(1);
+    expect(managed.info.status).toBe("idle");
+    expect(
+      vi.mocked(managed.client.abort).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(managed.client.reload).mock.invocationCallOrder[0]);
   });
 });
