@@ -157,7 +157,7 @@ function installDesktopShortcutFallback(): void {
       const command = getEditCommandFromKeyboardEvent(event);
       if (!command) return;
       const active = document.activeElement;
-      if (isTextControl(active)) {
+      if (isTextControl(active) && command !== "paste") {
         return;
       }
 
