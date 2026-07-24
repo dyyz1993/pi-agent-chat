@@ -151,6 +151,12 @@ Manual `/compact` calls `AgentSession.compact()`.
 
 Auto-compaction uses the same compaction primitives, but is triggered from post-run or preflight context-size checks.
 
+Trigger semantics:
+
+- `thresholdPercent` is an explicit override. When it is configured, auto-compaction triggers once `contextTokens > contextWindow * thresholdPercent`.
+- If `thresholdPercent` is absent, the legacy reserve-token rule applies: trigger once `contextTokens > contextWindow - reserveTokens`.
+- Context usage display and trigger input must use the materialized session context from `buildSessionContext()`, not raw in-memory message object identity. After restart or JSONL re-materialization, find the last assistant usage by message position in the materialized context and estimate any trailing messages after it.
+
 ## Multi-Compaction And Extension Rules
 
 Extensions that implement richer compaction, such as multi-compaction, must obey these rules:
