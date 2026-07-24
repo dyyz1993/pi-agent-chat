@@ -146,6 +146,8 @@ import {
   selectLruEvictionCandidate,
   countProcessPoolEntries,
 } from "./agent-process-pool";
+import { ensureManagedClientOperation } from "./agent-managed-client-operations";
+import { findSessionById } from "../lib/session-scanner";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -1336,41 +1338,24 @@ export class AgentProcessManager {
 
   /**
    * Ensure a managed client exists for the session.
-   * In sandbox mode, if the managed client was GC'd, this will rebuild it
-   * by calling start() with the persisted session/project metadata.
+   * If the managed client was GC'd, this rebuilds it from persisted
+   * session/project metadata or a disk session scan.
    */
   private async ensureManagedClient(sessionId: string): Promise<ManagedClient | null> {
-    const existing = this.getActiveManaged(sessionId);
-    if (existing) return existing;
-
-    if (!config.sandboxEnabled) return null;
-
-    const projectPath = this.sessionProjectPaths.get(sessionId);
-    const sessionPath = this.sessionPaths.get(sessionId);
-    if (!projectPath || !sessionPath) {
-      log.warn("[ensureManagedClient] no persisted session metadata", { sessionId });
-      return null;
-    }
-
-    const userId = this._getSandboxUserId(sessionId) ?? sessionId;
-
-    log.info("[ensureManagedClient] rebuilding GC'd sandbox", { sessionId, projectPath, userId });
-
-    try {
-      const result = await this.start(sessionId, projectPath, sessionPath, {
-        forceNewProcess: false,
-        userId,
-      });
-      log.info("[ensureManagedClient] rebuild complete", { sessionId, status: result.status });
-    } catch (err: unknown) {
-      log.error("[ensureManagedClient] rebuild failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
-    }
-
-    return this.getActiveManaged(sessionId);
+    return ensureManagedClientOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      sessionProjectPaths: this.sessionProjectPaths,
+      sessionPaths: this.sessionPaths,
+      findSessionById,
+      sandboxEnabled: config.sandboxEnabled,
+      getSandboxUserId: (sid) => this._getSandboxUserId(sid),
+      start: (sid, projectPath, sessionPath, options) =>
+        this.start(sid, projectPath, sessionPath, {
+          forceNewProcess: false,
+          userId: options.userId,
+        }),
+    });
   }
 
   private _getSandboxUserId(sessionId: string): string | null {

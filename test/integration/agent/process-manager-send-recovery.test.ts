@@ -163,8 +163,8 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(managed.client.prompt).toHaveBeenCalledWith("hello", undefined);
   });
 
-  it("returns false when only disk session data exists without manager metadata", async () => {
-    const sessionId = "sess_coord_after_restart";
+  it("rebuilds from disk session data when manager metadata is missing", async () => {
+    const sessionId = `sess_coord_after_restart_${Date.now()}`;
     const projectPath = join(tmpdir(), `pi-send-recovery-project-${Date.now()}`);
     const sessionRoot = join(homedir(), ".pi", "agent", "sessions", encodeCwd(projectPath));
     const sessionPath = join(sessionRoot, `${sessionId}.jsonl`);
@@ -187,10 +187,15 @@ describe("AgentProcessManager.send stale-session recovery", () => {
 
     const ok = await manager.send(sessionId, "hello after restart");
 
-    expect(ok).toBe(false);
-    expect(startSpy).not.toHaveBeenCalled();
-    expect(m.sessionProjectPaths.get(sessionId)).toBeUndefined();
-    expect(m.sessionPaths.get(sessionId)).toBeUndefined();
+    expect(ok).toBe(true);
+    expect(startSpy).toHaveBeenCalledWith(
+      sessionId,
+      projectPath,
+      sessionPath,
+      expect.objectContaining({ forceNewProcess: false }),
+    );
+    expect(m.sessionProjectPaths.get(sessionId)).toBe(projectPath);
+    expect(m.sessionPaths.get(sessionId)).toBe(sessionPath);
     rmSync(sessionRoot, { recursive: true, force: true });
     rmSync(projectPath, { recursive: true, force: true });
   });
