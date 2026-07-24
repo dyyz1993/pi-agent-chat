@@ -724,6 +724,158 @@ describe("memory custom entry ordering", () => {
   });
 });
 
+describe("memory fallback timestamp for late-arriving events", () => {
+  it("sorts memory_inject without occurredAt before the assistant response", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "继续" }],
+        timestamp: 5_000,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "好的" }],
+        timestamp: 6_000,
+        isStreaming: false,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-late",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-late",
+        summary: "已注入 Memory · 2个文件",
+        selectedFiles: ["rules.md", "prefs.md"],
+        injectedBytes: 1_000,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((m) => m.id)).toEqual(["user-1", "inject-late", "assistant-1"]);
+    expect(messages[1].timestamp).toBe(5_001);
+  });
+
+  it("sorts memory_prefetch_result without occurredAt before the assistant response", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "继续" }],
+        timestamp: 5_000,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "好的" }],
+        timestamp: 6_000,
+        isStreaming: false,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "prefetch-result-late",
+      customType: "memory_prefetch_result",
+      data: {
+        operationId: "op-late",
+        summary: "已匹配记忆 · 2个文件",
+        selectedFiles: ["rules.md"],
+        injectedBytes: 1_000,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((m) => m.id)).toEqual([
+      "user-1",
+      "prefetch-result-late",
+      "assistant-1",
+    ]);
+    expect(messages[1].timestamp).toBe(5_001);
+  });
+
+  it("does not trigger empty_response when memory_inject arrives after assistant at agent_end", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "hello" }],
+        timestamp: 5_000,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "hi there" }],
+        timestamp: 6_000,
+        isStreaming: false,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-late",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-late",
+        summary: "已注入 Memory",
+        selectedFiles: ["rules.md"],
+        injectedBytes: 100,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messagesBeforeEnd = getMessages();
+    expect(messagesBeforeEnd.map((m) => m.id)).toEqual([
+      "user-1",
+      "inject-late",
+      "assistant-1",
+    ]);
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.some((m) => m.role === "error")).toBe(false);
+    expect(messages.some((m) => m.stopReason === "empty_response")).toBe(false);
+    expect(notificationGateway.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session_complete",
+        sessionId: SID,
+      }),
+    );
+  });
+
+  it("falls back to earliest message timestamp - 1 when no user message exists", () => {
+    setMessages([
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "hi" }],
+        timestamp: 5_000,
+        isStreaming: false,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "custom_entry",
+      id: "inject-no-user",
+      customType: "memory_inject",
+      data: {
+        operationId: "op-no-user-unique",
+        summary: "已注入 Memory",
+        selectedFiles: ["rules.md"],
+        injectedBytes: 100,
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const messages = getMessages();
+    expect(messages.map((m) => m.id)).toEqual(["inject-no-user", "assistant-1"]);
+    expect(messages[0].timestamp).toBe(4_999);
+  });
+});
+
 describe("tool_execution_start", () => {
   it("adds toolExecution block with status=running to existing streaming message", () => {
     setMessages([

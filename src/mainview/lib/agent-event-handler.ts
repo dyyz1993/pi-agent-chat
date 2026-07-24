@@ -878,6 +878,19 @@ function applyToolResultMessage(sessionId: string, rawMessage: unknown): boolean
   return true;
 }
 
+/**
+ * Late memory events can arrive after the assistant response has already
+ * streamed. Without an explicit semantic timestamp, place them after the
+ * latest user message but before the assistant response for that turn.
+ */
+function getMemoryFallbackTimestamp(messages: ChatMessage[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") return messages[i].timestamp + 1;
+  }
+  if (messages.length > 0) return Math.max(0, messages[0].timestamp - 1);
+  return 0;
+}
+
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   const storeGet = () => useSessionStore.getState();
 
@@ -1858,7 +1871,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
               data: { ...(event.data as Record<string, unknown>), _timedOut: true },
             },
           ],
-          timestamp: getMemorySemanticTimestamp(event.data, Date.now()),
+          timestamp: getMemorySemanticTimestamp(event.data, getMemoryFallbackTimestamp(msgs)),
         };
         chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(msgs, customMsg));
       }, PREFETCH_FALLBACK_MS);
@@ -1915,7 +1928,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
               data: mergedResultData,
             },
           ],
-          timestamp: getMemorySemanticTimestamp(mergedResultData, Date.now()),
+          timestamp: getMemorySemanticTimestamp(
+            mergedResultData,
+            getMemoryFallbackTimestamp(existingMsgs),
+          ),
         };
         chat.setMessagesForSession(
           sessionId,
@@ -1927,7 +1943,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role: "custom",
         content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
-        timestamp: getMemorySemanticTimestamp(resultData, Date.now()),
+        timestamp: getMemorySemanticTimestamp(
+          resultData,
+          getMemoryFallbackTimestamp(existingMsgs),
+        ),
       };
       chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(existingMsgs, customMsg));
       return;
@@ -1941,7 +1960,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       role: "custom",
       content: [{ type: "custom", customType: event.customType, data: customData }],
       timestamp: ALL_MEMORY_TYPE_KEYS.has(event.customType)
-        ? getMemorySemanticTimestamp(customData, Date.now())
+        ? getMemorySemanticTimestamp(customData, getMemoryFallbackTimestamp(existing))
         : Date.now(),
     };
     chat.setMessagesForSession(
