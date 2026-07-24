@@ -147,16 +147,16 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
   },
 
   clearGoal: async (sessionId: string, reason?: string) => {
+    set((s) => ({
+      bySession: updateSession(s.bySession, sessionId, (session) => ({
+        ...session,
+        status: session.status
+          ? { ...session.status, goal: undefined, lastGoldResult: undefined }
+          : session.status,
+      })),
+    }));
     try {
       await apiClient.call("supervisor.clearGoal", { sessionId, reason });
-      set((s) => ({
-        bySession: updateSession(s.bySession, sessionId, (session) => ({
-          ...session,
-          status: session.status
-            ? { ...session.status, goal: undefined, lastGoldResult: undefined }
-            : session.status,
-        })),
-      }));
     } catch (err) {
       log.warn("clearGoal failed", {
         sessionId,

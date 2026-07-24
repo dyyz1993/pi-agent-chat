@@ -109,6 +109,52 @@ describe("useSupervisorStore", () => {
     expect(useSupervisorStore.getState().bySession["sess-1"]?.triggerRecords).toHaveLength(1);
   });
 
+  it("clears the local goal immediately even when clearGoal RPC fails", async () => {
+    useSupervisorStore.setState({
+      bySession: {
+        "sess-1": {
+          status: {
+            enabled: true,
+            state: "idle",
+            continueCount: 0,
+            maxContinueCount: 5,
+            activeGuards: [],
+            goal: {
+              id: "goal-1",
+              objective: "Goal to clear",
+              status: "running",
+              startedAt: 1,
+              updatedAt: 1,
+              continuationCount: 0,
+              blockers: [],
+            },
+            lastGoldResult: {
+              goalId: "goal-1",
+              verdict: "incomplete",
+              confidence: 0.9,
+              checkedAt: 2,
+              reason: "Still running",
+              evidence: [],
+            },
+          },
+          taskReports: [],
+          triggerRecords: [],
+        },
+      },
+    });
+    mockCall.mockRejectedValueOnce(new Error("channel unavailable"));
+
+    await useSupervisorStore.getState().clearGoal("sess-1", "user_cancelled");
+
+    expect(mockCall).toHaveBeenCalledWith("supervisor.clearGoal", {
+      sessionId: "sess-1",
+      reason: "user_cancelled",
+    });
+    const status = useSupervisorStore.getState().bySession["sess-1"]?.status;
+    expect(status?.goal).toBeUndefined();
+    expect(status?.lastGoldResult).toBeUndefined();
+  });
+
   it("handles goal and gold channel events", () => {
     const goal = {
       id: "goal-1",
