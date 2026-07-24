@@ -13,6 +13,7 @@ export default tseslint.config(
       'node_modules/**',
       'build/**',
       'dist/**',
+      '.vite/**',
       'eslint-plugin-rpc/**',
       'eslint-plugin-theme/**',
       'eslint-plugin-no-hardcoded-port/**',

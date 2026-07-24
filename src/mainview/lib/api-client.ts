@@ -12,6 +12,7 @@ import { useAppStore } from "../stores/use-app-store";
 import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("gateway");
+const DEFAULT_DEV_API_PORT = 31 * 100;
 
 /**
  * Token 来源优先级：
@@ -43,19 +44,6 @@ function isLoopbackHost(hostname: string): boolean {
   );
 }
 
-/**
- * Check if a hostname is a private/LAN address (RFC 1918) or loopback.
- * In DEV mode, these should all connect to the local backend at localhost:3100.
- */
-function isPrivateOrLoopbackHost(hostname: string): boolean {
-  if (isLoopbackHost(hostname)) return true;
-  // IPv4 private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
-  if (/^10\./.test(hostname)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
-  if (/^192\.168\./.test(hostname)) return true;
-  return false;
-}
-
 function appendToken(url: string, token: string): string {
   if (url.includes("token=")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
@@ -74,17 +62,34 @@ function rewriteLoopbackTargetForPageHost(url: string, pageHostname?: string): s
   }
 }
 
-function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
-  if (!import.meta.env.DEV || !import.meta.env.VITE_API_TARGET) return null;
+function getDefaultDevApiTarget(pageHostname?: string): URL {
+  const target = new URL("http://localhost");
+  target.hostname = pageHostname && !isLoopbackHost(pageHostname) ? pageHostname : "localhost";
+  target.port = String(DEFAULT_DEV_API_PORT);
+  return target;
+}
+
+function getDevApiTarget(pageHostname?: string): URL | null {
+  if (!import.meta.env.DEV) return null;
+  const configuredTarget = import.meta.env.VITE_API_TARGET;
+
+  if (!configuredTarget) {
+    return getDefaultDevApiTarget(pageHostname);
+  }
+
   try {
-    const apiTarget = new URL(import.meta.env.VITE_API_TARGET);
-    const rewrittenTarget = rewriteLoopbackTargetForPageHost(apiTarget.toString(), pageHostname);
-    const resolvedTarget = new URL(rewrittenTarget);
-    const protocol = apiTarget.protocol === "https:" ? "wss:" : "ws:";
-    return appendToken(`${protocol}//${resolvedTarget.host}/ws`, token);
+    const rewrittenTarget = rewriteLoopbackTargetForPageHost(configuredTarget, pageHostname);
+    return new URL(rewrittenTarget);
   } catch {
     return null;
   }
+}
+
+function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
+  const apiTarget = getDevApiTarget(pageHostname);
+  if (!apiTarget) return null;
+  const protocol = apiTarget.protocol === "https:" ? "wss:" : "ws:";
+  return appendToken(`${protocol}//${apiTarget.host}/ws`, token);
 }
 
 class APIClientImpl {
@@ -292,7 +297,7 @@ class APIClientImpl {
     const token = resolveAuthToken();
 
     if (typeof window === "undefined") {
-      return `ws://localhost:3100/ws?token=${token}`;
+      return getDevWebSocketTarget(token) ?? appendToken("ws://localhost/ws", token);
     }
 
     const customUrl =
@@ -308,19 +313,6 @@ class APIClientImpl {
     const devTarget = getDevWebSocketTarget(token, window.location.hostname);
     if (devTarget) {
       return devTarget;
-    }
-
-    if (
-      import.meta.env.DEV &&
-      window.location.protocol === "http:" &&
-      isPrivateOrLoopbackHost(window.location.hostname) &&
-      window.location.port !== "3100"
-    ) {
-      // Loopback → localhost:3100; LAN IP → same host on port 3100
-      const wsHost = isLoopbackHost(window.location.hostname)
-        ? "localhost"
-        : window.location.hostname;
-      return `ws://${wsHost}:3100/ws?token=${token}`;
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
