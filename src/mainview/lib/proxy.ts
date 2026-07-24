@@ -97,6 +97,18 @@ export function disableProxy(): ProxyStatus {
   return getProxyStatus();
 }
 
+export function parseProxyServerHost(
+  serverHost: string,
+  defaultPort = 80,
+): { hostname: string; port: number } | null {
+  if (!serverHost) return null;
+  const colonIdx = serverHost.lastIndexOf(":");
+  const hostname = colonIdx >= 0 ? serverHost.slice(0, colonIdx) : serverHost;
+  const parsedPort = colonIdx >= 0 ? Number.parseInt(serverHost.slice(colonIdx + 1), 10) : NaN;
+  const port = Number.isFinite(parsedPort) ? parsedPort : defaultPort;
+  return { hostname, port };
+}
+
 /** 刷新服务端代理能力。用户偏好和真实配置都满足时，代理才算 active。 */
 export async function refreshProxyStatus(): Promise<ProxyStatus> {
   try {
@@ -157,7 +169,7 @@ export async function setProxyPreference(next: boolean): Promise<ProxyStatus> {
  * 启动时检测：读取持久化偏好，并向后端发一个注册请求来验证代理是否可用。
  * 只有偏好已开启、服务端已配置且注册成功时才保持 active。
  */
-export async function tryEnable(serverHost: string): Promise<void> {
+export async function tryEnable(serverHost: string, defaultPort = 80): Promise<void> {
   await refreshProxyStatus();
   if (!preferred || !configured) {
     active = false;
@@ -169,14 +181,16 @@ export async function tryEnable(serverHost: string): Promise<void> {
     return;
   }
   try {
-    const colonIdx = serverHost.lastIndexOf(":");
-    const hostname = colonIdx >= 0 ? serverHost.slice(0, colonIdx) : serverHost;
-    const port = colonIdx >= 0 ? parseInt(serverHost.slice(colonIdx + 1), 10) : 3100;
+    const target = parseProxyServerHost(serverHost, defaultPort);
+    if (!target) {
+      active = false;
+      return;
+    }
 
     const res = await fetch("/api/proxy-register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ host: hostname, port }),
+      body: JSON.stringify({ host: target.hostname, port: target.port }),
     });
     if (!res.ok) {
       active = false;

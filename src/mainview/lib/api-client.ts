@@ -44,6 +44,15 @@ function isLoopbackHost(hostname: string): boolean {
   );
 }
 
+export function isPrivateOrLoopbackHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  if (isLoopbackHost(lower)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  return false;
+}
+
 function appendToken(url: string, token: string): string {
   if (url.includes("token=")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
@@ -69,9 +78,22 @@ function getDefaultDevApiTarget(pageHostname?: string): URL {
   return target;
 }
 
-function getDevApiTarget(pageHostname?: string): URL | null {
-  if (!import.meta.env.DEV) return null;
-  const configuredTarget = import.meta.env.VITE_API_TARGET;
+export interface DevApiTargetOptions {
+  dev: boolean;
+  configuredTarget?: string;
+  pageHostname?: string;
+}
+
+export function resolveDevApiTarget({
+  dev,
+  configuredTarget,
+  pageHostname,
+}: DevApiTargetOptions): URL | null {
+  if (!dev) return null;
+
+  if (pageHostname && !isPrivateOrLoopbackHost(pageHostname)) {
+    return null;
+  }
 
   if (!configuredTarget) {
     return getDefaultDevApiTarget(pageHostname);
@@ -85,11 +107,29 @@ function getDevApiTarget(pageHostname?: string): URL | null {
   }
 }
 
-function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
-  const apiTarget = getDevApiTarget(pageHostname);
+export interface DevWebSocketTargetOptions extends DevApiTargetOptions {
+  token: string;
+}
+
+export function resolveDevWebSocketTarget({
+  dev,
+  configuredTarget,
+  pageHostname,
+  token,
+}: DevWebSocketTargetOptions): string | null {
+  const apiTarget = resolveDevApiTarget({ dev, configuredTarget, pageHostname });
   if (!apiTarget) return null;
   const protocol = apiTarget.protocol === "https:" ? "wss:" : "ws:";
   return appendToken(`${protocol}//${apiTarget.host}/ws`, token);
+}
+
+function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
+  return resolveDevWebSocketTarget({
+    dev: import.meta.env.DEV,
+    configuredTarget: import.meta.env.VITE_API_TARGET,
+    pageHostname,
+    token,
+  });
 }
 
 class APIClientImpl {
@@ -177,7 +217,8 @@ class APIClientImpl {
         this._baseUrl = `${httpProto}//${wsUrlObj.host}`;
 
         // 启动时读取持久化代理偏好，并确认服务端代理配置真实可用。
-        import("./proxy").then(({ tryEnable }) => tryEnable(wsUrlObj.host));
+        const defaultProxyPort = wsUrlObj.protocol === "wss:" ? 443 : 80;
+        import("./proxy").then(({ tryEnable }) => tryEnable(wsUrlObj.host, defaultProxyPort));
       }
     })();
 

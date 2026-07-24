@@ -12,6 +12,7 @@ import {
   refreshProxyStatus,
   setProxyPreference,
   tryEnable,
+  parseProxyServerHost,
   proxyUrlSync,
   checkProxyUrl,
 } from "../../../src/mainview/lib/proxy";
@@ -82,6 +83,22 @@ describe("proxy module", () => {
       expect(isProxyEnabled()).toBe(false);
       expect(getProxyStatus().preferred).toBe(false);
       expect(localStorage.getItem("pi-local-proxy-enabled")).toBeNull();
+    });
+  });
+
+  describe("parseProxyServerHost", () => {
+    it("should use the explicit server port when one is present", () => {
+      expect(parseProxyServerHost("192.168.0.4:3100")).toEqual({
+        hostname: "192.168.0.4",
+        port: 3100,
+      });
+    });
+
+    it("should use the caller provided default port when no port is present", () => {
+      expect(parseProxyServerHost("preview.example.test", 443)).toEqual({
+        hostname: "preview.example.test",
+        port: 443,
+      });
     });
   });
 
@@ -365,6 +382,28 @@ describe("proxy module", () => {
       expect(isProxyEnabled()).toBe(false);
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch).toHaveBeenCalledWith("/api/proxy-status", { method: "GET" });
+    });
+
+    it("uses the websocket default port when registering a host without an explicit port", async () => {
+      enableProxy();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ configured: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ publicUrl: "https://abc.shanbox.xyz:8443" }),
+        });
+
+      await tryEnable("preview.example.test", 443);
+
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        "/api/proxy-register",
+        expect.objectContaining({
+          body: JSON.stringify({ host: "preview.example.test", port: 443 }),
+        }),
+      );
     });
   });
 });
