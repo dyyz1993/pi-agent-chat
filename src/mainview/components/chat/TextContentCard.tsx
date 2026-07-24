@@ -1,8 +1,9 @@
-import { lazy, memo, Suspense } from "react";
+import { memo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2 } from "lucide-react";
 
 import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
+import { safeLazy } from "../../lib/safe-lazy";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import {
   ContextReferenceCard,
@@ -15,7 +16,7 @@ import {
   extractHookInterventionSegments,
   type HookIntervention,
 } from "./HookInterventionCard";
-const StreamingMarkdownContent = lazy(() => import("./StreamingMarkdownContent"));
+const StreamingMarkdownContent = safeLazy(() => import("./StreamingMarkdownContent"));
 import { getRegisteredTags, getRenderer, type SpecialBlock } from "./special-block-registry";
 import { hasSpecialBlocks, parseSpecialBlocks } from "./special-block-parser";
 import "./special-block-renderers";

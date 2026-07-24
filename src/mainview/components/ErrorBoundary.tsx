@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import i18n from "../lib/i18n";
+import { isChunkLoadError, maybeReloadForChunkError } from "../lib/safe-lazy";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -21,7 +22,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return { hasError: true, error, detailsOpen: false };
   }
 
+  componentDidCatch(error: Error): void {
+    maybeReloadForChunkError(error);
+  }
+
   handleRetry = () => {
+    if (isChunkLoadError(this.state.error) && maybeReloadForChunkError(this.state.error)) {
+      return;
+    }
     this.setState({ hasError: false, error: null, detailsOpen: false });
   };
 
