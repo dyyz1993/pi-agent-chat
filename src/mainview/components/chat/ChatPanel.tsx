@@ -88,6 +88,7 @@ const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
 const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
 const SIDE_NAV_PAGE_SIZE = 200;
+const SIDE_NAV_WINDOW_SIZE = 200;
 
 const MAX_MSG_IDS_CACHE = 10;
 
@@ -537,6 +538,8 @@ export function ChatPanel() {
   const [sideNavExtraMessages, setSideNavExtraMessages] = useState<ChatMessage[]>([]);
   const [sideNavCursor, setSideNavCursor] = useState<string | null>(null);
   const [sideNavHasMore, setSideNavHasMore] = useState(false);
+  const [sideNavNewestExtraCursor, setSideNavNewestExtraCursor] = useState<string | null>(null);
+  const [sideNavHasMoreNewer, setSideNavHasMoreNewer] = useState(false);
   const [isSideNavLoadingMore, setIsSideNavLoadingMore] = useState(false);
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
@@ -891,6 +894,8 @@ export function ChatPanel() {
     setSideNavExtraMessages([]);
     setSideNavCursor(messageNextCursor);
     setSideNavHasMore(hasMoreMessages);
+    setSideNavNewestExtraCursor(null);
+    setSideNavHasMoreNewer(false);
     setIsSideNavLoadingMore(false);
   }, [effectiveScrollSessionId, hasMoreMessages, messageNextCursor]);
 
@@ -978,6 +983,42 @@ export function ChatPanel() {
     topLoadScrollAnchorRef.current = null;
   }, [activeSessionId, historyLoadVersion, isLoadingMore, isViewingSubagent]);
 
+  const seekSideNavToOldest = useCallback(async () => {
+    if (!effectiveScrollSessionId) return;
+    const sessionId = effectiveScrollSessionId;
+    setIsSideNavLoadingMore(true);
+    try {
+      const result = await apiClient.call("agent.getMessageNavPage", {
+        sessionId,
+        sessionPath: activeSideNavSessionPath ?? undefined,
+        fromStart: true,
+        limit: SIDE_NAV_WINDOW_SIZE,
+      });
+      const oldestMessages = mapNavMessages(result.messages);
+      if (oldestMessages.length === 0) return;
+      setSideNavExtraMessages(oldestMessages);
+      setSideNavCursor(oldestMessages[0]?.id ?? null);
+      setSideNavHasMore(false);
+      setSideNavNewestExtraCursor(oldestMessages[oldestMessages.length - 1]?.id ?? null);
+      setSideNavHasMoreNewer(result.hasMore === true);
+    } catch (err) {
+      log.warn("Failed to seek side nav to oldest", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsSideNavLoadingMore(false);
+    }
+  }, [activeSideNavSessionPath, effectiveScrollSessionId]);
+
+  const resetSideNavToLatest = useCallback(() => {
+    setSideNavExtraMessages([]);
+    setSideNavNewestExtraCursor(null);
+    setSideNavHasMoreNewer(false);
+    setSideNavCursor(messageNextCursor);
+    setSideNavHasMore(hasMoreMessages);
+  }, [hasMoreMessages, messageNextCursor]);
+
   const seekToAbsoluteTop = useCallback(async () => {
     if (!activeSessionId || isViewingSubagent) {
       scrollToEdge("top");
@@ -992,7 +1033,7 @@ export function ChatPanel() {
     topLoadScrollAnchorRef.current = null;
     setIsSeekingTop(true);
     try {
-      await loadTopMessages(sessionId);
+      await Promise.all([loadTopMessages(sessionId), seekSideNavToOldest()]);
     } finally {
       if (topSeekRunIdRef.current === runId) {
         topSeekSessionRef.current = null;
@@ -1008,7 +1049,14 @@ export function ChatPanel() {
         });
       }
     }
-  }, [activeSessionId, isViewingSubagent, loadTopMessages, scrollToEdge, setNavId]);
+  }, [
+    activeSessionId,
+    isViewingSubagent,
+    loadTopMessages,
+    scrollToEdge,
+    seekSideNavToOldest,
+    setNavId,
+  ]);
 
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
@@ -1040,6 +1088,7 @@ export function ChatPanel() {
       }
       if (activeSessionId && !isViewingSubagent) {
         clearTopWindowMessages(activeSessionId);
+        resetSideNavToLatest();
       }
       scrollToEdge(edge);
       setTimeout(() => {
@@ -1061,6 +1110,7 @@ export function ChatPanel() {
       scrollToEdge,
       seekToAbsoluteTop,
       suspendAutoScroll,
+      resetSideNavToLatest,
       setNavId,
     ],
   );
@@ -1087,7 +1137,17 @@ export function ChatPanel() {
         limit: SIDE_NAV_PAGE_SIZE,
       });
       const olderMessages = mapNavMessages(result.messages);
-      setSideNavExtraMessages((prev) => mergeSideNavMessages(olderMessages, prev));
+      setSideNavExtraMessages((prev) => {
+        const merged = mergeSideNavMessages(olderMessages, prev);
+        if (prev.length === 0 && merged.length > 0) {
+          setSideNavNewestExtraCursor(merged[merged.length - 1]?.id ?? null);
+        }
+        if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
+        const trimmed = merged.slice(0, SIDE_NAV_WINDOW_SIZE);
+        setSideNavNewestExtraCursor(trimmed[trimmed.length - 1]?.id ?? null);
+        setSideNavHasMoreNewer(true);
+        return trimmed;
+      });
       setSideNavCursor(result.nextCursor ?? null);
       setSideNavHasMore(result.hasMore === true);
     } catch (err) {
@@ -1106,19 +1166,64 @@ export function ChatPanel() {
     sideNavHasMore,
   ]);
 
+  const loadNewerSideNav = useCallback(async () => {
+    if (!effectiveScrollSessionId || isSideNavLoadingMore || !sideNavHasMoreNewer) return;
+    const sessionId = effectiveScrollSessionId;
+    setIsSideNavLoadingMore(true);
+    try {
+      const result = await apiClient.call("agent.getMessageNavPage", {
+        sessionId,
+        sessionPath: activeSideNavSessionPath ?? undefined,
+        beforeEntryId: sideNavNewestExtraCursor ?? undefined,
+        limit: SIDE_NAV_PAGE_SIZE,
+      });
+      const newerMessages = mapNavMessages(result.messages);
+      setSideNavExtraMessages((prev) => {
+        const merged = mergeSideNavMessages(prev, newerMessages);
+        if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
+        const trimmed = merged.slice(merged.length - SIDE_NAV_WINDOW_SIZE);
+        const newOldest = trimmed[0];
+        if (newOldest) {
+          setSideNavCursor(newOldest.id);
+          setSideNavHasMore(true);
+        }
+        return trimmed;
+      });
+      setSideNavNewestExtraCursor(result.nextCursor ?? null);
+      setSideNavHasMoreNewer(result.hasMore === true);
+    } catch (err) {
+      log.warn("Failed to load newer side nav page", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsSideNavLoadingMore(false);
+    }
+  }, [
+    activeSideNavSessionPath,
+    effectiveScrollSessionId,
+    isSideNavLoadingMore,
+    sideNavHasMoreNewer,
+    sideNavNewestExtraCursor,
+  ]);
+
   const sideNavPagination = useMemo<SideNavPagination | undefined>(() => {
     if (!shouldRenderSideNav || !effectiveScrollSessionId) return undefined;
     return {
       hasMore: sideNavHasMore,
       isLoading: isSideNavLoadingMore,
       onLoadMore: loadMoreSideNav,
+      hasMoreNewer: sideNavHasMoreNewer,
+      onLoadNewer: loadNewerSideNav,
     };
   }, [
     effectiveScrollSessionId,
     isSideNavLoadingMore,
     loadMoreSideNav,
+    loadNewerSideNav,
     shouldRenderSideNav,
     sideNavHasMore,
+    sideNavHasMoreNewer,
   ]);
 
   const handleNavDotClick = useCallback(
