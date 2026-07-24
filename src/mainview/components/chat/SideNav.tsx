@@ -66,6 +66,8 @@ export type SideNavPagination = {
   hasMore: boolean;
   isLoading: boolean;
   onLoadMore: () => void;
+  hasMoreNewer?: boolean;
+  onLoadNewer?: () => void;
 };
 
 const MAX_SIDE_NAV_CACHE = 10;
@@ -905,6 +907,16 @@ export const SideNav = memo(
           raf = 0;
           if (container.scrollTop <= 24 && pagination?.hasMore && !pagination.isLoading) {
             pagination.onLoadMore();
+          }
+          const distanceToBottom =
+            container.scrollHeight - container.scrollTop - container.clientHeight;
+          if (
+            distanceToBottom <= 24 &&
+            pagination?.hasMoreNewer &&
+            pagination.onLoadNewer &&
+            !pagination.isLoading
+          ) {
+            pagination.onLoadNewer();
           }
           refreshVisibleEdgeFallback();
         });

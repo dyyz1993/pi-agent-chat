@@ -454,6 +454,57 @@ describe("SideNav — keep active icon visible", () => {
   });
 });
 
+describe("SideNav — pagination edges", () => {
+  it("loads older messages at the top and newer messages at the bottom", () => {
+    vi.useFakeTimers();
+    const messages = makeMessages();
+    const onLoadMore = vi.fn();
+    const onLoadNewer = vi.fn();
+
+    const { container } = render(
+      <SideNav
+        ref={createRef()}
+        messages={messages}
+        onNavDotClick={vi.fn()}
+        pagination={{
+          hasMore: true,
+          hasMoreNewer: true,
+          isLoading: false,
+          onLoadMore,
+          onLoadNewer,
+        }}
+      />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    Object.defineProperty(scrollContainer, "scrollHeight", { value: 500, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 100, configurable: true });
+
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    fireEvent.scroll(scrollContainer);
+    vi.runOnlyPendingTimers();
+
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    expect(onLoadNewer).not.toHaveBeenCalled();
+
+    onLoadMore.mockClear();
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 400,
+      writable: true,
+      configurable: true,
+    });
+    fireEvent.scroll(scrollContainer);
+    vi.runOnlyPendingTimers();
+
+    expect(onLoadMore).not.toHaveBeenCalled();
+    expect(onLoadNewer).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+});
+
 describe("SideNav — click interaction", () => {
   it("calls onNavDotClick with the message target when an icon is clicked", () => {
     const messages = makeMessages();
