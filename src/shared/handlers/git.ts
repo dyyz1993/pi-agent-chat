@@ -52,8 +52,16 @@ function runSshCommand(remote: RemoteProjectRecord, command: string, allowNonZer
       remote.host,
       command,
     ],
-    { stdout: "pipe", stderr: "pipe" },
+    {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 10_000,
+    },
   );
+  if (proc.timedOut) {
+    throw new Error(`ssh command timed out after 10s: ${command.slice(0, 80)}`);
+  }
   if (proc.exitCode !== 0 && !allowNonZero) {
     throw new Error(proc.stderr.toString().trim() || "ssh command failed");
   }
@@ -87,9 +95,20 @@ function execGit(args: string[], target: GitTarget, allowNonZero = false): strin
   }
   const proc = Bun.spawnSync(["git", ...args], {
     cwd: target.cwd,
+    stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_ASKPASS: "",
+      SSH_ASKPASS: "",
+    },
+    timeout: 10_000,
   });
+  if (proc.timedOut) {
+    throw new Error(`git ${args[0]} timed out after 10s`);
+  }
   if (proc.exitCode !== 0 && !allowNonZero) {
     throw new Error(proc.stderr.toString().trim() || `git ${args[0]} failed`);
   }

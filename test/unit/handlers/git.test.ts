@@ -17,17 +17,20 @@ vi.mock("../../../src/shared/lib/pi-agent-paths", async () => {
 });
 
 const mockFn = vi.fn<(args: string[]) => string>(() => "");
+const mockSpawnCalls: Array<{ cmd: unknown[]; options?: unknown }> = [];
 type BunLike = {
   spawnSync?: (cmd: unknown[], options?: unknown) => {
     exitCode: number;
     stdout: Buffer;
     stderr: Buffer;
+    timedOut?: boolean;
   };
 };
 const bunRuntime = ((globalThis as { Bun?: BunLike }).Bun ??= {});
 const originalSpawnSync = bunRuntime.spawnSync;
 
-bunRuntime.spawnSync = ((cmd: unknown[]) => {
+bunRuntime.spawnSync = ((cmd: unknown[], options?: unknown) => {
+  mockSpawnCalls.push({ cmd, options });
   const cmdArgs = (Array.isArray(cmd) ? cmd.slice(1) : []) as string[];
   const output = mockFn(cmdArgs);
   if (output.startsWith("ERROR:")) {
@@ -50,6 +53,7 @@ describe("git handler", () => {
   });
 
   beforeEach(() => {
+    mockSpawnCalls.length = 0;
     mocks.listRemoteProjects.mockResolvedValue([]);
     mockFn.mockImplementation((args) => {
       if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") return "true";
@@ -101,6 +105,19 @@ describe("git handler", () => {
       expect(changed[0].status).toBe("modified");
 
       expect(untracked).toEqual(["untracked.txt"]);
+
+      const statusCall = mockSpawnCalls.find(
+        (call) => Array.isArray(call.cmd) && call.cmd[0] === "git" && call.cmd[1] === "status",
+      );
+      expect(statusCall?.options).toMatchObject({
+        stdin: "ignore",
+        timeout: 10_000,
+        env: {
+          GIT_TERMINAL_PROMPT: "0",
+          GIT_ASKPASS: "",
+          SSH_ASKPASS: "",
+        },
+      });
     });
 
     it("returns unknown branch when branch line is unparseable", async () => {
@@ -158,6 +175,13 @@ describe("git handler", () => {
       expect(
         mockFn.mock.calls.some(([args]) => (args.at(-1) ?? "").includes("cd '/srv/remote app'")),
       ).toBe(true);
+      const sshCall = mockSpawnCalls.find(
+        (call) => Array.isArray(call.cmd) && call.cmd[0] === "ssh",
+      );
+      expect(sshCall?.options).toMatchObject({
+        stdin: "ignore",
+        timeout: 10_000,
+      });
     });
 
     it("runs git status on remote subpaths returned by the file explorer", async () => {
