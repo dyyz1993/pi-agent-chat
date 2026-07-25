@@ -358,6 +358,7 @@ type SanitizedEvent = SanitizedMessageUpdate | Exclude<AgentEvent, { type: "mess
 
 type RpcClientInstance = RpcClientAPI;
 type AgentStartResult = { agentId: string; status: "started" | "already_running" };
+type WaitForIdleClient = { waitForIdle?: (timeout?: number) => Promise<void> };
 
 interface ManagedClient {
   client: RpcClientInstance;
@@ -1197,12 +1198,58 @@ export class AgentProcessManager {
       });
     } catch (err) {
       if (err instanceof Error && err.message.includes("follow-up or steer")) {
+        if (await this.waitForIdleAndRetryPrompt(sessionId, content, images)) {
+          return true;
+        }
         log.info("send: agent is streaming, falling back to steer", { sessionId });
         this.steer(sessionId, content, images);
         return true;
       }
       throw err;
     }
+  }
+
+  private async waitForIdleAndRetryPrompt(
+    sessionId: string,
+    content: string,
+    images?: ImageContent[],
+  ): Promise<boolean> {
+    const managed = this.getActiveManaged(sessionId);
+    const waitForIdle = (managed?.client as WaitForIdleClient | undefined)?.waitForIdle;
+    if (!managed || typeof waitForIdle !== "function") return false;
+
+    try {
+      log.info("send: agent is streaming, waiting briefly for idle before steer fallback", {
+        sessionId,
+        status: managed.info.status,
+      });
+      await waitForIdle.call(managed.client, 8_000);
+    } catch (waitErr: unknown) {
+      log.warn("send: waitForIdle failed before steer fallback", {
+        sessionId,
+        err: waitErr instanceof Error ? waitErr.message : String(waitErr),
+      });
+      return false;
+    }
+
+    if (managed.info.status && managed.info.status !== "idle") {
+      return false;
+    }
+
+    return sendPromptOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+      isClientAlive: (sid, m) => this.isClientAlive(sid, m),
+      cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
+      emitAgentEnd: (sid, reason) =>
+        this.emitAgentEvent(
+          sid,
+          (reason ? { type: "agent_end", reason } : { type: "agent_end" }) as SanitizedEvent,
+        ),
+    });
   }
 
   steer(

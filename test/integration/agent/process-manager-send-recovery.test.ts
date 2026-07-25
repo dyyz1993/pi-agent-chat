@@ -62,6 +62,7 @@ interface ManagedClientShape {
     reload: () => Promise<void>;
     stop?: () => Promise<void>;
     steer?: (content: string, images?: unknown[]) => Promise<void>;
+    waitForIdle?: (timeout?: number) => Promise<void>;
   };
   info: {
     sessionId: string;
@@ -304,6 +305,31 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(ok).toBe(true);
     expect(steerFn).toHaveBeenCalledWith("interrupt me", undefined);
     expect(managed.client.prompt).not.toHaveBeenCalled();
+  });
+
+  it("waits for idle and retries prompt before steering when the client supports it", async () => {
+    const sessionId = "sess-streaming-wait-idle";
+    const projectPath = "/fake/project";
+    const sessionPath = "/fake/sessions/sess-streaming-wait-idle.jsonl";
+    const m = internals(manager);
+    m.sessionProjectPaths.set(sessionId, projectPath);
+    m.sessionPaths.set(sessionId, sessionPath);
+
+    const managed = makeManaged(sessionId, projectPath, sessionPath);
+    const steerFn = vi.fn().mockResolvedValue(undefined);
+    const waitForIdle = vi.fn().mockImplementation(async () => {
+      managed.info.status = "idle";
+    });
+    managed.client = { ...managed.client, steer: steerFn, waitForIdle };
+    managed.info.status = "streaming";
+    m.clients.set(sessionId, managed);
+
+    const ok = await manager.send(sessionId, "send after idle");
+
+    expect(ok).toBe(true);
+    expect(waitForIdle).toHaveBeenCalledWith(8_000);
+    expect(managed.client.prompt).toHaveBeenCalledWith("send after idle", undefined);
+    expect(steerFn).not.toHaveBeenCalled();
   });
 
   it("still uses prompt when agent is idle despite streaming guard path", async () => {
