@@ -1,9 +1,10 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import { existsSync, rmSync } from "fs";
-import { execFile } from "child_process";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import { execFile, spawn } from "child_process";
 import { basename, join } from "path";
+import { homedir } from "os";
 import { promisify } from "util";
 import { createLogger } from "../lib/logger";
 import {
@@ -76,6 +77,86 @@ import {
 const log = createLogger("config");
 const execFileAsync = promisify(execFile);
 const REMOTE_RESOURCE_TYPES = new Set<RemoteSyncResourceType>(["skills", "agents", "rules"]);
+
+function runPiCli(
+  cliPath: string,
+  args: string[],
+  options: { env: NodeJS.ProcessEnv; timeoutMs: number },
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cliPath, args, {
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error(`pi CLI timed out after ${options.timeoutMs}ms`));
+    }, options.timeoutMs);
+
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+
+    child.on("close", (code, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const err = new Error(
+        `pi CLI exited with code ${code}${signal ? ` (signal ${signal})` : ""}`,
+      ) as Error & {
+        stdout?: string;
+        stderr?: string;
+        code?: number | null;
+        signal?: NodeJS.Signals | null;
+      };
+      err.stdout = stdout;
+      err.stderr = stderr;
+      err.code = code;
+      err.signal = signal;
+      reject(err);
+    });
+  });
+}
+
+function createIsolatedPiConfigDir(): string {
+  const baseDir = join(homedir(), ".pi", "chat", ".quick-create");
+  mkdirSync(baseDir, { recursive: true });
+  const tmpDir = mkdtempSync(join(baseDir, "run-"));
+
+  const realAgentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+  const realAuth = join(realAgentDir, "auth.json");
+  if (existsSync(realAuth)) {
+    try {
+      symlinkSync(realAuth, join(tmpDir, "auth.json"));
+    } catch {
+      // If the symlink fails, pi CLI will surface the missing-auth error itself.
+    }
+  }
+
+  writeFileSync(join(tmpDir, "mcp.json"), '{"mcp":{"servers":{}}}', "utf8");
+  return tmpDir;
+}
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -774,26 +855,38 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       model: quickCreateModel || "(pi default)",
     });
 
+    const tmpAgentDir = createIsolatedPiConfigDir();
     let stdout = "";
     let stderr = "";
     try {
-      const result = await execFileAsync(cliPath, args, {
-        maxBuffer: 8 * 1024 * 1024,
-        timeout: 60_000,
+      const result = await runPiCli(cliPath, args, {
+        env: { ...process.env, PI_CODING_AGENT_DIR: tmpAgentDir },
+        timeoutMs: 45_000,
       });
-      stdout = result.stdout ?? "";
-      stderr = result.stderr ?? "";
+      stdout = result.stdout;
+      stderr = result.stderr;
     } catch (err) {
-      const e = err as { stdout?: string; stderr?: string; message?: string };
+      const e = err as {
+        stdout?: string;
+        stderr?: string;
+        message?: string;
+        code?: string | number | null;
+        signal?: string | null;
+      };
       stdout = e.stdout ?? "";
       stderr = e.stderr ?? e.message ?? String(err);
       log.warn("project.generateName: pi CLI failed", {
         tier,
         stderr: stderr.slice(0, 500),
+        stdout: stdout.slice(0, 200),
+        exitCode: e.code,
+        signal: e.signal,
       });
       throw new Error(
         `Failed to generate project name: ${stderr.slice(0, 300) || "pi CLI error"}`,
       );
+    } finally {
+      rmSync(tmpAgentDir, { recursive: true, force: true });
     }
 
     const trimmed = stdout.trim();

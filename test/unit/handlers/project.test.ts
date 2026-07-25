@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const projectMocks = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
+  mockSpawn: vi.fn(),
   mockScanSessions: vi.fn(async () => []),
   mockScanAllProjects: vi.fn(async () => []),
   mockListPiProjects: vi.fn(async () => []),
@@ -155,6 +156,7 @@ const projectMocks = vi.hoisted(() => ({
 }));
 const {
   mockExecFile,
+  mockSpawn,
   mockScanSessions,
   mockScanAllProjects,
   mockListPiProjects,
@@ -181,8 +183,21 @@ const {
 vi.mock("child_process", () => ({
   default: {
     execFile: projectMocks.mockExecFile,
+    spawn: projectMocks.mockSpawn,
   },
   execFile: projectMocks.mockExecFile,
+  spawn: projectMocks.mockSpawn,
+}));
+
+vi.mock("../../../src/server-config", () => ({
+  config: {
+    piCliPath: "/mock/pi",
+    remoteResourceSyncEnabled: true,
+    remoteResourceSyncLocalAgentDir: "/local/.pi/agent",
+    remoteResourceSyncRemoteAgentDir: "",
+    remoteChildRemoteRuntimeDir: "",
+    remoteChildShell: "sh -lc",
+  },
 }));
 
 vi.mock("../../../src/shared/lib/session-scanner", () => ({
@@ -267,6 +282,45 @@ import { register } from "../../../src/shared/handlers/project";
 import { createMockServer } from "../../helpers/mock-server";
 import type { MockServer } from "../../helpers/mock-server";
 
+function createMockSpawnResult({
+  stdout = "",
+  stderr = "",
+  code = 0,
+  signal = null,
+}: {
+  stdout?: string;
+  stderr?: string;
+  code?: number | null;
+  signal?: NodeJS.Signals | null;
+}) {
+  const child = {
+    stdout: {
+      on(event: string, callback: (chunk: Buffer) => void) {
+        if (event === "data" && stdout) {
+          queueMicrotask(() => callback(Buffer.from(stdout)));
+        }
+        return child.stdout;
+      },
+    },
+    stderr: {
+      on(event: string, callback: (chunk: Buffer) => void) {
+        if (event === "data" && stderr) {
+          queueMicrotask(() => callback(Buffer.from(stderr)));
+        }
+        return child.stderr;
+      },
+    },
+    on(event: string, callback: (...args: unknown[]) => void) {
+      if (event === "close") {
+        queueMicrotask(() => callback(code, signal));
+      }
+      return child;
+    },
+    kill: vi.fn(),
+  };
+  return child;
+}
+
 describe("project handler", () => {
   let server: MockServer;
 
@@ -275,6 +329,14 @@ describe("project handler", () => {
     mockExecFile.mockImplementation((_command, _args, _options, callback) => {
       callback(null, { stdout: "", stderr: "" });
     });
+    mockSpawn.mockImplementation(() =>
+      createMockSpawnResult({
+        stdout: JSON.stringify({
+          name: "generated-demo-app",
+          description: "A generated demo app.",
+        }),
+      }),
+    );
     server = createMockServer();
     register(
       server as unknown as Parameters<typeof register>[0],
@@ -535,6 +597,51 @@ describe("project handler", () => {
       const result = await handler({});
 
       expect(result).toEqual({ projects: [{ path: "/merged" }] });
+    });
+  });
+
+  describe("project.generateName", () => {
+    it("uses spawned pi CLI with an isolated agent config dir", async () => {
+      const handler = server.handlers.get("project.generateName")!;
+
+      const result = await handler({
+        requirement: "Build a tiny notes app",
+        tier: "fast",
+      });
+
+      expect(result).toEqual({
+        name: "generated-demo-app",
+        description: "A generated demo app.",
+      });
+      expect(mockExecFile).not.toHaveBeenCalled();
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      const [cliPath, args, options] = mockSpawn.mock.calls[0];
+      expect(cliPath).toBe("/mock/pi");
+      expect(args).toContain("--no-session");
+      expect(args).toContain("--output-schema");
+      expect(args).toContain("Build a tiny notes app");
+      expect(options).toMatchObject({
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      expect(options.env.PI_CODING_AGENT_DIR).toContain(".quick-create/run-");
+      expect(options.env.PI_CODING_AGENT_DIR).not.toBe(process.env.PI_CODING_AGENT_DIR);
+    });
+
+    it("surfaces stderr when spawned pi CLI exits non-zero", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stderr: "model schema validation failed",
+          code: 1,
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      await expect(
+        handler({
+          requirement: "Build a tiny notes app",
+          tier: "fast",
+        }),
+      ).rejects.toThrow("model schema validation failed");
     });
   });
 
