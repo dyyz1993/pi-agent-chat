@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getProjectSessionDir } from "../../../src/shared/lib/pi-agent-paths";
 
 interface SupervisorTestGlobal {
   __supervisorProcessManager?: unknown;
@@ -34,6 +35,15 @@ describe("supervisor handler", () => {
 
   async function makeSupervisorDataDir(sessionId: string): Promise<string> {
     const dataDir = join(agentDir, "sessions", "--test-project--", "data", sessionId, "index");
+    await mkdir(dataDir, { recursive: true });
+    return dataDir;
+  }
+
+  async function makeProjectSupervisorDataDir(
+    projectPath: string,
+    sessionId: string,
+  ): Promise<string> {
+    const dataDir = join(getProjectSessionDir(projectPath), "data", sessionId, "index");
     await mkdir(dataDir, { recursive: true });
     return dataDir;
   }
@@ -180,6 +190,50 @@ describe("supervisor handler", () => {
     expect(status.enabled).toBe(true);
     expect(status.goal).toMatchObject({
       objective: "recover after reconnect",
+      status: "running",
+    });
+  });
+
+  it("uses process-manager project path to find persisted goal status directly", async () => {
+    const sessionId = "session-direct-project-path";
+    const projectPath = "/Users/test/project with spaces";
+    const dataDir = await makeProjectSupervisorDataDir(projectPath, sessionId);
+    await writeFile(
+      join(dataDir, "supervisor-goal-runtime.json"),
+      JSON.stringify(
+        {
+          enabled: true,
+          activeGoal: {
+            id: "goal-direct",
+            objective: "recover by project path",
+            status: "running",
+            startedAt: 1,
+            updatedAt: 2,
+            continuationCount: 3,
+            blockers: [],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    const callChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = {
+      callChannel,
+      getProjectPathForSession: vi.fn(() => projectPath),
+    };
+    const getStatus = server.handlers.get("supervisor.getStatus")!;
+
+    const statusPromise = getStatus({ sessionId });
+    vi.advanceTimersByTime(2_500);
+    await Promise.resolve();
+
+    const status = (await statusPromise) as SupervisorStatus;
+    expect(status.enabled).toBe(true);
+    expect(status.continueCount).toBe(3);
+    expect(status.goal).toMatchObject({
+      objective: "recover by project path",
       status: "running",
     });
   });

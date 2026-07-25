@@ -8,7 +8,7 @@ import { withTimeout } from "../lib/with-timeout";
 import { forwardToChannel } from "./channel-helpers";
 import { readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getSessionsRoot } from "../lib/pi-agent-paths";
+import { getProjectSessionDir, getSessionsRoot } from "../lib/pi-agent-paths";
 
 const log = createLogger("supervisor");
 const STATUS_TIMEOUT_MS = 2500;
@@ -51,7 +51,8 @@ async function getSupervisorStatus(
 
 // ── 磁盘 fallback（进程不在线时从持久化文件恢复状态）──
 
-/** 异步遍历 sessions bucket 查找 sessionId 对应的 supervisor 数据目录
+/** 查找 sessionId 对应的 supervisor 数据目录。优先用 projectPath 直接定位，
+ *  无法定位时再遍历 sessions bucket。
  *  supervisor 扩展的 extName = basename(入口文件 index.ts) = "index"，
  *  所以实际 sessionDataDir = .../data/<sessionId>/index/
  *  结果缓存到 sessionDataDirCache，避免每次请求都扫全部 bucket */
@@ -59,6 +60,19 @@ async function findSessionDataDir(sessionId: string): Promise<string | null> {
   if (sessionDataDirCache.has(sessionId)) {
     return sessionDataDirCache.get(sessionId) ?? null;
   }
+  const pm = getProcessManager();
+  const projectPath =
+    typeof pm?.getProjectPathForSession === "function"
+      ? pm.getProjectPathForSession(sessionId)
+      : undefined;
+  if (projectPath) {
+    const direct = await trySessionDataDir(projectPath, sessionId);
+    if (direct) {
+      sessionDataDirCache.set(sessionId, direct);
+      return direct;
+    }
+  }
+
   const sessionsRoot = getSessionsRoot();
   let buckets: string[];
   try {
@@ -88,6 +102,23 @@ async function findSessionDataDir(sessionId: string): Promise<string | null> {
   }
   sessionDataDirCache.set(sessionId, null);
   return null;
+}
+
+async function trySessionDataDir(projectPath: string, sessionId: string): Promise<string | null> {
+  const sessionDir = join(getProjectSessionDir(projectPath), "data", sessionId);
+  try {
+    await stat(sessionDir);
+  } catch {
+    return null;
+  }
+
+  const indexDir = join(sessionDir, "index");
+  try {
+    await stat(indexDir);
+    return indexDir;
+  } catch {
+    return sessionDir;
+  }
 }
 
 interface PersistedGoalRuntime {

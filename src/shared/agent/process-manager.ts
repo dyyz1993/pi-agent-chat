@@ -2384,6 +2384,11 @@ export class AgentProcessManager {
     return managed?.info?.projectPath;
   }
 
+  getProjectPathForSession(sessionId: string): string | undefined {
+    const managed = this.getActiveManaged(sessionId);
+    return managed?.info?.projectPath ?? this.sessionProjectPaths.get(sessionId);
+  }
+
   getSessionPath(sessionId: string): string {
     const managed = this.getActiveManaged(sessionId);
     if (managed) return managed.info.sessionPath;
