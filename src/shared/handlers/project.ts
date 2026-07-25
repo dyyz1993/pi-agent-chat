@@ -64,6 +64,7 @@ import type {
   SshConnectionErrorCode,
   SshDirectoryEntry,
   RemoteResourceSyncPreview,
+  QuickCreatePlan,
 } from "../modules/project";
 import { listDetectedSshHosts } from "../lib/ssh-config";
 import { classifySshErrorMessage } from "../lib/ssh-error-classification";
@@ -176,6 +177,65 @@ function sanitizeFolderName(input: string): string {
   // 去掉首尾 -
   const trimmed2 = collapsed.replace(/^-+|-+$/g, "");
   return trimmed2.slice(0, 40);
+}
+
+function sanitizeQuickCreatePlan(input: unknown): QuickCreatePlan | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const plan = input as Partial<QuickCreatePlan>;
+  if (
+    typeof plan.goal !== "string" ||
+    !Array.isArray(plan.techStack) ||
+    !Array.isArray(plan.steps) ||
+    typeof plan.testing !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    goal: plan.goal.trim().slice(0, 300),
+    techStack: plan.techStack
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 8),
+    steps: plan.steps
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 10),
+    testing: plan.testing.trim().slice(0, 500),
+  };
+}
+
+function renderProjectReadme(
+  folderName: string,
+  description: string,
+  plan: QuickCreatePlan | undefined,
+): string {
+  const title = folderName.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const lines: string[] = [`# ${title}`, ""];
+
+  if (description) {
+    lines.push(`> ${description}`, "");
+  }
+  if (plan?.goal) {
+    lines.push("## 目标", "", plan.goal, "");
+  }
+  if (plan && plan.techStack.length > 0) {
+    lines.push("## 技术栈", "", ...plan.techStack.map((tech) => `- ${tech}`), "");
+  }
+  if (plan && plan.steps.length > 0) {
+    lines.push("## 实施步骤", "");
+    plan.steps.forEach((step, index) => {
+      lines.push(`${index + 1}. ${step}`);
+    });
+    lines.push("");
+  }
+  if (plan?.testing) {
+    lines.push("## 测试与校验", "", plan.testing, "");
+  }
+
+  return lines.join("\n");
 }
 
 function normalizeRemoteDirectoryPath(path?: string): string {
@@ -820,11 +880,17 @@ export function register(server: RPCServer, options: HandlerOptions): void {
 
     const systemPrompt =
       "You are a senior software architect. Given a project requirement, " +
-      "produce a concise, filesystem-safe project folder name (lowercase, " +
+      "produce: (1) a concise filesystem-safe project folder name (lowercase, " +
       "kebab-case, no spaces, ASCII letters/digits/dashes only, max 40 chars, " +
-      "no leading/trailing dash) and a one-sentence description in the same " +
-      "language as the requirement. The name must reflect the project's core " +
-      "purpose, not be a generic word like 'project' or 'app'.";
+      "no leading/trailing dash; must reflect the project's core purpose, not " +
+      "a generic word like 'project' or 'app'); (2) a one-sentence description " +
+      "in the same language as the requirement; (3) a concrete project plan " +
+      "consisting of: goal (1-2 sentences on what success looks like), " +
+      "techStack (3-6 concrete technologies/libraries, each as a short label " +
+      "like 'React 18' or 'Vitest'), steps (4-7 ordered implementation " +
+      "milestones, each one short actionable sentence), and testing (a short " +
+      "paragraph describing what to test and how — unit/integration/manual). " +
+      "All plan text must be in the SAME language as the requirement.";
 
     const schema = JSON.stringify({
       type: "object",
@@ -835,13 +901,37 @@ export function register(server: RPCServer, options: HandlerOptions): void {
           maxLength: 40,
         },
         description: { type: "string", maxLength: 200 },
+        plan: {
+          type: "object",
+          properties: {
+            goal: { type: "string", maxLength: 300 },
+            techStack: {
+              type: "array",
+              items: { type: "string", maxLength: 40 },
+              minItems: 2,
+              maxItems: 8,
+            },
+            steps: {
+              type: "array",
+              items: { type: "string", maxLength: 200 },
+              minItems: 3,
+              maxItems: 10,
+            },
+            testing: { type: "string", maxLength: 500 },
+          },
+          required: ["goal", "techStack", "steps", "testing"],
+          additionalProperties: false,
+        },
       },
-      required: ["name", "description"],
+      required: ["name", "description", "plan"],
       additionalProperties: false,
     });
 
     const args = [
+      "-p",
       ...(quickCreateModel ? ["--model", quickCreateModel] : []),
+      "--no-tools",
+      "--no-extensions",
       "--system-prompt",
       systemPrompt,
       "--no-session",
@@ -899,9 +989,9 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       );
     }
 
-    let parsed: { name?: string; description?: string };
+    let parsed: { name?: string; description?: string; plan?: unknown };
     try {
-      parsed = JSON.parse(trimmed) as { name?: string; description?: string };
+      parsed = JSON.parse(trimmed) as { name?: string; description?: string; plan?: unknown };
     } catch {
       log.warn("project.generateName: invalid JSON", {
         stdout: trimmed.slice(0, 300),
@@ -916,9 +1006,11 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     if (!safeName) {
       throw new Error("Generated project name is invalid");
     }
+    const safePlan = sanitizeQuickCreatePlan(parsed.plan);
     return {
       name: safeName,
       description: (parsed.description ?? "").trim().slice(0, 200),
+      ...(safePlan ? { plan: safePlan } : {}),
     };
   });
 
@@ -929,6 +1021,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   r("project.confirmQuickCreate", async (params) => {
     const parentDir = params.parentDir?.trim() ?? "";
     const folderName = sanitizeFolderName(params.folderName ?? "");
+    const description = params.description?.trim() ?? "";
+    const plan = sanitizeQuickCreatePlan(params.plan);
     if (!parentDir) {
       return { ok: false, error: "Parent directory is required" };
     }
@@ -944,6 +1038,18 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       return { ok: false, error: created.error ?? "Failed to create directory" };
     }
     const projectPath = created.path;
+
+    try {
+      const readme = renderProjectReadme(folderName, description, plan);
+      if (readme.trim()) {
+        writeFileSync(join(projectPath, "README.md"), readme, "utf8");
+      }
+    } catch (err) {
+      log.warn("project.confirmQuickCreate: write README failed (non-fatal)", {
+        projectPath,
+        error: String(err).slice(0, 300),
+      });
+    }
 
     try {
       await execFileAsync("git", ["init", projectPath], {

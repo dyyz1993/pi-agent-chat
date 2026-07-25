@@ -494,7 +494,7 @@ export function ProjectPickerDialog({
       } finally {
         setQcCreating(false);
       }
-    }, [qcDefaultDir, qcName, onSelect, onClose, t]),
+    }, [qcDefaultDir, qcDescription, qcName, qcPlan, onSelect, onClose, t]),
   );
 
   // 触发加载默认目录的 effect

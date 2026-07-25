@@ -14,6 +14,13 @@ export type WorktreeWorkerStatus = "idle" | "assigned" | "running" | "blocked" |
 export type WorktreeIssuePriority = "low" | "medium" | "high";
 export type WorktreeBatchStatus = "planned" | "active" | "blocked" | "done";
 
+export interface QuickCreatePlan {
+  goal: string;
+  techStack: string[];
+  steps: string[];
+  testing: string;
+}
+
 export interface RemoteResourceSyncConfig {
   enabled?: boolean;
   resourceTypes?: RemoteSyncResourceType[];
@@ -456,10 +463,19 @@ export interface ProjectMethods {
   };
   "project.generateName": {
     params: { requirement: string; tier?: "fast" | "pro" | "max" };
-    result: { name: string; description: string };
+    result: {
+      name: string;
+      description: string;
+      plan?: QuickCreatePlan;
+    };
   };
   "project.confirmQuickCreate": {
-    params: { parentDir: string; folderName: string };
+    params: {
+      parentDir: string;
+      folderName: string;
+      description?: string;
+      plan?: QuickCreatePlan;
+    };
     result: { ok: boolean; path?: string; error?: string };
   };
   "project.getDefaultProjectDir": {

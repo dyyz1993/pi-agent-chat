@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const projectMocks = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
@@ -169,6 +172,7 @@ const {
   mockRestoreOpenTabs,
   mockToggleFavorite,
   mockTogglePin,
+  mockCreateDirectory,
   mockLinkProject,
   mockUnlinkProject,
   mockGetLinkedProjects,
@@ -334,6 +338,12 @@ describe("project handler", () => {
         stdout: JSON.stringify({
           name: "generated-demo-app",
           description: "A generated demo app.",
+          plan: {
+            goal: "Build a small app that captures notes quickly.",
+            techStack: ["React", "Vitest"],
+            steps: ["Create the UI", "Persist notes", "Add tests"],
+            testing: "Run unit tests and verify note creation manually.",
+          },
         }),
       }),
     );
@@ -612,12 +622,20 @@ describe("project handler", () => {
       expect(result).toEqual({
         name: "generated-demo-app",
         description: "A generated demo app.",
+        plan: {
+          goal: "Build a small app that captures notes quickly.",
+          techStack: ["React", "Vitest"],
+          steps: ["Create the UI", "Persist notes", "Add tests"],
+          testing: "Run unit tests and verify note creation manually.",
+        },
       });
       expect(mockExecFile).not.toHaveBeenCalled();
       expect(mockSpawn).toHaveBeenCalledTimes(1);
       const [cliPath, args, options] = mockSpawn.mock.calls[0];
       expect(cliPath).toBe("/mock/pi");
       expect(args).toContain("--no-session");
+      expect(args).toContain("--no-tools");
+      expect(args).toContain("--no-extensions");
       expect(args).toContain("--output-schema");
       expect(args).toContain("Build a tiny notes app");
       expect(options).toMatchObject({
@@ -642,6 +660,82 @@ describe("project handler", () => {
           tier: "fast",
         }),
       ).rejects.toThrow("model schema validation failed");
+    });
+
+    it("trims and bounds generated plan fields", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stdout: JSON.stringify({
+            name: "demo-app",
+            description: " demo description ",
+            plan: {
+              goal: ` ${"g".repeat(400)} `,
+              techStack: [" React ", 123, "Vitest", "Playwright", "Tailwind", "Zustand", "Vite", "Bun", "Extra"],
+              steps: [" Step 1 ", null, "Step 2", "Step 3"],
+              testing: ` ${"t".repeat(600)} `,
+            },
+          }),
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      const result = (await handler({
+        requirement: "Build a demo app",
+        tier: "fast",
+      })) as {
+        plan?: { goal: string; techStack: string[]; steps: string[]; testing: string };
+      };
+
+      expect(result.plan?.goal).toHaveLength(300);
+      expect(result.plan?.techStack).toEqual([
+        "React",
+        "Vitest",
+        "Playwright",
+        "Tailwind",
+        "Zustand",
+        "Vite",
+        "Bun",
+        "Extra",
+      ]);
+      expect(result.plan?.steps).toEqual(["Step 1", "Step 2", "Step 3"]);
+      expect(result.plan?.testing).toHaveLength(500);
+    });
+  });
+
+  describe("project.confirmQuickCreate", () => {
+    it("writes README with generated description and plan", async () => {
+      const root = await mkdtemp(join(tmpdir(), "pi-quick-create-test-"));
+      try {
+        const projectPath = join(root, "demo-app");
+        await mkdir(projectPath, { recursive: true });
+        mockCreateDirectory.mockResolvedValueOnce({ ok: true, path: projectPath });
+        const handler = server.handlers.get("project.confirmQuickCreate")!;
+
+        await expect(
+          handler({
+            parentDir: root,
+            folderName: "demo-app",
+            description: "A focused demo app.",
+            plan: {
+              goal: "Ship a usable note-taking flow.",
+              techStack: ["React", "Vitest"],
+              steps: ["Create screens", "Wire storage"],
+              testing: "Run unit tests and create a note manually.",
+            },
+          }),
+        ).resolves.toEqual({ ok: true, path: projectPath });
+
+        const readme = await readFile(join(projectPath, "README.md"), "utf-8");
+        expect(readme).toContain("# Demo App");
+        expect(readme).toContain("> A focused demo app.");
+        expect(readme).toContain("## 目标");
+        expect(readme).toContain("Ship a usable note-taking flow.");
+        expect(readme).toContain("- React");
+        expect(readme).toContain("1. Create screens");
+        expect(readme).toContain("Run unit tests and create a note manually.");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
     });
   });
 
