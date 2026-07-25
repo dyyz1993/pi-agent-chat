@@ -115,7 +115,6 @@ export interface AgentMethods {
       sessionPath?: string;
       limit?: number;
       afterEntryId?: string;
-      beforeEntryId?: string;
       fromStart?: boolean;
     };
     result: {
@@ -151,6 +150,7 @@ export interface AgentMethods {
       sessionPath?: string;
       limit?: number;
       afterEntryId?: string;
+      beforeEntryId?: string;
       fromStart?: boolean;
     };
     result: {

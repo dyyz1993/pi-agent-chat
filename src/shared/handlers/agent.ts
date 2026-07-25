@@ -303,13 +303,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getMessageNavPage", async (params: P<"agent.getMessageNavPage">) => {
-    const rawBeforeEntryId = (params as Record<string, unknown>).beforeEntryId;
-    const beforeEntryId =
-      typeof rawBeforeEntryId === "string" ? rawBeforeEntryId : undefined;
     const result = await m.getMessageNavPage(params.sessionId, params.sessionPath, {
       limit: params.limit,
       afterEntryId: params.afterEntryId,
-      beforeEntryId,
+      beforeEntryId: params.beforeEntryId,
       fromStart: params.fromStart,
     });
     return {
