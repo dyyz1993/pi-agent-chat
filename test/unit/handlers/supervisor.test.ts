@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 interface SupervisorTestGlobal {
   __supervisorProcessManager?: unknown;
@@ -26,18 +29,35 @@ const disabledStatus: SupervisorStatus = {
 
 describe("supervisor handler", () => {
   let server: MockServer;
+  let previousAgentDir: string | undefined;
+  let agentDir: string;
 
-  beforeEach(() => {
+  async function makeSupervisorDataDir(sessionId: string): Promise<string> {
+    const dataDir = join(agentDir, "sessions", "--test-project--", "data", sessionId, "index");
+    await mkdir(dataDir, { recursive: true });
+    return dataDir;
+  }
+
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    agentDir = await mkdtemp(join(tmpdir(), "pi-supervisor-test-"));
+    process.env.PI_CODING_AGENT_DIR = agentDir;
     supervisorTestGlobal().__supervisorProcessManager = null;
     server = createMockServer();
     register(server as unknown as Parameters<typeof register>[0], {} as Parameters<typeof register>[1]);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     supervisorTestGlobal().__supervisorProcessManager = undefined;
     vi.useRealTimers();
+    if (previousAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    }
+    await rm(agentDir, { recursive: true, force: true });
   });
 
   it("returns disabled status when no process manager exists", async () => {
@@ -108,5 +128,123 @@ describe("supervisor handler", () => {
 
     await expect(result).resolves.toEqual(disabledStatus);
     expect(callChannel).toHaveBeenCalledWith("session-slow", "supervisor", "getStatus", {});
+  });
+
+  it("persists a running goal when setGoal channel does not respond", async () => {
+    const sessionId = "session-set-goal-timeout";
+    const dataDir = await makeSupervisorDataDir(sessionId);
+    const callChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel };
+    const setGoal = server.handlers.get("supervisor.setGoal")!;
+
+    const resultPromise = setGoal({ sessionId, objective: "keep supervisor goal alive" });
+    vi.advanceTimersByTime(5_000);
+    await Promise.resolve();
+
+    const result = (await resultPromise) as { goal: { objective: string; status: string } };
+    expect(result.goal).toMatchObject({
+      objective: "keep supervisor goal alive",
+      status: "running",
+    });
+    const persisted = JSON.parse(
+      await readFile(join(dataDir, "supervisor-goal-runtime.json"), "utf-8"),
+    ) as { enabled?: boolean; activeGoal?: { objective?: string; status?: string } };
+    expect(persisted).toMatchObject({
+      enabled: true,
+      activeGoal: {
+        objective: "keep supervisor goal alive",
+        status: "running",
+      },
+    });
+  });
+
+  it("reads persisted goal status when getStatus channel does not respond", async () => {
+    const sessionId = "session-status-timeout";
+    await makeSupervisorDataDir(sessionId);
+    const setGoal = server.handlers.get("supervisor.setGoal")!;
+    const setGoalChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel: setGoalChannel };
+    const setPromise = setGoal({ sessionId, objective: "recover after reconnect" });
+    vi.advanceTimersByTime(5_000);
+    await setPromise;
+
+    const getStatusChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel: getStatusChannel };
+    const getStatus = server.handlers.get("supervisor.getStatus")!;
+
+    const statusPromise = getStatus({ sessionId });
+    vi.advanceTimersByTime(2_500);
+    await Promise.resolve();
+
+    const status = (await statusPromise) as SupervisorStatus;
+    expect(status.enabled).toBe(true);
+    expect(status.goal).toMatchObject({
+      objective: "recover after reconnect",
+      status: "running",
+    });
+  });
+
+  it("clears persisted goal when clearGoal channel does not respond", async () => {
+    const sessionId = "session-clear-timeout";
+    const dataDir = await makeSupervisorDataDir(sessionId);
+    const setGoal = server.handlers.get("supervisor.setGoal")!;
+    const setGoalChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel: setGoalChannel };
+    const setPromise = setGoal({ sessionId, objective: "temporary goal" });
+    vi.advanceTimersByTime(5_000);
+    await setPromise;
+
+    const clearChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel: clearChannel };
+    const clearGoal = server.handlers.get("supervisor.clearGoal")!;
+
+    const clearPromise = clearGoal({ sessionId, reason: "user_cancelled" });
+    vi.advanceTimersByTime(5_000);
+    await Promise.resolve();
+
+    await expect(clearPromise).resolves.toEqual({ cleared: true });
+    await expect(stat(join(dataDir, "supervisor-goal-runtime.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("updates persisted enabled flag when enable channel does not respond", async () => {
+    const sessionId = "session-enable-timeout";
+    const dataDir = await makeSupervisorDataDir(sessionId);
+    const callChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel };
+    const enable = server.handlers.get("supervisor.enable")!;
+
+    const resultPromise = enable({ sessionId });
+    vi.advanceTimersByTime(5_000);
+    await Promise.resolve();
+
+    await expect(resultPromise).resolves.toEqual({ enabled: true });
+    const persisted = JSON.parse(
+      await readFile(join(dataDir, "supervisor-goal-runtime.json"), "utf-8"),
+    ) as { enabled?: boolean };
+    expect(persisted.enabled).toBe(true);
+  });
+
+  it("updates persisted enabled flag when disable channel does not respond", async () => {
+    const sessionId = "session-disable-timeout";
+    const dataDir = await makeSupervisorDataDir(sessionId);
+    await writeFile(
+      join(dataDir, "supervisor-goal-runtime.json"),
+      JSON.stringify({ enabled: true }, null, 2),
+      "utf-8",
+    );
+    const callChannel = vi.fn().mockReturnValue(new Promise(() => {}));
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel };
+    const disable = server.handlers.get("supervisor.disable")!;
+
+    const resultPromise = disable({ sessionId });
+    vi.advanceTimersByTime(5_000);
+    await Promise.resolve();
+
+    await expect(resultPromise).resolves.toEqual({ disabled: true });
+    await expect(stat(join(dataDir, "supervisor-goal-runtime.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });

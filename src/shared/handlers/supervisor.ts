@@ -6,7 +6,7 @@ import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
 import { forwardToChannel } from "./channel-helpers";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getSessionsRoot } from "../lib/pi-agent-paths";
 
@@ -96,33 +96,90 @@ interface PersistedGoalRuntime {
   enabled?: boolean;
 }
 
-/** 读 supervisor-goal-runtime.json 构造静态状态（进程不在线时使用） */
-async function readPersistedStatus(sessionId: string): Promise<SupervisorStatus> {
+async function readPersistedGoalRuntime(sessionId: string): Promise<PersistedGoalRuntime | null> {
   const dataDir = await findSessionDataDir(sessionId);
-  if (!dataDir) return disabledStatus();
+  if (!dataDir) return null;
 
-  const runtimePath = join(dataDir, GOAL_RUNTIME_FILE);
   try {
-    const content = await readFile(runtimePath, "utf-8");
-    const parsed = JSON.parse(content) as PersistedGoalRuntime;
-    if (!parsed.activeGoal && !parsed.enabled) return disabledStatus();
-
-    return {
-      enabled: parsed.enabled === true,
-      state: "idle",
-      continueCount: parsed.activeGoal?.continuationCount ?? 0,
-      maxContinueCount: 0,
-      activeGuards: [],
-      goal: parsed.activeGoal,
-      lastGoldResult: parsed.lastGoldResult,
-    };
+    const content = await readFile(join(dataDir, GOAL_RUNTIME_FILE), "utf-8");
+    return JSON.parse(content) as PersistedGoalRuntime;
   } catch (err) {
-    log.warn("readPersistedStatus failed", {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return {};
+    log.warn("readPersistedGoalRuntime failed", {
       sessionId,
       err: err instanceof Error ? err.message : String(err),
     });
-    return disabledStatus();
+    return null;
   }
+}
+
+async function writePersistedGoalRuntime(
+  sessionId: string,
+  state: PersistedGoalRuntime,
+): Promise<boolean> {
+  const dataDir = await findSessionDataDir(sessionId);
+  if (!dataDir) return false;
+
+  const runtimePath = join(dataDir, GOAL_RUNTIME_FILE);
+  if (!state.activeGoal && !state.lastGoldResult && state.enabled !== true) {
+    try {
+      await unlink(runtimePath);
+      return true;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") return true;
+      log.warn("delete persisted supervisor goal failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+  }
+
+  try {
+    await writeFile(runtimePath, `${JSON.stringify(state, null, 2)}\n`, "utf-8");
+    return true;
+  } catch (err) {
+    log.warn("writePersistedGoalRuntime failed", {
+      sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+async function setPersistedEnabled(sessionId: string, enabled: boolean): Promise<boolean> {
+  const existing = await readPersistedGoalRuntime(sessionId);
+  if (existing === null) return false;
+  return writePersistedGoalRuntime(sessionId, { ...existing, enabled });
+}
+
+async function clearPersistedGoal(sessionId: string): Promise<boolean> {
+  const existing = await readPersistedGoalRuntime(sessionId);
+  if (existing === null) return false;
+  return writePersistedGoalRuntime(sessionId, {
+    ...existing,
+    activeGoal: undefined,
+    lastGoldResult: undefined,
+    enabled: false,
+  });
+}
+
+/** 读 supervisor-goal-runtime.json 构造静态状态（进程不在线时使用） */
+async function readPersistedStatus(sessionId: string): Promise<SupervisorStatus> {
+  const parsed = await readPersistedGoalRuntime(sessionId);
+  if (!parsed?.activeGoal && !parsed?.enabled) return disabledStatus();
+
+  return {
+    enabled: parsed.enabled === true,
+    state: "idle",
+    continueCount: parsed.activeGoal?.continuationCount ?? 0,
+    maxContinueCount: 0,
+    activeGuards: [],
+    goal: parsed.activeGoal,
+    lastGoldResult: parsed.lastGoldResult,
+  };
 }
 
 /** 读 supervisor-logs/trigger-*.json 构造 trigger 历史（进程不在线时使用） */
@@ -153,17 +210,25 @@ async function readTriggerHistoryFromDisk(sessionId: string, limit: number): Pro
   return records.slice(-limit);
 }
 
+function makeGoal(
+  objective: string,
+  status: GoalState["status"],
+  blockers: GoalState["blockers"] = [],
+): GoalState {
+  return {
+    id: "",
+    objective,
+    status,
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+    continuationCount: 0,
+    blockers,
+  };
+}
+
 function blockedGoal(objective: string, summary: string): { goal: GoalState } {
   return {
-    goal: {
-      id: "",
-      objective,
-      status: "blocked",
-      startedAt: Date.now(),
-      updatedAt: Date.now(),
-      continuationCount: 0,
-      blockers: [{ kind: "runtime", summary }],
-    },
+    goal: makeGoal(objective, "blocked", [{ kind: "runtime", summary }]),
   };
 }
 
@@ -236,8 +301,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       CHANNEL_TIMEOUT_MS,
       { skipHasSessionCheck: true },
     );
-    if (!result) log.warn("supervisor.disable channel call failed", { sessionId });
-    return result ?? { disabled: false };
+    if (result) return result;
+    log.warn("supervisor.disable channel call failed, updating persisted status", { sessionId });
+    return { disabled: await setPersistedEnabled(sessionId, false) };
   });
 
   r("supervisor.enable", async (params): Promise<{ enabled: boolean }> => {
@@ -250,8 +316,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       CHANNEL_TIMEOUT_MS,
       { skipHasSessionCheck: true },
     );
-    if (!result) log.warn("supervisor.enable channel call failed", { sessionId });
-    return result ?? { enabled: false };
+    if (result) return result;
+    log.warn("supervisor.enable channel call failed, updating persisted status", { sessionId });
+    return { enabled: await setPersistedEnabled(sessionId, true) };
   });
 
   r("supervisor.getTaskReport", async (params): Promise<{ tasks: TaskReport[] }> => {
@@ -311,8 +378,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       { skipHasSessionCheck: true },
     );
     if (result) return result;
-    log.warn("supervisor.setGoal channel call failed", { sessionId });
-    return blockedGoal(objective, "Channel call failed");
+    log.warn("supervisor.setGoal channel call failed, persisting running goal", { sessionId });
+    const goal = makeGoal(objective, "running");
+    const persisted = await writePersistedGoalRuntime(sessionId, {
+      activeGoal: goal,
+      enabled: true,
+    });
+    return persisted ? { goal } : blockedGoal(objective, "Channel call failed");
   });
 
   r("supervisor.clearGoal", async (params): Promise<{ cleared: boolean }> => {
@@ -325,8 +397,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       CHANNEL_TIMEOUT_MS,
       { skipHasSessionCheck: true },
     );
-    if (!result) log.warn("supervisor.clearGoal channel call failed", { sessionId });
-    return result ?? { cleared: false };
+    if (result) return result;
+    log.warn("supervisor.clearGoal channel call failed, clearing persisted goal", { sessionId });
+    return { cleared: await clearPersistedGoal(sessionId) };
   });
 
   r(
