@@ -77,6 +77,23 @@ function leafPointerEntry(leafId: string): string {
   });
 }
 
+function compactionEntry(
+  id: string,
+  parentId: string | null,
+  firstKeptEntryId: string,
+  summary: string,
+): string {
+  return JSON.stringify({
+    id,
+    parentId,
+    type: "compaction",
+    summary,
+    firstKeptEntryId,
+    tokensBefore: 9000,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 describe("getFullMessages leaf→root path filtering", () => {
   let manager: APM;
   let sessionFile: string;
@@ -385,6 +402,31 @@ describe("getFullMessages leaf→root path filtering", () => {
     expect(result.customEntries.map((entry) => entry.id)).toEqual(["c1", "c2"]);
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
+  });
+
+  it("fromStart returns raw branch history before compaction summaries", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "original raw request"),
+        msgEntry("e2", "e1", "assistant", "original raw reply"),
+        msgEntry("e3", "e2", "user", "kept before compaction"),
+        compactionEntry("c1", "e3", "e3", "compressed summary"),
+        msgEntry("e4", "c1", "user", "after compaction"),
+        msgEntry("e5", "e4", "assistant", "latest reply"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+
+    const result = await manager.getFullMessages("s1", sessionFile, {
+      limit: 2,
+      fromStart: true,
+    });
+
+    expect(result.totalCount).toBe(6);
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e1", "e2"]);
+    expect((result.messages[0] as Record<string, unknown>).content).toBe("original raw request");
   });
 
   it("handles session with no JSONL file gracefully", async () => {
