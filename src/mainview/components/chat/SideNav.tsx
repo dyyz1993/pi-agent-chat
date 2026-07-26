@@ -163,12 +163,21 @@ const SIDE_NAV_MIN_VIEWPORT_PADDING = 12;
 const SIDE_NAV_CLICK_SCROLL_SUPPRESS_MS = 1000;
 const SIDE_NAV_ACTIVE_SETTLE_DELAYS_MS = [80, 240] as const;
 const SIDE_NAV_INITIAL_ACTIVE_SETTLE_DELAYS_MS = [80, 240, 600, 1200, 2200] as const;
+const SIDE_NAV_VIRTUAL_OVERSCAN_ITEMS = 12;
+const SIDE_NAV_COMPACT_SMOOTH_MAX_DISTANCE = 96;
 type SideNavScrollStrategy = "center" | "edge";
 
 export type SideNavViewportMetrics = {
   gap: number;
   viewportHeight: number;
   visibleItemCount: number;
+};
+
+export type SideNavVirtualRange = {
+  startIndex: number;
+  endIndex: number;
+  topOffset: number;
+  totalSize: number;
 };
 
 export function getSideNavViewportMetrics(
@@ -219,6 +228,46 @@ export function getSideNavViewportPadding(
   minPadding = SIDE_NAV_MIN_VIEWPORT_PADDING,
 ): number {
   return getSideNavViewportMetrics(containerHeight, itemCount, itemHeight, minPadding).gap;
+}
+
+export function getSideNavVirtualRange({
+  scrollTop,
+  viewportHeight,
+  itemCount,
+  gap,
+  itemHeight = SIDE_NAV_ITEM_HEIGHT,
+  overscan = SIDE_NAV_VIRTUAL_OVERSCAN_ITEMS,
+}: {
+  scrollTop: number;
+  viewportHeight: number;
+  itemCount: number;
+  gap: number;
+  itemHeight?: number;
+  overscan?: number;
+}): SideNavVirtualRange {
+  if (!Number.isFinite(itemCount) || itemCount <= 0) {
+    return { startIndex: 0, endIndex: 0, topOffset: 0, totalSize: 0 };
+  }
+
+  const normalizedItemCount = Math.max(0, Math.floor(itemCount));
+  const normalizedItemHeight = Math.max(1, itemHeight);
+  const normalizedGap = Math.max(0, gap);
+  const normalizedOverscan = Math.max(0, Math.floor(overscan));
+  const stride = normalizedItemHeight + normalizedGap;
+  const totalSize =
+    normalizedItemCount * normalizedItemHeight +
+    Math.max(0, normalizedItemCount - 1) * normalizedGap;
+  const visibleStart = Math.floor(Math.max(0, scrollTop) / stride);
+  const visibleEnd = Math.ceil((Math.max(0, scrollTop) + Math.max(0, viewportHeight)) / stride);
+  const startIndex = Math.max(0, visibleStart - normalizedOverscan);
+  const endIndex = Math.min(normalizedItemCount, visibleEnd + normalizedOverscan + 1);
+
+  return {
+    startIndex,
+    endIndex,
+    topOffset: startIndex * stride,
+    totalSize,
+  };
 }
 
 export function getSideNavScrollTarget(
@@ -295,6 +344,7 @@ function scrollSideNavItemIntoView(
   behavior: ScrollBehavior,
   strategy: SideNavScrollStrategy = "center",
   margin = SIDE_NAV_SCROLL_MARGIN,
+  maxSmoothDistance = Number.POSITIVE_INFINITY,
 ): void {
   const containerRect = container.getBoundingClientRect();
   const itemRect = item.getBoundingClientRect();
@@ -317,7 +367,51 @@ function scrollSideNavItemIntoView(
     strategy,
   );
   if (targetTop == null) return;
-  container.scrollTo({ top: targetTop, behavior });
+  container.scrollTo({
+    top: targetTop,
+    behavior: getSideNavEffectiveScrollBehavior(container.scrollTop, targetTop, behavior, maxSmoothDistance),
+  });
+}
+
+function scrollSideNavIndexIntoView(
+  container: HTMLElement,
+  index: number,
+  gap: number,
+  behavior: ScrollBehavior,
+  strategy: SideNavScrollStrategy = "center",
+  margin = SIDE_NAV_SCROLL_MARGIN,
+  maxSmoothDistance = Number.POSITIVE_INFINITY,
+): void {
+  if (index < 0) return;
+  const targetTop = getSideNavScrollTarget(
+    {
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+      scrollHeight: container.scrollHeight,
+    },
+    {
+      offsetTop: index * (SIDE_NAV_ITEM_HEIGHT + Math.max(0, gap)),
+      offsetHeight: SIDE_NAV_ITEM_HEIGHT,
+    },
+    margin,
+    strategy,
+  );
+  if (targetTop == null) return;
+  container.scrollTo({
+    top: targetTop,
+    behavior: getSideNavEffectiveScrollBehavior(container.scrollTop, targetTop, behavior, maxSmoothDistance),
+  });
+}
+
+export function getSideNavEffectiveScrollBehavior(
+  currentTop: number,
+  targetTop: number,
+  behavior: ScrollBehavior,
+  maxSmoothDistance = Number.POSITIVE_INFINITY,
+): ScrollBehavior {
+  if (behavior !== "smooth") return behavior;
+  if (Math.abs(targetTop - currentTop) <= maxSmoothDistance) return "smooth";
+  return "auto";
 }
 
 function findSideNavItemByKey(container: HTMLElement, key: string): HTMLElement | null {
@@ -748,9 +842,13 @@ export const SideNav = memo(
       messages: ChatMessage[];
       onNavDotClick: (target: SideNavTarget) => void;
       isScrollLocked?: boolean;
+      compactMotion?: boolean;
       pagination?: SideNavPagination;
     }
-  >(function SideNavInner({ messages, onNavDotClick, isScrollLocked = false, pagination }, ref) {
+  >(function SideNavInner(
+    { messages, onNavDotClick, isScrollLocked = false, compactMotion = false, pagination },
+    ref,
+  ) {
     const sessionId = useSessionStore((s) => s.activeSessionId);
     const activeId = useChatNavStore(
       useCallback(
@@ -833,6 +931,7 @@ export const SideNav = memo(
       viewportHeight: 0,
       visibleItemCount: 0,
     });
+    const [scrollState, setScrollState] = useState({ scrollTop: 0, viewportHeight: 0 });
     const [visibleEdgeFallbackKey, setVisibleEdgeFallbackKey] = useState<string | null>(null);
     const clickSuppressRef = useRef<{
       key: string;
@@ -896,6 +995,33 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
+    const virtualRange = useMemo(
+      () =>
+        getSideNavVirtualRange({
+          scrollTop: scrollState.scrollTop,
+          viewportHeight: scrollState.viewportHeight,
+          itemCount: items.length,
+          gap: viewportMetrics.gap,
+        }),
+      [items.length, scrollState.scrollTop, scrollState.viewportHeight, viewportMetrics.gap],
+    );
+    const visibleItems = useMemo(
+      () => items.slice(virtualRange.startIndex, virtualRange.endIndex),
+      [items, virtualRange.startIndex, virtualRange.endIndex],
+    );
+
+    const syncScrollState = useCallback(() => {
+      const container = scrollRef.current;
+      if (!container) return;
+      const nextScrollTop = container.scrollTop;
+      const nextViewportHeight = container.clientHeight;
+      setScrollState((current) =>
+        current.scrollTop === nextScrollTop && current.viewportHeight === nextViewportHeight
+          ? current
+          : { scrollTop: nextScrollTop, viewportHeight: nextViewportHeight },
+      );
+    }, []);
+
     useEffect(() => {
       const container = scrollRef.current;
       if (!container) return;
@@ -905,6 +1031,7 @@ export const SideNav = memo(
         if (raf) return;
         raf = requestAnimationFrame(() => {
           raf = 0;
+          syncScrollState();
           if (container.scrollTop <= 24 && pagination?.hasMore && !pagination.isLoading) {
             pagination.onLoadMore();
           }
@@ -923,25 +1050,37 @@ export const SideNav = memo(
       };
 
       container.addEventListener("scroll", onScroll, { passive: true });
+      syncScrollState();
       refreshVisibleEdgeFallback();
       return () => {
         container.removeEventListener("scroll", onScroll);
         if (raf) cancelAnimationFrame(raf);
       };
-    }, [pagination, refreshVisibleEdgeFallback, items, viewportMetrics.viewportHeight]);
+    }, [
+      pagination,
+      refreshVisibleEdgeFallback,
+      items,
+      viewportMetrics.viewportHeight,
+      syncScrollState,
+    ]);
 
     useLayoutEffect(() => {
+      syncScrollState();
       refreshVisibleEdgeFallback();
       let secondRaf = 0;
       const raf = requestAnimationFrame(() => {
+        syncScrollState();
         refreshVisibleEdgeFallback();
-        secondRaf = requestAnimationFrame(refreshVisibleEdgeFallback);
+        secondRaf = requestAnimationFrame(() => {
+          syncScrollState();
+          refreshVisibleEdgeFallback();
+        });
       });
       return () => {
         cancelAnimationFrame(raf);
         if (secondRaf) cancelAnimationFrame(secondRaf);
       };
-    }, [refreshVisibleEdgeFallback, items, viewportMetrics.viewportHeight]);
+    }, [refreshVisibleEdgeFallback, items, viewportMetrics.viewportHeight, syncScrollState]);
 
     useEffect(() => {
       const shell = viewportShellRef.current;
@@ -956,6 +1095,11 @@ export const SideNav = memo(
           current.visibleItemCount === next.visibleItemCount
             ? current
             : next,
+        );
+        setScrollState((current) =>
+          current.viewportHeight === visualHeight
+            ? current
+            : { ...current, viewportHeight: visualHeight },
         );
       };
 
@@ -979,9 +1123,30 @@ export const SideNav = memo(
       if (activeEl) {
         const isFirst = firstNavRef.current;
         firstNavRef.current = false;
-        scrollSideNavItemIntoView(container, activeEl as HTMLElement, isFirst ? "auto" : "smooth");
+        scrollSideNavItemIntoView(
+          container,
+          activeEl as HTMLElement,
+          isFirst ? "auto" : "smooth",
+          "center",
+          SIDE_NAV_SCROLL_MARGIN,
+          compactMotion ? SIDE_NAV_COMPACT_SMOOTH_MAX_DISTANCE : Number.POSITIVE_INFINITY,
+        );
+      } else {
+        const index = items.findIndex((item) => item.key === selectedNavId);
+        if (index >= 0) {
+          firstNavRef.current = false;
+          scrollSideNavIndexIntoView(
+            container,
+            index,
+            viewportMetrics.gap,
+            "smooth",
+            "center",
+            SIDE_NAV_SCROLL_MARGIN,
+            compactMotion ? SIDE_NAV_COMPACT_SMOOTH_MAX_DISTANCE : Number.POSITIVE_INFINITY,
+          );
+        }
       }
-    }, [selectedNavId, sessionId, items, isScrollLocked]);
+    }, [selectedNavId, sessionId, items, isScrollLocked, viewportMetrics.gap, compactMotion]);
 
     useEffect(() => {
       if (!activeId) return;
@@ -994,7 +1159,21 @@ export const SideNav = memo(
 
       const syncActiveIntoView = () => {
         const activeEl = findSideNavItemByKey(container, activeId);
-        if (!activeEl) return;
+        if (!activeEl) {
+          const activeIndex = items.findIndex((item) => item.key === activeId);
+          if (activeIndex < 0) return;
+          firstNavRef.current = false;
+          scrollSideNavIndexIntoView(
+            container,
+            activeIndex,
+            viewportMetrics.gap,
+            "auto",
+            "edge",
+            SIDE_NAV_FOLLOW_MARGIN,
+          );
+          requestAnimationFrame(refreshVisibleEdgeFallback);
+          return;
+        }
         firstNavRef.current = false;
         scrollSideNavItemIntoView(container, activeEl, "auto", "edge", SIDE_NAV_FOLLOW_MARGIN);
         requestAnimationFrame(refreshVisibleEdgeFallback);
@@ -1005,7 +1184,9 @@ export const SideNav = memo(
       const settleDelays = isInitialSync
         ? SIDE_NAV_INITIAL_ACTIVE_SETTLE_DELAYS_MS
         : SIDE_NAV_ACTIVE_SETTLE_DELAYS_MS;
-      const timers = settleDelays.map((delay) => window.setTimeout(syncActiveIntoView, delay));
+      const timers = compactMotion
+        ? []
+        : settleDelays.map((delay) => window.setTimeout(syncActiveIntoView, delay));
       return () => {
         cancelAnimationFrame(raf);
         timers.forEach((timer) => window.clearTimeout(timer));
@@ -1015,8 +1196,10 @@ export const SideNav = memo(
       sessionId,
       items,
       isScrollLocked,
+      viewportMetrics.gap,
       viewportMetrics.viewportHeight,
       refreshVisibleEdgeFallback,
+      compactMotion,
     ]);
 
     return (
@@ -1029,45 +1212,54 @@ export const SideNav = memo(
               height: "100%",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              scrollSnapType: "y mandatory",
+              scrollSnapType: compactMotion ? "none" : "y mandatory",
             }}
           >
             <div
               onClick={handleDelegatedClick}
               onContextMenu={handleDelegatedContextMenu}
               style={{
+                height: virtualRange.totalSize || "100%",
                 minHeight: "100%",
-                display: "flex",
-                flexDirection: "column",
-                gap: viewportMetrics.gap || undefined,
+                position: "relative",
               }}
             >
-              {items.map((item, i) => {
-                const selected = selectedNavId === item.key;
-                const isFirstForMessage = !items[i - 1] || items[i - 1].navId !== item.navId;
-                const rawScrollActive =
-                  activeId === item.key || (activeId === item.navId && isFirstForMessage);
-                const scrollActive = visibleEdgeFallbackKey
-                  ? visibleEdgeFallbackKey === item.key
-                  : rawScrollActive;
-                const multi = selectedItems.has(item.navId);
-                return (
-                  <NavDot
-                    key={item.key}
-                    dataNavKey={item.key}
-                    dataMessageId={item.navId}
-                    dataBlockId={item.blockId}
-                    Icon={item.icon}
-                    color={item.color}
-                    isSelected={selected}
-                    isScrollActive={scrollActive}
-                    isMultiSelected={multi}
-                    avatar={item.useAgentAvatar ? currentAgentAvatar : undefined}
-                    agentFilePath={item.useAgentAvatar ? currentAgentFilePath : undefined}
-                    agentColor={item.useAgentAvatar ? currentAgentColor : undefined}
-                  />
-                );
-              })}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: viewportMetrics.gap || undefined,
+                  transform: `translateY(${virtualRange.topOffset}px)`,
+                }}
+              >
+                {visibleItems.map((item, visibleIndex) => {
+                  const i = virtualRange.startIndex + visibleIndex;
+                  const selected = selectedNavId === item.key;
+                  const isFirstForMessage = !items[i - 1] || items[i - 1].navId !== item.navId;
+                  const rawScrollActive =
+                    activeId === item.key || (activeId === item.navId && isFirstForMessage);
+                  const scrollActive = visibleEdgeFallbackKey
+                    ? visibleEdgeFallbackKey === item.key
+                    : rawScrollActive;
+                  const multi = selectedItems.has(item.navId);
+                  return (
+                    <NavDot
+                      key={item.key}
+                      dataNavKey={item.key}
+                      dataMessageId={item.navId}
+                      dataBlockId={item.blockId}
+                      Icon={item.icon}
+                      color={item.color}
+                      isSelected={selected}
+                      isScrollActive={scrollActive}
+                      isMultiSelected={multi}
+                      avatar={item.useAgentAvatar ? currentAgentAvatar : undefined}
+                      agentFilePath={item.useAgentAvatar ? currentAgentFilePath : undefined}
+                      agentColor={item.useAgentAvatar ? currentAgentColor : undefined}
+                    />
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

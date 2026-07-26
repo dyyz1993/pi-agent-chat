@@ -233,7 +233,10 @@ All design tokens are defined as CSS custom properties in `src/mainview/index.cs
 ### Mobile Conventions
 
 - Sidebars become 85% width overlays with `bg-black/50` backdrop
-- Chat `SideNav` must render on mobile and tablet. Do not hide, skip, or breakpoint-gate it as a performance shortcut; mobile performance work must preserve the right-side navigation rail and its active/selection behavior.
+- Chat `SideNav` must render on mobile and tablet. The right-side icon rail is part of the mobile chat contract, not an optional desktop-only affordance.
+- Never hide, remove, skip, breakpoint-gate, disable, or materially degrade mobile/tablet `SideNav` as a performance shortcut. This includes avoiding "mobile-only no SideNav" fallbacks, feature flags that silently suppress it, or replacing it with a non-equivalent placeholder.
+- Mobile/tablet message history loading must keep `SideNav` behavior intact: as the message list loads older or newer history on demand, the right-side icons should update from the same effective message window and keep active/selection behavior coherent.
+- When mobile/tablet `SideNav` feels slow or janky, focus only on performance fixes: virtualization, bounded windows, stable ids, memoization/cache, throttled/RAF scroll sync, scroll-motion tuning, and cheaper icon rendering. Do not solve SideNav performance by removing the rail or reducing its functional coverage.
 - Pin/collapse buttons hidden (`max-sm:hidden`)
 - QuickActionToolbar only renders on mobile/tablet
 - Tab close buttons always visible on mobile (no hover needed)

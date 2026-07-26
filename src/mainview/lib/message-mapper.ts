@@ -150,8 +150,8 @@ export function messageToChatMessage(
   if (!message || typeof message !== "object" || !("role" in message)) return null;
 
   const role = message.role as string;
-  const msgId = id ?? nextMsgId();
   const entryId = extractEntryId(message);
+  const msgId = id ?? entryId ?? nextMsgId();
 
   if (role === "custom") {
     const customMsg = message as unknown as {

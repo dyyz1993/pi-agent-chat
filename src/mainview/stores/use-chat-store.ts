@@ -40,6 +40,7 @@ const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
 const PAGE_SIZE = 50;
+export const MAIN_MESSAGE_HISTORY_WINDOW_SIZE = PAGE_SIZE * 6;
 const MAX_MESSAGE_CACHE_SESSIONS = 8;
 const MEMORY_SAME_QUERY_DEDUP_WINDOW_MS = 15_000;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
@@ -166,6 +167,19 @@ function setSessionMessagesWithCacheLimit(
     delete trimmed[id];
   }
   return trimmed;
+}
+
+export function limitLoadedHistoryWindow(
+  messages: ChatMessage[],
+  maxMessages = MAIN_MESSAGE_HISTORY_WINDOW_SIZE,
+): { messages: ChatMessage[]; trimmedTail: boolean } {
+  if (messages.length <= maxMessages) {
+    return { messages, trimmedTail: false };
+  }
+  return {
+    messages: messages.slice(0, maxMessages),
+    trimmedTail: true,
+  };
 }
 
 function getMemoryMessageDedupeKey(message: ChatMessage): string | undefined {
@@ -849,6 +863,7 @@ interface ChatState {
   historyLoadVersionBySession: Record<string, number>;
   messageHydrationBySession: Record<string, MessageHydrationState>;
   hasMoreMessagesBySession: Record<string, boolean>;
+  hasTrimmedTailMessagesBySession: Record<string, boolean>;
   isLoadingMoreBySession: Record<string, boolean>;
   nextCursorBySession: Record<string, string | null>;
 
@@ -923,6 +938,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   historyLoadVersionBySession: {},
   messageHydrationBySession: {},
   hasMoreMessagesBySession: {},
+  hasTrimmedTailMessagesBySession: {},
   isLoadingMoreBySession: {},
   nextCursorBySession: {},
 
@@ -949,6 +965,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         .getState()
         .push({ message: "Cannot send to subagent session", level: "warning" });
       return;
+    }
+
+    if (get().hasTrimmedTailMessagesBySession[sessionId]) {
+      await get().loadSessionMessages(sessionId, { force: true });
     }
 
     const compactionCommand = parseManualCompactionCommand(text);
@@ -1226,6 +1246,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           sessionId,
           nextMsgs,
         ),
+        hasTrimmedTailMessagesBySession: {
+          ...s.hasTrimmedTailMessagesBySession,
+          [sessionId]: false,
+        },
       };
       if (options.bumpStreamVersion) {
         next.streamContentVersion = s.streamContentVersion + 1;
@@ -1292,6 +1316,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { [sessionId]: _hlv, ...restHistoryLoadVersion } = s.historyLoadVersionBySession;
       const { [sessionId]: _hy, ...restHydration } = s.messageHydrationBySession;
       const { [sessionId]: _hm, ...restHasMore } = s.hasMoreMessagesBySession;
+      const { [sessionId]: _htt, ...restHasTrimmedTail } = s.hasTrimmedTailMessagesBySession;
       const { [sessionId]: _il, ...restIsLoading } = s.isLoadingMoreBySession;
       const { [sessionId]: _nc, ...restNextCursor } = s.nextCursorBySession;
       const loadingSessions = new Set(s.loadingSessions);
@@ -1306,6 +1331,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         historyLoadVersionBySession: restHistoryLoadVersion,
         messageHydrationBySession: restHydration,
         hasMoreMessagesBySession: restHasMore,
+        hasTrimmedTailMessagesBySession: restHasTrimmedTail,
         isLoadingMoreBySession: restIsLoading,
         nextCursorBySession: restNextCursor,
         loadingSessions,
@@ -1618,6 +1644,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((s) => ({
           ...(options?.force ? bumpHistoryLoadVersion(s, sid) : {}),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          hasTrimmedTailMessagesBySession: {
+            ...s.hasTrimmedTailMessagesBySession,
+            [sid]: false,
+          },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
@@ -1632,6 +1662,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, finalMsgs),
           ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          hasTrimmedTailMessagesBySession: {
+            ...s.hasTrimmedTailMessagesBySession,
+            [sid]: false,
+          },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
@@ -1876,6 +1910,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
         set((s) => ({
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          hasTrimmedTailMessagesBySession: {
+            ...s.hasTrimmedTailMessagesBySession,
+            [sid]: false,
+          },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
@@ -1895,6 +1933,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, finalMsgs),
           ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          hasTrimmedTailMessagesBySession: {
+            ...s.hasTrimmedTailMessagesBySession,
+            [sid]: false,
+          },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
@@ -2016,7 +2058,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
         },
       );
-      const finalMsgs = mergedMsgs;
+      const canTrimTail = !current.some((m) => (m._local ?? false) || (m.isStreaming ?? false));
+      const windowed = canTrimTail
+        ? limitLoadedHistoryWindow(mergedMsgs)
+        : { messages: mergedMsgs, trimmedTail: false };
+      const finalMsgs = windowed.messages;
       normalizeToolBlocks(finalMsgs, true, false);
       const preparedMsgs = prepareMessagesForStore(finalMsgs, {
         activeToolCallIds: get().activeToolCallIdsBySession[sid],
@@ -2027,6 +2073,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           hasMoreMessagesBySession: {
             ...s.hasMoreMessagesBySession,
             [sid]: hasMore,
+          },
+          hasTrimmedTailMessagesBySession: {
+            ...s.hasTrimmedTailMessagesBySession,
+            [sid]: s.hasTrimmedTailMessagesBySession[sid] || windowed.trimmedTail,
           },
           nextCursorBySession: {
             ...s.nextCursorBySession,
@@ -2041,6 +2091,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
           [sid]: hasMore,
+        },
+        hasTrimmedTailMessagesBySession: {
+          ...s.hasTrimmedTailMessagesBySession,
+          [sid]: s.hasTrimmedTailMessagesBySession[sid] || windowed.trimmedTail,
         },
         nextCursorBySession: {
           ...s.nextCursorBySession,

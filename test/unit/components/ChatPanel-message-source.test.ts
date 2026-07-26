@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "../../../src/mainview/types";
-import { getDisplayedMessagesForChatPanel } from "../../../src/mainview/components/chat/ChatPanel";
+import {
+  getDisplayedMessagesForChatPanel,
+  shouldUseIndependentSideNavHistory,
+} from "../../../src/mainview/components/chat/ChatPanel";
 
 function msg(id: string): ChatMessage {
   return {
@@ -50,5 +53,14 @@ describe("ChatPanel displayed message source", () => {
         messagesBySession: {},
       }),
     ).toEqual([]);
+  });
+});
+
+describe("ChatPanel SideNav history mode", () => {
+  it("keeps independent SideNav history off on mobile and tablet", () => {
+    expect(shouldUseIndependentSideNavHistory("mobile")).toBe(false);
+    expect(shouldUseIndependentSideNavHistory("tablet")).toBe(false);
+    expect(shouldUseIndependentSideNavHistory("desktop")).toBe(true);
+    expect(shouldUseIndependentSideNavHistory("wide")).toBe(true);
   });
 });

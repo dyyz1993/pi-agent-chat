@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   computeTopLoadRestoredScrollTop,
+  computeTopLoadRestoredVirtualOffset,
+  hasTopLoadAnchorContentShifted,
   shouldBlockComposerForRemoteDisconnect,
   shouldHideMessageSurfaceUntilInitialBottom,
   shouldStartTopLoad,
@@ -33,15 +35,37 @@ describe("ChatPanel top-load scroll anchor", () => {
     ).toBe(40);
   });
 
-  it("restores top-load scroll position synchronously without a double rAF frame", () => {
+  it("can restore by message item offset instead of total scroll height", () => {
+    expect(computeTopLoadRestoredVirtualOffset({ messageTop: 24 }, 650)).toBe(626);
+  });
+
+  it("waits for prepended content instead of clearing the anchor on loading state alone", () => {
+    const anchor = {
+      sessionId: "sess-1",
+      scrollHeight: 1_000,
+      scrollTop: 0,
+      messageId: "m10",
+      messageIndex: 0,
+      messageTop: 0,
+    };
+
+    expect(hasTopLoadAnchorContentShifted(anchor, ["m10", "m11"], 1_020)).toBe(false);
+    expect(hasTopLoadAnchorContentShifted(anchor, ["m8", "m9", "m10", "m11"], 1_500)).toBe(true);
+  });
+
+  it("restores top-load scroll position from a message anchor and settles after render", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
     const restoreEffectSection = source.slice(
-      source.indexOf("useLayoutEffect(() => {"),
+      source.indexOf("const captureTopLoadScrollAnchor"),
       source.indexOf("const seekToAbsoluteTop"),
     );
 
+    expect(restoreEffectSection).toContain("getTopVisibleMessageAnchor");
+    expect(restoreEffectSection).toContain("hasTopLoadAnchorContentShifted");
+    expect(restoreEffectSection).toContain("computeTopLoadRestoredVirtualOffset");
     expect(restoreEffectSection).toContain("computeTopLoadRestoredScrollTop");
-    expect(restoreEffectSection).not.toContain("requestAnimationFrame");
+    expect(restoreEffectSection).toContain("correctTopLoadAnchorAfterRender");
+    expect(restoreEffectSection).toContain("requestAnimationFrame");
   });
 });
 

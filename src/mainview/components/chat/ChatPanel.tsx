@@ -94,6 +94,7 @@ const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
 const SIDE_NAV_PAGE_SIZE = 200;
 const SIDE_NAV_WINDOW_SIZE = 200;
+const TOP_LOAD_RESTORE_MAX_ATTEMPTS = 6;
 
 const MAX_MSG_IDS_CACHE = 10;
 
@@ -223,6 +224,9 @@ interface TopLoadScrollAnchor {
   sessionId: string;
   scrollHeight: number;
   scrollTop: number;
+  messageId?: string;
+  messageTop?: number;
+  messageIndex?: number;
 }
 
 function findSessionMeta(
@@ -325,6 +329,80 @@ export function computeTopLoadRestoredScrollTop(
   return anchor.scrollTop + addedHeight;
 }
 
+export function computeTopLoadRestoredVirtualOffset(
+  anchor: Pick<TopLoadScrollAnchor, "messageTop">,
+  nextItemOffset: number,
+): number {
+  return Math.max(0, nextItemOffset - (anchor.messageTop ?? 0));
+}
+
+export function hasTopLoadAnchorContentShifted(
+  anchor: TopLoadScrollAnchor,
+  messageIds: string[],
+  nextScrollHeight: number,
+): boolean {
+  if (anchor.messageId && anchor.messageIndex != null) {
+    const nextIndex = messageIds.indexOf(anchor.messageId);
+    if (nextIndex >= 0) return nextIndex > anchor.messageIndex;
+  }
+  return nextScrollHeight > anchor.scrollHeight;
+}
+
+function getTopVisibleMessageAnchor(
+  container: HTMLElement,
+  messageIds: string[],
+  handle: VirtualizerHandle | null,
+): Pick<TopLoadScrollAnchor, "messageId" | "messageTop" | "messageIndex"> {
+  const containerRect = container.getBoundingClientRect();
+  const visibleMessages = Array.from(container.querySelectorAll<HTMLElement>("[data-msg-id]"))
+    .map((element) => {
+      const messageId = element.dataset.msgId;
+      if (!messageId) return null;
+      const rect = element.getBoundingClientRect();
+      if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) return null;
+      return {
+        messageId,
+        messageTop: rect.top - containerRect.top,
+        distance: Math.abs(rect.top - containerRect.top),
+      };
+    })
+    .filter((item): item is { messageId: string; messageTop: number; distance: number } => !!item)
+    .sort((a, b) => a.distance - b.distance);
+
+  const messageId = visibleMessages[0]?.messageId ?? messageIds[0];
+  if (!messageId) return {};
+  const messageIndex = messageIds.indexOf(messageId);
+  let messageTop = visibleMessages[0]?.messageTop;
+  if (messageTop == null && messageIndex >= 0 && handle) {
+    try {
+      messageTop = handle.getItemOffset(messageIndex) - handle.scrollOffset;
+    } catch {
+      messageTop = 0;
+    }
+  }
+  return {
+    messageId,
+    messageTop: messageTop ?? 0,
+    messageIndex: messageIndex >= 0 ? messageIndex : undefined,
+  };
+}
+
+function correctTopLoadDomAnchor(container: HTMLElement, anchor: TopLoadScrollAnchor): boolean {
+  if (!anchor.messageId || anchor.messageTop == null) return false;
+  const element =
+    Array.from(container.querySelectorAll<HTMLElement>("[data-msg-id]")).find(
+      (candidate) => candidate.dataset.msgId === anchor.messageId,
+    ) ?? null;
+  if (!element) return false;
+  const containerRect = container.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  const delta = rect.top - containerRect.top - anchor.messageTop;
+  if (Math.abs(delta) > 0.5) {
+    container.scrollTop += delta;
+  }
+  return true;
+}
+
 function evictMsgIdsIfNeeded(): void {
   if (_messageIdsCache.size > MAX_MSG_IDS_CACHE) {
     const firstKey = _messageIdsCache.keys().next().value;
@@ -361,6 +439,10 @@ function mergeSideNavMessages(
     merged.push(message);
   }
   return merged;
+}
+
+export function shouldUseIndependentSideNavHistory(breakpoint: string | null | undefined): boolean {
+  return breakpoint !== "mobile" && breakpoint !== "tablet";
 }
 
 const EMPTY_MSGS: never[] = [];
@@ -698,6 +780,14 @@ export function ChatPanel() {
       [effectiveScrollSessionId],
     ),
   );
+  const hasTrimmedTailMessages = useChatStore(
+    useCallback(
+      (s) =>
+        !!effectiveScrollSessionId &&
+        !!s.hasTrimmedTailMessagesBySession?.[effectiveScrollSessionId],
+      [effectiveScrollSessionId],
+    ),
+  );
   const messageNextCursor = useChatStore(
     useCallback(
       (s) =>
@@ -752,6 +842,7 @@ export function ChatPanel() {
   const showToolResults = useSettingsStore((s) => s.showToolResults);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
+  const useIndependentSideNavHistory = shouldUseIndependentSideNavHistory(breakpoint);
   const returnSourceTarget = useReturnToSourceSession();
   const shouldRenderSideNav = messages.length > 0;
   const renderedMessages = useMemo(
@@ -779,9 +870,9 @@ export function ChatPanel() {
     return result;
   }, [renderedMessages, effectiveScrollSessionId, messageViewMode]);
   const sideNavMessages = useMemo(() => {
-    if (sideNavExtraMessages.length === 0) return renderedMessages;
+    if (!useIndependentSideNavHistory || sideNavExtraMessages.length === 0) return renderedMessages;
     return mergeSideNavMessages(sideNavExtraMessages, renderedMessages);
-  }, [renderedMessages, sideNavExtraMessages]);
+  }, [renderedMessages, sideNavExtraMessages, useIndependentSideNavHistory]);
   const collapsedMessageIdsForNav = useTurnStore(
     useCallback(
       (s) =>
@@ -1172,26 +1263,91 @@ export function ChatPanel() {
     if (!activeSessionId) return;
     const el = messagesScrollRef.current;
     if (!el) return;
+    const handle = vlistRef.current;
     topLoadScrollAnchorRef.current = {
       sessionId: activeSessionId,
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
+      ...getTopVisibleMessageAnchor(el, messageIds, handle),
     };
-  }, [activeSessionId]);
+  }, [activeSessionId, messageIds]);
+
+  const correctTopLoadAnchorAfterRender = useCallback(
+    (anchor: TopLoadScrollAnchor, attempt = 0) => {
+      if (anchor.sessionId !== activeSessionId) return;
+      const el = messagesScrollRef.current;
+      if (!el) return;
+
+      const corrected = correctTopLoadDomAnchor(el, anchor);
+      if (corrected && attempt >= 1) return;
+      if (attempt >= TOP_LOAD_RESTORE_MAX_ATTEMPTS) return;
+
+      topLoadRestoreRafRef.current = requestAnimationFrame(() => {
+        topLoadRestoreRafRef.current = null;
+        correctTopLoadAnchorAfterRender(anchor, attempt + 1);
+      });
+    },
+    [activeSessionId],
+  );
+
+  const restoreTopLoadScrollAnchor = useCallback(
+    (anchor: TopLoadScrollAnchor) => {
+      const el = messagesScrollRef.current;
+      if (!el) return;
+      if (topLoadRestoreRafRef.current != null) {
+        cancelAnimationFrame(topLoadRestoreRafRef.current);
+        topLoadRestoreRafRef.current = null;
+      }
+
+      const handle = vlistRef.current;
+      let restoredByMessageAnchor = false;
+      if (anchor.messageId && handle) {
+        const nextIndex = messageIds.indexOf(anchor.messageId);
+        if (nextIndex >= 0) {
+          try {
+            const nextItemOffset = handle.getItemOffset(nextIndex);
+            handle.scrollTo(computeTopLoadRestoredVirtualOffset(anchor, nextItemOffset));
+            restoredByMessageAnchor = true;
+          } catch {
+            restoredByMessageAnchor = false;
+          }
+        }
+      }
+
+      if (!restoredByMessageAnchor) {
+        el.scrollTop = computeTopLoadRestoredScrollTop(anchor, el.scrollHeight);
+      }
+
+      correctTopLoadAnchorAfterRender(anchor);
+    },
+    [correctTopLoadAnchorAfterRender, messageIds],
+  );
 
   useLayoutEffect(() => {
-    if (isViewingSubagent || isLoadingMore) return;
+    if (isViewingSubagent) return;
     const anchor = topLoadScrollAnchorRef.current;
     if (!anchor || anchor.sessionId !== activeSessionId) return;
     const el = messagesScrollRef.current;
     if (!el) return;
-
-    const scrollTop = computeTopLoadRestoredScrollTop(anchor, el.scrollHeight);
-    el.scrollTop = scrollTop;
+    if (!hasTopLoadAnchorContentShifted(anchor, messageIds, el.scrollHeight)) {
+      if (!isLoadingMore) {
+        topLoadScrollAnchorRef.current = null;
+      }
+      return;
+    }
+    restoreTopLoadScrollAnchor(anchor);
     topLoadScrollAnchorRef.current = null;
-  }, [activeSessionId, historyLoadVersion, isLoadingMore, isViewingSubagent]);
+  }, [
+    activeSessionId,
+    historyLoadVersion,
+    isLoadingMore,
+    isViewingSubagent,
+    messageIds,
+    restoreTopLoadScrollAnchor,
+  ]);
 
   const seekSideNavToOldest = useCallback(async () => {
+    if (!useIndependentSideNavHistory) return;
     if (!effectiveScrollSessionId) return;
     const sessionId = effectiveScrollSessionId;
     setIsSideNavLoadingMore(true);
@@ -1217,7 +1373,7 @@ export function ChatPanel() {
     } finally {
       setIsSideNavLoadingMore(false);
     }
-  }, [activeSideNavSessionPath, effectiveScrollSessionId]);
+  }, [activeSideNavSessionPath, effectiveScrollSessionId, useIndependentSideNavHistory]);
 
   const resetSideNavToLatest = useCallback(() => {
     setSideNavExtraMessages([]);
@@ -1241,7 +1397,11 @@ export function ChatPanel() {
     topLoadScrollAnchorRef.current = null;
     setIsSeekingTop(true);
     try {
-      await Promise.all([loadTopMessages(sessionId), seekSideNavToOldest()]);
+      if (useIndependentSideNavHistory) {
+        await Promise.all([loadTopMessages(sessionId), seekSideNavToOldest()]);
+      } else {
+        await loadTopMessages(sessionId);
+      }
     } finally {
       if (topSeekRunIdRef.current === runId) {
         topSeekSessionRef.current = null;
@@ -1264,6 +1424,7 @@ export function ChatPanel() {
     scrollToEdge,
     seekSideNavToOldest,
     setNavId,
+    useIndependentSideNavHistory,
   ]);
 
   const handleScrollToEdge = useCallback(
@@ -1297,6 +1458,22 @@ export function ChatPanel() {
       if (activeSessionId && !isViewingSubagent) {
         clearTopWindowMessages(activeSessionId);
         resetSideNavToLatest();
+        if (hasTrimmedTailMessages) {
+          void (async () => {
+            await loadSessionMessages(activeSessionId, { force: true });
+            requestAnimationFrame(() => {
+              scrollToEdge("bottom");
+              setTimeout(() => {
+                const iconId = sideNavRef.current?.getLastIconId();
+                if (iconId) {
+                  lastSetNavIdRef.current = iconId;
+                  setNavId(iconId);
+                }
+              }, 200);
+            });
+          })();
+          return;
+        }
       }
       scrollToEdge(edge);
       setTimeout(() => {
@@ -1312,7 +1489,9 @@ export function ChatPanel() {
       clearFocusedMessages,
       clearTopWindowMessages,
       effectiveScrollSessionId,
+      hasTrimmedTailMessages,
       isViewingSubagent,
+      loadSessionMessages,
       messageIds,
       messageViewMode,
       scrollToEdge,
@@ -1334,6 +1513,7 @@ export function ChatPanel() {
   }, []);
 
   const loadMoreSideNav = useCallback(async () => {
+    if (!useIndependentSideNavHistory) return;
     if (!effectiveScrollSessionId || isSideNavLoadingMore || !sideNavHasMore) return;
     const sessionId = effectiveScrollSessionId;
     setIsSideNavLoadingMore(true);
@@ -1372,9 +1552,11 @@ export function ChatPanel() {
     isSideNavLoadingMore,
     sideNavCursor,
     sideNavHasMore,
+    useIndependentSideNavHistory,
   ]);
 
   const loadNewerSideNav = useCallback(async () => {
+    if (!useIndependentSideNavHistory) return;
     if (!effectiveScrollSessionId || isSideNavLoadingMore || !sideNavHasMoreNewer) return;
     const sessionId = effectiveScrollSessionId;
     setIsSideNavLoadingMore(true);
@@ -1413,10 +1595,12 @@ export function ChatPanel() {
     isSideNavLoadingMore,
     sideNavHasMoreNewer,
     sideNavNewestExtraCursor,
+    useIndependentSideNavHistory,
   ]);
 
   const sideNavPagination = useMemo<SideNavPagination | undefined>(() => {
     if (!shouldRenderSideNav || !effectiveScrollSessionId) return undefined;
+    if (!useIndependentSideNavHistory) return undefined;
     return {
       hasMore: sideNavHasMore,
       isLoading: isSideNavLoadingMore,
@@ -1432,6 +1616,7 @@ export function ChatPanel() {
     shouldRenderSideNav,
     sideNavHasMore,
     sideNavHasMoreNewer,
+    useIndependentSideNavHistory,
   ]);
 
   const handleNavDotClick = useCallback(
@@ -1959,6 +2144,7 @@ export function ChatPanel() {
                 onNavDotClick={handleNavDotClick}
                 pagination={sideNavPagination}
                 isScrollLocked={isSideNavScrollLocked}
+                compactMotion={isMobileOrTablet}
               />
             </div>
           )}
