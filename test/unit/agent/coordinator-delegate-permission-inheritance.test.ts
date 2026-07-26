@@ -87,6 +87,7 @@ describe("delegate permission inheritance", () => {
       syncDelegateResolvers: new Map(),
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
+      syncDelegateTimedOut: new Set(),
       sessionIdFactory: () => "sub-child",
     });
 
@@ -186,6 +187,7 @@ describe("delegate permission inheritance", () => {
       syncDelegateResolvers: new Map(),
       subagentSyncChildren: new Set(),
       syncDelegateLastText: new Map(),
+      syncDelegateTimedOut: new Set(),
       sessionIdFactory: () => "sub-child-agent",
     });
 
@@ -224,6 +226,7 @@ describe("delegate permission inheritance", () => {
         syncDelegateResolvers: new Map(),
         subagentSyncChildren: new Set(),
         syncDelegateLastText: new Map(),
+        syncDelegateTimedOut: new Set(),
         sessionIdFactory: () => "sub-child-agent-fail",
       }),
     ).rejects.toThrow(

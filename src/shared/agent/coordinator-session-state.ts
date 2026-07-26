@@ -108,6 +108,9 @@ export function cleanupStoppedDelegateSession(options: {
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: SyncChildRegistry;
   syncDelegateLastText: Map<string, string>;
+  // Sessions that timed out on the sync wait but were kept alive (#151 P1).
+  // Cleared here so a stopped session no longer reports as "timed out".
+  syncDelegateTimedOut?: Set<string>;
 }): { childSessionIds: string[]; resolvedSyncDelegate: boolean } {
   const childSessionIds = popDelegateChildren(options.parentChildMap, options.sessionId);
   removeSessionFromAllParents(options.parentChildMap, options.sessionId);
@@ -120,6 +123,10 @@ export function cleanupStoppedDelegateSession(options: {
   );
 
   const syncResolver = options.syncDelegateResolvers.get(options.sessionId);
+  // Always clear the timed-out marker when the session is fully stopped,
+  // regardless of whether a sync resolver still exists. This prevents stale
+  // "timed out" flags from lingering after explicit session removal.
+  options.syncDelegateTimedOut?.delete(options.sessionId);
   if (!syncResolver) {
     return { childSessionIds, resolvedSyncDelegate: false };
   }

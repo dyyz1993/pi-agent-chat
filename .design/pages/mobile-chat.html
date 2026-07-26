@@ -5,167 +5,182 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pi-agent-chat -- Mobile Chat</title>
     <style id="theme-vars">
-/* pi-agent-chat Design Tokens — 对齐项目实际颜色系统 */
-/* Generated: 2026-07-05 | Source: src/mainview/index.css (修正版) */
+/* pi-agent-chat Design Tokens — V2 配色重构 */
+/* Updated: 2026-07-08 | 设计原则: 色相一致、明度分级、暗色降饱和 */
 
 /* ================================
    1. Background Colors
+   暗色: 4 级明度，每级差 ~6% L，保证层次可辨
    ================================ */
 :root {
-  --color-bg-primary: #edf1f6;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-tertiary: #e7edf4;
+  --color-bg-primary: #f1f5f9;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #e2e8f0;
   --color-bg-elevated: #ffffff;
-  --color-bg-overlay: rgba(12, 18, 28, 0.48);
-  --color-bg-input: #edf1f6;
+  --color-bg-overlay: rgba(15, 23, 42, 0.5);
+  --color-bg-input: #f1f5f9;
 }
 .dark {
-  --color-bg-primary: #0b111a;
-  --color-bg-secondary: #111827;
-  --color-bg-tertiary: #142033;
-  --color-bg-elevated: #121b28;
-  --color-bg-overlay: rgba(0, 0, 0, 0.6);
-  --color-bg-input: #0d1520;
+  --color-bg-primary: #0c1220;      /* 最底层: 深蓝黑 */
+  --color-bg-secondary: #141c2e;    /* 二级: 消息列表背景 */
+  --color-bg-tertiary: #1c2840;     /* 三级: 工具栏/输入框 */
+  --color-bg-elevated: #1a2336;     /* 卡片/弹窗浮层 */
+  --color-bg-overlay: rgba(0, 0, 0, 0.65);
+  --color-bg-input: #0f1626;
 }
 
 /* ================================
    2. Text Colors
+   暗色: 三级文字 + inverse
    ================================ */
 :root {
-  --color-text-primary: #17202e;
-  --color-text-secondary: #4f5f72;
-  --color-text-tertiary: #7d8a9c;
-  --color-text-inverse: #f7fafc;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #94a3b8;
+  --color-text-inverse: #f8fafc;
 }
 .dark {
-  --color-text-primary: #f2f6fb;
-  --color-text-secondary: #c1cad6;
-  --color-text-tertiary: #8a96a8;
-  --color-text-inverse: #0a0c10;
+  --color-text-primary: #e8edf4;     /* 主文字: 高对比 */
+  --color-text-secondary: #9ca8b8;   /* 辅助文字: 中等对比 */
+  --color-text-tertiary: #5d6b80;    /* 次要文字: 低对比但不至于看不清 */
+  --color-text-inverse: #0c1220;
 }
 
 /* ================================
    3. Border Colors
    ================================ */
 :root {
-  --color-border-primary: #dce4ee;
-  --color-border-secondary: #c7d2df;
-  --color-border-focus: #246df3;
+  --color-border-primary: #e2e8f0;
+  --color-border-secondary: #cbd5e1;
+  --color-border-focus: #6366f1;
 }
 .dark {
-  --color-border-primary: #334155;
-  --color-border-secondary: #475569;
-  --color-border-focus: #746cff;
+  --color-border-primary: #2a3850;   /* 常规边框 */
+  --color-border-secondary: #3a4a66; /* 强调边框 */
+  --color-border-focus: #818cf8;
 }
 
 /* ================================
-   4. Accent Colors（修正：accent 统一 violet）
+   4. Accent Colors
+   品牌主色: indigo-violet，light/dark 同色相
    ================================ */
 :root {
-  --color-accent: #746cff;
-  --color-accent-hover: #8d88ff;
-  --color-accent-muted: rgba(116, 108, 255, 0.12);
-  --color-accent-text: #6b4cf0;
-  --color-accent-brand: #246df3;
-  --color-accent-idle: #16845f;
-  --color-accent-agent: #7f55cc;
+  --color-accent: #6366f1;
+  --color-accent-hover: #7c7ff5;
+  --color-accent-muted: rgba(99, 102, 241, 0.10);
+  --color-accent-text: #5558e6;
+  --color-accent-brand: #6366f1;
+  --color-accent-idle: #10b981;
+  --color-accent-agent: #8b5cf6;
 }
 .dark {
-  --color-accent: #746cff;
-  --color-accent-hover: #8d88ff;
-  --color-accent-muted: rgba(116, 108, 255, 0.18);
-  --color-accent-text: #a8b0ff;
-  --color-accent-brand: #2db6e8;
-  --color-accent-idle: #46dd89;
-  --color-accent-agent: #ae7aff;
+  --color-accent: #818cf8;
+  --color-accent-hover: #a5b4fc;
+  --color-accent-muted: rgba(129, 140, 248, 0.15);
+  --color-accent-text: #a5b4fc;
+  --color-accent-brand: #818cf8;
+  --color-accent-idle: #34d399;
+  --color-accent-agent: #a78bfa;
 }
 
 /* ================================
    5. Status Colors
+   核心原则: dark 模式不改变色相，只提亮
+   - info 保持蓝（不跳到青）
+   - success 保持绿（不跳到荧光绿）
+   - warning 保持琥珀
+   - error 保持红
    ================================ */
 :root {
-  --color-success: #16845f;
-  --color-warning: #b36b00;
-  --color-error: #cf3654;
-  --color-info: #246df3;
-  --color-status-success: 22 132 95;
-  --color-status-error: 207 54 84;
-  --color-status-warning: 179 107 0;
-  --color-status-info: 36 109 243;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #2563eb;
+  --color-status-success: 5 150 105;
+  --color-status-error: 220 38 38;
+  --color-status-warning: 217 119 6;
+  --color-status-info: 37 99 235;
 }
 .dark {
-  --color-success: #46dd89;
-  --color-warning: #eab308;
-  --color-error: #f87171;
-  --color-info: #2db6e8;
-  --color-status-success: 70 221 137;
+  --color-success: #34d399;          /* 提亮但保持绿色相 */
+  --color-warning: #fbbf24;          /* 提亮但保持琥珀色相 */
+  --color-error: #f87171;            /* 保持红色相 */
+  --color-info: #60a5fa;             /* 保持蓝色相，不跳到青 */
+  --color-status-success: 52 211 153;
   --color-status-error: 248 113 113;
-  --color-status-warning: 234 179 8;
-  --color-status-info: 45 182 232;
+  --color-status-warning: 251 191 36;
+  --color-status-info: 96 165 250;
 }
 
 /* ================================
    6. Semantic Colors（工具类型）
+   每个语义色色相明确区分:
+   - agent = violet (紫)
+   - tool = sky (天蓝，和 info-blue 拉开)
+   - memory = emerald (翠绿，和 success-green 拉开)
+   - notify = amber (琥珀，和 warning 拉开)
+   - media = pink
    ================================ */
 :root {
-  --color-semantic-agent: 127 85 204;
-  --color-semantic-tool: 0 128 149;
-  --color-semantic-memory: 30 140 113;
-  --color-semantic-notify: 186 86 36;
+  --color-semantic-agent: 139 92 246;
+  --color-semantic-tool: 14 165 233;
+  --color-semantic-memory: 16 185 129;
+  --color-semantic-notify: 245 158 11;
   --color-semantic-media: 236 72 153;
-  --color-semantic-line: #dce4ee;
+  --color-semantic-line: #cbd5e1;
 }
 .dark {
-  --color-semantic-agent: 174 122 255;
-  --color-semantic-tool: 45 212 232;
-  --color-semantic-memory: 45 212 191;
-  --color-semantic-notify: 251 146 60;
+  --color-semantic-agent: 167 139 250;   /* violet-400 */
+  --color-semantic-tool: 38 174 230;     /* sky-400，降饱和版 */
+  --color-semantic-memory: 52 211 153;   /* emerald-400 */
+  --color-semantic-notify: 251 191 36;   /* amber-400 */
   --color-semantic-media: 244 114 182;
-  --color-semantic-line: #2b394d;
+  --color-semantic-line: #2a3850;
 }
 
 /* ================================
    7. Diff Colors
    ================================ */
 :root {
-  --diff-bg: #f4f7fb;
-  --diff-color: #17202e;
-  --diff-added-bg: #dff6ea;
-  --diff-added-color: #0e6e4e;
-  --diff-removed-bg: #ffe2e9;
-  --diff-removed-color: #b42345;
-  --diff-word-added-bg: #c4ecd5;
-  --diff-word-removed-bg: #ffc6d2;
-  --diff-gutter-bg: #e8eef6;
-  --diff-gutter-color: #69778a;
-  --diff-highlight-bg: #dce6f1;
+  --diff-bg: #f8fafc;
+  --diff-color: #0f172a;
+  --diff-added-bg: #ecfdf5;
+  --diff-added-color: #059669;
+  --diff-removed-bg: #fef2f2;
+  --diff-removed-color: #dc2626;
+  --diff-word-added-bg: #d1fae5;
+  --diff-word-removed-bg: #fecaca;
+  --diff-gutter-bg: #f1f5f9;
+  --diff-gutter-color: #94a3b8;
+  --diff-highlight-bg: #e2e8f0;
 }
 .dark {
-  --diff-bg: #111b2a;
-  --diff-color: #d6deea;
-  --diff-added-bg: #102719;
-  --diff-added-color: #72df9d;
-  --diff-removed-bg: #2f151e;
-  --diff-removed-color: #ff8a9c;
-  --diff-word-added-bg: #183d28;
-  --diff-word-removed-bg: #48202b;
-  --diff-gutter-bg: #182538;
-  --diff-gutter-color: #94a3b8;
-  --diff-highlight-bg: #24344a;
+  --diff-bg: #141c2e;
+  --diff-color: #e8edf4;
+  --diff-added-bg: #0d2818;
+  --diff-added-color: #6ee7b7;
+  --diff-removed-bg: #2a1018;
+  --diff-removed-color: #fca5a5;
+  --diff-word-added-bg: #144022;
+  --diff-word-removed-bg: #3c1820;
+  --diff-gutter-bg: #1c2840;
+  --diff-gutter-color: #5d6b80;
+  --diff-highlight-bg: #2a3850;
 }
 
 /* ================================
    8. Surface Colors
+   暗色下拉开层次
    ================================ */
 :root {
-  --surface-code: #eef4fa;
-  --surface-hover: #eef3f9;
-  --surface-dim: #f4f7fb;
+  --surface-code: #f1f5f9;
+  --surface-hover: #f8fafc;
+  --surface-dim: #f1f5f9;
 }
 .dark {
-  --surface-code: #0e1724;
-  --surface-hover: #1a2638;
-  --surface-dim: #121b28;
+  --surface-code: #0a1020;     /* 代码块: 最暗 */
+  --surface-hover: #1c2840;    /* hover 态 */
+  --surface-dim: #141c2e;      /* 卡片底色 */
 }
 
 /* ================================
@@ -393,7 +408,7 @@
   /* --- Surface container tiers --- */
   --color-surface-container-low: var(--color-bg-secondary);
   --color-surface-container: var(--color-bg-tertiary);
-  --color-surface-dim: var(--tw-surface-dim);
+  --color-surface-dim: var(--surface-dim);
 
   /* --- Primary semantic aliases --- */
   --color-primary: var(--color-accent);
@@ -449,35 +464,36 @@
   /* --- Tailwind-friendly hex color aliases (for @theme inline bridge + /alpha modifiers) ---
      这些必须是合法的 hex/rgb 颜色值，不能用 RGB 分量格式，否则 Tailwind v4 的
      bg-status-info/5、border-status-error/20 等透明度语法不生效。
+     V2: 色相和 --color-status-* 保持一致
   */
-  --tw-status-info: #246df3;
-  --tw-status-success: #16845f;
-  --tw-status-error: #cf3654;
-  --tw-status-warning: #b36b00;
-  --tw-semantic-tool: #008095;
-  --tw-semantic-agent: #7f55cc;
-  --tw-semantic-memory: #1e8c71;
-  --tw-semantic-notify: #ba5624;
+  --tw-status-info: #2563eb;
+  --tw-status-success: #059669;
+  --tw-status-error: #dc2626;
+  --tw-status-warning: #d97706;
+  --tw-semantic-tool: #0ea5e9;
+  --tw-semantic-agent: #8b5cf6;
+  --tw-semantic-memory: #10b981;
+  --tw-semantic-notify: #f59e0b;
   --tw-semantic-media: #ec4899;
-  --tw-surface-dim: #f4f7fb;
-  --tw-surface-hover: #eef3f9;
-  --tw-surface-code: #eef4fa;
-  --tw-accent: #746cff;
+  --tw-surface-dim: #f1f5f9;
+  --tw-surface-hover: #f8fafc;
+  --tw-surface-code: #f1f5f9;
+  --tw-accent: #6366f1;
 }
 .dark {
-  --tw-status-info: #2db6e8;
-  --tw-status-success: #46dd89;
+  --tw-status-info: #60a5fa;
+  --tw-status-success: #34d399;
   --tw-status-error: #f87171;
-  --tw-status-warning: #eab308;
-  --tw-semantic-tool: #2dd4e8;
-  --tw-semantic-agent: #ae7aff;
-  --tw-semantic-memory: #2dd4bf;
-  --tw-semantic-notify: #fb923c;
+  --tw-status-warning: #fbbf24;
+  --tw-semantic-tool: #26aee6;
+  --tw-semantic-agent: #a78bfa;
+  --tw-semantic-memory: #34d399;
+  --tw-semantic-notify: #fbbf24;
   --tw-semantic-media: #f472b6;
-  --tw-surface-dim: #121b28;
-  --tw-surface-hover: #1a2638;
-  --tw-surface-code: #0e1724;
-  --tw-accent: #746cff;
+  --tw-surface-dim: #141c2e;
+  --tw-surface-hover: #1c2840;
+  --tw-surface-code: #0a1020;
+  --tw-accent: #818cf8;
 }
 
     </style>
