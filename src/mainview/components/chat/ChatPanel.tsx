@@ -17,6 +17,10 @@ import {
   FolderOpen,
   Sparkles,
   Target,
+  Edit3,
+  Eye,
+  PlusCircle,
+  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ImageContent, Message } from "@dyyz1993/pi-ai";
@@ -50,6 +54,7 @@ import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { GoalActionCard } from "./GoalActionCard";
+import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import {
   useReturnToSourceSession,
   type ReturnSourceTarget,
@@ -95,6 +100,84 @@ const MAX_MSG_IDS_CACHE = 10;
 const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
 
 export { ChatReloadButton, shouldShowChatReloadButton };
+
+export interface GoalDraftContext {
+  projectName: string;
+  projectPath: string;
+  sessionTitle: string;
+  hint: string;
+  messageCount: number;
+  hasAttachments: boolean;
+}
+
+function normalizeDraftLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function buildGoalDraftObjective(hint: string, projectName: string): string {
+  const firstMeaningfulLine = hint
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^#+\s*/, "").trim())
+    .find(Boolean);
+  const fallback = `围绕 ${projectName} 生成一个可执行、可验收的开发目标。`;
+  const objective = normalizeDraftLine(firstMeaningfulLine ?? "") || fallback;
+  return objective.length > 96 ? `${objective.slice(0, 95)}...` : objective;
+}
+
+export function buildGoalDraftMarkdown(context: GoalDraftContext): string {
+  const hint = normalizeDraftLine(context.hint);
+  const projectName = normalizeDraftLine(context.projectName) || "当前项目";
+  const sessionTitle = normalizeDraftLine(context.sessionTitle);
+  const objective = buildGoalDraftObjective(context.hint, projectName);
+  const source = [
+    `项目：${projectName}`,
+    context.projectPath ? `路径：${context.projectPath}` : "",
+    sessionTitle ? `会话：${sessionTitle}` : "",
+    context.messageCount > 0 ? `已参考当前会话 ${context.messageCount} 条消息` : "",
+    context.hasAttachments ? "包含当前 composer 附件/上下文" : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return [
+    `# Target: ${objective}`,
+    "",
+    "## Target Manifest",
+    `- Target Name: ${objective}`,
+    "- Target Type: Development Goal",
+    `- Project: ${projectName}`,
+    `- Entry: ${sessionTitle || "当前会话"}`,
+    "- Scheme: Understand -> Implement -> Validate -> Deliver",
+    "",
+    "## 背景来源",
+    source || "当前会话和当前项目。",
+    "",
+    "## 要解决的问题",
+    hint || "当前还没有手写目标描述，需要先把项目上下文转成一个清晰的执行目标。",
+    "",
+    "## Scope",
+    "- In Scope: 目标直接要求的代码、文档、测试和验证流程。",
+    "- Out of Scope: 无关重构、批量删除、未确认的合并/发布。",
+    "",
+    "## Build Phases",
+    "- 明确目标范围和不做的事情。",
+    "- 检查相关代码、文档和现有测试。",
+    "- 按小模块实现，避免混入无关改动。",
+    "- 运行自动测试、构建或等价验证命令。",
+    "- 对 UI/交互改动执行桌面端和移动端验收；涉及核心链路时先验 RPC/底层，再验 UI。",
+    "",
+    "## 验收标准",
+    "- 目标对应的主要功能可以被用户直接看到或操作。",
+    "- 自动测试或构建命令通过，并记录具体命令。",
+    "- 至少覆盖一个 happy path 和一个边界/异常场景。",
+    "- 如果产生临时预览端口，明确说明它只是预览地址，不是产品功能。",
+    "",
+    "## 风险与确认点",
+    "- 不删除或回滚与本目标无关的未提交改动。",
+    "- 遇到危险命令、批量删除、合并或提交前先确认。",
+    "- 未覆盖的验收项需要在最终回复中明确说明。",
+  ].join("\n");
+}
 
 function stringifyMessageBlock(block: ChatMessage["content"][number]): string {
   switch (block.type) {
@@ -330,6 +413,124 @@ function RefineGoalOverlay({ step }: { step: number }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function GoalDraftCard({
+  draft,
+  editing,
+  disabled,
+  onChange,
+  onGenerate,
+  onEdit,
+  onSave,
+  onCancel,
+  onAdd,
+}: {
+  draft: string;
+  editing: boolean;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  onGenerate: () => void;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onAdd: () => void;
+}) {
+  const { t } = useTranslation("chat");
+  return (
+    <div
+      data-testid="goal-draft-card"
+      className="mx-2 mt-2 overflow-hidden rounded-lg border border-accent/25 bg-accent/5"
+    >
+      <div className="flex flex-col gap-2 border-b border-accent/15 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <Target className="h-3.5 w-3.5 shrink-0 text-accent" />
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-text-primary">
+              {t("goal.draft.title")}
+            </div>
+            <div className="text-[11px] text-text-tertiary">
+              {t("goal.draft.subtitle")}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                data-testid="goal-draft-save-preview"
+                onClick={onSave}
+                disabled={disabled || !draft.trim()}
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Eye className="h-3 w-3" />
+                {t("goal.draft.save")}
+              </button>
+              <button
+                type="button"
+                data-testid="goal-draft-cancel-edit"
+                onClick={onCancel}
+                disabled={disabled}
+                className="inline-flex items-center gap-1 rounded-md bg-surface-dim px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <X className="h-3 w-3" />
+                {t("goal.draft.cancelEdit")}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                data-testid="goal-draft-regenerate"
+                onClick={onGenerate}
+                disabled={disabled}
+                className="inline-flex items-center gap-1 rounded-md bg-surface-dim px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw className="h-3 w-3" />
+                {t("goal.draft.regenerate")}
+              </button>
+              <button
+                type="button"
+                data-testid="goal-draft-edit"
+                onClick={onEdit}
+                disabled={disabled}
+                className="inline-flex items-center gap-1 rounded-md bg-surface-dim px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Edit3 className="h-3 w-3" />
+                {t("goal.draft.edit")}
+              </button>
+              <button
+                type="button"
+                data-testid="goal-draft-add"
+                onClick={onAdd}
+                disabled={disabled || !draft.trim()}
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlusCircle className="h-3 w-3" />
+                {t("goal.draft.add")}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh]">
+        {editing ? (
+          <textarea
+            value={draft}
+            data-testid="goal-draft-editor"
+            onChange={(event) => onChange(event.target.value)}
+            className="min-h-48 w-full resize-y rounded-md border border-border-primary bg-bg-elevated px-3 py-2 font-mono text-xs leading-5 text-text-primary outline-none transition-colors focus:border-border-focus"
+            aria-label={t("goal.draft.editorLabel")}
+          />
+        ) : (
+          <div className="prose prose-sm max-w-none text-xs text-text-secondary dark:prose-invert prose-headings:my-2 prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">
+            <CachedReactMarkdown>{draft}</CachedReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -674,11 +875,14 @@ export function ChatPanel() {
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
   const [isRefiningGoal, setIsRefiningGoal] = useState(false);
   const [refineStep, setRefineStep] = useState(0); // 0=idle, 1=gathering, 2=calling LLM, 3=done
+  const [goalDraft, setGoalDraft] = useState("");
+  const [isGoalDraftEditing, setIsGoalDraftEditing] = useState(false);
   const preGoalInputRef = useRef("");
+  const preEditGoalDraftRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
   const showComposerUtilityRow = !isMobileOrTablet || goalMode || !!returnSourceTarget;
   const hasSendableContent = goalMode
-    ? inputText.trim().length > 0
+    ? inputText.trim().length > 0 || goalDraft.trim().length > 0
     : inputText.trim().length > 0 || attachmentCount > 0 || hasComposerPlaceholders;
   const composerInputDisabled = !activeSessionId || isCreatingGoal || activeRemoteDisconnected;
   const sendDisabled =
@@ -1369,21 +1573,88 @@ export function ChatPanel() {
       if (goalMode) {
         // Toggle off: exit goal mode
         setGoalMode(false);
+        setGoalDraft("");
+        setIsGoalDraftEditing(false);
         setInputText(preGoalInputRef.current);
         preGoalInputRef.current = "";
+        preEditGoalDraftRef.current = "";
         return;
       }
+      const draftHint = objective ?? inputText;
+      const draft = buildGoalDraftMarkdown({
+        projectName: activeProjectTab?.name ?? chatProjectName,
+        projectPath: chatProjectPath,
+        sessionTitle: chatIdentity?.title ?? "",
+        hint: draftHint,
+        messageCount: messages.length,
+        hasAttachments: attachmentCount > 0 || hasComposerPlaceholders,
+      });
       preGoalInputRef.current = inputText;
-      setInputText(objective ?? inputText);
+      setInputText(draftHint);
+      setGoalDraft(draft);
+      setIsGoalDraftEditing(false);
+      preEditGoalDraftRef.current = "";
       setGoalMode(true);
       commandPopup.closePopup();
       requestAnimationFrame(() => inputBarRef.current?.focus?.());
     },
-    [commandPopup, goalMode, inputText, isViewingSubagent, setInputText],
+    [
+      activeProjectTab?.name,
+      attachmentCount,
+      chatIdentity?.title,
+      chatProjectName,
+      chatProjectPath,
+      commandPopup,
+      goalMode,
+      hasComposerPlaceholders,
+      inputText,
+      isViewingSubagent,
+      messages.length,
+      setInputText,
+    ],
   );
 
+  const generateGoalDraft = useCallback(() => {
+    const draft = buildGoalDraftMarkdown({
+      projectName: activeProjectTab?.name ?? chatProjectName,
+      projectPath: chatProjectPath,
+      sessionTitle: chatIdentity?.title ?? "",
+      hint: inputText,
+      messageCount: messages.length,
+      hasAttachments: attachmentCount > 0 || hasComposerPlaceholders,
+    });
+    setGoalDraft(draft);
+    setIsGoalDraftEditing(false);
+  }, [
+    activeProjectTab?.name,
+    attachmentCount,
+    chatIdentity?.title,
+    chatProjectName,
+    chatProjectPath,
+    hasComposerPlaceholders,
+    inputText,
+    messages.length,
+  ]);
+
+  const handleEditGoalDraft = useCallback(() => {
+    preEditGoalDraftRef.current = goalDraft;
+    setIsGoalDraftEditing(true);
+  }, [goalDraft]);
+
+  const handleCancelGoalDraftEdit = useCallback(() => {
+    if (preEditGoalDraftRef.current) {
+      setGoalDraft(preEditGoalDraftRef.current);
+    }
+    setIsGoalDraftEditing(false);
+  }, []);
+
+  const handleSaveGoalDraftEdit = useCallback(() => {
+    preEditGoalDraftRef.current = "";
+    setIsGoalDraftEditing(false);
+  }, []);
+
   const handleCreateGoal = useCallback(async () => {
-    const objective = inputText.trim();
+    const objective = (goalDraft || inputText).trim();
     if (!activeSessionId || !objective || isCreatingGoal) return;
     setIsCreatingGoal(true);
     try {
@@ -1395,6 +1666,7 @@ export function ChatPanel() {
       if (needsBootstrap) {
         // Send the goal text as the bootstrap message — the agent will see
         // it and start working. setGoal below registers it with supervisor.
+        setInputText(objective);
         await sendMessage();
         // Retry setGoal until the pi subprocess channel is ready.
         // callChannel in process-manager already waits 1.6s internally,
@@ -1408,11 +1680,15 @@ export function ChatPanel() {
       } else {
         // Session already active — set goal first, then send message
         await setGoal(activeSessionId, objective);
+        setInputText(objective);
         await sendMessage();
       }
       setInputText("");
+      setGoalDraft("");
+      setIsGoalDraftEditing(false);
       setGoalMode(false);
       preGoalInputRef.current = "";
+      preEditGoalDraftRef.current = "";
       resumeAutoScroll();
       if (isMobileOrTablet) {
         inputBarRef.current?.blur();
@@ -1423,6 +1699,7 @@ export function ChatPanel() {
   }, [
     activeSessionId,
     effectiveStatus,
+    goalDraft,
     inputText,
     isCreatingGoal,
     isMobileOrTablet,
@@ -1432,7 +1709,7 @@ export function ChatPanel() {
   ]);
 
   const handleRefineGoal = useCallback(async () => {
-    const objective = inputText.trim();
+    const objective = (goalDraft || inputText).trim();
     if (!activeSessionId || !objective || isRefiningGoal) return;
     setIsRefiningGoal(true);
     setRefineStep(1);
@@ -1442,7 +1719,11 @@ export function ChatPanel() {
     try {
       const result = await refineGoal(activeSessionId, objective);
       if (result.success && result.objective) {
-        setInputText(result.objective);
+        if (goalDraft) {
+          setGoalDraft(result.objective);
+        } else {
+          setInputText(result.objective);
+        }
       }
       setRefineStep(3);
       await new Promise((r) => setTimeout(r, 600));
@@ -1450,7 +1731,7 @@ export function ChatPanel() {
       setIsRefiningGoal(false);
       setRefineStep(0);
     }
-  }, [activeSessionId, inputText, isRefiningGoal, refineGoal, setInputText]);
+  }, [activeSessionId, goalDraft, inputText, isRefiningGoal, refineGoal, setInputText]);
 
   const [handleFollowUp, isFollowUpRunning] = useAsyncGuard(async () => {
     if (!inputText.trim() || !isStreaming) return;
@@ -1553,6 +1834,12 @@ export function ChatPanel() {
   ]);
 
   const isFilePreviewOpen = overlay === "file" && !!filePreview;
+  const chatIdentityTitle = chatIdentity
+    ? chatProjectPath
+      ? `${chatIdentity.title} · ${chatProjectPath}`
+      : chatIdentity.title
+    : "";
+  const chatIdentityClassName = chatIdentity ? sessionIdentityClass(chatIdentity) : "";
 
   return (
     <div
@@ -1570,10 +1857,8 @@ export function ChatPanel() {
             <span
               data-testid="chat-session-identity-badge"
               data-session-kind={chatIdentity.kind}
-              className={`inline-flex min-w-0 max-w-[220px] items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${sessionIdentityClass(chatIdentity)}`}
-              title={
-                chatProjectPath ? `${chatIdentity.title} · ${chatProjectPath}` : chatIdentity.title
-              }
+              className={`inline-flex min-w-0 max-w-[220px] items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${chatIdentityClassName}`}
+              title={chatIdentityTitle}
             >
               {chatIdentity.kind === "fork" ? (
                 <GitFork className="h-3 w-3 shrink-0" />
@@ -1720,6 +2005,38 @@ export function ChatPanel() {
                     {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
                     {!goalMode && <AttachmentBar />}
                     {!goalMode && <ComposerPlaceholderBar />}
+                    {goalMode && (
+                      <div className="mx-2 mt-2 flex flex-col gap-2 rounded-lg border border-border-primary/70 bg-bg-secondary/60 px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0 text-[11px] leading-4 text-text-tertiary">
+                          <span className="font-medium text-text-secondary">
+                            {t("goal.draft.entryTitle")}
+                          </span>
+                          <span className="ml-1">{t("goal.draft.entryHint")}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={generateGoalDraft}
+                          disabled={isCreatingGoal || isRefiningGoal}
+                          className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-surface-dim px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          {goalDraft ? t("goal.draft.regenerate") : t("goal.draft.generate")}
+                        </button>
+                      </div>
+                    )}
+                    {goalMode && goalDraft && (
+                      <GoalDraftCard
+                        draft={goalDraft}
+                        editing={isGoalDraftEditing}
+                        disabled={isCreatingGoal || isRefiningGoal}
+                        onChange={setGoalDraft}
+                        onGenerate={generateGoalDraft}
+                        onEdit={handleEditGoalDraft}
+                        onSave={handleSaveGoalDraftEdit}
+                        onCancel={handleCancelGoalDraftEdit}
+                        onAdd={() => void handleCreateGoal()}
+                      />
+                    )}
                     {activeRemoteDisconnected && (
                       <div
                         data-testid="composer-remote-disconnected"
@@ -1794,7 +2111,7 @@ export function ChatPanel() {
                     {goalMode ? (
                       <button
                         onClick={() => void handleRefineGoal()}
-                        disabled={isCreatingGoal || isRefiningGoal || !inputText.trim()}
+                        disabled={isCreatingGoal || isRefiningGoal || !(goalDraft || inputText).trim()}
                         className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-accent/20 text-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
                         title={t("goal.refine")}
                         aria-label={t("goal.refine")}
