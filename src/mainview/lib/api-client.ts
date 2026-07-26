@@ -13,6 +13,10 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("gateway");
 const DEFAULT_DEV_API_PORT = 31 * 100;
+const DEFAULT_RPC_CALL_TIMEOUT_MS = 30_000;
+const LONG_RPC_CALL_TIMEOUT_MS = 300_000;
+
+const LONG_RUNNING_RPC_METHODS = new Set<keyof RPCMethods>(["agent.compact"]);
 
 /**
  * Token 来源优先级：
@@ -149,6 +153,19 @@ class APIClientImpl {
   private _stopped: boolean = false;
   private _reconnectCheckInterval: ReturnType<typeof setInterval> | null = null;
 
+  private createRpcClient<TTransport extends WebSocketTransport | IPCTransport>(
+    transport: TTransport,
+    timeout = DEFAULT_RPC_CALL_TIMEOUT_MS,
+  ): TypedClient<RPCMethods, RPCEvents> {
+    return createTypedClient<RPCMethods, RPCEvents>(transport, { timeout });
+  }
+
+  private setRpcClients<TTransport extends WebSocketTransport | IPCTransport>(
+    transport: TTransport,
+  ): void {
+    this.client = this.createRpcClient(transport);
+  }
+
   onConnectionChange(listener: (status: "connected" | "disconnected") => void): () => void {
     this._connectionListeners.add(listener);
     return () => {
@@ -172,7 +189,7 @@ class APIClientImpl {
     const ipcTransport = new IPCTransport();
     this._transport = "ipc";
     this._baseUrl = null;
-    this.client = createTypedClient<RPCMethods, RPCEvents>(ipcTransport);
+    this.setRpcClients(ipcTransport);
     this.setupElectrobunBridge(ipcTransport);
     useAppStore.getState().addLog("[APIClient] Desktop (IPC) initialized synchronously");
   }
@@ -207,7 +224,7 @@ class APIClientImpl {
             ),
           ),
         ]);
-        this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
+        this.setRpcClients(this.wsTransport);
         this._reconnectDetected = false;
         this._reconnectAttempts = 0;
         this.setupReconnectDetection();
@@ -252,7 +269,7 @@ class APIClientImpl {
 
       if (!wasConnected && connected && this._reconnectDetected) {
         this._reconnectDetected = false;
-        this.client = createTypedClient<RPCMethods, RPCEvents>(transport);
+        this.setRpcClients(transport);
         this.initPromise = null;
         this._reconnectAttempts = 0;
         this.setConnectionStatus("connected");
@@ -313,7 +330,7 @@ class APIClientImpl {
         ]);
 
         this._reconnectAttempts = 0;
-        this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
+        this.setRpcClients(this.wsTransport);
         this.initPromise = null;
         this.setConnectionStatus("connected");
         this.setupReconnectDetection();
@@ -413,7 +430,13 @@ class APIClientImpl {
     this.debugLog("call", method as string, params);
     try {
       if (!this.client) throw new Error("Client not initialized");
-      const result = await this.client.call(method, params);
+      const result = await this.client.call(
+        method,
+        params,
+        LONG_RUNNING_RPC_METHODS.has(method)
+          ? { timeoutMs: LONG_RPC_CALL_TIMEOUT_MS }
+          : undefined,
+      );
       this.debugLog("response", method as string, result);
       return result;
     } catch (err) {

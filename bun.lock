@@ -9,7 +9,7 @@
         "@dyyz1993/pi-agent-core": "^0.78.3",
         "@dyyz1993/pi-ai": "^0.78.2",
         "@dyyz1993/pi-coding-agent": "file:.yalc/@dyyz1993/pi-coding-agent",
-        "@dyyz1993/rpc-core": "^1.3.0",
+        "@dyyz1993/rpc-core": "^2.2.0",
         "diff": "^9.0.0",
         "dotenv-cli": "^11.0.0",
         "electrobun": "1.13.1",
@@ -229,7 +229,7 @@
 
     "@dyyz1993/pi-tui": ["@dyyz1993/pi-tui@0.74.56", "", { "dependencies": { "@types/mime-types": "^2.1.4", "chalk": "^5.5.0", "get-east-asian-width": "^1.3.0", "marked": "^15.0.12", "mime-types": "^3.0.1" }, "optionalDependencies": { "koffi": "^2.9.0" } }, "sha512-i1Rg8XHJNybP9bPs/gfn7nSkvDxBuI10cN07kNHJ1vwFeVzO+TRJceifNCtDFljdgRnAZvWMkAB2viOm2yqTlQ=="],
 
-    "@dyyz1993/rpc-core": ["@dyyz1993/rpc-core@1.3.0", "", {}, "sha512-w98zp31gJayuVcXG3Pe9c9KQ8gaW9Pj8Uv0ON0+wqEBm303j6PNB2cRzlhYFR2BVs9bFEP8yqOHuFKzguNaNMQ=="],
+    "@dyyz1993/rpc-core": ["@dyyz1993/rpc-core@2.2.0", "", {}, "sha512-4yD9Ai73K3pkgC1vU+ZlzJ8Pb+7x+jS/1GK0z6UV2tiF+UYhQmydh7zFK8A3u8kDSs623LoNJyALn+8F/P8bMw=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
 
