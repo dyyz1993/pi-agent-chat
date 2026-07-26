@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Check,
   ArrowLeft,
+  ShieldCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -1143,6 +1144,35 @@ export function ProjectPickerDialog({
             )}
           </div>
         )}
+
+        <div className="rounded-md border border-status-success/25 bg-status-success/5 dark:bg-status-success/10 p-3 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-status-success shrink-0" />
+            <p className="text-[10px] font-medium text-text-secondary">
+              {t("picker.qc.deliveryTitle", "交付门槛")}
+            </p>
+          </div>
+          <ul className="space-y-1 text-[11px] text-text-secondary leading-relaxed">
+            <li>
+              {t(
+                "picker.qc.deliverySafeInstall",
+                "安装失败先重试/查日志，不默认递归删除 node_modules、lockfile 或项目文件。",
+              )}
+            </li>
+            <li>
+              {t(
+                "picker.qc.deliveryValidation",
+                "完成前必须提供 validation packet：自动测试、构建、浏览器验收、边界场景和未测风险。",
+              )}
+            </li>
+            <li>
+              {t(
+                "picker.qc.deliveryPreviewPort",
+                "后续启动的本地端口只是临时预览地址，不代表主应用功能或产品端口。",
+              )}
+            </li>
+          </ul>
+        </div>
 
         <div>
           <div className="flex items-center justify-between mb-1.5">

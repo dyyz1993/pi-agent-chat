@@ -168,6 +168,7 @@ pi-momo-fork/packages/coding-agent/
 - 关联 fork 的开发结果默认面向当前关联 fork 的分支/PR-style change set，不要写成 upstream PR，除非用户明确要求。
 - 关联 fork 并行开发也必须用 worktree：一个 issue/slice 对应 app worktree + paired fork worktree。fork 代码改完后按 `npm run build`、必要时 `yalc push`、再重启/reload app/Agent session 的顺序处理。
 - 端口和配对关系从 `./scripts/worktree-dev.sh list`、`~/.pi/chat/worktrees/<worktree-id>/manifest.json`、`~/.pi/chat/worktrees/registry/*.env`、worktree `.env`、`logs/dev.log` 和 `lsof` 查询；不要让 Agent 猜端口。
+- Quick Create 生成项目后的首轮开发必须遵循 `docs/workflows/quick-create-delivery-workflow.md`：生成项目内的 `QUICK_CREATE_DELIVERY.md` 是交付契约；Developer 不能用递归删除作为安装失败的默认恢复手段；没有 validation packet、浏览器验收和临时预览端口说明，不能自称 ready。
 - 启动项目 stack 时不要手工复制 env 或猜端口。新建并启动用 `scripts/worktree-create.sh <slug> --dev --start --with-agent-fork`；启动/修复已有 worktree 用 `scripts/worktree-dev.sh <app-worktree> --with-agent-fork --agent-path <paired-fork> --agent-build`；只准备 env/registry 用 `--no-start`。
 - 启动脚本会从主仓 `.env` 派生 worktree `.env` 并重写 `PORT`、`PI_CLI_PATH`、`PI_CODING_AGENT_DIR`、`PI_APP_CONFIG_DIR`，启动时导出 `VITE_API_TARGET`、`VITE_PORT`、`VITE_AUTH_TOKEN`。worker 必须在回报里列出这些实际值。
 - 默认依赖策略是 app `--link` / fork `--agent-link`；改依赖、lockfile 或 native deps 时才用 `--install` / `--agent-install`。仅 CLI/runtime fork 改动通常 build + `PI_CLI_PATH` 即可；app import 的 package API/type 改动才需要 `yalc push`。

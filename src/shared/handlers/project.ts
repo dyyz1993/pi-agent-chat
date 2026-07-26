@@ -159,6 +159,29 @@ function createIsolatedPiConfigDir(): string {
   return tmpDir;
 }
 
+function stripBenignPiCliStderr(stderr: string): string {
+  return stderr
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        !/^\[agent\] ".+" is missing recommended field\(s\): .+ These affect the Agent panel display\.$/.test(
+          line.trim(),
+        ),
+    )
+    .join("\n")
+    .trim();
+}
+
+function getPiCliFailureMessage(params: {
+  stderr: string;
+  fallback?: string;
+  limit?: number;
+}): string {
+  const filtered = stripBenignPiCliStderr(params.stderr);
+  const message = filtered || params.fallback?.trim() || "pi CLI error";
+  return message.slice(0, params.limit ?? 300);
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
@@ -207,6 +230,86 @@ function sanitizeQuickCreatePlan(input: unknown): QuickCreatePlan | undefined {
   };
 }
 
+function hasCjkText(input: string): boolean {
+  return /[\u3400-\u9fff]/.test(input);
+}
+
+function deriveFallbackFolderName(requirement: string): string {
+  const words = requirement
+    .toLowerCase()
+    .match(/[a-z0-9]+/g)
+    ?.filter(
+      (word) =>
+        !new Set([
+          "a",
+          "an",
+          "and",
+          "app",
+          "application",
+          "build",
+          "create",
+          "for",
+          "of",
+          "small",
+          "the",
+          "to",
+          "with",
+        ]).has(word),
+    )
+    .slice(0, 5);
+
+  const fromWords = sanitizeFolderName(words?.join("-") ?? "");
+  if (fromWords) return fromWords;
+
+  return sanitizeFolderName(requirement) || "quick-project";
+}
+
+function createFallbackQuickCreatePlan(requirement: string): QuickCreatePlan {
+  if (hasCjkText(requirement)) {
+    return {
+      goal: `根据需求完成一个可运行的项目：${requirement}`.slice(0, 300),
+      techStack: ["TypeScript", "React", "Vitest"],
+      steps: ["确认核心功能范围", "搭建项目结构", "实现主要交互流程", "补充基础测试"],
+      testing: "运行单元测试和构建检查，并手动验证主要创建、编辑和错误状态流程。",
+    };
+  }
+
+  return {
+    goal: `Build a working project for: ${requirement}`.slice(0, 300),
+    techStack: ["TypeScript", "React", "Vitest"],
+    steps: [
+      "Confirm the core user workflow.",
+      "Set up the project structure.",
+      "Implement the primary UI and state flow.",
+      "Add focused tests for the main behavior.",
+    ],
+    testing: "Run unit tests and a production build, then manually verify the main happy path and error states.",
+  };
+}
+
+function createFallbackQuickCreateResult(requirement: string): {
+  name: string;
+  description: string;
+  plan: QuickCreatePlan;
+} {
+  const cjk = hasCjkText(requirement);
+  return {
+    name: deriveFallbackFolderName(requirement),
+    description: (
+      cjk ? `根据需求创建的项目：${requirement}` : `A project generated from: ${requirement}`
+    ).slice(0, 200),
+    plan: createFallbackQuickCreatePlan(requirement),
+  };
+}
+
+function isStructuredOutputFailure(message: string): boolean {
+  return (
+    /structured output validation failed/i.test(message) ||
+    /json parse failed/i.test(message) ||
+    /unexpected end of json input/i.test(message)
+  );
+}
+
 function renderProjectReadme(
   folderName: string,
   description: string,
@@ -234,6 +337,87 @@ function renderProjectReadme(
   if (plan?.testing) {
     lines.push("## 测试与校验", "", plan.testing, "");
   }
+  lines.push(
+    "## 交付协议",
+    "",
+    "本项目由快速创建流程生成。开发 Agent 必须先阅读并遵循 [`QUICK_CREATE_DELIVERY.md`](./QUICK_CREATE_DELIVERY.md)，完成其中的安全安装、自动测试、构建、浏览器验收、负向/边界场景和未测风险记录后，才能声明交付完成。",
+    "",
+  );
+
+  return lines.join("\n");
+}
+
+function renderQuickCreateDeliveryProtocol(
+  folderName: string,
+  description: string,
+  plan: QuickCreatePlan | undefined,
+): string {
+  const lines: string[] = [
+    "# Quick Create Delivery Protocol",
+    "",
+    "This project was created by pi-agent-chat quick create. Treat this file as the delivery contract for the first development session.",
+    "",
+    "## Source Request",
+    "",
+    `- Project: ${folderName}`,
+  ];
+
+  if (description) {
+    lines.push(`- Description: ${description}`);
+  }
+  if (plan?.goal) {
+    lines.push(`- Goal: ${plan.goal}`);
+  }
+  if (plan && plan.techStack.length > 0) {
+    lines.push(`- Suggested stack: ${plan.techStack.join(", ")}`);
+  }
+  lines.push("");
+
+  if (plan && plan.steps.length > 0) {
+    lines.push("## Implementation Scope", "");
+    plan.steps.forEach((step, index) => {
+      lines.push(`${index + 1}. ${step}`);
+    });
+    lines.push("");
+  }
+
+  lines.push(
+    "## Safety Rules",
+    "",
+    "- Do not run recursive destructive cleanup commands such as `rm -rf node_modules`, `rm -rf .`, or lockfile deletion as the first recovery step.",
+    "- If dependency installation fails or times out, inspect the error and retry with a non-destructive command first, for example `npm install --no-fund --no-audit`.",
+    "- Ask for explicit user approval before deleting generated files, dependency directories, lockfiles, git history, or anything outside this project.",
+    "- Keep build artifacts and cache files out of git unless they are intentionally part of the project.",
+    "",
+    "## Required Validation Packet",
+    "",
+    "Before saying the project is ready, provide a validation packet with:",
+    "",
+    "- Automated checks: exact install, test, typecheck, and build commands with pass/fail results.",
+    "- Manual acceptance checks: setup, steps, expected result, evidence, and status.",
+    "- Browser/UI checks for web projects: open URL, happy path, negative/edge cases, refresh or persistence behavior when relevant, and mobile viewport behavior.",
+    "- Safety evidence: any permission prompts, denied destructive commands, and why the final commands were safe.",
+    "- Residual risk: what was not tested and why.",
+    "",
+    "## Minimum Web App Acceptance Cases",
+    "",
+    "- Happy path: create the primary object, edit/update it, move or complete it if applicable, then delete/reset it.",
+    "- Negative path: empty input, invalid input, missing dependency, corrupt persisted data, or unavailable storage when applicable.",
+    "- Runtime path: start the local dev/preview server on a clearly marked temporary port and state that it is a preview URL, not a product feature.",
+    "- Responsive path: verify desktop and mobile viewport layout, with no incoherent overlap or horizontal overflow.",
+    "",
+  );
+
+  if (plan?.testing) {
+    lines.push("## Generated Testing Hint", "", plan.testing, "");
+  }
+
+  lines.push(
+    "## Completion Gate",
+    "",
+    "The project is not deliverable until the validation packet is complete. If any required check fails, report the failure and continue fixing or ask the user for direction.",
+    "",
+  );
 
   return lines.join("\n");
 }
@@ -972,8 +1156,19 @@ export function register(server: RPCServer, options: HandlerOptions): void {
         exitCode: e.code,
         signal: e.signal,
       });
+      const failureMessage = getPiCliFailureMessage({
+        stderr,
+        fallback: e.message,
+      });
+      if (isStructuredOutputFailure(`${failureMessage}\n${stderr}\n${e.message ?? ""}`)) {
+        log.warn("project.generateName: using fallback after structured output failure", {
+          tier,
+          failureMessage: failureMessage.slice(0, 300),
+        });
+        return createFallbackQuickCreateResult(requirement);
+      }
       throw new Error(
-        `Failed to generate project name: ${stderr.slice(0, 300) || "pi CLI error"}`,
+        `Failed to generate project name: ${failureMessage}`,
       );
     } finally {
       rmSync(tmpAgentDir, { recursive: true, force: true });
@@ -985,7 +1180,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
         stderr: stderr.slice(0, 500),
       });
       throw new Error(
-        `Failed to generate project name (empty output): ${stderr.slice(0, 300)}`,
+        `Failed to generate project name (empty output): ${getPiCliFailureMessage({ stderr })}`,
       );
     }
 
@@ -996,9 +1191,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       log.warn("project.generateName: invalid JSON", {
         stdout: trimmed.slice(0, 300),
       });
-      throw new Error(
-        `Failed to parse generated name: ${trimmed.slice(0, 200)}`,
-      );
+      return createFallbackQuickCreateResult(requirement);
     }
 
     // 兜底清洗：即便 schema 校验通过，仍可能含有不合规字符
@@ -1044,6 +1237,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       if (readme.trim()) {
         writeFileSync(join(projectPath, "README.md"), readme, "utf8");
       }
+      const deliveryProtocol = renderQuickCreateDeliveryProtocol(folderName, description, plan);
+      writeFileSync(join(projectPath, "QUICK_CREATE_DELIVERY.md"), deliveryProtocol, "utf8");
     } catch (err) {
       log.warn("project.confirmQuickCreate: write README failed (non-fatal)", {
         projectPath,

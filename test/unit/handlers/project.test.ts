@@ -662,6 +662,92 @@ describe("project handler", () => {
       ).rejects.toThrow("model schema validation failed");
     });
 
+    it("filters recommended agent field warnings before surfacing pi CLI failures", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stderr: [
+            '[agent] "doc-curator.md" is missing recommended field(s): thinkingLevel, effort. These affect the Agent panel display.',
+            '[agent] "pi-issue-leader.md" is missing recommended field(s): tools. These affect the Agent panel display.',
+            "model schema validation failed",
+          ].join("\n"),
+          code: 1,
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      await expect(
+        handler({
+          requirement: "Build a tiny notes app",
+          tier: "fast",
+        }),
+      ).rejects.toThrow("Failed to generate project name: model schema validation failed");
+    });
+
+    it("does not present recommended agent field warnings as the project-name failure", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stderr: [
+            '[agent] "doc-curator.md" is missing recommended field(s): thinkingLevel, effort. These affect the Agent panel display.',
+            '[agent] "issue-manager.md" is missing recommended field(s): tools. These affect the Agent panel display.',
+          ].join("\n"),
+          code: 1,
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      await expect(
+        handler({
+          requirement: "Build a tiny notes app",
+          tier: "fast",
+        }),
+      ).rejects.toThrow("Failed to generate project name: pi CLI exited with code 1");
+    });
+
+    it("falls back when pi CLI structured output generation fails", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stderr: [
+            '[agent] "doc-curator.md" is missing recommended field(s): thinkingLevel, effort. These affect the Agent panel display.',
+            "Structured output validation failed after 4 attempts: JSON parse failed: Unexpected end of JSON input",
+          ].join("\n"),
+          code: 1,
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      await expect(
+        handler({
+          requirement: "Create a small kanban board app for tracking personal tasks",
+          tier: "fast",
+        }),
+      ).resolves.toMatchObject({
+        name: "kanban-board-tracking-personal-tasks",
+        description: "A project generated from: Create a small kanban board app for tracking personal tasks",
+        plan: {
+          techStack: ["TypeScript", "React", "Vitest"],
+        },
+      });
+    });
+
+    it("falls back when pi CLI returns invalid JSON with exit code 0", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stdout: '{"name":',
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      await expect(
+        handler({
+          requirement: "做一个个人任务看板",
+          tier: "fast",
+        }),
+      ).resolves.toMatchObject({
+        name: "quick-project",
+        description: "根据需求创建的项目：做一个个人任务看板",
+      });
+    });
+
     it("trims and bounds generated plan fields", async () => {
       mockSpawn.mockImplementationOnce(() =>
         createMockSpawnResult({
@@ -733,6 +819,15 @@ describe("project handler", () => {
         expect(readme).toContain("- React");
         expect(readme).toContain("1. Create screens");
         expect(readme).toContain("Run unit tests and create a note manually.");
+        expect(readme).toContain("QUICK_CREATE_DELIVERY.md");
+
+        const delivery = await readFile(join(projectPath, "QUICK_CREATE_DELIVERY.md"), "utf-8");
+        expect(delivery).toContain("# Quick Create Delivery Protocol");
+        expect(delivery).toContain("Ship a usable note-taking flow.");
+        expect(delivery).toContain("Do not run recursive destructive cleanup commands");
+        expect(delivery).toContain("npm install --no-fund --no-audit");
+        expect(delivery).toContain("Required Validation Packet");
+        expect(delivery).toContain("local dev/preview server");
       } finally {
         await rm(root, { recursive: true, force: true });
       }
