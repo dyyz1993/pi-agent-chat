@@ -146,6 +146,8 @@ pi-momo-fork/packages/coding-agent/
 
 ### Pi Expert 角色同步规则
 
+- 项目级核心 skill/rule 清单见 `docs/workflows/pi-core-skills-and-rules.md`。当前 `.pi/skills` 覆盖目标编写、hooks、Agent 定义、规则编写、验收包、worktree、session context、asset preview；`.pi/rules` 覆盖源码边界、验证顺序、git 安全、移动端 SideNav、session context、远程资源同步、项目状态路径和 UI 验收。
+- 这些 `.pi` 资源是本仓项目级默认资源，当前不是底层 runtime 打包的不可删除 built-in；若要升级为真正内置能力，必须迁移到 runtime resource packaging 层并补 loader/parser 测试。
 - 全局 Pi 专家角色是 `~/.pi/agent/agents/pi-expert.md`；它必须掌握当前 Pi 框架的配置、模型、代理、preview、hooks、Agent 定义、委派/子任务、插件、worktree/yalc 开发流程。
 - 维护大纲见 `docs/architecture/pi-expert-knowledge-map.md`。任何改动如果涉及以下内容，必须同步更新该文档和 `~/.pi/agent/agents/pi-expert.md`：OSS/AssetStore/FileResolver、`@file`/`read` 文件处理、视觉 provider/OCR/MCP/xBrowser 路由、模型/auth/settings 配置、Bridge/Preview/Proxy URL、hooks 配置来源、Agent frontmatter 字段、session/委派/subagent/fork 语义、worktree/端口/yalc 流程、持久化路径。
 - 如果新增“使用型 Agent”和“开发型 Agent”，开发型 Agent 必须引用或继承 pi-expert 的知识入口；使用型 Agent 可以只引用必要的运行/配置说明，不需要包含底层构建细节。
