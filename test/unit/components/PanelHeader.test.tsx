@@ -3,7 +3,7 @@
 // 测试 PanelHeader 组件：
 // - 渲染 title / icon
 // - trailing 区域有/无内容时的渲染差异
-// - iconCls 默认值 "text-semantic-accent" 与自定义值
+// - iconCls 默认值 "text-accent" 与自定义值
 // - className 被合并到根 div 的 className 中
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -57,11 +57,11 @@ describe("PanelHeader — iconCls behavior", () => {
     vi.clearAllMocks();
   });
 
-  it("uses default 'text-semantic-accent' when iconCls is undefined", () => {
+  it("uses default 'text-accent' when iconCls is undefined", () => {
     const { container } = render(<PanelHeader icon={Sparkles} title="Panel" />);
     const icon = container.querySelector(".lucide-sparkles") as HTMLElement | null;
     expect(icon).not.toBeNull();
-    expect(icon!.className).toContain("text-semantic-accent");
+    expect(icon!.className).toContain("text-accent");
   });
 
   it("uses custom iconCls when provided", () => {
@@ -72,7 +72,7 @@ describe("PanelHeader — iconCls behavior", () => {
     expect(icon).not.toBeNull();
     expect(icon!.className).toContain("text-blue-500");
     // 自定义值应取代默认值（源码用 `??`，传入值时不会出现默认值）
-    expect(icon!.className).not.toContain("text-semantic-accent");
+    expect(icon!.className).not.toContain("text-accent");
   });
 
   it("preserves base icon classes alongside iconCls", () => {

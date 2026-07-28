@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import type { VirtualizerHandle } from "virtua";
 import { useScrollIntent } from "./use-scroll-intent";
+import type { SideNavActiveTarget } from "../components/chat/SideNav";
 
 interface UseActiveScrollTrackerOptions {
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -96,6 +97,39 @@ export function chooseActiveTargetKeyForScroll(
   }
 
   return anchorCandidate.key;
+}
+
+export interface ActiveTargetIndex {
+  firstKey: string;
+  lastKey: string;
+  messageToKey: Map<string, string>;
+  blockToKey: Map<string, string>;
+  targetOrder: Map<string, number>;
+}
+
+export function buildActiveTargetIndex(
+  targets: readonly SideNavActiveTarget[] | null | undefined,
+): ActiveTargetIndex | null {
+  if (!targets || targets.length === 0) return null;
+  const messageToKey = new Map<string, string>();
+  const blockToKey = new Map<string, string>();
+  const targetOrder = new Map<string, number>();
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    targetOrder.set(target.key, i);
+    if (target.blockId) {
+      blockToKey.set(target.blockId, target.key);
+    } else if (!messageToKey.has(target.messageId)) {
+      messageToKey.set(target.messageId, target.key);
+    }
+  }
+  return {
+    firstKey: targets[0]!.key,
+    lastKey: targets[targets.length - 1]!.key,
+    messageToKey,
+    blockToKey,
+    targetOrder,
+  };
 }
 
 export function useActiveScrollTracker({
@@ -239,18 +273,9 @@ export function useActiveScrollTracker({
     const container = scrollRef.current;
     if (!targets || targets.length === 0 || !container) return null;
 
-    const blockToKey = new Map<string, string>();
-    const messageToKey = new Map<string, string>();
-    const targetOrder = new Map<string, number>();
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
-      targetOrder.set(target.key, i);
-      if (target.blockId) {
-        blockToKey.set(target.blockId, target.key);
-      } else if (!messageToKey.has(target.messageId)) {
-        messageToKey.set(target.messageId, target.key);
-      }
-    }
+    const index = buildActiveTargetIndex(targets);
+    if (!index) return null;
+    const { messageToKey, blockToKey, targetOrder } = index;
 
     const containerRect = container.getBoundingClientRect();
     const anchorY = getActiveTargetAnchorY(containerRect);

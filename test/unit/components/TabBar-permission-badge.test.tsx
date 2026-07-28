@@ -430,7 +430,7 @@ describe("TabBar permission icon badge", () => {
 
     const indicator = screen.getByTestId("tab-remote-runtime-indicator");
     expect(indicator.getAttribute("data-runtime-kind")).toBe("remote-agent-child");
-    expect(indicator.className).toContain("text-status-info");
+    expect(indicator.className).toContain("text-runtime-ssh");
     expect(indicator.querySelector("svg.lucide-cloud-cog")).not.toBeNull();
   });
 
@@ -458,7 +458,7 @@ describe("TabBar permission icon badge", () => {
 
     const indicator = screen.getByTestId("tab-remote-runtime-indicator");
     expect(indicator.getAttribute("data-runtime-kind")).toBe("ssh-command");
-    expect(indicator.className).toContain("text-status-warning");
+    expect(indicator.className).toContain("text-runtime-sandbox");
     expect(indicator.querySelector("svg.lucide-cable")).not.toBeNull();
   });
 
@@ -477,7 +477,7 @@ describe("TabBar permission icon badge", () => {
 
     const indicator = screen.getByTestId("tab-remote-runtime-indicator");
     expect(indicator.getAttribute("data-runtime-kind")).toBe("remote-agent-child");
-    expect(indicator.className).toContain("text-status-info");
+    expect(indicator.className).toContain("text-runtime-ssh");
     expect(indicator.querySelector("svg.lucide-cloud-cog")).not.toBeNull();
   });
 });

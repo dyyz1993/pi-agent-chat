@@ -249,6 +249,6 @@ describe("SidebarBottomControls agent menu", () => {
 
     render(<SidebarBottomControls />);
 
-    expect(screen.getByTitle("Fast").className).toContain("text-semantic-accent");
+    expect(screen.getByTitle("Fast").className).toContain("text-accent");
   });
 });
