@@ -8,6 +8,7 @@ export type PanelTabId =
   | "files"
   | "status"
   | "supervisor"
+  | "goal"
   | "agent"
   | "rpc"
   | "learning"
@@ -27,6 +28,7 @@ export const PANEL_TABS: PanelTab[] = [
   { id: "files", label: "文件" },
   { id: "status", label: "状态" },
   { id: "supervisor", label: "守护" },
+  { id: "goal", label: "Goal" },
   { id: "agent", label: "Agent" },
   { id: "rpc", label: "RPC" },
   { id: "learning", label: "Learning" },

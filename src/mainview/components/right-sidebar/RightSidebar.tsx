@@ -19,6 +19,7 @@ import { useLayoutStore } from "../../layouts/use-layout-store";
 import { PANEL_TABS, type PanelTabId } from "../../layouts/types";
 import { StatusPanel } from "../status-panel/StatusPanel";
 import { SupervisorPanel } from "../supervisor-panel/SupervisorPanel";
+import { GoalPanel } from "../goal-panel/GoalPanel";
 import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
@@ -43,6 +44,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   files: FolderTree,
   status: Target,
   supervisor: ShieldCheck,
+  goal: Target,
   agent: Bot,
   rpc: Terminal,
   learning: Brain,
@@ -150,6 +152,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <StatusPanel />;
       case "supervisor":
         return <SupervisorPanel />;
+      case "goal":
+        return <GoalPanel />;
       case "agent":
         return <AgentPanel />;
       case "rpc":

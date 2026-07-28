@@ -127,6 +127,10 @@ export class AgentEventHandler {
         this.handleSupervisorChannelData(sessionId, ch);
         return;
       }
+      if (ch.name === "goal") {
+        this.handleGoalChannelData(sessionId, ch);
+        return;
+      }
       if (ch.name === "coordinator") {
         log.warn(
           "coordinator channel_data reached handleEvent — should have been intercepted in start()",
@@ -404,6 +408,18 @@ export class AgentEventHandler {
     log.info("Supervisor channel data", { sessionId, type: data.type });
 
     await this.deps.broadcastEvent("supervisor.event", { sessionId, event: data }, { sessionId });
+  }
+
+  async handleGoalChannelData(
+    sessionId: string,
+    channelMsg: ChannelDataEvent,
+  ): Promise<void> {
+    const data = channelMsg.data as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    log.info("Goal channel data", { sessionId, type: data.type });
+
+    await this.deps.broadcastEvent("goal.event", { sessionId, event: data }, { sessionId });
   }
 
   async handleLspChannelData(sessionId: string, channelMsg: ChannelDataEvent): Promise<void> {

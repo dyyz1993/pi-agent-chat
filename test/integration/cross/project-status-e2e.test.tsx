@@ -199,6 +199,7 @@ const TEST_DEFAULT = {
   notifySubscriptions: {} as Record<string, unknown>,
   memorySubscriptions: {} as Record<string, unknown>,
   supervisorSubscriptions: {} as Record<string, unknown>,
+    goalSubscriptions: {},
   coordinatorSubscriptions: {} as Record<string, unknown>,
   sessionReady: {} as Record<string, boolean>,
   sessionContextMap: {} as Record<string, unknown>,

@@ -106,6 +106,22 @@ export const SUPERVISOR_METHODS = {
   GET_TRIGGER_HISTORY: "getTriggerHistory",
 } as const;
 
+// ---- goal channel (goal-vendor extension) ----
+export const GOAL_METHODS = {
+  GET_STATUS: "getStatus",
+  START_SETUP: "startSetup",
+  APPROVE_CONTRACT: "approveContract",
+  REJECT_CONTRACT: "rejectContract",
+  CLEAR_GOAL: "clearGoal",
+  FORCE_CONTINUE: "forceContinue",
+  DISABLE: "disable",
+  ENABLE: "enable",
+  GET_TASK_REPORT: "getTaskReport",
+  GET_TRIGGER_HISTORY: "getTriggerHistory",
+  REFINE_GOAL: "refineGoal",
+  CHECK_TOOL_STATUS: "checkToolStatus",
+} as const;
+
 // ---- rules-engine channel ----
 export const RULES_METHODS = {
   GET_SNAPSHOT: "getSnapshot",
@@ -143,6 +159,7 @@ export const ALL_CHANNEL_METHODS: ReadonlySet<string> = new Set([
   ...Object.values(MEMORY_METHODS),
   ...Object.values(LEARNING_METHODS),
   ...Object.values(SUPERVISOR_METHODS),
+  ...Object.values(GOAL_METHODS),
   ...Object.values(RULES_METHODS),
   ...Object.values(COORDINATOR_METHODS),
   ...Object.values(REMOTE_SSH_METHODS),
@@ -159,6 +176,7 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   memory: new Set(Object.values(MEMORY_METHODS)),
   learning: new Set(Object.values(LEARNING_METHODS)),
   supervisor: new Set(Object.values(SUPERVISOR_METHODS)),
+  goal: new Set(Object.values(GOAL_METHODS)),
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),
   "remote-ssh": new Set(Object.values(REMOTE_SSH_METHODS)),

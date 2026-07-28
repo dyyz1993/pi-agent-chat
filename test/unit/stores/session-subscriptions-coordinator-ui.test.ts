@@ -200,6 +200,7 @@ function makeState(): SubscriptionMaps & { projectTabs: []; activeProjectId: nul
     memorySubscriptions: { "parent-1": ["memory-sub"] },
     coordinatorSubscriptions: {},
     supervisorSubscriptions: { "parent-1": "supervisor-sub" },
+    goalSubscriptions: {},
     projectTabs: [],
     activeProjectId: null,
   };

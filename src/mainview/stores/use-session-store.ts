@@ -232,6 +232,7 @@ interface SessionState {
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
   supervisorSubscriptions: Record<string, string>;
+  goalSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
   agentReady: Record<string, boolean>;
   sessionContextMap: Record<string, ContextUsage>;
@@ -326,6 +327,7 @@ export const useSessionStore = create<SessionState>()(
       memorySubscriptions: {},
       coordinatorSubscriptions: {},
       supervisorSubscriptions: {},
+      goalSubscriptions: {},
       sessionReady: {},
       agentReady: {},
       sessionContextMap: {},

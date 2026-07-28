@@ -98,6 +98,7 @@ function createMockState() {
     memorySubscriptions: {} as Record<string, string>,
     coordinatorSubscriptions: {} as Record<string, string>,
     supervisorSubscriptions: {} as Record<string, string>,
+    goalSubscriptions: {},
   };
 }
 
