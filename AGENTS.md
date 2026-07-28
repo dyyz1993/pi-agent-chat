@@ -174,6 +174,19 @@ pi-momo-fork/packages/coding-agent/
 - 默认依赖策略是 app `--link` / fork `--agent-link`；改依赖、lockfile 或 native deps 时才用 `--install` / `--agent-install`。仅 CLI/runtime fork 改动通常 build + `PI_CLI_PATH` 即可；app import 的 package API/type 改动才需要 `yalc push`。
 - 新增或修改这类项目级 Agent 时，需要同步检查：frontmatter 是否只使用 `agent-types.ts` 支持的字段、是否声明当前项目拓扑、是否说明 app/fork 双仓边界、是否包含回报格式、是否避免直接合并/删除 worktree。
 
+### Subagent 产出验证（trust-but-verify）
+
+主 session 通过 `Agent` / `isolation:worktree` 委派任务后，**不得直接采纳 subagent 的报告**。在合并、push、写"Closes #N"之前，主 session 必须自己执行：
+
+- **跑全套测试，不止单个 case**：subagent 经常用 `vitest -t "<name>"` 跑单个测试，会漏掉无关测试被误改的情况。验收前必须 `vitest run <file>` 跑整个文件。
+- **逐行审查 diff**：`git diff main..HEAD` 必须由主 session 完整过一遍，确认改动范围匹配 issue、没有无关删除或意外修改。GitHub PR 的 file-changed 视图不能替代本地 `git show <commit>`。
+- **验证 commit 真实存在**：subagent 报告"已 commit 到 worktree"时，主 session 用 `git -C <worktree> log main..HEAD --oneline` 确认 commit 哈希、message、stat 都对得上。
+- **禁用 sed/awk 改代码或测试**：sed 全局替换会误伤其他代码块（这次 PR #60 误改了 2 个无关测试块，靠逐行 review 才发现）。改源码/测试一律用 Edit 工具的 `old_string`/`new_string`，sed 只允许用于纯文本提取。
+- **force push 前必看 diff**：amend + `push --force-with-lease` 之前必须 `git show <commit>` 完整审查；amend 通常意味着前一个 commit 有问题，必须明确问题范围已修复且无新副作用。
+- **PR 描述里 "Closes #N" 必须基于测试证据**：复现测试 green 才能写 `Closes`；只基于代码阅读判断的写 `Relates to`。`Closes #N` 会让 GitHub 自动关 issue，如果实际没修，重新打开 issue 比误导更糟。
+- **base 落后时优先 rebase，不直接 merge**：分支基于老 main 时，PR diff 会显示大量"假删除"（实际是 main 后来的代码）。即使 GitHub 显示 Mergeable，主 session 也必须先 `git fetch origin && git merge-tree $(git merge-base HEAD origin/main) HEAD origin/main` 做 dry-run，或直接 rebase + force push 让 diff 干净。
+- **defer 前必须自己写测试验证**：subagent 报告"issue 第 X 条 defer（设计限制/架构问题）"时，主 session 必须先写一个精确复现测试确认 bug 真实存在再同意 defer。这次 #151 clause 1 被 subagent 误判为"部分修"，实际已完整修复，靠测试定位才纠正。
+
 ## Theme & Design System
 
 ### Token Location
