@@ -9,6 +9,7 @@ export const AGENT_CHANNEL_NAMES = [
   "memory",
   "coordinator",
   "supervisor",
+  "goal",
   "file-snapshot",
   "file-review",
 ] as const;

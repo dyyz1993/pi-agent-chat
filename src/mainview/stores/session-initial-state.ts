@@ -14,6 +14,7 @@ import { useTierStore } from "./use-tier-store";
 import { useRetryConfigStore, RETRY_DEFAULTS } from "./use-settings-store";
 import { useAgentStore } from "./use-agent-store";
 import { useSupervisorStore } from "./use-supervisor-store";
+import { useGoalStore } from "./use-goal-store";
 import { useSessionQueueStore } from "./use-session-queue-store";
 import { useUIDialogStore } from "./use-ui-dialog-store";
 import { useCompactionStore } from "./use-compaction-store";
@@ -607,6 +608,16 @@ export function createFetchInitialStateAction({
               ])
             : Promise.resolve();
 
+        const goalStore = useGoalStore.getState();
+        const goalPromise =
+          typeof goalStore.fetchStatus === "function"
+            ? Promise.allSettled([
+                goalStore.fetchStatus(sessionId),
+                goalStore.fetchTaskReport(sessionId),
+                goalStore.fetchTriggerHistory(sessionId, 50),
+              ])
+            : Promise.resolve();
+
         mcpPromise
           .then((res) => {
             perfLog.info("[fetchInit] getMcpServers done", {
@@ -663,7 +674,7 @@ export function createFetchInitialStateAction({
             });
           });
 
-        await Promise.allSettled([mcpPromise, queuePromise, agentChangePromise, supervisorPromise]);
+        await Promise.allSettled([mcpPromise, queuePromise, agentChangePromise, supervisorPromise, goalPromise]);
         trace.mark("p4-mcp-queue-supervisor-done", { ms: Math.round(performance.now() - t0) });
 
         // --- Priority 5 (parallel) ---

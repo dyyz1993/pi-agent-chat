@@ -18,6 +18,7 @@ import type { SnapshotMethods } from "./modules/snapshot";
 import type { ChangeReviewMethods } from "./modules/change-review";
 import type { CoordinatorEvents } from "./modules/coordinator";
 import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
+import type { GoalMethods, GoalEvents } from "./modules/goal";
 import type { UpdaterMethods } from "./modules/updater";
 
 export interface RPCMethods
@@ -41,6 +42,7 @@ export interface RPCMethods
     SnapshotMethods,
     ChangeReviewMethods,
     SupervisorMethods,
+    GoalMethods,
     UpdaterMethods {}
 
 export interface RPCEvents
@@ -57,7 +59,8 @@ export interface RPCEvents
     LearningEvents,
     FileEvents,
     CoordinatorEvents,
-    SupervisorEvents {}
+    SupervisorEvents,
+    GoalEvents {}
 
 export interface HandlerOptions {
   platform: "desktop" | "web";

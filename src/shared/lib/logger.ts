@@ -21,6 +21,7 @@ export type LogModule =
   | "settings"
   | "proxy-register"
   | "supervisor"
+  | "goal"
   | "lsp"
   | "memory"
   | "fork-dialog"

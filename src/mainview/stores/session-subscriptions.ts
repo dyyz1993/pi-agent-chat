@@ -4,6 +4,7 @@ import type { BashChannelEvent, BashProcess } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
 import type { SupervisorChannelEvent } from "../../shared/modules/supervisor";
+import type { GoalChannelEvent } from "../../shared/modules/goal";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore, insertAfterPinned, clearStatusWatchdog } from "./use-session-store";
 import { useChatStore, clearBackgroundRefreshGeneration } from "./use-chat-store";
@@ -16,6 +17,7 @@ import { useLearningStore } from "./use-learning-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSupervisorStore } from "./use-supervisor-store";
+import { useGoalStore } from "./use-goal-store";
 import { useStatusStore, type RemoteRuntimeState } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
 import { clearSessionFetchInitCache } from "./session-initial-state";
@@ -424,6 +426,7 @@ export interface SubscriptionMaps {
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
   supervisorSubscriptions: Record<string, string>;
+  goalSubscriptions: Record<string, string>;
 }
 
 export type TodoPriority = "high" | "medium" | "low";
@@ -456,6 +459,7 @@ export function setupSubscriptions(
     memorySubscriptions,
     coordinatorSubscriptions,
     supervisorSubscriptions,
+    goalSubscriptions,
   } = state;
   if (!agentSubscriptions[id]) {
     set((s) => ({
@@ -975,6 +979,42 @@ export function setupSubscriptions(
       });
   }
 
+  if (!goalSubscriptions[id]) {
+    set((s) => ({
+      goalSubscriptions: { ...s.goalSubscriptions, [id]: "__pending__" },
+    }));
+
+    apiClient
+      .subscribe(
+        "goal.event",
+        (payload: { sessionId: string; event: GoalChannelEvent }) => {
+          if (payload.sessionId !== id) return;
+          useGoalStore.getState().handleEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          goalSubscriptions: { ...s.goalSubscriptions, [id]: subId },
+        }));
+        const goalStore = useGoalStore.getState();
+        Promise.allSettled([
+          goalStore.fetchStatus(id),
+          goalStore.fetchTaskReport(id),
+          goalStore.fetchTriggerHistory(id, 50),
+        ]).catch((err) => {
+          useAppStore.getState().addLog(`[sub] ${String(err)}`);
+        });
+      })
+      .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.goalSubscriptions;
+          return { goalSubscriptions: rest };
+        });
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
+  }
+
   if (!coordinatorSubscriptions[id]) {
     set((s) => ({
       coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: "__pending__" },
@@ -1049,6 +1089,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
     state.notifySubscriptions,
     state.coordinatorSubscriptions,
     state.supervisorSubscriptions,
+    state.goalSubscriptions,
   ];
 
   for (const map of singleSubMaps) {
@@ -1105,6 +1146,7 @@ export function cleanupSessionHeavy(sessionId: string): void {
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
   useSupervisorStore.getState().clearSession(sessionId);
+  useGoalStore.getState().clearSession(sessionId);
   useHooksStore.getState().clearSession(sessionId);
   useSnapshotStore.getState().clearSession(sessionId);
   useTierStore.getState().clearSession(sessionId);
@@ -1138,6 +1180,7 @@ export function clearSubscriptionState(
   const { [sessionId]: _h, ...restMemory } = state.memorySubscriptions;
   const { [sessionId]: _j, ...restCoord } = state.coordinatorSubscriptions;
   const { [sessionId]: _k, ...restSupervisor } = state.supervisorSubscriptions;
+  const { [sessionId]: _l, ...restGoal } = state.goalSubscriptions;
   const { [sessionId]: _i, ...restReady } = state.sessionReady;
   return {
     agentSubscriptions: restAgent,
@@ -1150,6 +1193,7 @@ export function clearSubscriptionState(
     memorySubscriptions: restMemory,
     coordinatorSubscriptions: restCoord,
     supervisorSubscriptions: restSupervisor,
+    goalSubscriptions: restGoal,
     sessionReady: restReady,
   };
 }
