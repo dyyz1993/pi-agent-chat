@@ -40,6 +40,12 @@ yarn-error.log*
 .worktree-dev.*
 .worktree-deps.json
 
+# Brainstorming tool local state
+.brainstorm/
+
+# Claude Code agent isolation worktrees (auto-created by subagents)
+.claude/worktrees/
+
 # Bun
 bun.lockb
 
