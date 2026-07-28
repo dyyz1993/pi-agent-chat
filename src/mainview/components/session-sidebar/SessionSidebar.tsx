@@ -148,7 +148,7 @@ export function groupSessions(
         const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
         if (isWorkingSession(sess)) return 0;
         if (sess.pinned) return 1;
-        if (isEmpty) return 2;
+        if (isEmpty) return 3;
         return 2;
       };
       const priorityA = getPriority(a);

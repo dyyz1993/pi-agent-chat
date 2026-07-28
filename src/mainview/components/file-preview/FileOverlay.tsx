@@ -237,13 +237,13 @@ export function FileOverlay({
           className="flex-1 h-full min-w-0 overflow-auto whitespace-pre font-mono bg-surface-dim dark:bg-surface-code text-text-primary border-0 outline-none resize-none p-4"
           style={{ fontSize: fontSizePx, lineHeight: lineHeightPx }}
           spellCheck={false}
-          wrap="soft"
+          wrap="off"
         />
       );
     }
 
     if (preview.content && !preview.editable) {
-      return <VirtualizedCodeView code={preview.content} filename={preview.name} fontSize={fontSize} wrap />;
+      return <VirtualizedCodeView code={preview.content} filename={preview.name} fontSize={fontSize} />;
     }
 
     return null;

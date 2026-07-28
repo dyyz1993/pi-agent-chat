@@ -27,14 +27,19 @@ describe("Goal action stack regression", () => {
     // It is triggered by onSend when goalMode is true
     const handleCreateGoalIndex = source.indexOf("const handleCreateGoal");
     const setGoalCallIndex = source.indexOf("await setGoal(activeSessionId, objective)", handleCreateGoalIndex);
-    const idleTurnIndex = source.indexOf('if (effectiveStatus === "idle")', setGoalCallIndex);
-    const idleSendIndex = source.indexOf("await sendMessage()", idleTurnIndex);
+    // Current implementation uses a `needsBootstrap` flag (idle or undefined)
+    // to decide whether to bootstrap the subprocess with sendMessage first,
+    // then retry setGoal, vs. setting the goal first then sending.
+    const needsBootstrapIndex = source.indexOf("needsBootstrap", handleCreateGoalIndex);
+    const idleCheckIndex = source.indexOf('effectiveStatus === "idle"', handleCreateGoalIndex);
+    const bootstrapSendIndex = source.indexOf("await sendMessage()", handleCreateGoalIndex);
     const goalModeDispatchIndex = source.indexOf("goalMode ? handleCreateGoal : handleSend");
 
     expect(handleCreateGoalIndex).toBeGreaterThan(-1);
     expect(setGoalCallIndex).toBeGreaterThan(handleCreateGoalIndex);
-    expect(idleTurnIndex).toBeGreaterThan(setGoalCallIndex);
-    expect(idleSendIndex).toBeGreaterThan(idleTurnIndex);
+    expect(needsBootstrapIndex).toBeGreaterThan(handleCreateGoalIndex);
+    expect(idleCheckIndex).toBeGreaterThan(handleCreateGoalIndex);
+    expect(bootstrapSendIndex).toBeGreaterThan(handleCreateGoalIndex);
     expect(goalModeDispatchIndex).toBeGreaterThan(-1);
 
     // handleSend still handles the normal chat path.
