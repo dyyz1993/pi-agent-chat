@@ -129,7 +129,7 @@ export function resolveDevWebSocketTarget({
 
 function getDevWebSocketTarget(token: string, pageHostname?: string): string | null {
   return resolveDevWebSocketTarget({
-    dev: import.meta.env.DEV,
+    dev: Boolean(import.meta.env.DEV),
     configuredTarget: import.meta.env.VITE_API_TARGET,
     pageHostname,
     token,

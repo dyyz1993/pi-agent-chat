@@ -1328,7 +1328,6 @@ export class AgentProcessManager {
       syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers,
       subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,
       syncDelegateLastText: this.coordinatorHandler.syncDelegateLastText,
-      syncDelegateTimedOut: this.coordinatorHandler.syncDelegateTimedOut,
       leafIds: this.leafIds,
       getPoolKey: (cwd, userId) => this.getPoolKey(cwd, userId),
       removeFromPool: (k, m) => this.removeFromPool(k, m),

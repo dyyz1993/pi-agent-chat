@@ -59,7 +59,7 @@ function runSshCommand(remote: RemoteProjectRecord, command: string, allowNonZer
       timeout: 10_000,
     },
   );
-  if (proc.timedOut) {
+  if ((proc as { timedOut?: boolean }).timedOut) {
     throw new Error(`ssh command timed out after 10s: ${command.slice(0, 80)}`);
   }
   if (proc.exitCode !== 0 && !allowNonZero) {
@@ -106,7 +106,7 @@ function execGit(args: string[], target: GitTarget, allowNonZero = false): strin
     },
     timeout: 10_000,
   });
-  if (proc.timedOut) {
+  if ((proc as { timedOut?: boolean }).timedOut) {
     throw new Error(`git ${args[0]} timed out after 10s`);
   }
   if (proc.exitCode !== 0 && !allowNonZero) {

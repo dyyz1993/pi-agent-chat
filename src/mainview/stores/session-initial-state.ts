@@ -711,9 +711,13 @@ export function createFetchInitialStateAction({
               (currentSessionMeta.messageCount ?? 0) === 0 &&
               !currentSessionMeta.firstMessage;
             if (!isBlankSession) return;
-            const existingTier = useTierStore.getState().getCurrentTier(projectPath);
+            const existingTier = useTierStore
+              .getState()
+              .getCurrentTierForSession(sessionId, projectPath);
             if (existingTier) return;
-            const tierModels = useTierStore.getState().getTierModels(projectPath);
+            const tierModels = useTierStore
+              .getState()
+              .getTierModelsForSession(sessionId, projectPath);
             if (Object.keys(tierModels).length > 0 && tierModels.fast) {
               void useTierStore
                 .getState()

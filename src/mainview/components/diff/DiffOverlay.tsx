@@ -79,7 +79,7 @@ export function DiffOverlay() {
 
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
-  const contentRef = usePinchZoom<HTMLDivElement>(fontSizeRef, setFontSize);
+  const contentRef = usePinchZoom(fontSizeRef, setFontSize);
 
   const rawPath = currentDiff?.filePath ?? "";
 
