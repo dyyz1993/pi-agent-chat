@@ -166,6 +166,7 @@ beforeEach(() => {
     notifySubscriptions: {},
     memorySubscriptions: {},
     supervisorSubscriptions: {},
+    goalSubscriptions: {},
     coordinatorSubscriptions: {},
     sessionReady: {},
     sessionContextMap: {},

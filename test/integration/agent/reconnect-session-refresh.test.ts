@@ -147,6 +147,7 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
       memorySubscriptions: omitSession(s.memorySubscriptions),
       coordinatorSubscriptions: omitSession(s.coordinatorSubscriptions),
       supervisorSubscriptions: omitSession(s.supervisorSubscriptions),
+      goalSubscriptions: omitSession(s.goalSubscriptions),
       sessionReady: omitSession(s.sessionReady),
     };
   },

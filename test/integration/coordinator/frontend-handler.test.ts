@@ -26,6 +26,7 @@ const mockSessionStoreState: Record<string, unknown> = {
   notifySubscriptions: {},
   memorySubscriptions: {},
   supervisorSubscriptions: {},
+    goalSubscriptions: {},
   sessionReady: {},
 };
 
