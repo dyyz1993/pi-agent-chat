@@ -30,6 +30,7 @@ import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types"
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { useAsyncGuard } from "../../hooks/use-async-guard";
 import { IconButton } from "../primitives";
+import { useInitialQcTier, type QcTier } from "./use-initial-qc-tier";
 
 interface ProjectPickerDialogProps {
   open: boolean;
@@ -40,7 +41,6 @@ interface ProjectPickerDialogProps {
 
 type LeftView = "default" | "browse" | "quickcreate";
 type MobileTab = "recents" | "favorites" | "browse" | "quickcreate";
-type QcTier = "fast" | "pro" | "max";
 type QcMobileStep = "input" | "confirm";
 
 const CACHE_KEY_RECENTS = "pi-picker-recents";
@@ -169,8 +169,10 @@ export function ProjectPickerDialog({
   const [creating, setCreating] = useState(false);
 
   // 快速创建项目相关状态
+  const initialQcTier = useInitialQcTier();
+
   const [qcRequirement, setQcRequirement] = useState("");
-  const [qcTier, setQcTier] = useState<QcTier>("fast");
+  const [qcTier, setQcTier] = useState<QcTier>(initialQcTier);
   const [qcGenerating, setQcGenerating] = useState(false);
   const [qcGenError, setQcGenError] = useState<string | null>(null);
   const [qcName, setQcName] = useState("");
@@ -247,7 +249,7 @@ export function ProjectPickerDialog({
       setCreating(false);
       // 重置快速创建状态
       setQcRequirement("");
-      setQcTier("fast");
+      setQcTier(initialQcTier);
       setQcGenerating(false);
       setQcGenError(null);
       setQcName("");

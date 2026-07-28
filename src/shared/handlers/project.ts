@@ -44,6 +44,7 @@ import {
 } from "../lib/session-scanner";
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
+import { getPiAgentDir } from "../lib/pi-agent-paths";
 import { getProcessManager } from "./agent";
 import { config } from "../../server-config";
 import {
@@ -145,13 +146,21 @@ function createIsolatedPiConfigDir(): string {
   mkdirSync(baseDir, { recursive: true });
   const tmpDir = mkdtempSync(join(baseDir, "run-"));
 
-  const realAgentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
-  const realAuth = join(realAgentDir, "auth.json");
-  if (existsSync(realAuth)) {
-    try {
-      symlinkSync(realAuth, join(tmpDir, "auth.json"));
-    } catch {
-      // If the symlink fails, pi CLI will surface the missing-auth error itself.
+  const realAgentDir = getPiAgentDir();
+
+  // Symlink the user's auth, settings and models so the isolated pi CLI run
+  // can resolve tier aliases ("fast"/"pro"/"max") to the models the user has
+  // actually configured, and pick up auth/credentials without prompting.
+  // If a symlink fails we leave the file absent; pi CLI surfaces the
+  // missing-auth / missing-model error itself, so there is nothing to do here.
+  for (const fileName of ["auth.json", "settings.json", "models.json"]) {
+    const realFile = join(realAgentDir, fileName);
+    if (existsSync(realFile)) {
+      try {
+        symlinkSync(realFile, join(tmpDir, fileName));
+      } catch {
+        // ignore: file may already exist or fs is read-only
+      }
     }
   }
 
@@ -1040,7 +1049,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
    * 关键点：
    * - `--output-schema` 会强制开启 print 模式，stdout 只输出 JSON 一行
    *   （takeOverStdout 把其他日志都重定向到 stderr），可直接 JSON.parse
-   * - `--model fast` 走 tier 别名，不需要 provider/model 全名
+   * - `--model <tier>` 走 tier 别名，pi CLI 通过 settings.json 的
+   *   tierModels 解析为用户配置的具体模型；未配置时回退到 pi CLI 默认
    * - `--no-session` 避免在 ~/.pi 下留下一次性 session 痕迹
    * - 失败（如模型输出无法通过 schema 校验）时 exit code=1，stdout 为空，
    *   错误信息在 stderr，因此必须先看 exit code 再 parse
@@ -1056,11 +1066,13 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       throw new Error("pi CLI path is not configured (PI_CLI_PATH unset)");
     }
 
-    // tier ("fast"|"pro"|"max") is an application-level alias, not a real
-    // model id that pi CLI understands. Resolve it to a concrete model via
-    // PI_QUICK_CREATE_MODEL (accepts "provider/id" or a raw model id).
-    // When unset, omit --model entirely so pi CLI uses its own default.
+    // Resolve the --model to pass to pi CLI. Priority:
+    //   1. PI_QUICK_CREATE_MODEL (ops override; accepts "provider/id" or raw id)
+    //   2. frontend `tier` ("fast"/"pro"/"max") — pi CLI resolves it through
+    //      settings.json tierModels, so the user's configured model is used.
+    // When both are empty we omit --model and pi CLI uses its own default.
     const quickCreateModel = process.env.PI_QUICK_CREATE_MODEL?.trim() ?? "";
+    const modelArg = quickCreateModel || tier;
 
     const systemPrompt =
       "You are a senior software architect. Given a project requirement, " +
@@ -1113,7 +1125,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
 
     const args = [
       "-p",
-      ...(quickCreateModel ? ["--model", quickCreateModel] : []),
+      ...(modelArg ? ["--model", modelArg] : []),
       "--no-tools",
       "--no-extensions",
       "--system-prompt",
@@ -1126,7 +1138,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
 
     log.info("project.generateName: invoking pi CLI", {
       tier,
-      model: quickCreateModel || "(pi default)",
+      model: modelArg || "(pi default)",
     });
 
     const tmpAgentDir = createIsolatedPiConfigDir();

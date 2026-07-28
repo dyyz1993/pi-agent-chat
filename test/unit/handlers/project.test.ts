@@ -277,10 +277,19 @@ vi.mock("../../../src/shared/handlers/agent", () => ({
   getProcessManager: () => fakeProcessManager,
 }));
 
-vi.mock("../../../src/shared/lib/pi-agent-paths", () => ({
-  getProjectUserStateDir: (projectPath: string) =>
-    `/tmp/pi-tier-test-${Buffer.from(projectPath).toString("base64url").slice(0, 32)}`,
+const piAgentPathsMocks = vi.hoisted(() => ({
+  getPiAgentDir: vi.fn(() => process.env.PI_CODING_AGENT_DIR ?? "/tmp/pi-test-agent-dir"),
 }));
+
+vi.mock("../../../src/shared/lib/pi-agent-paths", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/shared/lib/pi-agent-paths")>();
+  return {
+    ...actual,
+    getPiAgentDir: piAgentPathsMocks.getPiAgentDir,
+    getProjectUserStateDir: (projectPath: string) =>
+      `/tmp/pi-tier-test-${Buffer.from(projectPath).toString("base64url").slice(0, 32)}`,
+  };
+});
 
 import { register } from "../../../src/shared/handlers/project";
 import { createMockServer } from "../../helpers/mock-server";
@@ -785,6 +794,98 @@ describe("project handler", () => {
       ]);
       expect(result.plan?.steps).toEqual(["Step 1", "Step 2", "Step 3"]);
       expect(result.plan?.testing).toHaveLength(500);
+    });
+
+    // Regression for issue #172: the frontend `tier` ("fast"/"pro"/"max") must
+    // be forwarded to pi CLI as `--model <tier>` so the user's settings.json
+    // tierModels mapping is honored. Previously `tier` was a dead log-only
+    // parameter and the CLI fell back to its own findInitialModel().
+    it.each(["fast", "pro", "max"] as const)(
+      "forwards tier %s to pi CLI as --model",
+      async (tier) => {
+        const handler = server.handlers.get("project.generateName")!;
+
+        await handler({ requirement: "Build a tiny notes app", tier });
+
+        const [, args] = mockSpawn.mock.calls[0];
+        const modelIdx = args.indexOf("--model");
+        expect(modelIdx).toBeGreaterThan(-1);
+        expect(args[modelIdx + 1]).toBe(tier);
+      },
+    );
+
+    it("prefers PI_QUICK_CREATE_MODEL env override over frontend tier", async () => {
+      const previous = process.env.PI_QUICK_CREATE_MODEL;
+      process.env.PI_QUICK_CREATE_MODEL = "anthropic/claude-sonnet-4";
+      try {
+        const handler = server.handlers.get("project.generateName")!;
+
+        await handler({ requirement: "Build a tiny notes app", tier: "fast" });
+
+        const [, args] = mockSpawn.mock.calls[0];
+        const modelIdx = args.indexOf("--model");
+        expect(args[modelIdx + 1]).toBe("anthropic/claude-sonnet-4");
+      } finally {
+        if (previous === undefined) delete process.env.PI_QUICK_CREATE_MODEL;
+        else process.env.PI_QUICK_CREATE_MODEL = previous;
+      }
+    });
+
+    // Regression for issue #172: createIsolatedPiConfigDir must symlink the
+    // user's settings.json and models.json (not only auth.json) into the
+    // tmpDir so pi CLI can resolve tier aliases via settings.tierModels.
+    // The handler removes the tmpDir in a finally block, so we capture the
+    // symlink state from inside the spawn mock before it gets cleaned up.
+    it("symlinks user settings.json and models.json into the isolated pi config dir", async () => {
+      const fixtureAgentDir = await mkdtemp(join(tmpdir(), "pi-agent-172-"));
+      const { writeFileSync, readlinkSync } = await import("node:fs");
+      for (const name of ["auth.json", "settings.json", "models.json"]) {
+        writeFileSync(join(fixtureAgentDir, name), "{}");
+      }
+      const captured: { isolatedDir: string; links: Record<string, string> } = {
+        isolatedDir: "",
+        links: {},
+      };
+      mockSpawn.mockImplementationOnce(() => {
+        const callArgs = mockSpawn.mock.calls[0];
+        if (callArgs) {
+          const isolatedDir = (callArgs[2] as { env?: Record<string, string> }).env
+            ?.PI_CODING_AGENT_DIR as string;
+          captured.isolatedDir = isolatedDir;
+          for (const name of ["auth.json", "settings.json", "models.json"]) {
+            try {
+              captured.links[name] = readlinkSync(join(isolatedDir, name));
+            } catch {
+              // captured.links[name] stays undefined
+            }
+          }
+        }
+        return createMockSpawnResult({
+          stdout: JSON.stringify({
+            name: "generated-demo-app",
+            description: "A generated demo app.",
+            plan: {
+              goal: "Build a small app that captures notes quickly.",
+              techStack: ["React", "Vitest"],
+              steps: ["Create the UI", "Persist notes", "Add tests"],
+              testing: "Run unit tests and verify note creation manually.",
+            },
+          }),
+        });
+      });
+      piAgentPathsMocks.getPiAgentDir.mockReturnValue(fixtureAgentDir);
+      try {
+        const handler = server.handlers.get("project.generateName")!;
+        await handler({ requirement: "Build a tiny notes app", tier: "fast" });
+
+        expect(captured.isolatedDir).toContain(".quick-create/run-");
+        for (const name of ["auth.json", "settings.json", "models.json"]) {
+          expect(captured.links[name]).toBe(join(fixtureAgentDir, name));
+        }
+      } finally {
+        piAgentPathsMocks.getPiAgentDir.mockReset();
+        await rm(fixtureAgentDir, { recursive: true, force: true });
+      }
     });
   });
 
