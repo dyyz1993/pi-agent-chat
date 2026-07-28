@@ -35,6 +35,12 @@ interface ParsedReviewState {
   turns: TurnChange[];
   approvals: Map<string, ApprovalRecord>;
   everApproved: Set<string>;
+  /**
+   * Per-path: the highest turnIndex whose timestamp is <= the latest approval
+   * timestamp for that path. Robust against out-of-order writes (compaction,
+   * CLI restart) because it is computed from timestamps rather than the
+   * physical line order in the JSONL.
+   */
   maxTurnIndexAtLastApproval: Map<string, number>;
 }
 
@@ -42,18 +48,15 @@ async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedRevi
   const turns: TurnChange[] = [];
   const approvals = new Map<string, ApprovalRecord>();
   const everApproved = new Set<string>();
-  const maxTurnIndexAtLastApproval = new Map<string, number>();
 
   if (!sessionPath || !existsSync(sessionPath)) {
-    return { turns, approvals, everApproved, maxTurnIndexAtLastApproval };
+    return { turns, approvals, everApproved, maxTurnIndexAtLastApproval: new Map() };
   }
 
   const rl = readline.createInterface({
     input: createReadStream(sessionPath, { encoding: "utf-8" }),
     crlfDelay: Infinity,
   });
-
-  let currentMaxTurn = -1;
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -71,7 +74,6 @@ async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedRevi
           | undefined;
         if (!data) continue;
         turns.push({ turnIndex: data.turnIndex, timestamp: data.timestamp, changes: data.changes });
-        if (data.turnIndex > currentMaxTurn) currentMaxTurn = data.turnIndex;
       } else if (entry.customType === "file-approval") {
         const data = entry.data as
           | {
@@ -91,11 +93,25 @@ async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedRevi
           snapshotTreeHash: data.snapshotTreeHash,
         });
         if (data.status === "approved") everApproved.add(data.path);
-        maxTurnIndexAtLastApproval.set(data.path, currentMaxTurn);
       }
     } catch {}
   }
   rl.close();
+
+  // Compute maxTurnIndexAtLastApproval from timestamps so that out-of-order
+  // writes (compaction, CLI restart, async flush) cannot corrupt the value.
+  // For each path, find its latest approval timestamp, then pick the highest
+  // turnIndex among turns that occurred at or before that timestamp.
+  const maxTurnIndexAtLastApproval = new Map<string, number>();
+  for (const [path, approval] of approvals) {
+    let maxTurn = -1;
+    for (const turn of turns) {
+      if (turn.timestamp <= approval.timestamp && turn.turnIndex > maxTurn) {
+        maxTurn = turn.turnIndex;
+      }
+    }
+    maxTurnIndexAtLastApproval.set(path, maxTurn);
+  }
 
   return { turns, approvals, everApproved, maxTurnIndexAtLastApproval };
 }
