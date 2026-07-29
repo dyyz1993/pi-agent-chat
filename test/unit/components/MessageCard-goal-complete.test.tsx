@@ -39,25 +39,23 @@ describe("MessageCard — pi-goal-complete rendering", () => {
     useSessionStore.setState({ activeSessionId: "sess-1" });
     const message: ChatMessage = {
       id: "msg-goal-complete",
-      role: "assistant",
+      role: "custom",
       content: [
         {
-          type: "text",
-          text: "Goal complete and independently verified.",
+          type: "custom",
+          customType: "pi-goal-complete",
+          data: { objective: "ship the feature", verdict: "all tests pass" },
         },
       ],
       timestamp: Date.now(),
-      customType: "pi-goal-complete",
-      data: { summary: "All tests pass." },
-    } as unknown as ChatMessage;
+    } as ChatMessage;
 
     const { container } = render(<MessageCard message={message} />);
-    // GoalCompleteCard should render — looking for the data attribute it sets
-    // or any text inside the card.
-    expect(container.innerHTML).toContain("msg-goal-complete");
-    // If app missed the rename, the GoalCompleteCard would not render and
-    // the message would fall through to default text rendering only.
-    // We assert that the card shell div is present.
-    expect(container.querySelector('[data-msg-card-id="msg-goal-complete"]')).not.toBeNull();
+    // GoalCompleteCard renders a button with aria-label "goal.completeCardLabel".
+    // If app missed the rename (still looking for "supervisor_goal_complete"),
+    // this button would not exist — the message would fall through to the
+    // default text rendering instead.
+    expect(container.querySelector('button[aria-label="goal.completeCardLabel"]')).not.toBeNull();
   });
 });
+

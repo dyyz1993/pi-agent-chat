@@ -68,7 +68,7 @@ function getCustomBlockPreview(block: Extract<ChatMessage["content"][number], { 
   if (
     MEMORY_CUSTOM_TYPES.has(block.customType) ||
     block.customType === "step_snapshot" ||
-    block.customType === "supervisor_goal_complete"
+    block.customType === "pi-goal-complete"
   ) {
     return cleanPreviewText(block.customType);
   }
@@ -196,7 +196,7 @@ export const MessageCard = memo(function MessageCard({
         !isLspCustomType(b.customType) &&
         !isBashBackgroundProcessType(b.customType) &&
         b.customType !== "step_snapshot" &&
-        b.customType !== "supervisor_goal_complete"
+        b.customType !== "pi-goal-complete"
       )
         return true;
       return false;
@@ -204,7 +204,7 @@ export const MessageCard = memo(function MessageCard({
     if (allHidden) return null;
   }
 
-  if (hasCustomContent && customBlock && customBlock.customType === "supervisor_goal_complete") {
+  if (hasCustomContent && customBlock && customBlock.customType === "pi-goal-complete") {
     return (
       <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
         <GoalCompleteCard data={(customBlock as { data?: unknown }).data} blockId={message.id} />
