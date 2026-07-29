@@ -238,8 +238,30 @@ export async function getFileDiffOperation<TManaged extends ManagedClientLike>(o
 } | null> {
   const managed = options.getActiveManaged(options.sessionId);
   if (managed) {
+    // Cast: fork >= 0.78.10 adds fromHash/toHash to getFileDiff (commit on
+    // pi-momo-fork main), but the published npm tarball at this version is
+    // stale and still shows only fromEntryId/toEntryId. The cast lets tsc
+    // pass against the published tarball while real fork builds (yalc-pushed
+    // locally, or next npm publish) accept the call natively. Drop the cast
+    // once the npm 0.78.10+ tarball is republished with the new types.
+    type FileDiffArgs = {
+      filePath: string;
+      fromHash?: string | null;
+      toHash?: string | null;
+    };
+    type FileDiffResult = {
+      path: string;
+      oldContent: string | null;
+      newContent: string | null;
+      unifiedDiff: string;
+    };
+    const getFileDiff = (
+      managed.client as unknown as {
+        getFileDiff: (args: FileDiffArgs) => Promise<FileDiffResult | null>;
+      }
+    ).getFileDiff;
     return withTimeout(
-      managed.client.getFileDiff({
+      getFileDiff({
         filePath: options.filePath,
         fromHash: options.fromHash,
         toHash: options.toHash,

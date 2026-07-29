@@ -1269,7 +1269,15 @@ export class AgentProcessManager {
       // steer({text,images,promote,immediate}) overloads). Wrapping it in
       // an adapter object loses the `this` binding on RpcClient.steer(),
       // which calls this.send() internally — see commit 05d9bec7 regression.
-      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      // Cast through unknown because ManagedClient and the local
+      // ManagedSteeringLike shape used by steerOperation are structurally
+      // compatible but not nominally typed.
+      getActiveManaged: (sid) =>
+        this.getActiveManaged(sid) as unknown as Parameters<
+          typeof steerOperation
+        >[0]["getActiveManaged"] extends () => infer R
+          ? R
+          : never,
     });
   }
 
