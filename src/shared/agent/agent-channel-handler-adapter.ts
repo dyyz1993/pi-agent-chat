@@ -9,7 +9,6 @@ import {
   handleMemoryChannelDataOperation,
   handleRulesChannelDataOperation,
   handleSubagentChannelDataOperation,
-  handleSupervisorChannelDataOperation,
   handleTodoChannelDataOperation,
 } from "./agent-channel-handlers";
 import type { DelegateChildMap, SyncDelegateResolver } from "./coordinator-session-state";
@@ -35,7 +34,6 @@ export interface AgentChannelHandlerAdapter {
   ) => Promise<void>;
   handleTodoChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleBashChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
-  handleSupervisorChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleLspChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleRulesChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleMemoryChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
@@ -80,7 +78,6 @@ export function createAgentChannelHandlerAdapter<TManaged extends ChannelManaged
         handleRulesChannelData: adapter.handleRulesChannelData,
         handleMemoryChannelData: adapter.handleMemoryChannelData,
         handleLearningChannelData: adapter.handleLearningChannelData,
-        handleSupervisorChannelData: adapter.handleSupervisorChannelData,
       });
     },
     async handleSubagentChannelData(parentSessionId, channelMsg) {
@@ -117,13 +114,6 @@ export function createAgentChannelHandlerAdapter<TManaged extends ChannelManaged
             activeBackgroundTools: managed.activeBackgroundTools,
           };
         },
-        broadcastEvent: deps.broadcastEvent,
-      });
-    },
-    async handleSupervisorChannelData(sessionId, channelMsg) {
-      await handleSupervisorChannelDataOperation({
-        sessionId,
-        channelMsg,
         broadcastEvent: deps.broadcastEvent,
       });
     },

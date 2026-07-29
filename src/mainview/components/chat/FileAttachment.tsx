@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
 import { formatFileSize } from "../chat/preview/types";
-import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import { useGoalStore } from "../../stores/use-goal-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { isVisionModel } from "../../lib/vision-detection";
@@ -143,7 +143,7 @@ export function AttachmentButtons({
         ) ?? {},
       )
     : false;
-  const supervisorStatus = useSupervisorStore(
+  const goalStatus = useGoalStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
@@ -170,32 +170,31 @@ export function AttachmentButtons({
     [addFiles],
   );
 
-  const handleSupervisorClick = useCallback(() => {
+  const handleGoalClick = useCallback(() => {
     if (onGoalClick) {
       onGoalClick();
       return;
     }
-    openStatusPanel("supervisor");
+    openStatusPanel("goal");
   }, [onGoalClick, openStatusPanel]);
 
-  const goalStatus = supervisorStatus?.goal?.status;
+  const goalRawStatus = goalStatus?.rawStatus;
   const goalColor = (() => {
     if (mode === "goal") return "text-accent";
-    if (!supervisorStatus?.goal) return "text-text-tertiary";
-    if (goalStatus === "complete") return "text-status-success";
-    if (goalStatus === "blocked" || goalStatus === "needs_user") return "text-status-warning";
+    if (!goalStatus || goalRawStatus === "none") return "text-text-tertiary";
+    if (goalRawStatus === "completed") return "text-status-success";
+    if (goalStatus.state === "blocked" || goalRawStatus === "interrupted") return "text-status-warning";
     return "text-accent";
   })();
 
   const isPulsing =
-    supervisorStatus?.enabled === true &&
-    !!supervisorStatus.goal &&
-    (supervisorStatus.state === "checking" || supervisorStatus.state === "continuing");
+    goalStatus?.enabled === true &&
+    goalRawStatus !== "none" &&
+    goalRawStatus !== "completed" &&
+    goalRawStatus !== "cancelled" &&
+    (goalStatus.state === "running" || goalStatus.state === "checking");
 
-  const pendingSeconds =
-    supervisorStatus?.pendingPause && supervisorStatus.pendingPause.scheduledAt
-      ? Math.max(0, Math.round((supervisorStatus.pendingPause.scheduledAt - Date.now()) / 1000))
-      : null;
+  const pendingSeconds = null;
 
   const isCompact = layout === "compact";
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -240,19 +239,19 @@ export function AttachmentButtons({
 
   const openGoalComposer = useCallback(() => {
     setIsAddMenuOpen(false);
-    handleSupervisorClick();
-  }, [handleSupervisorClick]);
+    handleGoalClick();
+  }, [handleGoalClick]);
 
   const openLoopPanel = useCallback(() => {
     setIsAddMenuOpen(false);
-    openStatusPanel("supervisor");
+    openStatusPanel("goal");
   }, [openStatusPanel]);
 
   const showGoalIndicator =
-    mode === "goal" || (!!supervisorStatus?.goal && supervisorStatus.goal.status !== "cancelled");
+    mode === "goal" || (!!goalStatus && goalRawStatus !== "none" && goalRawStatus !== "cancelled");
   const showLoopIndicator =
-    supervisorStatus?.enabled === true &&
-    (supervisorStatus.state === "checking" || supervisorStatus.state === "continuing");
+    goalStatus?.enabled === true &&
+    (goalStatus.state === "running" || goalStatus.state === "checking");
   const compactStatusIcon: CompactStatusIcon | null = showGoalIndicator
     ? {
         key: "goal",
@@ -446,7 +445,7 @@ export function AttachmentButtons({
       {!isCompact && (
         <button
           type="button"
-          onClick={handleSupervisorClick}
+          onClick={handleGoalClick}
           className={`relative ${buttonClass} ${goalColor}`}
           title={t("goal.entry")}
           aria-label={t("goal.entry")}

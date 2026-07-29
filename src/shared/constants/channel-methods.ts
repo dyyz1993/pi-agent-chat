@@ -90,22 +90,6 @@ export const LEARNING_METHODS = {
   RUN_CURATOR: "learning.runCurator",
 } as const;
 
-// ---- supervisor channel ----
-export const SUPERVISOR_METHODS = {
-  GET_STATUS: "getStatus",
-  REQUEST_PAUSE: "requestPause",
-  CANCEL_PAUSE: "cancelPause",
-  FORCE_CONTINUE: "forceContinue",
-  DISABLE: "disable",
-  ENABLE: "enable",
-  GET_TASK_REPORT: "getTaskReport",
-  CHECK_TOOL_STATUS: "checkToolStatus",
-  SET_GOAL: "setGoal",
-  CLEAR_GOAL: "clearGoal",
-  REFINE_GOAL: "refineGoal",
-  GET_TRIGGER_HISTORY: "getTriggerHistory",
-} as const;
-
 // ---- goal channel (goal-vendor extension) ----
 export const GOAL_METHODS = {
   GET_STATUS: "getStatus",
@@ -158,7 +142,6 @@ export const ALL_CHANNEL_METHODS: ReadonlySet<string> = new Set([
   ...Object.values(LSP_METHODS),
   ...Object.values(MEMORY_METHODS),
   ...Object.values(LEARNING_METHODS),
-  ...Object.values(SUPERVISOR_METHODS),
   ...Object.values(GOAL_METHODS),
   ...Object.values(RULES_METHODS),
   ...Object.values(COORDINATOR_METHODS),
@@ -175,7 +158,6 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   lsp: new Set(Object.values(LSP_METHODS)),
   memory: new Set(Object.values(MEMORY_METHODS)),
   learning: new Set(Object.values(LEARNING_METHODS)),
-  supervisor: new Set(Object.values(SUPERVISOR_METHODS)),
   goal: new Set(Object.values(GOAL_METHODS)),
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),

@@ -123,10 +123,6 @@ export class AgentEventHandler {
         this.handleLearningChannelData(sessionId, ch);
         return;
       }
-      if (ch.name === "supervisor") {
-        this.handleSupervisorChannelData(sessionId, ch);
-        return;
-      }
       if (ch.name === "goal") {
         this.handleGoalChannelData(sessionId, ch);
         return;
@@ -396,18 +392,6 @@ export class AgentEventHandler {
     }
 
     await this.deps.broadcastEvent("bash.event", { sessionId, event: data }, { sessionId });
-  }
-
-  async handleSupervisorChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    const data = channelMsg.data as Record<string, unknown> | undefined;
-    if (!data) return;
-
-    log.info("Supervisor channel data", { sessionId, type: data.type });
-
-    await this.deps.broadcastEvent("supervisor.event", { sessionId, event: data }, { sessionId });
   }
 
   async handleGoalChannelData(

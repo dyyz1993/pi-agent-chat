@@ -8,7 +8,6 @@ export const AGENT_CHANNEL_NAMES = [
   "rules-engine",
   "memory",
   "coordinator",
-  "supervisor",
   "goal",
   "file-snapshot",
   "file-review",

@@ -6,7 +6,6 @@ import {
   Terminal,
   Brain,
   Shield,
-  ShieldCheck,
   Camera,
   Bot,
   ListChecks,
@@ -18,7 +17,6 @@ import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { PANEL_TABS, type PanelTabId } from "../../layouts/types";
 import { StatusPanel } from "../status-panel/StatusPanel";
-import { SupervisorPanel } from "../supervisor-panel/SupervisorPanel";
 import { GoalPanel } from "../goal-panel/GoalPanel";
 import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
@@ -43,7 +41,6 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   git: GitBranch,
   files: FolderTree,
   status: Target,
-  supervisor: ShieldCheck,
   goal: Target,
   agent: Bot,
   rpc: Terminal,
@@ -150,8 +147,6 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         );
       case "status":
         return <StatusPanel />;
-      case "supervisor":
-        return <SupervisorPanel />;
       case "goal":
         return <GoalPanel />;
       case "agent":

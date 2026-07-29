@@ -30,7 +30,7 @@ import { apiClient } from "../../lib/api-client";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { useStatusStore } from "../../stores/use-status-store";
-import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import { useGoalStore } from "../../stores/use-goal-store";
 import type { TreeNode } from "../../types";
 import { isVisionModel } from "../../lib/vision-detection";
 
@@ -109,27 +109,24 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   const containerRef = useRef<HTMLDivElement>(null);
   const [popupStyle, setPopupStyle] = useState<CSSProperties>({});
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
-  const supervisorStatus = useSupervisorStore(
+  const goalStatus = useGoalStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
-  const goalStatus = supervisorStatus?.goal?.status;
-  const supervisorRunning =
-    supervisorStatus?.enabled === true &&
-    (supervisorStatus.state === "checking" || supervisorStatus.state === "continuing");
+  const goalRawStatus = goalStatus?.rawStatus;
+  const goalRunning =
+    goalStatus?.enabled === true &&
+    (goalStatus.state === "running" || goalStatus.state === "checking");
   const goalButtonClass = (() => {
-    if (!supervisorStatus?.goal) return "text-text-tertiary border border-transparent";
-    if (goalStatus === "complete") {
+    if (!goalStatus || goalRawStatus === "none") return "text-text-tertiary border border-transparent";
+    if (goalRawStatus === "completed") {
       return "text-status-success border border-status-success/40 bg-status-success/10";
     }
-    if (goalStatus === "blocked" || goalStatus === "needs_user") {
+    if (goalStatus.state === "blocked" || goalRawStatus === "interrupted") {
       return "text-status-warning border border-status-warning/40 bg-status-warning/10";
     }
-    if (supervisorStatus.goal) {
-      return "text-accent border border-accent/40 bg-accent/10";
-    }
-    return "text-text-tertiary border border-transparent";
+    return "text-accent border border-accent/40 bg-accent/10";
   })();
-  const supervisorButtonClass = supervisorRunning
+  const goalActiveButtonClass = goalRunning
     ? "text-status-info border border-status-info/40 bg-status-info/10"
     : "text-text-tertiary border border-transparent";
 
@@ -632,14 +629,14 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             </div>
           </button>
           <button
-            onClick={() => openStatusPanel("supervisor")}
-            className={`${toolbarButtonClass} whitespace-nowrap ${supervisorButtonClass}`}
+            onClick={() => openStatusPanel("goal")}
+            className={`${toolbarButtonClass} whitespace-nowrap ${goalActiveButtonClass}`}
             title={t("composerState.loopTitle")}
             aria-label={t("composerState.loopTitle")}
           >
             <div className="flex items-center gap-1 whitespace-nowrap">
               <Repeat2
-                className={`${toolbarIconClass} ${supervisorRunning ? "animate-pulse" : ""}`}
+                className={`${toolbarIconClass} ${goalRunning ? "animate-pulse" : ""}`}
               />
               <span className="max-sm:sr-only">{t("composerState.loopShort", "Loop")}</span>
             </div>
@@ -650,7 +647,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                 onGoalClick();
                 return;
               }
-              openStatusPanel("supervisor");
+              openStatusPanel("goal");
             }}
             className={`${toolbarButtonClass} whitespace-nowrap ${goalButtonClass}`}
             title={t("goal.entry")}

@@ -231,7 +231,6 @@ interface SessionState {
   notifySubscriptions: Record<string, string>;
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
-  supervisorSubscriptions: Record<string, string>;
   goalSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
   agentReady: Record<string, boolean>;
@@ -326,7 +325,6 @@ export const useSessionStore = create<SessionState>()(
       notifySubscriptions: {},
       memorySubscriptions: {},
       coordinatorSubscriptions: {},
-      supervisorSubscriptions: {},
       goalSubscriptions: {},
       sessionReady: {},
       agentReady: {},

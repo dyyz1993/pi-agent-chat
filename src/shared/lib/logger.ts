@@ -20,7 +20,6 @@ export type LogModule =
   | "tier"
   | "settings"
   | "proxy-register"
-  | "supervisor"
   | "goal"
   | "lsp"
   | "memory"

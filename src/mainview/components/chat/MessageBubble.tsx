@@ -20,7 +20,6 @@ import { getBlockBorderColor, getDefaultBorderColor } from "./block-border";
 import { MEMORY_HIDDEN_IN_CHAT, isLspCustomType, isLspVisibleInChat } from "./lsp-constants";
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
-import { SUPERVISOR_CONTINUE_CUSTOM_TYPE } from "./SupervisorContinueCard";
 
 export const TOOL_BLOCK_RENDER_WINDOW_SIZE = 50;
 
@@ -395,8 +394,7 @@ export const MessageBubble = memo(function MessageBubble({
               block.type === "custom" &&
               !MEMORY_CUSTOM_TYPES.has(block.customType) &&
               !isLspCustomType(block.customType) &&
-              !isBashBackgroundProcessType(block.customType) &&
-              block.customType !== SUPERVISOR_CONTINUE_CUSTOM_TYPE
+              !isBashBackgroundProcessType(block.customType)
             ) {
               return null;
             }
