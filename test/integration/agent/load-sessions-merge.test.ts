@@ -85,8 +85,8 @@ vi.mock("../../../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: { getState: () => ({}) },
 }));
 
-vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
-  useSupervisorStore: { getState: () => ({}) },
+vi.mock("../../../src/mainview/stores/use-goal-store", () => ({
+  useGoalStore: { getState: () => ({}) },
 }));
 
 vi.mock("../../../src/mainview/lib/agent-event-handler", () => ({
@@ -165,7 +165,6 @@ beforeEach(() => {
     rulesSubscriptions: {},
     notifySubscriptions: {},
     memorySubscriptions: {},
-    supervisorSubscriptions: {},
     goalSubscriptions: {},
     coordinatorSubscriptions: {},
     sessionReady: {},

@@ -53,7 +53,8 @@ import { CommandPopup } from "./CommandPopup";
 import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
-import { GoalActionCard } from "./GoalActionCard";
+// NOTE: GoalActionCard was removed (supervisor-dependent). Goal UI is now
+// exclusively in the right-sidebar GoalPanel (goal-vendor channel).
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import {
   useReturnToSourceSession,
@@ -76,7 +77,7 @@ import type { ChatMessage } from "../../types";
 import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
-import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import { useGoalStore } from "../../stores/use-goal-store";
 import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
 import { FileOverlay } from "../file-preview/FileOverlay";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -914,8 +915,8 @@ export function ChatPanel() {
   const isPermissionPending = effectiveStatus === "permission";
   const hasNoModel = effectiveStatus === "idle" && !currentModel;
   const commandPopup = useCommandPopup();
-  const setGoal = useSupervisorStore((s) => s.setGoal);
-  const refineGoal = useSupervisorStore((s) => s.refineGoal);
+  const startSetup = useGoalStore((s) => s.startSetup);
+  const refineGoal = useGoalStore((s) => s.refineGoal);
 
   const streamVersion = useChatStore(
     useCallback(
@@ -1843,28 +1844,28 @@ export function ChatPanel() {
     if (!activeSessionId || !objective || isCreatingGoal) return;
     setIsCreatingGoal(true);
     try {
-      // The supervisor channel is only available after the pi subprocess is
+      // The goal channel is only available after the pi subprocess is
       // running. If the session is idle (no pi process), sendMessage first
-      // to bootstrap the subprocess, then retry setGoal until the channel
+      // to bootstrap the subprocess, then retry startSetup until the channel
       // is ready (up to ~10s).
       const needsBootstrap = effectiveStatus === "idle" || effectiveStatus === undefined;
       if (needsBootstrap) {
         // Send the goal text as the bootstrap message — the agent will see
-        // it and start working. setGoal below registers it with supervisor.
+        // it and start working. startSetup below registers it with goal-vendor.
         setInputText(objective);
         await sendMessage();
-        // Retry setGoal until the pi subprocess channel is ready.
+        // Retry startSetup until the pi subprocess channel is ready.
         // callChannel in process-manager already waits 1.6s internally,
         // but the subprocess may need more time on first spawn.
         for (let attempt = 0; attempt < 5; attempt++) {
           await new Promise((r) => setTimeout(r, 1000));
-          const result = await setGoal(activeSessionId, objective);
-          if (result === "ok") break;
-          // "blocked" or "error" → channel not ready yet, retry
+          const result = await startSetup(activeSessionId, objective);
+          if (result.started) break;
+          // Channel not ready yet, retry
         }
       } else {
-        // Session already active — set goal first, then send message
-        await setGoal(activeSessionId, objective);
+        // Session already active — start goal setup, then send message
+        await startSetup(activeSessionId, objective);
         setInputText(objective);
         await sendMessage();
       }
@@ -1890,7 +1891,7 @@ export function ChatPanel() {
     isMobileOrTablet,
     resumeAutoScroll,
     sendMessage,
-    setGoal,
+    startSetup,
   ]);
 
   const handleRefineGoal = useCallback(async () => {
@@ -2131,7 +2132,6 @@ export function ChatPanel() {
             </div>
             {activeSessionId && !isViewingSubagent && (
               <>
-                {!goalMode && <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />}
                 <QueueCards sessionId={activeSessionId} />
               </>
             )}

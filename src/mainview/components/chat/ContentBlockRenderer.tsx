@@ -7,7 +7,6 @@ import { ToolExecutionCard } from "./ToolExecutionCard";
 import { MEMORY_CUSTOM_TYPES, MemoryCard } from "./MemoryCard";
 import { BashBackgroundProcessCard } from "./BashBackgroundProcessCard";
 import { isBashBackgroundProcessType } from "./bash-background-process";
-import { SUPERVISOR_CONTINUE_CUSTOM_TYPE, SupervisorContinueCard } from "./SupervisorContinueCard";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
@@ -139,9 +138,6 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       }
       if (isBashBackgroundProcessType(block.customType)) {
         return <BashBackgroundProcessCard compact data={block.data} />;
-      }
-      if (block.customType === SUPERVISOR_CONTINUE_CUSTOM_TYPE) {
-        return <SupervisorContinueCard data={block.data} />;
       }
       if (!MEMORY_CUSTOM_TYPES.has(block.customType)) {
         return null;

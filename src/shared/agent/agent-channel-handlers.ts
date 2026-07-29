@@ -210,23 +210,6 @@ export async function handleBashChannelDataOperation(options: {
   );
 }
 
-export async function handleSupervisorChannelDataOperation(options: {
-  sessionId: string;
-  channelMsg: ChannelDataEvent;
-  broadcastEvent: BroadcastEvent;
-}): Promise<void> {
-  const data = options.channelMsg.data as Record<string, unknown> | undefined;
-  if (!data) return;
-
-  log.info("Supervisor channel data", { sessionId: options.sessionId, type: data.type });
-
-  await options.broadcastEvent(
-    "supervisor.event",
-    { sessionId: options.sessionId, event: data },
-    { sessionId: options.sessionId },
-  );
-}
-
 export async function handleLspChannelDataOperation(options: {
   sessionId: string;
   channelMsg: ChannelDataEvent;

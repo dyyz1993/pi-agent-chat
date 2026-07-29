@@ -3,7 +3,6 @@ import type { PersistedTab } from "../../shared/modules/project";
 import type { BashChannelEvent, BashProcess } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
-import type { SupervisorChannelEvent } from "../../shared/modules/supervisor";
 import type { GoalChannelEvent } from "../../shared/modules/goal";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore, insertAfterPinned, clearStatusWatchdog } from "./use-session-store";
@@ -16,7 +15,6 @@ import { useMemoryStore } from "./use-memory-store";
 import { useLearningStore } from "./use-learning-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
-import { useSupervisorStore } from "./use-supervisor-store";
 import { useGoalStore } from "./use-goal-store";
 import { useStatusStore, type RemoteRuntimeState } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
@@ -425,7 +423,6 @@ export interface SubscriptionMaps {
   notifySubscriptions: Record<string, string>;
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
-  supervisorSubscriptions: Record<string, string>;
   goalSubscriptions: Record<string, string>;
 }
 
@@ -458,7 +455,6 @@ export function setupSubscriptions(
     notifySubscriptions,
     memorySubscriptions,
     coordinatorSubscriptions,
-    supervisorSubscriptions,
     goalSubscriptions,
   } = state;
   if (!agentSubscriptions[id]) {
@@ -943,42 +939,6 @@ export function setupSubscriptions(
     );
   }
 
-  if (!supervisorSubscriptions[id]) {
-    set((s) => ({
-      supervisorSubscriptions: { ...s.supervisorSubscriptions, [id]: "__pending__" },
-    }));
-
-    apiClient
-      .subscribe(
-        "supervisor.event",
-        (payload: { sessionId: string; event: SupervisorChannelEvent }) => {
-          if (payload.sessionId !== id) return;
-          useSupervisorStore.getState().handleEvent(id, payload.event);
-        },
-        { sessionId: id },
-      )
-      .then((subId) => {
-        set((s) => ({
-          supervisorSubscriptions: { ...s.supervisorSubscriptions, [id]: subId },
-        }));
-        const supervisorStore = useSupervisorStore.getState();
-        Promise.allSettled([
-          supervisorStore.fetchStatus(id),
-          supervisorStore.fetchTaskReport(id),
-          supervisorStore.fetchTriggerHistory(id, 50),
-        ]).catch((err) => {
-          useAppStore.getState().addLog(`[sub] ${String(err)}`);
-        });
-      })
-      .catch((err) => {
-        set((s) => {
-          const { [id]: _, ...rest } = s.supervisorSubscriptions;
-          return { supervisorSubscriptions: rest };
-        });
-        useAppStore.getState().addLog(`[sub] ${String(err)}`);
-      });
-  }
-
   if (!goalSubscriptions[id]) {
     set((s) => ({
       goalSubscriptions: { ...s.goalSubscriptions, [id]: "__pending__" },
@@ -1088,7 +1048,6 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
     state.rulesSubscriptions,
     state.notifySubscriptions,
     state.coordinatorSubscriptions,
-    state.supervisorSubscriptions,
     state.goalSubscriptions,
   ];
 
@@ -1145,7 +1104,6 @@ export function cleanupSessionHeavy(sessionId: string): void {
   useRulesStore.getState().clearSession(sessionId);
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
-  useSupervisorStore.getState().clearSession(sessionId);
   useGoalStore.getState().clearSession(sessionId);
   useHooksStore.getState().clearSession(sessionId);
   useSnapshotStore.getState().clearSession(sessionId);
@@ -1179,7 +1137,6 @@ export function clearSubscriptionState(
   const { [sessionId]: _g, ...restNotify } = state.notifySubscriptions;
   const { [sessionId]: _h, ...restMemory } = state.memorySubscriptions;
   const { [sessionId]: _j, ...restCoord } = state.coordinatorSubscriptions;
-  const { [sessionId]: _k, ...restSupervisor } = state.supervisorSubscriptions;
   const { [sessionId]: _l, ...restGoal } = state.goalSubscriptions;
   const { [sessionId]: _i, ...restReady } = state.sessionReady;
   return {
@@ -1192,7 +1149,6 @@ export function clearSubscriptionState(
     notifySubscriptions: restNotify,
     memorySubscriptions: restMemory,
     coordinatorSubscriptions: restCoord,
-    supervisorSubscriptions: restSupervisor,
     goalSubscriptions: restGoal,
     sessionReady: restReady,
   };

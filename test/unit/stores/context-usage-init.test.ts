@@ -75,7 +75,6 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
-import { useSupervisorStore } from "../../../src/mainview/stores/use-supervisor-store";
 import { useTierStore } from "../../../src/mainview/stores/use-tier-store";
 
 let _sidCounter = 0;
@@ -145,14 +144,6 @@ function setupMock(contextUsageHandler: () => Promise<unknown>) {
     if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
     if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
     if (method === "agent.getSettings") return Promise.resolve({});
-    if (method === "supervisor.getStatus")
-      return Promise.resolve({
-        enabled: true,
-        state: "idle",
-        continueCount: 0,
-        maxContinueCount: 0,
-        activeGuards: [],
-      });
     return Promise.resolve({});
   });
 }
@@ -193,7 +184,6 @@ beforeEach(() => {
     modelManuallySet: false,
     modelFavorites: new Set(),
   });
-  useSupervisorStore.setState({ bySession: {} });
   useTierStore.setState({
     globalDefaults: {},
     hasGlobalDefaults: false,
@@ -433,60 +423,5 @@ describe("fetchInitialState context usage retry", () => {
     expect(ctx).toBeDefined();
     expect(ctx.tokens).toBe(10000);
     expect(ctx.contextWindow).toBe(128000);
-  });
-
-  it("hydrates supervisor goal during initial state fetch", async () => {
-    const sid = nextSid();
-    const goal = {
-      id: "goal-1",
-      objective: "持续执行，直到满足 spa 爬虫",
-      status: "running" as const,
-      startedAt: 1780743607505,
-      updatedAt: 1780743607505,
-      continuationCount: 0,
-      blockers: [],
-    };
-    setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
-    (apiClient.call as ReturnType<typeof vi.fn>).mockImplementation((method: string) => {
-      if (method === "agent.getState") return Promise.resolve(AGENT_STATE);
-      if (method === "agent.getAvailableModels") return Promise.resolve([]);
-      if (method === "agent.getExtensions") return Promise.resolve([]);
-      if (method === "agent.getSkills") return Promise.resolve([]);
-      if (method === "agent.getDisabledSkills") return Promise.resolve({ disabledSkills: [] });
-      if (method === "agent.getQueue") return Promise.resolve({ steering: [], followUp: [] });
-      if (method === "agent.getContextUsage")
-        return Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 });
-      if (method === "agent.getSessionStats")
-        return Promise.resolve({
-          tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-          cost: 0,
-          toolCalls: 0,
-          totalMessages: 0,
-        });
-      if (method === "agent.getTierModels") return Promise.resolve({ models: {} });
-      if (method === "agent.getLatestAgentChange") return Promise.resolve(null);
-      if (method === "agent.getAgents") return Promise.resolve([]);
-      if (method === "agent.getCurrentAgent") return Promise.resolve(null);
-      if (method === "agent.getMcpServers") return Promise.resolve([]);
-      if (method === "project.getModelFavorites") return Promise.resolve({ favorites: [] });
-      if (method === "project.getAgentFavorites") return Promise.resolve({ favorites: [] });
-      if (method === "agent.getSettings") return Promise.resolve({});
-      if (method === "supervisor.getStatus")
-        return Promise.resolve({
-          enabled: true,
-          state: "idle",
-          continueCount: 0,
-          maxContinueCount: 0,
-          activeGuards: [],
-          goal,
-        });
-      return Promise.resolve({});
-    });
-
-    useSessionStore.getState().fetchInitialState(sid);
-    await new Promise((r) => setTimeout(r, 500));
-
-    expect(apiClient.call).toHaveBeenCalledWith("supervisor.getStatus", { sessionId: sid });
-    expect(useSupervisorStore.getState().bySession[sid]?.status?.goal).toEqual(goal);
   });
 });

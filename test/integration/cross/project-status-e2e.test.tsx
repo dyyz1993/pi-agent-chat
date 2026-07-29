@@ -126,8 +126,8 @@ vi.mock("../../../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: { getState: () => ({}) },
 }));
 
-vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
-  useSupervisorStore: { getState: () => ({}) },
+vi.mock("../../../src/mainview/stores/use-goal-store", () => ({
+  useGoalStore: { getState: () => ({}) },
 }));
 
 vi.mock("../../../src/mainview/stores/use-notification-store", () => ({
@@ -198,7 +198,6 @@ const TEST_DEFAULT = {
   rulesSubscriptions: {} as Record<string, unknown>,
   notifySubscriptions: {} as Record<string, unknown>,
   memorySubscriptions: {} as Record<string, unknown>,
-  supervisorSubscriptions: {} as Record<string, unknown>,
     goalSubscriptions: {},
   coordinatorSubscriptions: {} as Record<string, unknown>,
   sessionReady: {} as Record<string, boolean>,
