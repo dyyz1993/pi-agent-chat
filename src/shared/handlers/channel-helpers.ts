@@ -16,8 +16,8 @@ export const DEFAULT_CHANNEL_TIMEOUT_MS = 1_000;
  * @param payload      Arguments passed to the channel method.
  * @param timeoutMs    Timeout in milliseconds (defaults to {@link DEFAULT_CHANNEL_TIMEOUT_MS}).
  * @param options.skipHasSessionCheck When `true`, do not call `manager.hasSession(sid)`
- *        before forwarding (some handlers — e.g. supervisor — only check for the
- *        manager itself, mirroring their original behaviour).
+ *        before forwarding (some handlers only check for the manager itself,
+ *        mirroring their original behaviour).
  */
 export async function forwardToChannel<TResult = unknown>(
   params: { sessionId?: string } & Record<string, unknown>,

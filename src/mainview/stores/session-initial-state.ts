@@ -665,7 +665,7 @@ export function createFetchInitialStateAction({
           });
 
         await Promise.allSettled([mcpPromise, queuePromise, agentChangePromise, goalPromise]);
-        trace.mark("p4-mcp-queue-supervisor-done", { ms: Math.round(performance.now() - t0) });
+        trace.mark("p4-mcp-queue-goal-done", { ms: Math.round(performance.now() - t0) });
 
         // --- Priority 5 (parallel) ---
         const agentsPromise = apiClient.call("agent.getAgents", { sessionId });

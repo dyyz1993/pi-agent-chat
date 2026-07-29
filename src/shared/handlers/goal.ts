@@ -2,9 +2,9 @@
  * Goal channel RPC handler — forwards calls to the "goal" channel
  * (goal-vendor extension) in the CLI process.
  *
- * Simpler than supervisor.ts: goal-vendor has its own triple-storage
- * persistence (JSON mirror + session entries + events.jsonl), so no
- * disk fallback is needed here. Pure channel forwarding.
+ * goal-vendor has its own triple-storage persistence (JSON mirror +
+ * session entries + events.jsonl), so no disk fallback is needed here.
+ * Pure channel forwarding.
  */
 
 import type { RPCServer } from "@dyyz1993/rpc-core";
