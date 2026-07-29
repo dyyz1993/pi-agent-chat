@@ -187,6 +187,16 @@ pi-momo-fork/packages/coding-agent/
 - **base 落后时优先 rebase，不直接 merge**：分支基于老 main 时，PR diff 会显示大量"假删除"（实际是 main 后来的代码）。即使 GitHub 显示 Mergeable，主 session 也必须先 `git fetch origin && git merge-tree $(git merge-base HEAD origin/main) HEAD origin/main` 做 dry-run，或直接 rebase + force push 让 diff 干净。
 - **defer 前必须自己写测试验证**：subagent 报告"issue 第 X 条 defer（设计限制/架构问题）"时，主 session 必须先写一个精确复现测试确认 bug 真实存在再同意 defer。这次 #151 clause 1 被 subagent 误判为"部分修"，实际已完整修复，靠测试定位才纠正。
 
+### CI vs 本地环境差异（"本地绿、CI 红" 防护）
+
+CI runner 是 ubuntu 全新 install，跟本地 macOS dev 环境有 4 个关键差异。本地绿不代表 CI 绿；commit/push 前必须逐条核对：
+
+- **`.yalc/` 在 .gitignore，CI 装 npm fallback**：`scripts/ci-hydrate-yalc.mjs` 在 `.yalc/` 不可达时（CI 上永远是）从 npm 装声明的 fallback 版本。fallback 版本（脚本里 `packages` 数组）必须跟 `npm view <pkg> version` 一致——脚本注释里的 "latest npm tag" 会过时，每次 fork publish 后要核对。这次 PR #174 后 CI fail 是因为 fallback 还写 `0.78.2` 而 npm latest 已经是 `0.78.10`。
+- **npm publish 的 fork dist 可能比 fork main 落后**：本地 yalc push 直接从 fork main build，npm publish 是 fork 维护者另做的步骤、可能滞后几次 commit。app 代码依赖 fork 新类型时（如 `getFileDiff({ fromHash, toHash })`），CI 装到的 npm 版本可能类型不匹配。修复优先级：(1) 提醒 fork 维护者 publish；(2) 短期用 `as unknown as Type` 绕过，注释里写清楚哪个 fork commit 加了新字段、npm 重新 publish 后立即删 cast。验证：本地 `npm pack @dyyz1993/pi-coding-agent@<version>` + `tar -xzf` + `grep` 实际 d.ts，不要假设 npm 上的版本跟本地一样。
+- **`file:.yalc/...` 链接在 CI 上不递归装 fork 的 transitive deps**：本地 `node_modules/` 历史安装有这些 transitive deps，CI 全新 install 时拿不到。如果 fork dist 代码 import 了某个 transitive dep（这次是 `@anthropic-ai/sandbox-runtime`），必须在 app `package.json` 显式声明为直接依赖。修复后必须 `bun install` + 跑一次涉及 fork loader 的测试确认本地仍能跑。
+- **跨仓库测试不能 hard-code 本地 fork 路径**：drift 测试需要读 fork 文件时（如 `goal-channel-contract.test.ts` 读 `/Users/xuyingzhou/Project/temporary/pi-momo-fork/...`），必须用 `describe.skip` 在 fork 不可达时跳过，否则会让整个测试 suite 加载失败（一个 suite fail 会拖累 N 个无关测试的统计）。环境变量 `PI_MONO_FORK_ROOT` 提供路径覆盖入口。
+- **push 前看一眼最近的 CI run 颜色**：`gh run list --branch master --limit 3`。如果上一个 run 已经红色，你的 commit 推上去也会被同样的红色覆盖；先 fix 红色再推新 commit。这次 merge PR #174 时我信任了 GitHub "Mergeable" 标记没看 CI run 颜色，结果把 fail 的代码 merge 到了 master。
+
 ## Theme & Design System
 
 ### Token Location
