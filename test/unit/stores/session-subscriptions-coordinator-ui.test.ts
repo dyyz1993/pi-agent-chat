@@ -126,8 +126,8 @@ vi.mock("../../../src/mainview/stores/use-chat-nav-store", () => ({
   useChatNavStore: { getState: () => ({}) },
 }));
 
-vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
-  useSupervisorStore: { getState: () => ({}) },
+vi.mock("../../../src/mainview/stores/use-goal-store", () => ({
+  useGoalStore: { getState: () => ({}) },
 }));
 
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
@@ -199,7 +199,6 @@ function makeState(): SubscriptionMaps & { projectTabs: []; activeProjectId: nul
     notifySubscriptions: { "parent-1": "notify-sub" },
     memorySubscriptions: { "parent-1": ["memory-sub"] },
     coordinatorSubscriptions: {},
-    supervisorSubscriptions: { "parent-1": "supervisor-sub" },
     goalSubscriptions: {},
     projectTabs: [],
     activeProjectId: null,

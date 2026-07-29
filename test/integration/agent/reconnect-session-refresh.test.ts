@@ -118,8 +118,8 @@ vi.mock("../../../src/mainview/stores/use-lsp-store", () => ({
   useLspStore: { getState: () => ({ clearSessionData: vi.fn() }) },
 }));
 
-vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
-  useSupervisorStore: { getState: () => ({ clearSessionData: vi.fn() }) },
+vi.mock("../../../src/mainview/stores/use-goal-store", () => ({
+  useGoalStore: { getState: () => ({ clearSession: vi.fn() }) },
 }));
 
 vi.mock("../../../src/mainview/stores/use-rpc-debug-store", () => ({
@@ -146,7 +146,6 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
       notifySubscriptions: omitSession(s.notifySubscriptions),
       memorySubscriptions: omitSession(s.memorySubscriptions),
       coordinatorSubscriptions: omitSession(s.coordinatorSubscriptions),
-      supervisorSubscriptions: omitSession(s.supervisorSubscriptions),
       goalSubscriptions: omitSession(s.goalSubscriptions),
       sessionReady: omitSession(s.sessionReady),
     };

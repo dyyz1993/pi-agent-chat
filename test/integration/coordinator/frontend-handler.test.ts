@@ -25,7 +25,6 @@ const mockSessionStoreState: Record<string, unknown> = {
   rulesSubscriptions: {},
   notifySubscriptions: {},
   memorySubscriptions: {},
-  supervisorSubscriptions: {},
     goalSubscriptions: {},
   sessionReady: {},
 };
@@ -89,8 +88,8 @@ vi.mock("../../../src/mainview/stores/use-chat-nav-store", () => ({
   useChatNavStore: { getState: () => ({}) },
 }));
 
-vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
-  useSupervisorStore: { getState: () => ({}) },
+vi.mock("../../../src/mainview/stores/use-goal-store", () => ({
+  useGoalStore: { getState: () => ({}) },
 }));
 
 vi.mock("../../../src/mainview/lib/agent-event-handler", () => ({

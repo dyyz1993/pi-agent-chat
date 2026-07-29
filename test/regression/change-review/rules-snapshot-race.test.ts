@@ -97,7 +97,6 @@ function createMockState() {
     notifySubscriptions: {} as Record<string, string>,
     memorySubscriptions: {} as Record<string, string>,
     coordinatorSubscriptions: {} as Record<string, string>,
-    supervisorSubscriptions: {} as Record<string, string>,
     goalSubscriptions: {},
   };
 }

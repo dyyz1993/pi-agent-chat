@@ -111,12 +111,6 @@ vi.mock("../../../src/mainview/stores/use-lsp-store", () => ({
   },
 }));
 
-vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
-  useSupervisorStore: {
-    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
-  },
-}));
-
 vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
   setupSubscriptions: vi.fn(),
   cleanupSession: vi.fn(),
