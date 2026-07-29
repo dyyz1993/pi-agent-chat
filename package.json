@@ -67,6 +67,7 @@
     "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.26",
     "@dyyz1993/pi-agent-core": "^0.78.3",
     "@dyyz1993/pi-ai": "^0.78.2",
     "@dyyz1993/pi-coding-agent": "file:.yalc/@dyyz1993/pi-coding-agent",
