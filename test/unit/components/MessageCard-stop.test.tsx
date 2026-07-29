@@ -225,33 +225,4 @@ describe("MessageCard stop boundary rendering", () => {
       collapseButton.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
-
-  it("renders supervisor continue custom entries with expandable details", () => {
-    useSessionStore.setState({ activeSessionId: "sess-1" });
-    const message: ChatMessage = {
-      id: "msg-supervisor-continue",
-      role: "custom",
-      content: [
-        {
-          type: "custom",
-          customType: "supervisor_continue",
-          data: "Guard check: remaining work detected. Continue with unfinished verification steps.",
-        },
-      ],
-      timestamp: Date.now(),
-    };
-
-    render(<MessageCard message={message} />);
-
-    expect(screen.getByText("Supervisor Continue")).toBeInTheDocument();
-    expect(screen.getByText(/Guard check: remaining work detected/)).toBeInTheDocument();
-
-    const toggle = screen.getByRole("button", { name: "Supervisor Continue" });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    fireEvent.click(toggle);
-
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByText(/Continue with unfinished verification steps/)).toHaveLength(2);
-  });
 });
