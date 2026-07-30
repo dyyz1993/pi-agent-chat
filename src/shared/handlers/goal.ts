@@ -10,7 +10,12 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { GoalVendorStatus, GoalVendorTaskItem, GoalVendorTriggerRecord } from "../modules/goal";
+import type {
+  GoalDraftContract,
+  GoalVendorStatus,
+  GoalVendorTaskItem,
+  GoalVendorTriggerRecord,
+} from "../modules/goal";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { forwardToChannel } from "./channel-helpers";
@@ -66,6 +71,25 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return result ?? { started: false, error: "Channel call failed" };
   });
 
+  r("goal.submitContract", async (params) => {
+    const { sessionId, contract } = params as { sessionId: string; contract: GoalDraftContract };
+    const result = await forwardToChannel<{
+      submitted: boolean;
+      goalId?: string;
+      status?: string;
+      error?: string;
+    }>(
+      { sessionId },
+      "goal",
+      "submitContract",
+      contract,
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("goal.submitContract channel call failed", { sessionId });
+    return result ?? { submitted: false, error: "Channel call failed" };
+  });
+
   r("goal.approveContract", async (params) => {
     const { sessionId } = params as { sessionId: string };
     const result = await forwardToChannel<{ approved: boolean; error?: string }>(
@@ -77,6 +101,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       { skipHasSessionCheck: true },
     );
     if (!result) log.warn("goal.approveContract channel call failed", { sessionId });
+    return result ?? { approved: false, error: "Channel call failed" };
+  });
+
+  r("goal.approveAuthorityAmendment", async (params) => {
+    const { sessionId } = params as { sessionId: string };
+    const result = await forwardToChannel<{ approved: boolean; count?: number; error?: string }>(
+      { sessionId },
+      "goal",
+      "approveAuthorityAmendment",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("goal.approveAuthorityAmendment channel call failed", { sessionId });
     return result ?? { approved: false, error: "Channel call failed" };
   });
 

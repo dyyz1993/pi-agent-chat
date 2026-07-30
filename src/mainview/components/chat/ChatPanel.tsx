@@ -53,8 +53,7 @@ import { CommandPopup } from "./CommandPopup";
 import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
-// NOTE: GoalActionCard was removed (supervisor-dependent). Goal UI is now
-// exclusively in the right-sidebar GoalPanel (goal-vendor channel).
+import { GoalVendorActionCard } from "./GoalVendorActionCard";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import {
   useReturnToSourceSession,
@@ -2186,6 +2185,9 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
+                {!goalMode && (
+                  <GoalVendorActionCard sessionId={activeSessionId} onEdit={startGoalMode} />
+                )}
                 <div className="flex items-end gap-1.5">
                   <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
                     {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, Square, CheckCircle, XCircle, Target, Zap } from "lucide-react";
+import { AlertTriangle, Play, Square, CheckCircle, XCircle, Target, Zap, ShieldCheck } from "lucide-react";
 import { useGoalStore } from "../../stores/use-goal-store";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import type { GoalVendorTaskItem } from "../../../shared/modules/goal";
@@ -14,11 +14,18 @@ const STATE_LABELS: Record<string, { label: string; color: string }> = {
   disabled: { label: "已禁用", color: "text-text-tertiary" },
 };
 
+function formatAuthorityCommand(authority: { command?: { executable: string; argsPrefix: string[]; trailingArgs: string } }): string | null {
+  if (!authority.command) return null;
+  const suffix = authority.command.trailingArgs === "none" ? "" : ` <${authority.command.trailingArgs}>`;
+  return [authority.command.executable, ...authority.command.argsPrefix, suffix].filter(Boolean).join(" ");
+}
+
 export function GoalPanel() {
   const sessionId = useEffectiveSessionId();
   const sessionState = useGoalStore((s) => (sessionId ? s.bySession[sessionId] : null));
   const startSetup = useGoalStore((s) => s.startSetup);
   const approveContract = useGoalStore((s) => s.approveContract);
+  const approveAuthorityAmendment = useGoalStore((s) => s.approveAuthorityAmendment);
   const rejectContract = useGoalStore((s) => s.rejectContract);
   const clearGoal = useGoalStore((s) => s.clearGoal);
   const forceContinue = useGoalStore((s) => s.forceContinue);
@@ -35,6 +42,7 @@ export function GoalPanel() {
   const status = sessionState?.status;
   const stateInfo = status ? (STATE_LABELS[status.state] ?? { label: status.state, color: "text-text-secondary" }) : null;
   const isSettingUp = status?.rawStatus === "setting_up" || status?.rawStatus === "awaiting_approval";
+  const pendingAuthorityAmendment = status?.interrupt?.pendingAuthorityAmendment;
   const hasActiveGoal = status && status.rawStatus !== "none" && status.rawStatus !== "completed" && status.rawStatus !== "cancelled";
 
   const handleStartSetup = async () => {
@@ -61,6 +69,15 @@ export function GoalPanel() {
     setBusy(true);
     try {
       await rejectContract(sessionId, "rejected from panel");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleApproveAuthorityAmendment = async () => {
+    setBusy(true);
+    try {
+      await approveAuthorityAmendment(sessionId);
     } finally {
       setBusy(false);
     }
@@ -128,6 +145,45 @@ export function GoalPanel() {
         <div className="rounded-md border border-border-primary bg-bg-secondary p-2">
           <div className="text-xs text-text-tertiary mb-1">Objective</div>
           <div className="text-sm text-text-primary whitespace-pre-wrap">{status.objective}</div>
+        </div>
+      )}
+
+      {/* Interruption / approval needed */}
+      {status?.interrupt && (
+        <div className="rounded-md border border-status-warning/35 bg-status-warning/10 p-2">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-status-warning">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {pendingAuthorityAmendment ? "等待授权" : status.interrupt.class}
+          </div>
+          <div className="space-y-1 text-xs leading-5 text-text-secondary">
+            <div>{status.interrupt.need}</div>
+            <div className="text-text-tertiary">{status.interrupt.recommendation}</div>
+          </div>
+          {pendingAuthorityAmendment && (
+            <div className="mt-2 space-y-1.5">
+              {pendingAuthorityAmendment.authorities.map((authority) => {
+                const command = formatAuthorityCommand(authority);
+                return (
+                  <div
+                    key={authority.id}
+                    className="rounded border border-border-primary/70 bg-bg-secondary/70 px-2 py-1.5"
+                  >
+                    <div className="text-xs font-medium text-text-primary">{authority.label}</div>
+                    {command && <div className="mt-0.5 font-mono text-[11px] text-text-tertiary">{command}</div>}
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={handleApproveAuthorityAmendment}
+                disabled={busy}
+                className="mt-1 flex w-full items-center justify-center gap-1 rounded-md bg-status-warning/20 px-3 py-1.5 text-sm text-status-warning hover:bg-status-warning/30 disabled:opacity-50"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                批准这些授权
+              </button>
+            </div>
+          )}
         </div>
       )}
 

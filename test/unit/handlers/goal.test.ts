@@ -95,6 +95,33 @@ describe("goal handler", () => {
       expect(result).toEqual({ started: true, goalId: "g-1" });
     });
 
+    it("goal.submitContract forwards contract to channel", async () => {
+      const contract = {
+        outcome: "ship it",
+        criteria: ["Done"],
+        phases: [{ title: "Build" }],
+        verificationChecks: [{ id: "VC1", kind: "file_exists", label: "Readme", path: "README.md" }],
+        authorities: [],
+        constraints: [],
+        nonGoals: [],
+      };
+      channelMocks.forwardToChannel.mockResolvedValueOnce({
+        submitted: true,
+        goalId: "g-1",
+        status: "awaiting_approval",
+      });
+      const result = await callHandler(server, "goal.submitContract", {
+        sessionId: "sess-1",
+        contract,
+      });
+      expect(lastForwardedCall()).toEqual({
+        channel: "goal",
+        method: "submitContract",
+        payload: contract,
+      });
+      expect(result).toEqual({ submitted: true, goalId: "g-1", status: "awaiting_approval" });
+    });
+
     it("goal.approveContract forwards empty payload", async () => {
       channelMocks.forwardToChannel.mockResolvedValueOnce({ approved: true });
       await callHandler(server, "goal.approveContract", { sessionId: "sess-1" });
@@ -103,6 +130,19 @@ describe("goal handler", () => {
         method: "approveContract",
         payload: {},
       });
+    });
+
+    it("goal.approveAuthorityAmendment forwards empty payload", async () => {
+      channelMocks.forwardToChannel.mockResolvedValueOnce({ approved: true, count: 2 });
+      const result = await callHandler(server, "goal.approveAuthorityAmendment", {
+        sessionId: "sess-1",
+      });
+      expect(lastForwardedCall()).toEqual({
+        channel: "goal",
+        method: "approveAuthorityAmendment",
+        payload: {},
+      });
+      expect(result).toEqual({ approved: true, count: 2 });
     });
 
     it("goal.rejectContract forwards optional reason", async () => {

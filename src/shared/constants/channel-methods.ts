@@ -94,7 +94,9 @@ export const LEARNING_METHODS = {
 export const GOAL_METHODS = {
   GET_STATUS: "getStatus",
   START_SETUP: "startSetup",
+  SUBMIT_CONTRACT: "submitContract",
   APPROVE_CONTRACT: "approveContract",
+  APPROVE_AUTHORITY_AMENDMENT: "approveAuthorityAmendment",
   REJECT_CONTRACT: "rejectContract",
   CLEAR_GOAL: "clearGoal",
   FORCE_CONTINUE: "forceContinue",

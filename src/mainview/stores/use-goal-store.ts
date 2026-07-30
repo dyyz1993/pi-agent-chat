@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  GoalDraftContract,
   GoalVendorStatus,
   GoalVendorTaskItem,
   GoalVendorTriggerRecord,
@@ -31,7 +32,14 @@ interface GoalStoreState {
     sessionId: string,
     objective: string,
   ) => Promise<{ started: boolean; goalId?: string; error?: string }>;
+  submitContract: (
+    sessionId: string,
+    contract: GoalDraftContract,
+  ) => Promise<{ submitted: boolean; goalId?: string; status?: string; error?: string }>;
   approveContract: (sessionId: string) => Promise<{ approved: boolean; error?: string }>;
+  approveAuthorityAmendment: (
+    sessionId: string,
+  ) => Promise<{ approved: boolean; count?: number; error?: string }>;
   rejectContract: (sessionId: string, reason?: string) => Promise<{ rejected: boolean }>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
@@ -124,6 +132,23 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     }
   },
 
+  submitContract: async (sessionId, contract) => {
+    try {
+      const result = (await apiClient.call("goal.submitContract", {
+        sessionId,
+        contract,
+      })) as { submitted: boolean; goalId?: string; status?: string; error?: string };
+      if (result.submitted) {
+        loadedStatusSessions.delete(sessionId);
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+      }
+      return result;
+    } catch (error) {
+      log.warn("Failed to submit goal contract", { sessionId, error });
+      return { submitted: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
   approveContract: async (sessionId) => {
     try {
       const result = (await apiClient.call("goal.approveContract", {
@@ -136,6 +161,23 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
       return result;
     } catch (error) {
       log.warn("Failed to approve goal contract", { sessionId, error });
+      return { approved: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
+  approveAuthorityAmendment: async (sessionId) => {
+    try {
+      const result = (await apiClient.call("goal.approveAuthorityAmendment", {
+        sessionId,
+      })) as { approved: boolean; count?: number; error?: string };
+      if (result.approved) {
+        loadedStatusSessions.delete(sessionId);
+        loadedTaskReportSessions.delete(sessionId);
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+      }
+      return result;
+    } catch (error) {
+      log.warn("Failed to approve goal authority amendment", { sessionId, error });
       return { approved: false, error: error instanceof Error ? error.message : String(error) };
     }
   },

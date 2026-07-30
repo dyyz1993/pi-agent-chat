@@ -26,6 +26,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
 import { apiClient } from "../../lib/api-client";
+import type { QuickCreateAutoStart } from "../../lib/quick-create-auto-start";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { useAsyncGuard } from "../../hooks/use-async-guard";
@@ -35,7 +36,11 @@ import { useInitialQcTier, type QcTier } from "./use-initial-qc-tier";
 interface ProjectPickerDialogProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (path: string, name: string) => void;
+  onSelect: (
+    path: string,
+    name: string,
+    options?: { quickStart?: QuickCreateAutoStart },
+  ) => void | Promise<void>;
   onOpenRemoteProject?: () => void;
 }
 
@@ -487,7 +492,13 @@ export function ProjectPickerDialog({
           return;
         }
         const projectPath = result.path as string;
-        onSelect(projectPath, folderName);
+        await onSelect(projectPath, folderName, {
+          quickStart: {
+            requirement: qcRequirement.trim(),
+            description: qcDescription,
+            plan: qcPlan,
+          },
+        });
         onClose();
       } catch (err) {
         logger.warn("confirmQuickCreate failed", { error: String(err) });
@@ -497,7 +508,7 @@ export function ProjectPickerDialog({
       } finally {
         setQcCreating(false);
       }
-    }, [qcDefaultDir, qcDescription, qcName, qcPlan, onSelect, onClose, t]),
+    }, [qcDefaultDir, qcDescription, qcName, qcPlan, qcRequirement, onSelect, onClose, t]),
   );
 
   // 触发加载默认目录的 effect

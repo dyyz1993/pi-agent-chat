@@ -654,7 +654,7 @@ describe("project handler", () => {
       expect(options.env.PI_CODING_AGENT_DIR).not.toBe(process.env.PI_CODING_AGENT_DIR);
     });
 
-    it("surfaces stderr when spawned pi CLI exits non-zero", async () => {
+    it("falls back when spawned pi CLI exits non-zero", async () => {
       mockSpawn.mockImplementationOnce(() =>
         createMockSpawnResult({
           stderr: "model schema validation failed",
@@ -665,13 +665,16 @@ describe("project handler", () => {
 
       await expect(
         handler({
-          requirement: "Build a tiny notes app",
+          requirement: "做一个俄罗斯方块游戏",
           tier: "fast",
         }),
-      ).rejects.toThrow("model schema validation failed");
+      ).resolves.toMatchObject({
+        name: "tetris-game",
+        description: "根据需求创建的项目：做一个俄罗斯方块游戏",
+      });
     });
 
-    it("filters recommended agent field warnings before surfacing pi CLI failures", async () => {
+    it("filters recommended agent field warnings before choosing fallback after pi CLI failures", async () => {
       mockSpawn.mockImplementationOnce(() =>
         createMockSpawnResult({
           stderr: [
@@ -686,13 +689,16 @@ describe("project handler", () => {
 
       await expect(
         handler({
-          requirement: "Build a tiny notes app",
+          requirement: "做一个个人任务看板",
           tier: "fast",
         }),
-      ).rejects.toThrow("Failed to generate project name: model schema validation failed");
+      ).resolves.toMatchObject({
+        name: "kanban-board",
+        description: "根据需求创建的项目：做一个个人任务看板",
+      });
     });
 
-    it("does not present recommended agent field warnings as the project-name failure", async () => {
+    it("does not block quick create when only recommended agent field warnings are emitted", async () => {
       mockSpawn.mockImplementationOnce(() =>
         createMockSpawnResult({
           stderr: [
@@ -709,7 +715,10 @@ describe("project handler", () => {
           requirement: "Build a tiny notes app",
           tier: "fast",
         }),
-      ).rejects.toThrow("Failed to generate project name: pi CLI exited with code 1");
+      ).resolves.toMatchObject({
+        name: "tiny-notes",
+        description: "A project generated from: Build a tiny notes app",
+      });
     });
 
     it("falls back when pi CLI structured output generation fails", async () => {
@@ -752,8 +761,36 @@ describe("project handler", () => {
           tier: "fast",
         }),
       ).resolves.toMatchObject({
-        name: "quick-project",
+        name: "kanban-board",
         description: "根据需求创建的项目：做一个个人任务看板",
+      });
+    });
+
+    it("replaces generic generated names with requirement-derived topic slugs", async () => {
+      mockSpawn.mockImplementationOnce(() =>
+        createMockSpawnResult({
+          stdout: JSON.stringify({
+            name: "quick-project",
+            description: "一个浏览器里的俄罗斯方块小游戏。",
+            plan: {
+              goal: "完成一个可玩的俄罗斯方块。",
+              techStack: ["React", "Vitest"],
+              steps: ["实现方块下落", "实现消行计分", "补充基础测试"],
+              testing: "运行单元测试并手动玩一局。",
+            },
+          }),
+        }),
+      );
+      const handler = server.handlers.get("project.generateName")!;
+
+      await expect(
+        handler({
+          requirement: "做一个俄罗斯方块游戏",
+          tier: "fast",
+        }),
+      ).resolves.toMatchObject({
+        name: "tetris-game",
+        description: "一个浏览器里的俄罗斯方块小游戏。",
       });
     });
 
@@ -926,7 +963,8 @@ describe("project handler", () => {
         expect(delivery).toContain("# Quick Create Delivery Protocol");
         expect(delivery).toContain("Ship a usable note-taking flow.");
         expect(delivery).toContain("Do not run recursive destructive cleanup commands");
-        expect(delivery).toContain("npm install --no-fund --no-audit");
+        expect(delivery).toContain("Do not put package registry/install actions");
+        expect(delivery).toContain("if no install step was needed");
         expect(delivery).toContain("Required Validation Packet");
         expect(delivery).toContain("local dev/preview server");
       } finally {

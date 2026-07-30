@@ -9,6 +9,11 @@ import {
   setupSessionRenamedSubscription,
 } from "./stores/session-subscriptions";
 import { useChatStore } from "./stores/use-chat-store";
+import { useGoalStore } from "./stores/use-goal-store";
+import {
+  runQuickCreateAutoStart,
+  type QuickCreateAutoStart,
+} from "./lib/quick-create-auto-start";
 import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
 import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDialog";
@@ -138,7 +143,11 @@ function App() {
   // 所以活跃项目一加载完就立即拥有正确状态；非活跃项目由 TabBar 立刻拉。
   // 实时变化走 setupProjectStatusSubscription 推送。
 
-  const handleSelectProject = async (path: string, name: string) => {
+  const handleSelectProject = async (
+    path: string,
+    name: string,
+    options?: { quickStart?: QuickCreateAutoStart },
+  ) => {
     setProjectLoading(true);
 
     const prevSessionId = useSessionStore.getState().activeSessionId;
@@ -155,10 +164,41 @@ function App() {
 
     const tabId = `proj-${path.replace(/\//g, "-")}`;
     addProjectTab({ id: tabId, name, path });
-    useSessionStore.getState().setActiveProject(tabId);
+    useSessionStore
+      .getState()
+      .setActiveProject(tabId, options?.quickStart ? { skipAutoSession: true } : undefined);
     addLog(`Loaded project: ${name}`);
 
     setProjectLoading(false);
+
+    if (options?.quickStart) {
+      void runQuickCreateAutoStart(path, name, options.quickStart, {
+        createNewSession: (projectPath) =>
+          useSessionStore.getState().createNewSession(projectPath),
+        startAgent: (sessionId, projectPath, sessionPath) =>
+          apiClient.call("agent.start", {
+            sessionId,
+            projectPath,
+            sessionPath,
+          }) as Promise<{ status: "started" | "already_running" }>,
+        setInputText: (text) => useChatStore.getState().setInputText(text),
+        sendMessage: () => useChatStore.getState().sendMessage(),
+        startSetup: (sessionId, objective) =>
+          useGoalStore.getState().startSetup(sessionId, objective),
+        submitContract: (sessionId, contract) =>
+          useGoalStore.getState().submitContract(sessionId, contract),
+        fetchGoalStatus: async (sessionId) => {
+          await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+          return useGoalStore.getState().bySession[sessionId]?.status ?? null;
+        },
+        approveContract: (sessionId) => useGoalStore.getState().approveContract(sessionId),
+        addLog,
+      }).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        addLog(`Quick create auto-start failed: ${message}`);
+        log.warn("Quick create auto-start failed", { projectPath: path, error: message });
+      });
+    }
   };
 
   const activateProjectTab = useCallback(

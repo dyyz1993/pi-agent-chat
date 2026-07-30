@@ -243,7 +243,44 @@ function hasCjkText(input: string): boolean {
   return /[\u3400-\u9fff]/.test(input);
 }
 
+const QUICK_CREATE_GENERIC_NAMES = new Set([
+  "quick-project",
+  "quick-app",
+  "generated-project",
+  "generated-app",
+  "new-project",
+  "demo-project",
+  "demo-app",
+]);
+
+const CJK_QUICK_CREATE_KEYWORDS: Array<{ pattern: RegExp; slug: string }> = [
+  { pattern: /俄罗斯方块|俄羅斯方塊|tetris/i, slug: "tetris-game" },
+  { pattern: /贪吃蛇|貪吃蛇|snake/i, slug: "snake-game" },
+  { pattern: /扫雷|掃雷|mine\s*sweeper|minesweeper/i, slug: "minesweeper-game" },
+  { pattern: /记账|記帳|账本|帳本|expense|budget/i, slug: "expense-tracker" },
+  { pattern: /看板|kanban/i, slug: "kanban-board" },
+  { pattern: /番茄钟|番茄鐘|pomodoro/i, slug: "pomodoro-timer" },
+  { pattern: /待办|待辦|todo|to-do/i, slug: "todo-list" },
+  { pattern: /英语|英文|單詞|单词|背词|背單詞|english|vocabulary/i, slug: "english-learning" },
+];
+
+function deriveKnownTopicFolderName(requirement: string): string | null {
+  for (const item of CJK_QUICK_CREATE_KEYWORDS) {
+    if (item.pattern.test(requirement)) return item.slug;
+  }
+  return null;
+}
+
+function isGenericQuickCreateName(name: string): boolean {
+  return QUICK_CREATE_GENERIC_NAMES.has(name);
+}
+
 function deriveFallbackFolderName(requirement: string): string {
+  if (hasCjkText(requirement)) {
+    const knownTopic = deriveKnownTopicFolderName(requirement);
+    if (knownTopic) return knownTopic;
+  }
+
   const words = requirement
     .toLowerCase()
     .match(/[a-z0-9]+/g)
@@ -394,7 +431,9 @@ function renderQuickCreateDeliveryProtocol(
     "## Safety Rules",
     "",
     "- Do not run recursive destructive cleanup commands such as `rm -rf node_modules`, `rm -rf .`, or lockfile deletion as the first recovery step.",
-    "- If dependency installation fails or times out, inspect the error and retry with a non-destructive command first, for example `npm install --no-fund --no-audit`.",
+    "- Prefer a no-install implementation or already-available local tooling for the first pass when the Goal workflow is active.",
+    "- Do not put package registry/install actions such as `npm install`, `npm add`, `pnpm add`, `yarn add`, publish, or login into Goal contract authorities, phase commands, or verification checks; goal-vendor rejects those contracts.",
+    "- If dependency installation is truly required, handle it during execution through the normal permission flow after the Goal contract is accepted; do not encode it as a contract authority.",
     "- Ask for explicit user approval before deleting generated files, dependency directories, lockfiles, git history, or anything outside this project.",
     "- Keep build artifacts and cache files out of git unless they are intentionally part of the project.",
     "",
@@ -402,7 +441,7 @@ function renderQuickCreateDeliveryProtocol(
     "",
     "Before saying the project is ready, provide a validation packet with:",
     "",
-    "- Automated checks: exact install, test, typecheck, and build commands with pass/fail results.",
+    "- Automated checks: exact setup, test, typecheck, and build commands with pass/fail results; if no install step was needed, say so explicitly.",
     "- Manual acceptance checks: setup, steps, expected result, evidence, and status.",
     "- Browser/UI checks for web projects: open URL, happy path, negative/edge cases, refresh or persistence behavior when relevant, and mobile viewport behavior.",
     "- Safety evidence: any permission prompts, denied destructive commands, and why the final commands were safe.",
@@ -1052,8 +1091,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
    * - `--model <tier>` 走 tier 别名，pi CLI 通过 settings.json 的
    *   tierModels 解析为用户配置的具体模型；未配置时回退到 pi CLI 默认
    * - `--no-session` 避免在 ~/.pi 下留下一次性 session 痕迹
-   * - 失败（如模型输出无法通过 schema 校验）时 exit code=1，stdout 为空，
-   *   错误信息在 stderr，因此必须先看 exit code 再 parse
+   * - 名称生成不能卡住快速创建主流程；模型、鉴权、超时或结构化输出失败时，
+   *   返回本地语义 fallback（例如“俄罗斯方块” -> `tetris-game`）。
    */
   r("project.generateName", async (params) => {
     const requirement = params.requirement?.trim() ?? "";
@@ -1079,7 +1118,10 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       "produce: (1) a concise filesystem-safe project folder name (lowercase, " +
       "kebab-case, no spaces, ASCII letters/digits/dashes only, max 40 chars, " +
       "no leading/trailing dash; must reflect the project's core purpose, not " +
-      "a generic word like 'project' or 'app'); (2) a one-sentence description " +
+      "a generic word like 'project' or 'app'; for non-English requirements, " +
+      "translate the key product noun into an English slug, for example " +
+      "'做一个俄罗斯方块游戏' should produce a name like 'tetris-game'); " +
+      "(2) a one-sentence description " +
       "in the same language as the requirement; (3) a concrete project plan " +
       "consisting of: goal (1-2 sentences on what success looks like), " +
       "techStack (3-6 concrete technologies/libraries, each as a short label " +
@@ -1147,7 +1189,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     try {
       const result = await runPiCli(cliPath, args, {
         env: { ...process.env, PI_CODING_AGENT_DIR: tmpAgentDir },
-        timeoutMs: 45_000,
+        timeoutMs: 25_000,
       });
       stdout = result.stdout;
       stderr = result.stderr;
@@ -1172,16 +1214,12 @@ export function register(server: RPCServer, options: HandlerOptions): void {
         stderr,
         fallback: e.message,
       });
-      if (isStructuredOutputFailure(`${failureMessage}\n${stderr}\n${e.message ?? ""}`)) {
-        log.warn("project.generateName: using fallback after structured output failure", {
-          tier,
-          failureMessage: failureMessage.slice(0, 300),
-        });
-        return createFallbackQuickCreateResult(requirement);
-      }
-      throw new Error(
-        `Failed to generate project name: ${failureMessage}`,
-      );
+      log.warn("project.generateName: using fallback after pi CLI failure", {
+        tier,
+        failureMessage: failureMessage.slice(0, 300),
+        structuredOutputFailure: isStructuredOutputFailure(`${failureMessage}\n${stderr}\n${e.message ?? ""}`),
+      });
+      return createFallbackQuickCreateResult(requirement);
     } finally {
       rmSync(tmpAgentDir, { recursive: true, force: true });
     }
@@ -1191,9 +1229,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       log.warn("project.generateName: empty stdout", {
         stderr: stderr.slice(0, 500),
       });
-      throw new Error(
-        `Failed to generate project name (empty output): ${getPiCliFailureMessage({ stderr })}`,
-      );
+      return createFallbackQuickCreateResult(requirement);
     }
 
     let parsed: { name?: string; description?: string; plan?: unknown };
@@ -1209,11 +1245,17 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     // 兜底清洗：即便 schema 校验通过，仍可能含有不合规字符
     const safeName = sanitizeFolderName(parsed.name ?? "");
     if (!safeName) {
-      throw new Error("Generated project name is invalid");
+      log.warn("project.generateName: generated name invalid, using fallback", {
+        generatedName: parsed.name,
+      });
+      return createFallbackQuickCreateResult(requirement);
     }
+    const finalName = isGenericQuickCreateName(safeName)
+      ? deriveFallbackFolderName(requirement)
+      : safeName;
     const safePlan = sanitizeQuickCreatePlan(parsed.plan);
     return {
-      name: safeName,
+      name: finalName,
       description: (parsed.description ?? "").trim().slice(0, 200),
       ...(safePlan ? { plan: safePlan } : {}),
     };

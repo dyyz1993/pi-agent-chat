@@ -130,6 +130,7 @@ export function createLoadSessionsForProjectAction({
 export interface CreateNewSessionResult {
   status: "created" | "reused";
   sessionId: string;
+  sessionPath?: string;
   projectPath: string;
 }
 
@@ -204,7 +205,12 @@ export function createCreateNewSessionAction({
       });
       get().setActiveSession(blankSession.sessionId);
       set({ newSessionCreatedAt: Date.now() });
-      return { status: "reused", sessionId: blankSession.sessionId, projectPath: targetPath };
+      return {
+        status: "reused",
+        sessionId: blankSession.sessionId,
+        sessionPath: blankSession.sessionPath,
+        projectPath: targetPath,
+      };
     }
 
     log.info("Creating session", { targetPath });
@@ -283,6 +289,11 @@ export function createCreateNewSessionAction({
       useAppStore.getState().addLog(`Session created, but model sync failed: ${errMsg}`);
     }
 
-    return { status: "created", sessionId: result.sessionId, projectPath: targetPath };
+    return {
+      status: "created",
+      sessionId: result.sessionId,
+      sessionPath: result.sessionPath,
+      projectPath: targetPath,
+    };
   };
 }
