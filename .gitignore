@@ -151,6 +151,12 @@ scan-project.mjs
 
 # Promo drafts
 promo/
+!promo/
+promo/*
+!promo/press-kit/
+!promo/press-kit/**
+promo/press-kit/videos/frames/
+promo/press-kit/videos/raw/
 
 # Temporary plan docs
 .compaction-verify-plan.md

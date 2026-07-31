@@ -1,0 +1,4 @@
+Pi Agent Chat is an open-source workbench for coding agents.
+Create goals, keep progress visible, and review changes before you merge.
+Run local, desktop, mobile, and remote project workflows from one focused chat surface.
+Ship with agents. Review with context.
