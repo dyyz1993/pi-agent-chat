@@ -4,8 +4,8 @@
   "description": "AI Agent Chat Application",
   "start_url": "/",
   "display": "fullscreen",
-  "background_color": "#030712",
-  "theme_color": "#4F46E5",
+  "background_color": "#0E1718",
+  "theme_color": "#0E1718",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [

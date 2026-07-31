@@ -22,6 +22,7 @@ export default {
 		watchIgnore: ["dist/**"],
 		mac: {
 			bundleCEF: useCEFRenderer,
+			icons: "resources/app-icon.iconset",
 			defaultRenderer: desktopRenderer,
 			entitlements: {
 				"com.apple.security.device.microphone":
@@ -32,9 +33,11 @@ export default {
 		},
 		linux: {
 			bundleCEF: false,
+			icon: "resources/app-icon.png",
 		},
 		win: {
 			bundleCEF: false,
+			icon: "resources/app-icon.ico",
 		},
 	},
 } satisfies ElectrobunConfig;
