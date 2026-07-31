@@ -500,7 +500,7 @@ function RefineGoalOverlay({ step }: { step: number }) {
   );
 }
 
-function GoalDraftCard({
+export function GoalDraftCard({
   draft,
   editing,
   disabled,
@@ -509,6 +509,7 @@ function GoalDraftCard({
   onEdit,
   onSave,
   onCancel,
+  onClose,
   onAdd,
 }: {
   draft: string;
@@ -519,6 +520,7 @@ function GoalDraftCard({
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
+  onClose: () => void;
   onAdd: () => void;
 }) {
   const { t } = useTranslation("chat");
@@ -528,25 +530,21 @@ function GoalDraftCard({
       className="mx-2 mt-2 overflow-hidden rounded-lg border border-accent/25 bg-accent/5"
     >
       <div className="flex flex-col gap-2 border-b border-accent/15 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Target className="h-3.5 w-3.5 shrink-0 text-accent" />
           <div className="min-w-0">
-            <div className="text-xs font-medium text-text-primary">
-              {t("goal.draft.title")}
-            </div>
-            <div className="text-[11px] text-text-tertiary">
-              {t("goal.draft.subtitle")}
-            </div>
+            <div className="text-xs font-medium text-text-primary">{t("goal.draft.title")}</div>
+            <div className="text-[11px] text-text-tertiary">{t("goal.draft.subtitle")}</div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {editing ? (
             <>
               <button
                 type="button"
                 data-testid="goal-draft-save-preview"
                 onClick={onSave}
-                disabled={disabled || !draft.trim()}
+                disabled={(disabled ?? false) || !draft.trim()}
                 className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Eye className="h-3 w-3" />
@@ -589,7 +587,7 @@ function GoalDraftCard({
                 type="button"
                 data-testid="goal-draft-add"
                 onClick={onAdd}
-                disabled={disabled || !draft.trim()}
+                disabled={(disabled ?? false) || !draft.trim()}
                 className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusCircle className="h-3 w-3" />
@@ -597,6 +595,17 @@ function GoalDraftCard({
               </button>
             </>
           )}
+          <button
+            type="button"
+            data-testid="goal-draft-close"
+            onClick={onClose}
+            disabled={disabled}
+            className="inline-flex items-center justify-center rounded-md p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            title={t("goal.cancelCompose")}
+            aria-label={t("goal.cancelCompose")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
       <div className="max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh]">
@@ -1752,17 +1761,20 @@ export function ChatPanel() {
     }
   };
 
+  const exitGoalMode = useCallback(() => {
+    setGoalMode(false);
+    setGoalDraft("");
+    setIsGoalDraftEditing(false);
+    setInputText(preGoalInputRef.current);
+    preGoalInputRef.current = "";
+    preEditGoalDraftRef.current = "";
+  }, [setInputText]);
+
   const startGoalMode = useCallback(
     (objective?: string) => {
       if (isViewingSubagent) return;
       if (goalMode) {
-        // Toggle off: exit goal mode
-        setGoalMode(false);
-        setGoalDraft("");
-        setIsGoalDraftEditing(false);
-        setInputText(preGoalInputRef.current);
-        preGoalInputRef.current = "";
-        preEditGoalDraftRef.current = "";
+        exitGoalMode();
         return;
       }
       const draftHint = objective ?? inputText;
@@ -1790,6 +1802,7 @@ export function ChatPanel() {
       chatProjectName,
       chatProjectPath,
       commandPopup,
+      exitGoalMode,
       goalMode,
       hasComposerPlaceholders,
       inputText,
@@ -2201,15 +2214,28 @@ export function ChatPanel() {
                           </span>
                           <span className="ml-1">{t("goal.draft.entryHint")}</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={generateGoalDraft}
-                          disabled={isCreatingGoal || isRefiningGoal}
-                          className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-surface-dim px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          {goalDraft ? t("goal.draft.regenerate") : t("goal.draft.generate")}
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={generateGoalDraft}
+                            disabled={isCreatingGoal || isRefiningGoal}
+                            className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-surface-dim px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            {goalDraft ? t("goal.draft.regenerate") : t("goal.draft.generate")}
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="goal-draft-entry-close"
+                            onClick={exitGoalMode}
+                            disabled={isCreatingGoal || isRefiningGoal}
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                            title={t("goal.cancelCompose")}
+                            aria-label={t("goal.cancelCompose")}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     )}
                     {goalMode && goalDraft && (
@@ -2222,6 +2248,7 @@ export function ChatPanel() {
                         onEdit={handleEditGoalDraft}
                         onSave={handleSaveGoalDraftEdit}
                         onCancel={handleCancelGoalDraftEdit}
+                        onClose={exitGoalMode}
                         onAdd={() => void handleCreateGoal()}
                       />
                     )}
@@ -2278,7 +2305,7 @@ export function ChatPanel() {
                             layout="compact"
                             mode={goalMode ? "goal" : "normal"}
                             onGoalClick={() => startGoalMode()}
-                            onExitGoalMode={() => startGoalMode()}
+                            onExitGoalMode={exitGoalMode}
                           />
                         )}
                         {!goalMode && (
@@ -2299,7 +2326,9 @@ export function ChatPanel() {
                     {goalMode ? (
                       <button
                         onClick={() => void handleRefineGoal()}
-                        disabled={isCreatingGoal || isRefiningGoal || !(goalDraft || inputText).trim()}
+                        disabled={
+                          isCreatingGoal || isRefiningGoal || !(goalDraft || inputText).trim()
+                        }
                         className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-accent/20 text-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
                         title={t("goal.refine")}
                         aria-label={t("goal.refine")}
