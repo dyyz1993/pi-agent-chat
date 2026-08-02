@@ -1,9 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  buildGoalDraftMarkdown,
-  GoalDraftCard,
-} from "../../../src/mainview/components/chat/ChatPanel";
+import { buildGoalDraftMarkdown } from "../../../src/mainview/components/chat/goal-draft";
+import { GoalDraftCard } from "../../../src/mainview/components/chat/ChatPanel";
 
 afterEach(() => {
   cleanup();
