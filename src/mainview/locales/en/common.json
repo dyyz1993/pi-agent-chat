@@ -152,5 +152,10 @@
   "welcome.remoteSelectDirectory": "Select this folder",
   "welcome.remoteOpening": "Opening...",
   "welcome.remoteOpeningTitle": "Opening remote project",
-  "welcome.remoteOpeningHint": "Creating the local mapping and starting the remote runtime. This closes automatically when ready."
+  "welcome.remoteOpeningHint": "Creating the local mapping and starting the remote runtime. This closes automatically when ready.",
+  "quickCreate.started": "Quick create started: {{name}}",
+  "quickCreate.cancel": "Cancel",
+  "quickCreate.completed": "Quick create completed: {{name}}",
+  "quickCreate.cancelled": "Quick create cancelled: {{name}}",
+  "quickCreate.failed": "Quick create failed: {{error}}"
 }

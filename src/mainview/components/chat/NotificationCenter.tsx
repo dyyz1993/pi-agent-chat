@@ -143,9 +143,27 @@ export function NotificationCenter() {
                     }}
                   >
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${LEVEL_COLOR[n.level]}`} />
-                    <span className="flex-1 text-[11px] text-text-secondary break-all leading-relaxed">
-                      {n.message}
-                    </span>
+                    <div className="flex-1 flex flex-col gap-1 min-w-0">
+                      <span className="text-[11px] text-text-secondary break-all leading-relaxed">
+                        {n.message}
+                      </span>
+                      {n.actions && n.actions.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {n.actions.map((action) => (
+                            <button
+                              key={action.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                action.onClick();
+                              }}
+                              className="rounded border border-border-primary px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-surface-hover hover:text-accent transition-colors"
+                            >
+                              {action.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

@@ -10,6 +10,7 @@ import {
 } from "./stores/session-subscriptions";
 import { useChatStore } from "./stores/use-chat-store";
 import { useGoalStore } from "./stores/use-goal-store";
+import { useNotificationStore } from "./stores/use-notification-store";
 import {
   runQuickCreateAutoStart,
   type QuickCreateAutoStart,
@@ -176,6 +177,19 @@ function App() {
 
     if (options?.quickStart) {
       const controller = abortPreviousAndTrack(quickStartAbortRef);
+      const notifStore = useNotificationStore.getState();
+      const startNotifId = notifStore.push({
+        message: t("quickCreate.started", { name, defaultValue: `Quick create started: ${name}` }),
+        level: "warning",
+        actions: [
+          {
+            id: "cancel",
+            label: t("quickCreate.cancel", { defaultValue: "Cancel" }),
+            onClick: () => controller.abort(),
+          },
+        ],
+      });
+
       void runQuickCreateAutoStart(path, name, options.quickStart, {
         signal: controller.signal,
         createNewSession: (projectPath) =>
@@ -198,11 +212,50 @@ function App() {
         },
         approveContract: (sessionId) => useGoalStore.getState().approveContract(sessionId),
         addLog,
-      }).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        addLog(`Quick create auto-start failed: ${message}`);
-        log.warn("Quick create auto-start failed", { projectPath: path, error: message });
-      });
+      })
+        .then((result) => {
+          if (startNotifId) notifStore.dismiss(startNotifId);
+          if (result.goalStarted) {
+            notifStore.push({
+              message: t("quickCreate.completed", {
+                name,
+                defaultValue: `Quick create completed: ${name}`,
+              }),
+              level: "info",
+            });
+          } else if (/cancel/i.test(result.error ?? "")) {
+            notifStore.push({
+              message: t("quickCreate.cancelled", {
+                name,
+                defaultValue: `Quick create cancelled: ${name}`,
+              }),
+              level: "info",
+            });
+          } else {
+            notifStore.push({
+              message: t("quickCreate.failed", {
+                name,
+                error: result.error ?? "",
+                defaultValue: `Quick create failed: ${result.error ?? "unknown error"}`,
+              }),
+              level: "warning",
+            });
+          }
+        })
+        .catch((err) => {
+          if (startNotifId) notifStore.dismiss(startNotifId);
+          const message = err instanceof Error ? err.message : String(err);
+          addLog(`Quick create auto-start failed: ${message}`);
+          log.warn("Quick create auto-start failed", { projectPath: path, error: message });
+          notifStore.push({
+            message: t("quickCreate.failed", {
+              name,
+              error: message,
+              defaultValue: `Quick create failed: ${message}`,
+            }),
+            level: "error",
+          });
+        });
     }
   };
 

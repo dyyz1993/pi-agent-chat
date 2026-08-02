@@ -189,3 +189,36 @@ describe("togglePanel / setPanelOpen", () => {
 		expect(useNotificationStore.getState().panelOpen).toBe(false)
 	})
 })
+
+describe("actions", () => {
+	it("stores action buttons alongside the notification", () => {
+		const cancel = vi.fn()
+		useNotificationStore.getState().push({
+			message: "running",
+			level: "warning",
+			actions: [{ id: "cancel", label: "Cancel", onClick: cancel }],
+		})
+
+		const state = useNotificationStore.getState()
+		expect(state.notifications).toHaveLength(1)
+		expect(state.notifications[0].actions).toEqual([
+			expect.objectContaining({ id: "cancel", label: "Cancel" }),
+		])
+
+		state.notifications[0].actions?.[0].onClick?.()
+		expect(cancel).toHaveBeenCalledTimes(1)
+	})
+
+	it("dismiss removes the notification and its actions", () => {
+		useNotificationStore.getState().push({
+			message: "running",
+			level: "warning",
+			actions: [{ id: "cancel", label: "Cancel", onClick: () => {} }],
+		})
+
+		const id = useNotificationStore.getState().notifications[0].id
+		useNotificationStore.getState().dismiss(id)
+
+		expect(useNotificationStore.getState().notifications).toHaveLength(0)
+	})
+})

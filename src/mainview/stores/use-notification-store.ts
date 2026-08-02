@@ -2,6 +2,12 @@ import { create } from "zustand";
 
 export type NotificationLevel = "info" | "warning" | "error";
 
+export interface NotificationAction {
+  id: string;
+  label: string;
+  onClick: () => void;
+}
+
 export interface AppNotification {
   id: string;
   message: string;
@@ -10,13 +16,14 @@ export interface AppNotification {
   sessionId?: string;
   requestId?: string;
   read: boolean;
+  actions?: NotificationAction[];
 }
 
 interface NotificationState {
   notifications: AppNotification[];
   panelOpen: boolean;
 
-  push: (n: Omit<AppNotification, "id" | "timestamp" | "read">) => void;
+  push: (n: Omit<AppNotification, "id" | "timestamp" | "read">) => string | null;
   markRead: (id: string) => void;
   markAllRead: () => void;
   dismiss: (id: string) => void;
@@ -34,7 +41,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       const existing = useNotificationStore
         .getState()
         .notifications.find((x) => x.requestId === n.requestId);
-      if (existing) return;
+      if (existing) return null;
     }
 
     const entry: AppNotification = {
@@ -54,6 +61,8 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         }));
       }, 5000);
     }
+
+    return entry.id;
   },
 
   markRead(id) {
