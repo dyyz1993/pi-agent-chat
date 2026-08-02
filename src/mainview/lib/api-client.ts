@@ -10,6 +10,7 @@ import type { RPCMethods, RPCEvents } from "../../shared/rpc-schema";
 import { useRpcDebugStore } from "../stores/use-rpc-debug-store";
 import { useAppStore } from "../stores/use-app-store";
 import { createLogger } from "../../shared/lib/logger";
+import { raceWithAbortSignal } from "./race-with-abort-signal";
 
 const log = createLogger("gateway");
 const DEFAULT_DEV_API_PORT = 31 * 100;
@@ -425,18 +426,25 @@ class APIClientImpl {
   async call<K extends keyof RPCMethods>(
     method: K,
     params: MethodParams<RPCMethods, K>,
+    options?: { signal?: AbortSignal },
   ): Promise<MethodResult<RPCMethods, K>> {
     await this.initialize();
+    if (options?.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
     this.debugLog("call", method as string, params);
     try {
       if (!this.client) throw new Error("Client not initialized");
-      const result = await this.client.call(
+      const callPromise = this.client.call(
         method,
         params,
         LONG_RUNNING_RPC_METHODS.has(method)
           ? { timeoutMs: LONG_RPC_CALL_TIMEOUT_MS }
           : undefined,
       );
+      const result = options?.signal
+        ? await raceWithAbortSignal(callPromise, options.signal)
+        : await callPromise;
       this.debugLog("response", method as string, result);
       return result;
     } catch (err) {
