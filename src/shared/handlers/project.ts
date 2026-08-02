@@ -76,7 +76,7 @@ import {
   updateWorktreeStackOrchestration,
 } from "../lib/worktree-stack-manifest";
 
-const log = createLogger("config");
+const log = createLogger("project");
 const execFileAsync = promisify(execFile);
 const REMOTE_RESOURCE_TYPES = new Set<RemoteSyncResourceType>(["skills", "agents", "rules"]);
 
@@ -755,7 +755,6 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   });
 
   r("project.scanSessions", async (params) => {
-    const log = createLogger("project");
     const t0 = Date.now();
     log.info("[scanSessions] handler begin", { projectPath: params.projectPath });
     try {
@@ -1285,6 +1284,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       return { ok: false, error: created.error ?? "Failed to create directory" };
     }
     const projectPath = created.path;
+    const warnings: string[] = [];
 
     try {
       const readme = renderProjectReadme(folderName, description, plan);
@@ -1294,10 +1294,14 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       const deliveryProtocol = renderQuickCreateDeliveryProtocol(folderName, description, plan);
       writeFileSync(join(projectPath, "QUICK_CREATE_DELIVERY.md"), deliveryProtocol, "utf8");
     } catch (err) {
+      const msg = `Failed to write README/delivery docs: ${
+        err instanceof Error ? err.message : String(err)
+      }`.slice(0, 300);
       log.warn("project.confirmQuickCreate: write README failed (non-fatal)", {
         projectPath,
-        error: String(err).slice(0, 300),
+        error: msg,
       });
+      warnings.push(msg);
     }
 
     try {
@@ -1307,12 +1311,14 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       });
     } catch (err) {
       const e = err as { stderr?: string; message?: string };
+      const detail = (e.stderr ?? e.message ?? String(err)).trim().slice(0, 300);
+      const msg = `git init failed: ${detail || "unknown error"}`;
       log.warn("project.confirmQuickCreate: git init failed (non-fatal)", {
         projectPath,
-        error: (e.stderr ?? e.message ?? String(err)).slice(0, 300),
+        error: detail,
       });
-      // git init 失败不阻塞，目录已创建，仍然返回 ok 让用户继续
+      warnings.push(msg);
     }
-    return { ok: true, path: projectPath };
+    return warnings.length > 0 ? { ok: true, path: projectPath, warnings } : { ok: true, path: projectPath };
   });
 }

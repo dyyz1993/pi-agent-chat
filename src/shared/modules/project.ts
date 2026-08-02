@@ -476,7 +476,7 @@ export interface ProjectMethods {
       description?: string;
       plan?: QuickCreatePlan;
     };
-    result: { ok: boolean; path?: string; error?: string };
+    result: { ok: boolean; path?: string; error?: string; warnings?: string[] };
   };
   "project.getDefaultProjectDir": {
     params: {};

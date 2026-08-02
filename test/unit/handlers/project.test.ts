@@ -971,6 +971,65 @@ describe("project handler", () => {
         await rm(root, { recursive: true, force: true });
       }
     });
+
+    it("surfaces a warning when git init fails but the project directory was created", async () => {
+      const root = await mkdtemp(join(tmpdir(), "pi-quick-create-git-fail-"));
+      try {
+        const projectPath = join(root, "demo-app");
+        await mkdir(projectPath, { recursive: true });
+        mockCreateDirectory.mockResolvedValueOnce({ ok: true, path: projectPath });
+        mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+          const error = new Error("git init failed") as Error & {
+            stderr?: string;
+            code?: number | null;
+          };
+          error.stderr = "git is not installed";
+          error.code = 127;
+          callback(error);
+        });
+        const handler = server.handlers.get("project.confirmQuickCreate")!;
+
+        const result = (await handler({
+          parentDir: root,
+          folderName: "demo-app",
+          description: "A focused demo app.",
+          plan: null,
+        })) as { ok: boolean; path: string; warnings?: string[] };
+
+        expect(result.ok).toBe(true);
+        expect(result.path).toBe(projectPath);
+        expect(result.warnings).toEqual(
+          expect.arrayContaining([expect.stringMatching(/git init/i)]),
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("omits warnings when git init succeeds", async () => {
+      const root = await mkdtemp(join(tmpdir(), "pi-quick-create-git-ok-"));
+      try {
+        const projectPath = join(root, "demo-app");
+        await mkdir(projectPath, { recursive: true });
+        mockCreateDirectory.mockResolvedValueOnce({ ok: true, path: projectPath });
+        mockExecFile.mockImplementationOnce((_command, _args, _options, callback) => {
+          callback(null, { stdout: "Initialized empty Git repository", stderr: "" });
+        });
+        const handler = server.handlers.get("project.confirmQuickCreate")!;
+
+        const result = (await handler({
+          parentDir: root,
+          folderName: "demo-app",
+          description: "A focused demo app.",
+          plan: null,
+        })) as { ok: boolean; warnings?: string[] };
+
+        expect(result.ok).toBe(true);
+        expect(result.warnings).toBeUndefined();
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("project.syncTabs", () => {

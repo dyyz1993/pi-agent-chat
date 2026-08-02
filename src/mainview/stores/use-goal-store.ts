@@ -11,6 +11,8 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("goal");
 
+const MAX_SESSIONS = 100;
+
 const statusPromises = new Map<string, Promise<void>>();
 const taskReportPromises = new Map<string, Promise<void>>();
 const triggerHistoryPromises = new Map<string, Promise<void>>();
@@ -65,13 +67,44 @@ const emptySession = (): GoalSessionState => ({
   triggerRecords: [],
 });
 
+function pruneSessionCaches(sessionId: string): void {
+  loadedStatusSessions.delete(sessionId);
+  loadedTaskReportSessions.delete(sessionId);
+  statusPromises.delete(sessionId);
+  taskReportPromises.delete(sessionId);
+  for (const key of [...loadedTriggerHistoryKeys]) {
+    if (key.startsWith(`${sessionId}:`)) loadedTriggerHistoryKeys.delete(key);
+  }
+  for (const key of [...triggerHistoryPromises.keys()]) {
+    if (key.startsWith(`${sessionId}:`)) triggerHistoryPromises.delete(key);
+  }
+}
+
+function pruneBySession(
+  bySession: Record<string, GoalSessionState>,
+): Record<string, GoalSessionState> {
+  const keys = Object.keys(bySession);
+  if (keys.length <= MAX_SESSIONS) return bySession;
+
+  const excess = keys.length - MAX_SESSIONS;
+  const evicted = new Set(keys.slice(0, excess));
+  for (const sessionId of evicted) pruneSessionCaches(sessionId);
+
+  const next: Record<string, GoalSessionState> = {};
+  for (const key of keys) {
+    if (!evicted.has(key)) next[key] = bySession[key];
+  }
+  return next;
+}
+
 function updateSession(
   bySession: Record<string, GoalSessionState>,
   sessionId: string,
   updater: (session: GoalSessionState) => GoalSessionState,
 ): Record<string, GoalSessionState> {
   const session = bySession[sessionId] ?? emptySession();
-  return { ...bySession, [sessionId]: updater(session) };
+  const next = { ...bySession, [sessionId]: updater(session) };
+  return pruneBySession(next);
 }
 
 function mergeTriggerRecords(

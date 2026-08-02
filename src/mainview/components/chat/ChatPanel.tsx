@@ -77,6 +77,7 @@ import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalStore } from "../../stores/use-goal-store";
+import { bootstrapGoalSetupWithRetry } from "../../lib/goal-setup";
 import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
 import { FileOverlay } from "../file-preview/FileOverlay";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -979,7 +980,7 @@ export function ChatPanel() {
   const [isGoalDraftEditing, setIsGoalDraftEditing] = useState(false);
   const preGoalInputRef = useRef("");
   const preEditGoalDraftRef = useRef("");
-  const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
+  const abortFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showComposerUtilityRow = !isMobileOrTablet || goalMode || !!returnSourceTarget;
   const hasSendableContent = goalMode
     ? inputText.trim().length > 0 || goalDraft.trim().length > 0
@@ -1017,7 +1018,7 @@ export function ChatPanel() {
       setIsAborting(false);
       if (abortFallbackRef.current) {
         clearTimeout(abortFallbackRef.current);
-        abortFallbackRef.current = undefined;
+        abortFallbackRef.current = null;
       }
     }
   }, [isStreaming, isAborting]);
@@ -1038,7 +1039,7 @@ export function ChatPanel() {
         }
         pushNotif({ message: "Agent stopped", level: "info" });
         abortFallbackRef.current = setTimeout(() => {
-          abortFallbackRef.current = undefined;
+          abortFallbackRef.current = null;
           const sessionId = activeSessionId as string;
           const status = useSessionStore.getState().sessionStatusMap[sessionId];
           if (status === "streaming" || status === "retrying") {
@@ -1859,24 +1860,29 @@ export function ChatPanel() {
       // The goal channel is only available after the pi subprocess is
       // running. If the session is idle (no pi process), sendMessage first
       // to bootstrap the subprocess, then retry startSetup until the channel
-      // is ready (up to ~10s).
+      // is ready (up to ~5s).
       const needsBootstrap = effectiveStatus === "idle" || effectiveStatus === undefined;
       if (needsBootstrap) {
-        // Send the goal text as the bootstrap message — the agent will see
-        // it and start working. startSetup below registers it with goal-vendor.
         setInputText(objective);
         await sendMessage();
-        // Retry startSetup until the pi subprocess channel is ready.
-        // callChannel in process-manager already waits 1.6s internally,
-        // but the subprocess may need more time on first spawn.
-        for (let attempt = 0; attempt < 5; attempt++) {
-          await new Promise((r) => setTimeout(r, 1000));
-          const result = await startSetup(activeSessionId, objective);
-          if (result.started) break;
-          // Channel not ready yet, retry
+        const setupResult = await bootstrapGoalSetupWithRetry(activeSessionId, objective, {
+          startSetup,
+        });
+        if (!setupResult.started) {
+          pushNotif({
+            message: t("goal.startSetupFailed", {
+              defaultValue: `Goal 启动失败：${setupResult.error ?? "unknown"}`,
+              error: setupResult.error ?? "",
+            }),
+            level: "error",
+          });
+          log.warn("Goal startSetup did not become ready", {
+            sessionId: activeSessionId,
+            error: setupResult.error,
+          });
+          return;
         }
       } else {
-        // Session already active — start goal setup, then send message
         await startSetup(activeSessionId, objective);
         setInputText(objective);
         await sendMessage();
@@ -1901,9 +1907,12 @@ export function ChatPanel() {
     inputText,
     isCreatingGoal,
     isMobileOrTablet,
+    log,
+    pushNotif,
     resumeAutoScroll,
     sendMessage,
     startSetup,
+    t,
   ]);
 
   const handleRefineGoal = useCallback(async () => {
@@ -2429,10 +2438,10 @@ export function ChatPanel() {
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
                 bg-accent/15 text-accent hover:bg-accent/25 hover:text-accent
                 border border-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title={t("enterChat", "进入聊天")}
+                title={t("enterChat")}
               >
                 <GitFork className="w-3 h-3" />
-                {t("enterChat", "进入聊天")}
+                {t("enterChat")}
               </button>
             </div>
           )}

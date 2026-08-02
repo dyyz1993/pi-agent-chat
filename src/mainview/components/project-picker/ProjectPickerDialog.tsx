@@ -31,6 +31,7 @@ import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types"
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { useAsyncGuard } from "../../hooks/use-async-guard";
 import { IconButton } from "../primitives";
+import { useNotificationStore } from "../../stores/use-notification-store";
 import { useInitialQcTier, type QcTier } from "./use-initial-qc-tier";
 
 interface ProjectPickerDialogProps {
@@ -490,6 +491,10 @@ export function ProjectPickerDialog({
         if (!result.ok) {
           setQcCreateError((result.error as string) ?? t("picker.qc.createFailed"));
           return;
+        }
+        const pushNotif = useNotificationStore.getState().push;
+        for (const warning of (result.warnings as string[] | undefined) ?? []) {
+          pushNotif({ message: warning, level: "warning" });
         }
         const projectPath = result.path as string;
         await onSelect(projectPath, folderName, {
