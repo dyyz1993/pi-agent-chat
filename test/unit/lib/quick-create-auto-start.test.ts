@@ -55,8 +55,8 @@ describe("quick create auto start", () => {
         sendMessage,
         startSetup,
         addLog,
-        waitMs,
       },
+      { waitMs },
     );
 
     expect(result).toEqual({ sessionId: "session-1", goalStarted: true });
@@ -151,8 +151,8 @@ describe("quick create auto start", () => {
         submitContract,
         approveContract,
         addLog,
-        waitMs,
       },
+      { waitMs },
     );
 
     expect(result).toEqual({ sessionId: "session-1", goalStarted: true });
@@ -209,8 +209,8 @@ describe("quick create auto start", () => {
         fetchGoalStatus,
         approveContract,
         addLog,
-        waitMs,
       },
+      { waitMs },
     );
 
     expect(result).toEqual({ sessionId: "session-1", goalStarted: true });
@@ -248,8 +248,8 @@ describe("quick create auto start", () => {
         fetchGoalStatus,
         approveContract,
         addLog,
-        waitMs,
       },
+      { waitMs },
     );
 
     expect(result.goalStarted).toBe(false);
@@ -282,9 +282,8 @@ describe("quick create auto start", () => {
         fetchGoalStatus,
         approveContract,
         addLog,
-        waitMs,
-        signal: controller.signal,
       },
+      { waitMs, signal: controller.signal },
     );
 
     expect(result.goalStarted).toBe(false);
@@ -326,14 +325,53 @@ describe("quick create auto start", () => {
         fetchGoalStatus,
         approveContract,
         addLog,
-        waitMs,
-        signal: controller.signal,
       },
+      { waitMs, signal: controller.signal },
     );
 
     expect(result.goalStarted).toBe(false);
     expect(result.error).toMatch(/cancel/i);
     expect(fetchGoalStatus.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(approveContract).not.toHaveBeenCalled();
+  });
+
+  it("aborts between submitContract and approveContract on the startAgent path", async () => {
+    const createNewSession = vi.fn().mockResolvedValue({
+      sessionId: "session-1",
+      sessionPath: "/tmp/session.jsonl",
+    });
+    const startAgent = vi.fn().mockResolvedValue({ status: "started" });
+    const controller = new AbortController();
+    const submitContract = vi.fn().mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve({ submitted: true, goalId: "goal-1", status: "awaiting_approval" });
+    });
+    const approveContract = vi.fn();
+    const setInputText = vi.fn();
+    const sendMessage = vi.fn();
+    const startSetup = vi.fn();
+    const addLog = vi.fn();
+    const waitMs = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runQuickCreateAutoStart(
+      "/tmp/tetris-game",
+      "tetris-game",
+      { requirement: "做一个俄罗斯方块游戏", plan: null },
+      {
+        createNewSession,
+        startAgent,
+        setInputText,
+        sendMessage,
+        startSetup,
+        submitContract,
+        approveContract,
+        addLog,
+      },
+      { waitMs, signal: controller.signal },
+    );
+
+    expect(result.goalStarted).toBe(false);
+    expect(result.error).toMatch(/cancel/i);
     expect(approveContract).not.toHaveBeenCalled();
   });
 });

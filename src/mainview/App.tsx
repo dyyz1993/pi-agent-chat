@@ -50,6 +50,7 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const quickStartAbortRef = useRef<AbortController | null>(null);
+  const quickStartTabIdRef = useRef<string | null>(null);
   const handleDiagnosticToggle = useCallback((e: KeyboardEvent) => {
     if (e.ctrlKey && e.shiftKey && e.key === "D") {
       e.preventDefault();
@@ -68,6 +69,16 @@ function App() {
       quickStartAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const quickStartTabId = quickStartTabIdRef.current;
+    if (!quickStartTabId) return;
+    if (!projectTabs.some((tab) => tab.id === quickStartTabId)) {
+      quickStartAbortRef.current?.abort();
+      quickStartAbortRef.current = null;
+      quickStartTabIdRef.current = null;
+    }
+  }, [projectTabs]);
 
   const handleLogin = useCallback(() => {
     setLoginError(null);
@@ -178,6 +189,7 @@ function App() {
 
     if (options?.quickStart) {
       const controller = abortPreviousAndTrack(quickStartAbortRef);
+      quickStartTabIdRef.current = tabId;
       const notifStore = useNotificationStore.getState();
       const startNotifId = notifStore.push({
         message: tChat("quickCreate.started", { name }),
@@ -191,29 +203,34 @@ function App() {
         ],
       });
 
-      void runQuickCreateAutoStart(path, name, options.quickStart, {
-        signal: controller.signal,
-        createNewSession: (projectPath) =>
-          useSessionStore.getState().createNewSession(projectPath),
-        startAgent: (sessionId, projectPath, sessionPath) =>
-          apiClient.call("agent.start", {
-            sessionId,
-            projectPath,
-            sessionPath,
-          }) as Promise<{ status: "started" | "already_running" }>,
-        setInputText: (text) => useChatStore.getState().setInputText(text),
-        sendMessage: () => useChatStore.getState().sendMessage(),
-        startSetup: (sessionId, objective) =>
-          useGoalStore.getState().startSetup(sessionId, objective),
-        submitContract: (sessionId, contract) =>
-          useGoalStore.getState().submitContract(sessionId, contract),
-        fetchGoalStatus: async (sessionId) => {
-          await useGoalStore.getState().fetchStatus(sessionId, { force: true });
-          return useGoalStore.getState().bySession[sessionId]?.status ?? null;
+      void runQuickCreateAutoStart(
+        path,
+        name,
+        options.quickStart,
+        {
+          createNewSession: (projectPath) =>
+            useSessionStore.getState().createNewSession(projectPath),
+          startAgent: (sessionId, projectPath, sessionPath) =>
+            apiClient.call("agent.start", {
+              sessionId,
+              projectPath,
+              sessionPath,
+            }) as Promise<{ status: "started" | "already_running" }>,
+          setInputText: (text) => useChatStore.getState().setInputText(text),
+          sendMessage: () => useChatStore.getState().sendMessage(),
+          startSetup: (sessionId, objective) =>
+            useGoalStore.getState().startSetup(sessionId, objective),
+          submitContract: (sessionId, contract) =>
+            useGoalStore.getState().submitContract(sessionId, contract),
+          fetchGoalStatus: async (sessionId) => {
+            await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+            return useGoalStore.getState().bySession[sessionId]?.status ?? null;
+          },
+          approveContract: (sessionId) => useGoalStore.getState().approveContract(sessionId),
+          addLog,
         },
-        approveContract: (sessionId) => useGoalStore.getState().approveContract(sessionId),
-        addLog,
-      })
+        { signal: controller.signal },
+      )
         .then((result) => {
           if (startNotifId) notifStore.dismiss(startNotifId);
           if (result.goalStarted) {

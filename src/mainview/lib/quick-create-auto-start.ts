@@ -33,6 +33,9 @@ export interface QuickCreateAutoStartDeps {
   fetchGoalStatus?: (sessionId: string) => Promise<GoalVendorStatus | null>;
   approveContract?: (sessionId: string) => Promise<{ approved: boolean; error?: string }>;
   addLog?: (message: string) => void;
+}
+
+export interface QuickCreateAutoStartOptions {
   waitMs?: (ms: number) => Promise<void>;
   maxGoalSetupAttempts?: number;
   maxContractApprovalAttempts?: number;
@@ -217,12 +220,14 @@ export async function runQuickCreateAutoStart(
   projectName: string,
   quickStart: QuickCreateAutoStart,
   deps: QuickCreateAutoStartDeps,
+  options: QuickCreateAutoStartOptions = {},
 ): Promise<{ sessionId: string; goalStarted: boolean; error?: string }> {
   const objective = buildQuickCreateGoalObjective(projectName, quickStart);
-  const waitMs = deps.waitMs ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-  const maxGoalSetupAttempts = deps.maxGoalSetupAttempts ?? 5;
-  const maxContractApprovalAttempts = deps.maxContractApprovalAttempts ?? 30;
-  const signal = deps.signal;
+  const waitMs =
+    options.waitMs ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const maxGoalSetupAttempts = options.maxGoalSetupAttempts ?? 5;
+  const maxContractApprovalAttempts = options.maxContractApprovalAttempts ?? 30;
+  const signal = options.signal;
   const cancelled = "cancelled by user";
 
   const { sessionId, sessionPath } = await deps.createNewSession(projectPath);
@@ -238,6 +243,10 @@ export async function runQuickCreateAutoStart(
       await waitMs(1000);
       const submission = await deps.submitContract(sessionId, contract);
       if (submission.submitted) {
+        if (signal?.aborted) {
+          deps.addLog?.(`Quick create cancelled: ${projectName}`);
+          return { sessionId, goalStarted: false, error: cancelled };
+        }
         deps.addLog?.(`Quick create goal contract submitted: ${projectName}`);
         const approval = await deps.approveContract(sessionId);
         if (approval.approved) {
