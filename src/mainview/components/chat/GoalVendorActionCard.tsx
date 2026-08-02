@@ -106,7 +106,7 @@ export function GoalVendorActionCard({ sessionId, onEdit }: GoalVendorActionCard
   const tone = getTone(status);
   const Icon = tone.Icon;
   const isSpinning = status.state === "checking" || status.state === "setup";
-  const objective = status.objective.trim();
+  const objective = (status.objective ?? "").trim();
   const stateLabel = getStateLabel(t, status);
   const generationLabel = status.generation ? `#${status.generation}` : null;
   const pendingAuthority = status.interrupt?.pendingAuthorityAmendment;

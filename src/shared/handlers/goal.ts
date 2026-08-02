@@ -82,7 +82,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       { sessionId },
       "goal",
       "submitContract",
-      contract,
+      contract as unknown as Record<string, unknown>,
       CHANNEL_TIMEOUT_MS,
       { skipHasSessionCheck: true },
     );
