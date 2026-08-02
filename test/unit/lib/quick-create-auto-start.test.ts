@@ -218,4 +218,122 @@ describe("quick create auto start", () => {
     expect(approveContract).toHaveBeenCalledWith("session-1");
     expect(addLog).toHaveBeenCalledWith("Quick create goal contract approved: tetris-game");
   });
+
+  it("caps contract polling at 30 attempts when status never reaches awaiting_approval", async () => {
+    const createNewSession = vi.fn().mockResolvedValue({ sessionId: "session-1" });
+    const setInputText = vi.fn();
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const startSetup = vi.fn().mockResolvedValue({ started: true });
+    const fetchGoalStatus = vi.fn().mockResolvedValue({
+      state: "setup",
+      rawStatus: "setting_up",
+      rawPhase: "setup",
+      enabled: true,
+      continuationSequence: 0,
+      turnCount: 0,
+    });
+    const approveContract = vi.fn().mockResolvedValue({ approved: true });
+    const addLog = vi.fn();
+    const waitMs = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runQuickCreateAutoStart(
+      "/tmp/tetris-game",
+      "tetris-game",
+      { requirement: "做一个俄罗斯方块游戏", plan: null },
+      {
+        createNewSession,
+        setInputText,
+        sendMessage,
+        startSetup,
+        fetchGoalStatus,
+        approveContract,
+        addLog,
+        waitMs,
+      },
+    );
+
+    expect(result.goalStarted).toBe(false);
+    expect(result.error).toMatch(/did not become ready|not ready/i);
+    expect(fetchGoalStatus.mock.calls.length).toBeLessThanOrEqual(30);
+    expect(approveContract).not.toHaveBeenCalled();
+  });
+
+  it("aborts polling immediately when signal is already aborted", async () => {
+    const createNewSession = vi.fn().mockResolvedValue({ sessionId: "session-1" });
+    const setInputText = vi.fn();
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const startSetup = vi.fn().mockResolvedValue({ started: true });
+    const fetchGoalStatus = vi.fn();
+    const approveContract = vi.fn();
+    const addLog = vi.fn();
+    const waitMs = vi.fn().mockResolvedValue(undefined);
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await runQuickCreateAutoStart(
+      "/tmp/tetris-game",
+      "tetris-game",
+      { requirement: "做一个俄罗斯方块游戏", plan: null },
+      {
+        createNewSession,
+        setInputText,
+        sendMessage,
+        startSetup,
+        fetchGoalStatus,
+        approveContract,
+        addLog,
+        waitMs,
+        signal: controller.signal,
+      },
+    );
+
+    expect(result.goalStarted).toBe(false);
+    expect(result.error).toMatch(/cancel/i);
+    expect(fetchGoalStatus).not.toHaveBeenCalled();
+    expect(approveContract).not.toHaveBeenCalled();
+  });
+
+  it("aborts mid-polling when signal fires after a few attempts", async () => {
+    const createNewSession = vi.fn().mockResolvedValue({ sessionId: "session-1" });
+    const setInputText = vi.fn();
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const startSetup = vi.fn().mockResolvedValue({ started: true });
+    const controller = new AbortController();
+    const fetchGoalStatus = vi.fn().mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve({
+        state: "setup",
+        rawStatus: "setting_up",
+        rawPhase: "setup",
+        enabled: true,
+        continuationSequence: 0,
+        turnCount: 0,
+      });
+    });
+    const approveContract = vi.fn();
+    const addLog = vi.fn();
+    const waitMs = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runQuickCreateAutoStart(
+      "/tmp/tetris-game",
+      "tetris-game",
+      { requirement: "做一个俄罗斯方块游戏", plan: null },
+      {
+        createNewSession,
+        setInputText,
+        sendMessage,
+        startSetup,
+        fetchGoalStatus,
+        approveContract,
+        addLog,
+        waitMs,
+        signal: controller.signal,
+      },
+    );
+
+    expect(result.goalStarted).toBe(false);
+    expect(result.error).toMatch(/cancel/i);
+    expect(fetchGoalStatus.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(approveContract).not.toHaveBeenCalled();
+  });
 });

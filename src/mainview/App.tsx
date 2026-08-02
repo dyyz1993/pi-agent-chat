@@ -14,6 +14,7 @@ import {
   runQuickCreateAutoStart,
   type QuickCreateAutoStart,
 } from "./lib/quick-create-auto-start";
+import { abortPreviousAndTrack } from "./lib/quick-create-registry";
 import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
 import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDialog";
@@ -46,6 +47,7 @@ function App() {
   const [hasToken, setHasToken] = useState(() => !!resolveAuthToken());
   const [loginError, setLoginError] = useState<string | null>(null);
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quickStartAbortRef = useRef<AbortController | null>(null);
   const handleDiagnosticToggle = useCallback((e: KeyboardEvent) => {
     if (e.ctrlKey && e.shiftKey && e.key === "D") {
       e.preventDefault();
@@ -61,6 +63,7 @@ function App() {
   useEffect(() => {
     return () => {
       if (loginTimerRef.current) clearTimeout(loginTimerRef.current);
+      quickStartAbortRef.current?.abort();
     };
   }, []);
 
@@ -172,7 +175,9 @@ function App() {
     setProjectLoading(false);
 
     if (options?.quickStart) {
+      const controller = abortPreviousAndTrack(quickStartAbortRef);
       void runQuickCreateAutoStart(path, name, options.quickStart, {
+        signal: controller.signal,
         createNewSession: (projectPath) =>
           useSessionStore.getState().createNewSession(projectPath),
         startAgent: (sessionId, projectPath, sessionPath) =>

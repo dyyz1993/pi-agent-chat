@@ -36,6 +36,7 @@ export interface QuickCreateAutoStartDeps {
   waitMs?: (ms: number) => Promise<void>;
   maxGoalSetupAttempts?: number;
   maxContractApprovalAttempts?: number;
+  signal?: AbortSignal;
 }
 
 function buildNumberedList(items: string[]): string[] {
@@ -219,7 +220,9 @@ export async function runQuickCreateAutoStart(
   const objective = buildQuickCreateGoalObjective(projectName, quickStart);
   const waitMs = deps.waitMs ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const maxGoalSetupAttempts = deps.maxGoalSetupAttempts ?? 5;
-  const maxContractApprovalAttempts = deps.maxContractApprovalAttempts ?? 120;
+  const maxContractApprovalAttempts = deps.maxContractApprovalAttempts ?? 30;
+  const signal = deps.signal;
+  const cancelled = "cancelled by user";
 
   const { sessionId, sessionPath } = await deps.createNewSession(projectPath);
   if (deps.startAgent && deps.submitContract && deps.approveContract && sessionPath) {
@@ -227,6 +230,10 @@ export async function runQuickCreateAutoStart(
     const contract = buildQuickCreateGoalContract(projectPath, projectName, quickStart);
     let lastSubmitError: string | undefined;
     for (let attempt = 0; attempt < maxGoalSetupAttempts; attempt++) {
+      if (signal?.aborted) {
+        deps.addLog?.(`Quick create cancelled: ${projectName}`);
+        return { sessionId, goalStarted: false, error: cancelled };
+      }
       await waitMs(1000);
       const submission = await deps.submitContract(sessionId, contract);
       if (submission.submitted) {
@@ -253,12 +260,23 @@ export async function runQuickCreateAutoStart(
 
   let lastError: string | undefined;
   for (let attempt = 0; attempt < maxGoalSetupAttempts; attempt++) {
+    if (signal?.aborted) {
+      deps.addLog?.(`Quick create cancelled: ${projectName}`);
+      return { sessionId, goalStarted: false, error: cancelled };
+    }
     await waitMs(1000);
     const result = await deps.startSetup(sessionId, objective);
     if (result.started) {
       deps.addLog?.(`Quick create goal started: ${projectName}`);
       if (deps.fetchGoalStatus && deps.approveContract) {
-        for (let approvalAttempt = 0; approvalAttempt < maxContractApprovalAttempts; approvalAttempt++) {
+        if (signal?.aborted) {
+          return { sessionId, goalStarted: false, error: cancelled };
+        }
+        for (
+          let approvalAttempt = 0;
+          approvalAttempt < maxContractApprovalAttempts;
+          approvalAttempt++
+        ) {
           const status = await deps.fetchGoalStatus(sessionId);
           if (status?.rawStatus === "awaiting_approval") {
             const approval = await deps.approveContract(sessionId);
@@ -280,6 +298,10 @@ export async function runQuickCreateAutoStart(
             status?.rawStatus === "approved"
           ) {
             return { sessionId, goalStarted: true };
+          }
+          if (signal?.aborted) {
+            deps.addLog?.(`Quick create cancelled: ${projectName}`);
+            return { sessionId, goalStarted: false, error: cancelled };
           }
           await waitMs(1000);
         }
