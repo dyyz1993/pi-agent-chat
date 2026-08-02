@@ -820,6 +820,7 @@ describe("createNewSession", () => {
     expect(result).toEqual({
       status: "created",
       sessionId: "new-sess",
+      sessionPath: "/sessions/new-sess",
       projectPath: "/project-a",
     });
   });
@@ -870,6 +871,7 @@ describe("createNewSession", () => {
     expect(result).toEqual({
       status: "created",
       sessionId: "new-worktree-sess",
+      sessionPath: "/sessions/new-worktree-sess",
       projectPath: "/worktree-a",
     });
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toBeUndefined();
@@ -919,6 +921,7 @@ describe("createNewSession", () => {
     expect(result).toEqual({
       status: "reused",
       sessionId: "blank-1",
+      sessionPath: "/sessions/blank-1",
       projectPath: "/project-a",
     });
   });
