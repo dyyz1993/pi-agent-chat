@@ -187,8 +187,10 @@ function getPiCliFailureMessage(params: {
   limit?: number;
 }): string {
   const filtered = stripBenignPiCliStderr(params.stderr);
-  const message = filtered || params.fallback?.trim() || "pi CLI error";
-  return message.slice(0, params.limit ?? 300);
+  const fallback = params.fallback?.trim() ?? "";
+  const message = filtered || fallback;
+  const finalMessage = message.length > 0 ? message : "pi CLI error";
+  return finalMessage.slice(0, params.limit ?? 300);
 }
 
 function shellQuote(value: string): string {

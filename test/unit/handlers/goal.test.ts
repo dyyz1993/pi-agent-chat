@@ -294,44 +294,37 @@ describe("goal handler", () => {
     });
   });
 
-  describe("refineGoal — direct pm.callChannel path", () => {
+  describe("refineGoal — channel forwarding path", () => {
     it("returns channel result on success", async () => {
-      const callChannel = vi.fn().mockResolvedValue({
+      channelMocks.forwardToChannel.mockResolvedValueOnce({
         success: true,
         objective: "new obj",
       });
-      channelMocks.getProcessManager.mockReturnValue({ callChannel });
 
       const result = await callHandler(server, "goal.refineGoal", {
         sessionId: "sess-1",
         objective: "new obj",
       });
-      expect(callChannel).toHaveBeenCalledWith("sess-1", "goal", "refineGoal", {
-        objective: "new obj",
-      });
+      expect(channelMocks.forwardToChannel).toHaveBeenCalledWith(
+        { sessionId: "sess-1" },
+        "goal",
+        "refineGoal",
+        { objective: "new obj" },
+        expect.any(Number),
+        { skipHasSessionCheck: true },
+      );
       expect(result).toEqual({ success: true, objective: "new obj" });
     });
 
-    it("returns error result when callChannel throws", async () => {
-      const callChannel = vi.fn().mockRejectedValue(new Error("channel down"));
-      channelMocks.getProcessManager.mockReturnValue({ callChannel });
+    it("returns error result when channel returns null", async () => {
+      channelMocks.forwardToChannel.mockResolvedValueOnce(null);
 
       const result = await callHandler(server, "goal.refineGoal", {
         sessionId: "sess-1",
         objective: "x",
       });
       expect(result).toMatchObject({ success: false });
-      expect((result as { error: string }).error).toContain("channel down");
-    });
-
-    it("returns error when process manager is unavailable", async () => {
-      channelMocks.getProcessManager.mockReturnValue(null);
-
-      const result = await callHandler(server, "goal.refineGoal", {
-        sessionId: "sess-1",
-        objective: "x",
-      });
-      expect(result).toMatchObject({ success: false });
+      expect((result as { error: string }).error).toMatch(/channel call failed/i);
     });
   });
 });

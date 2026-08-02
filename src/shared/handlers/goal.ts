@@ -82,7 +82,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       { sessionId },
       "goal",
       "submitContract",
-      contract as unknown as Record<string, unknown>,
+      contract,
       CHANNEL_TIMEOUT_MS,
       { skipHasSessionCheck: true },
     );
@@ -216,15 +216,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("goal.refineGoal", async (params) => {
     const { sessionId, objective } = params as { sessionId: string; objective: string };
-    const pm = getProcessManager();
-    if (!pm) return { success: false, error: "No process manager" };
-    try {
-      const result = await pm.callChannel(sessionId, "goal", "refineGoal", { objective });
-      return result as { success: boolean; objective?: string; error?: string };
-    } catch (error) {
-      log.warn("goal.refineGoal channel call failed", { sessionId, error });
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    const result = await forwardToChannel<{ success: boolean; objective?: string; error?: string }>(
+      { sessionId },
+      "goal",
+      "refineGoal",
+      { objective },
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) {
+      log.warn("goal.refineGoal channel call failed", { sessionId });
+      return { success: false, error: "Channel call failed" };
     }
+    return result;
   });
 
   r("goal.checkToolStatus", async (params) => {

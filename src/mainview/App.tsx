@@ -31,6 +31,7 @@ import type { ProjectTab, RecentProject } from "./types";
 
 function App() {
   const { t } = useTranslation("common");
+  const { t: tChat } = useTranslation("chat");
   const log = createLogger("chat");
   const initError = useAppStore((s) => s.initError);
   const ready = useAppStore((s) => s.ready);
@@ -179,12 +180,12 @@ function App() {
       const controller = abortPreviousAndTrack(quickStartAbortRef);
       const notifStore = useNotificationStore.getState();
       const startNotifId = notifStore.push({
-        message: t("quickCreate.started", { name, defaultValue: `Quick create started: ${name}` }),
+        message: tChat("quickCreate.started", { name }),
         level: "warning",
         actions: [
           {
             id: "cancel",
-            label: t("quickCreate.cancel", { defaultValue: "Cancel" }),
+            label: t("cancel"),
             onClick: () => controller.abort(),
           },
         ],
@@ -217,27 +218,17 @@ function App() {
           if (startNotifId) notifStore.dismiss(startNotifId);
           if (result.goalStarted) {
             notifStore.push({
-              message: t("quickCreate.completed", {
-                name,
-                defaultValue: `Quick create completed: ${name}`,
-              }),
+              message: tChat("quickCreate.completed", { name }),
               level: "info",
             });
           } else if (/cancel/i.test(result.error ?? "")) {
             notifStore.push({
-              message: t("quickCreate.cancelled", {
-                name,
-                defaultValue: `Quick create cancelled: ${name}`,
-              }),
+              message: tChat("quickCreate.cancelled", { name }),
               level: "info",
             });
           } else {
             notifStore.push({
-              message: t("quickCreate.failed", {
-                name,
-                error: result.error ?? "",
-                defaultValue: `Quick create failed: ${result.error ?? "unknown error"}`,
-              }),
+              message: tChat("quickCreate.failed", { error: result.error ?? "" }),
               level: "warning",
             });
           }
@@ -248,11 +239,7 @@ function App() {
           addLog(`Quick create auto-start failed: ${message}`);
           log.warn("Quick create auto-start failed", { projectPath: path, error: message });
           notifStore.push({
-            message: t("quickCreate.failed", {
-              name,
-              error: message,
-              defaultValue: `Quick create failed: ${message}`,
-            }),
+            message: tChat("quickCreate.failed", { error: message }),
             level: "error",
           });
         });

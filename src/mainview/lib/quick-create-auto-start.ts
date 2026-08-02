@@ -49,7 +49,8 @@ export function buildQuickCreateGoalObjective(
 ): string {
   const requirement = quickStart.requirement.trim();
   const plan = quickStart.plan ?? null;
-  const goal = plan?.goal?.trim() || requirement;
+  const trimmedGoal = plan?.goal?.trim() ?? "";
+  const goal = trimmedGoal.length > 0 ? trimmedGoal : requirement;
 
   const lines = [
     "请直接开始完成这个快速创建项目，不需要再次询问我是否确认目标。",
@@ -243,13 +244,13 @@ export async function runQuickCreateAutoStart(
           deps.addLog?.(`Quick create goal contract approved: ${projectName}`);
           return { sessionId, goalStarted: true };
         }
-        const error = approval.error || "goal.approveContract failed";
+        const error = approval.error ?? "goal.approveContract failed";
         deps.addLog?.(`Quick create goal contract auto-approval failed: ${error}`);
         return { sessionId, goalStarted: false, error };
       }
       lastSubmitError = submission.error;
     }
-    const error = lastSubmitError || "goal.submitContract did not become ready";
+    const error = lastSubmitError ?? "goal.submitContract did not become ready";
     deps.addLog?.(`Quick create project opened, but goal contract did not submit: ${error}`);
     return { sessionId, goalStarted: false, error };
   }
@@ -284,7 +285,7 @@ export async function runQuickCreateAutoStart(
               deps.addLog?.(`Quick create goal contract approved: ${projectName}`);
               return { sessionId, goalStarted: true };
             }
-            const error = approval.error || "goal.approveContract failed";
+            const error = approval.error ?? "goal.approveContract failed";
             deps.addLog?.(`Quick create goal contract auto-approval failed: ${error}`);
             return {
               sessionId,
@@ -318,7 +319,7 @@ export async function runQuickCreateAutoStart(
     lastError = result.error;
   }
 
-  const error = lastError || "goal.startSetup did not become ready";
+  const error = lastError ?? "goal.startSetup did not become ready";
   deps.addLog?.(`Quick create project opened, but goal setup did not start: ${error}`);
   return { sessionId, goalStarted: false, error };
 }

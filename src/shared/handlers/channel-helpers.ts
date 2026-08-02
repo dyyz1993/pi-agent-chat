@@ -23,7 +23,7 @@ export async function forwardToChannel<TResult = unknown>(
   params: { sessionId?: string } & Record<string, unknown>,
   channelName: string,
   methodName: string,
-  payload: Record<string, unknown>,
+  payload: object,
   timeoutMs: number = DEFAULT_CHANNEL_TIMEOUT_MS,
   options: { skipHasSessionCheck?: boolean } = {},
 ): Promise<TResult | null> {
@@ -33,7 +33,7 @@ export async function forwardToChannel<TResult = unknown>(
   if (!options.skipHasSessionCheck && !manager.hasSession(sid)) return null;
   try {
     return (await withTimeout(
-      manager.callChannel(sid, channelName, methodName, payload),
+      manager.callChannel(sid, channelName, methodName, payload as Record<string, unknown>),
       timeoutMs,
     )) as TResult;
   } catch {

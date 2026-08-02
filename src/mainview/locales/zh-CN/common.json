@@ -152,10 +152,5 @@
   "welcome.remoteSelectDirectory": "选择此目录",
   "welcome.remoteOpening": "正在打开...",
   "welcome.remoteOpeningTitle": "正在打开远程项目",
-  "welcome.remoteOpeningHint": "正在创建本地映射并启动远端运行时，成功后会自动关闭。",
-  "quickCreate.started": "快速创建已启动：{{name}}",
-  "quickCreate.cancel": "取消",
-  "quickCreate.completed": "快速创建完成：{{name}}",
-  "quickCreate.cancelled": "快速创建已取消：{{name}}",
-  "quickCreate.failed": "快速创建失败：{{error}}"
+  "welcome.remoteOpeningHint": "正在创建本地映射并启动远端运行时，成功后会自动关闭。"
 }
