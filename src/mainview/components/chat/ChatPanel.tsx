@@ -74,6 +74,7 @@ import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalMode } from "./use-goal-mode";
 import { useGoalStore } from "../../stores/use-goal-store";
+import { CardPrimitive } from "../primitives/CardPrimitive";
 import { useMessageActions } from "./use-message-actions";
 import { useAttachmentDrop } from "./use-attachment-drop";
 import { useSendMessage } from "./use-send-message";
@@ -407,9 +408,10 @@ export function GoalDraftCard({
 }) {
   const { t } = useTranslation("chat");
   return (
-    <div
+    <CardPrimitive
+      tone="accent"
       data-testid="goal-draft-card"
-      className="mx-2 mt-2 overflow-hidden rounded-lg border border-accent/25 bg-accent/5 max-sm:mx-0 max-sm:rounded-none"
+      className="mx-2 mt-2 overflow-hidden max-sm:mx-0 max-sm:rounded-none"
     >
       <div className="flex items-center gap-2 border-b border-accent/15 px-3 py-2 max-sm:px-2">
         <button
@@ -506,7 +508,7 @@ export function GoalDraftCard({
           </>
         )}
       </div>
-    </div>
+    </CardPrimitive>
   );
 }
 
@@ -1810,9 +1812,10 @@ export function ChatPanel() {
                       />
                     )}
                     {activeRemoteDisconnected && (
-                      <div
+                      <CardPrimitive
+                        tone="error"
                         data-testid="composer-remote-disconnected"
-                        className="mx-2 mt-2 flex items-start gap-2 rounded-lg border border-status-error/35 bg-status-error/10 px-2.5 py-2 text-[11px] leading-4 text-status-error"
+                        className="mx-2 mt-2 flex items-start gap-2 px-2.5 py-2 text-[11px] leading-4 text-status-error"
                       >
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         <div className="min-w-0">
@@ -1821,7 +1824,7 @@ export function ChatPanel() {
                             {remoteDisconnectedMessage}
                           </div>
                         </div>
-                      </div>
+                      </CardPrimitive>
                     )}
                     <InputBar
                       ref={inputBarRef}

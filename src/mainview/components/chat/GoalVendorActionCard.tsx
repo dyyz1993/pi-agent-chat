@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { GoalVendorStatus, GoalVendorTaskItem } from "../../../shared/modules/goal";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useGoalStore } from "../../stores/use-goal-store";
+import { CardPrimitive, type CardTone } from "../primitives/CardPrimitive";
 
 interface GoalVendorActionCardProps {
   sessionId: string | null;
@@ -36,55 +37,24 @@ function getStateLabel(t: (key: string) => string, status: GoalVendorStatus): st
 }
 
 function getTone(status: GoalVendorStatus): {
-  border: string;
-  bg: string;
+  tone: CardTone;
   icon: string;
   text: string;
   Icon: typeof Target;
 } {
   if (status.interrupt?.pendingAuthorityAmendment) {
-    return {
-      border: "border-status-warning/35",
-      bg: "bg-status-warning/10",
-      icon: "text-status-warning",
-      text: "text-status-warning",
-      Icon: AlertTriangle,
-    };
+    return { tone: "warning", icon: "text-status-warning", text: "text-status-warning", Icon: AlertTriangle };
   }
   if (status.state === "blocked" || status.rawStatus === "interrupted") {
-    return {
-      border: "border-status-error/35",
-      bg: "bg-status-error/10",
-      icon: "text-status-error",
-      text: "text-status-error",
-      Icon: AlertTriangle,
-    };
+    return { tone: "error", icon: "text-status-error", text: "text-status-error", Icon: AlertTriangle };
   }
   if (status.rawStatus === "completed") {
-    return {
-      border: "border-status-success/35",
-      bg: "bg-status-success/10",
-      icon: "text-status-success",
-      text: "text-status-success",
-      Icon: CheckCircle2,
-    };
+    return { tone: "success", icon: "text-status-success", text: "text-status-success", Icon: CheckCircle2 };
   }
   if (status.state === "checking" || status.state === "setup" || status.rawStatus === "awaiting_approval") {
-    return {
-      border: "border-status-warning/35",
-      bg: "bg-status-warning/10",
-      icon: "text-status-warning",
-      text: "text-status-warning",
-      Icon: Loader2,
-    };
+    return { tone: "warning", icon: "text-status-warning", text: "text-status-warning", Icon: Loader2 };
   }
-  return {
-    border: "border-accent/30",
-    bg: "bg-accent/10",
-    icon: "text-accent",
-    text: "text-accent",
-    Icon: Target,
-  };
+  return { tone: "accent", icon: "text-accent", text: "text-accent", Icon: Target };
 }
 
 function summarizeTasks(tasks: GoalVendorTaskItem[]) {
@@ -128,9 +98,10 @@ export function GoalVendorActionCard({ sessionId, onEdit, onCancel }: GoalVendor
   };
 
   return (
-    <section
+    <CardPrimitive
+      tone={tone.tone}
       data-testid="goal-vendor-action-card"
-      className={`mx-2 mb-2 rounded-lg border ${tone.border} ${tone.bg} px-2.5 py-2 shadow-sm transition-colors hover:bg-surface-hover/70 sm:mx-0`}
+      className="mx-2 mb-2 px-2.5 py-2 transition-colors hover:bg-surface-hover/70 sm:mx-0"
       aria-label={t("goal.activeCardLabel")}
     >
       <div className="flex min-w-0 items-start gap-2">
@@ -208,6 +179,6 @@ export function GoalVendorActionCard({ sessionId, onEdit, onCancel }: GoalVendor
           )}
         </div>
       </div>
-    </section>
+    </CardPrimitive>
   );
 }
