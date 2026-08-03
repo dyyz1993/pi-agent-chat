@@ -29,18 +29,27 @@ export interface GoalSessionState {
 interface GoalStoreState {
   bySession: Record<string, GoalSessionState>;
 
-  fetchStatus: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
+  fetchStatus: (
+    sessionId: string,
+    options?: { force?: boolean; signal?: AbortSignal },
+  ) => Promise<void>;
   startSetup: (
     sessionId: string,
     objective: string,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ started: boolean; goalId?: string; error?: string }>;
   submitContract: (
     sessionId: string,
     contract: GoalDraftContract,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ submitted: boolean; goalId?: string; status?: string; error?: string }>;
-  approveContract: (sessionId: string) => Promise<{ approved: boolean; error?: string }>;
+  approveContract: (
+    sessionId: string,
+    options?: { signal?: AbortSignal },
+  ) => Promise<{ approved: boolean; error?: string }>;
   approveAuthorityAmendment: (
     sessionId: string,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ approved: boolean; count?: number; error?: string }>;
   rejectContract: (sessionId: string, reason?: string) => Promise<{ rejected: boolean }>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
@@ -130,11 +139,14 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
       await statusPromises.get(sessionId);
       return;
     }
+    const signal = options?.signal;
     const promise = (async () => {
       try {
-        const status = (await apiClient.call("goal.getStatus", {
-          sessionId,
-        })) as GoalVendorStatus;
+        const status = (await apiClient.call(
+          "goal.getStatus",
+          { sessionId },
+          signal ? { signal } : undefined,
+        )) as GoalVendorStatus;
         set((state) => ({
           bySession: updateSession(state.bySession, sessionId, (s) => ({ ...s, status })),
         }));
@@ -148,15 +160,17 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     statusPromises.delete(sessionId);
   },
 
-  startSetup: async (sessionId, objective) => {
+  startSetup: async (sessionId, objective, options) => {
+    const signal = options?.signal;
     try {
-      const result = (await apiClient.call("goal.startSetup", {
-        sessionId,
-        objective,
-      })) as { started: boolean; goalId?: string; error?: string };
+      const result = (await apiClient.call(
+        "goal.startSetup",
+        { sessionId, objective },
+        signal ? { signal } : undefined,
+      )) as { started: boolean; goalId?: string; error?: string };
       if (result.started) {
         loadedStatusSessions.delete(sessionId);
-        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true, signal });
       }
       return result;
     } catch (error) {
@@ -165,15 +179,17 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     }
   },
 
-  submitContract: async (sessionId, contract) => {
+  submitContract: async (sessionId, contract, options) => {
+    const signal = options?.signal;
     try {
-      const result = (await apiClient.call("goal.submitContract", {
-        sessionId,
-        contract,
-      })) as { submitted: boolean; goalId?: string; status?: string; error?: string };
+      const result = (await apiClient.call(
+        "goal.submitContract",
+        { sessionId, contract },
+        signal ? { signal } : undefined,
+      )) as { submitted: boolean; goalId?: string; status?: string; error?: string };
       if (result.submitted) {
         loadedStatusSessions.delete(sessionId);
-        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true, signal });
       }
       return result;
     } catch (error) {
@@ -182,14 +198,17 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     }
   },
 
-  approveContract: async (sessionId) => {
+  approveContract: async (sessionId, options) => {
+    const signal = options?.signal;
     try {
-      const result = (await apiClient.call("goal.approveContract", {
-        sessionId,
-      })) as { approved: boolean; error?: string };
+      const result = (await apiClient.call(
+        "goal.approveContract",
+        { sessionId },
+        signal ? { signal } : undefined,
+      )) as { approved: boolean; error?: string };
       if (result.approved) {
         loadedStatusSessions.delete(sessionId);
-        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true, signal });
       }
       return result;
     } catch (error) {
@@ -198,15 +217,18 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     }
   },
 
-  approveAuthorityAmendment: async (sessionId) => {
+  approveAuthorityAmendment: async (sessionId, options) => {
+    const signal = options?.signal;
     try {
-      const result = (await apiClient.call("goal.approveAuthorityAmendment", {
-        sessionId,
-      })) as { approved: boolean; count?: number; error?: string };
+      const result = (await apiClient.call(
+        "goal.approveAuthorityAmendment",
+        { sessionId },
+        signal ? { signal } : undefined,
+      )) as { approved: boolean; count?: number; error?: string };
       if (result.approved) {
         loadedStatusSessions.delete(sessionId);
         loadedTaskReportSessions.delete(sessionId);
-        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true, signal });
       }
       return result;
     } catch (error) {

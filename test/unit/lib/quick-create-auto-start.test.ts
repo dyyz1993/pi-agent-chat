@@ -71,6 +71,7 @@ describe("quick create auto start", () => {
     expect(startSetup).toHaveBeenLastCalledWith(
       "session-1",
       expect.stringContaining("做一个俄罗斯方块游戏"),
+      expect.anything(),
     );
     expect(addLog).toHaveBeenCalledWith("Quick create goal started: tetris-game");
   });
@@ -160,8 +161,9 @@ describe("quick create auto start", () => {
     expect(submitContract).toHaveBeenCalledWith(
       "session-1",
       expect.objectContaining({ outcome: expect.stringContaining("做一个俄罗斯方块游戏") }),
+      expect.anything(),
     );
-    expect(approveContract).toHaveBeenCalledWith("session-1");
+    expect(approveContract).toHaveBeenCalledWith("session-1", expect.anything());
     expect(sendMessage).not.toHaveBeenCalled();
     expect(startSetup).not.toHaveBeenCalled();
     expect(setInputText).not.toHaveBeenCalled();
@@ -215,7 +217,7 @@ describe("quick create auto start", () => {
 
     expect(result).toEqual({ sessionId: "session-1", goalStarted: true });
     expect(fetchGoalStatus).toHaveBeenCalledTimes(2);
-    expect(approveContract).toHaveBeenCalledWith("session-1");
+    expect(approveContract).toHaveBeenCalledWith("session-1", expect.anything());
     expect(addLog).toHaveBeenCalledWith("Quick create goal contract approved: tetris-game");
   });
 

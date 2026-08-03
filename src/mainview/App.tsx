@@ -218,15 +218,19 @@ function App() {
             }) as Promise<{ status: "started" | "already_running" }>,
           setInputText: (text) => useChatStore.getState().setInputText(text),
           sendMessage: () => useChatStore.getState().sendMessage(),
-          startSetup: (sessionId, objective) =>
-            useGoalStore.getState().startSetup(sessionId, objective),
-          submitContract: (sessionId, contract) =>
-            useGoalStore.getState().submitContract(sessionId, contract),
-          fetchGoalStatus: async (sessionId) => {
-            await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+          startSetup: (sessionId, objective, options) =>
+            useGoalStore.getState().startSetup(sessionId, objective, options),
+          submitContract: (sessionId, contract, options) =>
+            useGoalStore.getState().submitContract(sessionId, contract, options),
+          fetchGoalStatus: async (sessionId, options) => {
+            await useGoalStore.getState().fetchStatus(sessionId, {
+              force: true,
+              signal: options?.signal,
+            });
             return useGoalStore.getState().bySession[sessionId]?.status ?? null;
           },
-          approveContract: (sessionId) => useGoalStore.getState().approveContract(sessionId),
+          approveContract: (sessionId, options) =>
+            useGoalStore.getState().approveContract(sessionId, options),
           addLog,
         },
         { signal: controller.signal },

@@ -25,13 +25,21 @@ export interface QuickCreateAutoStartDeps {
   startSetup: (
     sessionId: string,
     objective: string,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ started: boolean; error?: string }>;
   submitContract?: (
     sessionId: string,
     contract: GoalDraftContract,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ submitted: boolean; goalId?: string; status?: string; error?: string }>;
-  fetchGoalStatus?: (sessionId: string) => Promise<GoalVendorStatus | null>;
-  approveContract?: (sessionId: string) => Promise<{ approved: boolean; error?: string }>;
+  fetchGoalStatus?: (
+    sessionId: string,
+    options?: { signal?: AbortSignal },
+  ) => Promise<GoalVendorStatus | null>;
+  approveContract?: (
+    sessionId: string,
+    options?: { signal?: AbortSignal },
+  ) => Promise<{ approved: boolean; error?: string }>;
   addLog?: (message: string) => void;
 }
 
@@ -241,14 +249,14 @@ export async function runQuickCreateAutoStart(
         return { sessionId, goalStarted: false, error: cancelled };
       }
       await waitMs(1000);
-      const submission = await deps.submitContract(sessionId, contract);
+      const submission = await deps.submitContract(sessionId, contract, { signal });
       if (submission.submitted) {
         if (signal?.aborted) {
           deps.addLog?.(`Quick create cancelled: ${projectName}`);
           return { sessionId, goalStarted: false, error: cancelled };
         }
         deps.addLog?.(`Quick create goal contract submitted: ${projectName}`);
-        const approval = await deps.approveContract(sessionId);
+        const approval = await deps.approveContract(sessionId, { signal });
         if (approval.approved) {
           deps.addLog?.(`Quick create goal contract approved: ${projectName}`);
           return { sessionId, goalStarted: true };
@@ -275,7 +283,7 @@ export async function runQuickCreateAutoStart(
       return { sessionId, goalStarted: false, error: cancelled };
     }
     await waitMs(1000);
-    const result = await deps.startSetup(sessionId, objective);
+    const result = await deps.startSetup(sessionId, objective, { signal });
     if (result.started) {
       deps.addLog?.(`Quick create goal started: ${projectName}`);
       if (deps.fetchGoalStatus && deps.approveContract) {
@@ -287,9 +295,9 @@ export async function runQuickCreateAutoStart(
           approvalAttempt < maxContractApprovalAttempts;
           approvalAttempt++
         ) {
-          const status = await deps.fetchGoalStatus(sessionId);
+          const status = await deps.fetchGoalStatus(sessionId, { signal });
           if (status?.rawStatus === "awaiting_approval") {
-            const approval = await deps.approveContract(sessionId);
+            const approval = await deps.approveContract(sessionId, { signal });
             if (approval.approved) {
               deps.addLog?.(`Quick create goal contract approved: ${projectName}`);
               return { sessionId, goalStarted: true };
