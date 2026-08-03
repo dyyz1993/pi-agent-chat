@@ -2,7 +2,7 @@ import { getProcessManager } from "./agent";
 import { withTimeout } from "../lib/with-timeout";
 
 /** Default timeout for channel forwarding calls (ms). */
-export const DEFAULT_CHANNEL_TIMEOUT_MS = 1_000;
+const DEFAULT_CHANNEL_TIMEOUT_MS = 1_000;
 
 /**
  * Forward a request to a CLI channel via the process manager.
