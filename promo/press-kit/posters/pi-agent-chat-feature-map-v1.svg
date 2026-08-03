@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="72" y1="0" x2="1000" y2="1920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B111B"/>
+      <stop offset="1" stop-color="#101B2A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="74" y1="220" x2="976" y2="610" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35E0B4"/>
+      <stop offset="1" stop-color="#58A6FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.24"/>
+    </filter>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Arial, sans-serif; }
+      .mono { font-family: "SFMono-Regular", Consolas, monospace; }
+      .white { fill: #F5FAFA; }
+      .muted { fill: #9BAEAC; }
+      .green { fill: #35E0B4; }
+      .blue { fill: #58A6FF; }
+      .yellow { fill: #F6C85F; }
+      .red { fill: #FF7C86; }
+      .panel { fill: #142333; stroke: #29413F; stroke-width: 2; }
+      .small { font-size: 22px; }
+      .label { font-size: 25px; font-weight: 700; letter-spacing: 1px; }
+      .body { font-size: 24px; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <circle cx="958" cy="116" r="260" fill="#172A39"/>
+  <circle cx="84" cy="1780" r="300" fill="#122E34"/>
+
+  <!-- Brand -->
+  <rect x="72" y="72" width="78" height="78" rx="21" fill="#0E1718" stroke="#35E0B4" stroke-width="3"/>
+  <path d="M91 99h40M111 99v32M95 123c0 12 8 19 17 19 11 0 19-8 19-19" stroke="#F5FAFA" stroke-width="7" stroke-linecap="round"/>
+  <path d="M87 137c27-5 43-24 57-42" stroke="#35E0B4" stroke-width="7" stroke-linecap="round"/>
+  <text x="174" y="122" class="sans white" font-size="38" font-weight="700">Pi Agent Chat</text>
+  <text x="72" y="218" class="sans green" font-size="22" font-weight="700" letter-spacing="3">AGENT WORKFLOW · HUMAN CONTROL</text>
+
+  <!-- Headline -->
+  <text x="72" y="310" class="sans white" font-size="70" font-weight="800">不是只会聊天的</text>
+  <text x="72" y="390" class="sans white" font-size="70" font-weight="800">AI 编程 Agent。</text>
+  <rect x="72" y="430" width="936" height="4" rx="2" fill="url(#accent)"/>
+  <text x="72" y="490" class="sans muted" font-size="30">把执行过程变成可审批、可审查、可回滚的工作区。</text>
+
+  <!-- Workflow strip -->
+  <rect x="72" y="548" width="936" height="128" rx="24" fill="#101B28" stroke="#29413F" stroke-width="2" filter="url(#shadow)"/>
+  <g class="sans">
+    <circle cx="126" cy="600" r="20" fill="#35E0B4"/>
+    <text x="126" y="608" text-anchor="middle" fill="#071516" font-size="21" font-weight="800">1</text>
+    <text x="164" y="594" class="white label">提出目标</text>
+    <text x="164" y="628" class="muted small">Goal / context</text>
+    <path d="M338 610h48" stroke="#35E0B4" stroke-width="3" stroke-linecap="round"/>
+    <path d="m378 598 14 12-14 12" stroke="#35E0B4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="458" cy="600" r="20" fill="#58A6FF"/>
+    <text x="458" y="608" text-anchor="middle" fill="#071516" font-size="21" font-weight="800">2</text>
+    <text x="496" y="594" class="white label">Agent 执行</text>
+    <text x="496" y="628" class="muted small">Tools / timeline / hooks</text>
+    <path d="M724 610h48" stroke="#58A6FF" stroke-width="3" stroke-linecap="round"/>
+    <path d="m764 598 14 12-14 12" stroke="#58A6FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="812" cy="600" r="20" fill="#F6C85F"/>
+    <text x="812" y="608" text-anchor="middle" fill="#071516" font-size="21" font-weight="800">3</text>
+    <text x="846" y="594" class="white label">人类确认</text>
+    <text x="846" y="628" class="muted small">Review / rollback</text>
+  </g>
+
+  <!-- Feature cards -->
+  <g filter="url(#shadow)">
+    <rect x="72" y="736" width="454" height="276" rx="24" class="panel"/>
+    <rect x="554" y="736" width="454" height="276" rx="24" class="panel"/>
+    <rect x="72" y="1040" width="454" height="276" rx="24" class="panel"/>
+    <rect x="554" y="1040" width="454" height="276" rx="24" class="panel"/>
+    <rect x="72" y="1344" width="454" height="276" rx="24" class="panel"/>
+    <rect x="554" y="1344" width="454" height="276" rx="24" class="panel"/>
+  </g>
+
+  <!-- Approval -->
+  <g class="sans">
+    <circle cx="124" cy="794" r="27" fill="#35E0B4" fill-opacity=".16"/>
+    <path d="M113 794l8 8 15-18" stroke="#35E0B4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="168" y="803" class="white" font-size="30" font-weight="800">审批与权限</text>
+    <text x="104" y="862" class="green body">ALLOW</text>
+    <text x="278" y="862" class="yellow body">ASK</text>
+    <text x="388" y="862" class="red body">DENY</text>
+    <text x="104" y="913" class="muted small">工具调用、文件操作和危险命令</text>
+    <text x="104" y="949" class="muted small">在真正执行前交给你决定。</text>
+  </g>
+
+  <!-- Review -->
+  <g class="sans">
+    <circle cx="606" cy="794" r="27" fill="#58A6FF" fill-opacity=".16"/>
+    <path d="M594 784h24M594 795h24M594 806h14" stroke="#58A6FF" stroke-width="4" stroke-linecap="round"/>
+    <text x="650" y="803" class="white" font-size="30" font-weight="800">变更审查</text>
+    <rect x="586" y="850" width="370" height="38" rx="10" fill="#0F1A27" stroke="#29413F"/>
+    <text x="602" y="876" class="green mono" font-size="20">+ 3 added</text>
+    <text x="744" y="876" class="yellow mono" font-size="20">~ 5 modified</text>
+    <text x="602" y="929" class="muted small">逐文件查看 diff，支持 approve all</text>
+    <text x="602" y="965" class="muted small">或 reject all，不盲目接受结果。</text>
+  </g>
+
+  <!-- Rollback -->
+  <g class="sans">
+    <circle cx="124" cy="1098" r="27" fill="#F6C85F" fill-opacity=".16"/>
+    <path d="M137 1091a17 17 0 1 0 1 17" stroke="#F6C85F" stroke-width="4" stroke-linecap="round"/>
+    <path d="M137 1082v13h-13" stroke="#F6C85F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="168" y="1107" class="white" font-size="30" font-weight="800">快照与回滚</text>
+    <text x="104" y="1165" class="yellow body">SNAPSHOT</text>
+    <text x="104" y="1215" class="muted small">Agent 执行工具后自动留下快照。</text>
+    <text x="104" y="1251" class="muted small">可以回滚，也可以取消回滚。</text>
+  </g>
+
+  <!-- Git -->
+  <g class="sans">
+    <circle cx="606" cy="1098" r="27" fill="#FF7C86" fill-opacity=".16"/>
+    <path d="M595 1098h22M606 1087v22M606 1087l12-8M606 1109l12 8" stroke="#FF7C86" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="594" cy="1098" r="4" fill="#FF7C86"/><circle cx="618" cy="1098" r="4" fill="#FF7C86"/>
+    <text x="650" y="1107" class="white" font-size="30" font-weight="800">Git 工作区</text>
+    <text x="586" y="1165" class="red body">BRANCH</text>
+    <text x="586" y="1205" class="muted small">查看文件状态、diff 和提交记录。</text>
+    <text x="586" y="1241" class="muted small">stage / unstage / commit 都在界面内。</text>
+  </g>
+
+  <!-- Hooks -->
+  <g class="sans">
+    <circle cx="124" cy="1402" r="27" fill="#B98CFF" fill-opacity=".18"/>
+    <path d="M112 1410c7-18 20-25 27-13 5 8-4 18-11 14-8-5-1-18 10-24" stroke="#B98CFF" stroke-width="4" stroke-linecap="round"/>
+    <text x="168" y="1411" class="white" font-size="30" font-weight="800">Hooks 与规则</text>
+    <text x="104" y="1469" class="body" fill="#B98CFF">PRE · POST · STOP</text>
+    <text x="104" y="1519" class="muted small">记录每次 Hook 的 allow / block / ask。</text>
+    <text x="104" y="1555" class="muted small">区分 policy、global、project、local 来源。</text>
+  </g>
+
+  <!-- Goals -->
+  <g class="sans">
+    <circle cx="606" cy="1402" r="27" fill="#35E0B4" fill-opacity=".16"/>
+    <path d="M594 1402h24M606 1390v24" stroke="#35E0B4" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="606" cy="1402" r="13" stroke="#35E0B4" stroke-width="3"/>
+    <text x="650" y="1411" class="white" font-size="30" font-weight="800">Goal 与执行记录</text>
+    <text x="586" y="1469" class="green body">OBJECTIVE → EVIDENCE</text>
+    <text x="586" y="1519" class="muted small">目标、验收条件、事件历史和状态。</text>
+    <text x="586" y="1555" class="muted small">暂停、继续、取消，都有上下文可追踪。</text>
+  </g>
+
+  <!-- Footer -->
+  <rect x="72" y="1690" width="936" height="138" rx="24" fill="#0E1718" stroke="#35E0B4" stroke-width="2"/>
+  <text x="108" y="1742" class="sans green" font-size="22" font-weight="700" letter-spacing="2">THE POINT</text>
+  <text x="108" y="1790" class="sans white" font-size="32" font-weight="700">让 Agent 的工作可见、可控、可恢复。</text>
+  <text x="72" y="1878" class="sans muted" font-size="21">Open source · desktop + web · local project control · AGPL-3.0</text>
+</svg>

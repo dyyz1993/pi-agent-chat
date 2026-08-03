@@ -30,6 +30,11 @@ Pi Agent Chat is a desktop and web UI for AI coding agents. It is built for deve
 - `posters/pi-agent-chat-og-1600x900.png` - GitHub social preview, blog cover, launch page hero
 - `posters/pi-agent-chat-square-1080.png` - square social post
 - `posters/pi-agent-chat-story-1080x1920.png` - mobile story / vertical poster
+- `posters/pi-agent-chat-story-editorial-v2.png` - bright editorial / Xiaohongshu variant
+- `posters/pi-agent-chat-story-swiss-v1.png` - Swiss modernist grid variant
+- `posters/pi-agent-chat-story-retro-future-v1.png` - retro-futurist developer variant
+- `posters/pi-agent-chat-story-sticker-v1.png` - playful sticker-collage variant
+- `posters/pi-agent-chat-feature-map-v1.svg` - feature-accurate product capability map
 
 ### Clean Product Visual
 

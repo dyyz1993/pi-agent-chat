@@ -222,3 +222,42 @@ describe("actions", () => {
 		expect(useNotificationStore.getState().notifications).toHaveLength(0)
 	})
 })
+
+describe("unread / notifications consistency (UI test race condition)", () => {
+	it("info notification auto-dismisses after 5s and both unread and length go to 0", () => {
+		useNotificationStore.getState().push({ message: "info msg", level: "info" })
+
+		const state1 = useNotificationStore.getState()
+		expect(state1.notifications).toHaveLength(1)
+		const unread1 = state1.notifications.filter((n) => !n.read).length
+		expect(unread1).toBe(1)
+
+		vi.advanceTimersByTime(5000)
+
+		const state2 = useNotificationStore.getState()
+		expect(state2.notifications).toHaveLength(0)
+		const unread2 = state2.notifications.filter((n) => !n.read).length
+		expect(unread2).toBe(0)
+	})
+
+	it("warning notification does not auto-dismiss", () => {
+		useNotificationStore.getState().push({ message: "warning msg", level: "warning" })
+
+		vi.advanceTimersByTime(10000)
+
+		const state = useNotificationStore.getState()
+		expect(state.notifications).toHaveLength(1)
+		expect(state.notifications.filter((n) => !n.read).length).toBe(1)
+	})
+
+	it("markRead reduces unread but keeps length", () => {
+		useNotificationStore.getState().push({ message: "warning msg", level: "warning" })
+		const id = useNotificationStore.getState().notifications[0].id
+
+		useNotificationStore.getState().markRead(id)
+
+		const state = useNotificationStore.getState()
+		expect(state.notifications).toHaveLength(1)
+		expect(state.notifications.filter((n) => !n.read).length).toBe(0)
+	})
+})
