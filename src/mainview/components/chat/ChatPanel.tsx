@@ -17,9 +17,7 @@ import {
   FolderOpen,
   Sparkles,
   Target,
-  Edit3,
   Eye,
-  PlusCircle,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -413,7 +411,18 @@ export function GoalDraftCard({
       data-testid="goal-draft-card"
       className="mx-2 mt-2 overflow-hidden rounded-lg border border-accent/25 bg-accent/5 max-sm:mx-0 max-sm:rounded-none"
     >
-      <div className="flex flex-col gap-2 border-b border-accent/15 px-3 py-2 sm:flex-row sm:items-center sm:justify-between max-sm:px-2">
+      <div className="flex items-center gap-2 border-b border-accent/15 px-3 py-2 max-sm:px-2">
+        <button
+          type="button"
+          data-testid="goal-draft-close"
+          onClick={onClose}
+          disabled={disabled}
+          className="shrink-0 rounded-md p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          title={t("goal.cancelCompose")}
+          aria-label={t("goal.cancelCompose")}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Target className="h-3.5 w-3.5 shrink-0 text-accent" />
           <div className="min-w-0">
@@ -421,28 +430,28 @@ export function GoalDraftCard({
             <div className="text-[11px] text-text-tertiary">{t("goal.draft.subtitle")}</div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {editing ? (
             <>
-              <button
-                type="button"
-                data-testid="goal-draft-save-preview"
-                onClick={onSave}
-                disabled={(disabled ?? false) || !draft.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Eye className="h-3 w-3" />
-                {t("goal.draft.save")}
-              </button>
               <button
                 type="button"
                 data-testid="goal-draft-cancel-edit"
                 onClick={onCancel}
                 disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md bg-surface-dim px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-transparent px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <X className="h-3 w-3" />
                 {t("goal.draft.cancelEdit")}
+              </button>
+              <button
+                type="button"
+                data-testid="goal-draft-save-preview"
+                onClick={onSave}
+                disabled={(disabled ?? false) || !draft.trim()}
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Eye className="h-3 w-3" />
+                {t("goal.draft.save")}
               </button>
             </>
           ) : (
@@ -452,47 +461,32 @@ export function GoalDraftCard({
                 data-testid="goal-draft-regenerate"
                 onClick={onGenerate}
                 disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md bg-surface-dim px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-transparent px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw className="h-3 w-3" />
-                {t("goal.draft.regenerate")}
-              </button>
-              <button
-                type="button"
-                data-testid="goal-draft-edit"
-                onClick={onEdit}
-                disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md bg-surface-dim px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Edit3 className="h-3 w-3" />
-                {t("goal.draft.edit")}
+                <span className="max-sm:hidden">{t("goal.draft.regenerate")}</span>
+                <span className="sm:hidden">{t("goal.draft.generateShort")}</span>
               </button>
               <button
                 type="button"
                 data-testid="goal-draft-add"
                 onClick={onAdd}
                 disabled={(disabled ?? false) || !draft.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <PlusCircle className="h-3 w-3" />
-                {t("goal.draft.add")}
+                <Check className="h-3 w-3" />
+                {t("goal.draft.confirm")}
               </button>
             </>
           )}
-          <button
-            type="button"
-            data-testid="goal-draft-close"
-            onClick={onClose}
-            disabled={disabled}
-            className="inline-flex items-center justify-center rounded-md p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-            title={t("goal.cancelCompose")}
-            aria-label={t("goal.cancelCompose")}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
         </div>
       </div>
-      <div className="max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh] max-sm:px-2">
+      <div
+        className={`max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh] max-sm:px-2${
+          editing ? "" : " cursor-pointer"
+        }`}
+        onClick={editing ? undefined : onEdit}
+      >
         {editing ? (
           <textarea
             value={draft}
@@ -502,9 +496,14 @@ export function GoalDraftCard({
             aria-label={t("goal.draft.editorLabel")}
           />
         ) : (
-          <div className="prose prose-sm max-w-none text-xs text-text-secondary dark:prose-invert prose-headings:my-2 prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">
-            <CachedReactMarkdown>{draft}</CachedReactMarkdown>
-          </div>
+          <>
+            <div className="prose prose-sm max-w-none text-xs text-text-secondary dark:prose-invert prose-headings:my-2 prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">
+              <CachedReactMarkdown>{draft}</CachedReactMarkdown>
+            </div>
+            <div className="mt-1 border-t border-dashed border-border-primary/50 pt-1 text-[10px] text-text-tertiary">
+              ✏️ {t("goal.draft.clickToEdit")}
+            </div>
+          </>
         )}
       </div>
     </div>
