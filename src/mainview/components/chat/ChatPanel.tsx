@@ -76,9 +76,7 @@ import type { ChatMessage } from "../../types";
 import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
-import { useGoalStore } from "../../stores/use-goal-store";
-import { bootstrapGoalSetupWithRetry } from "../../lib/goal-setup";
-import { buildGoalDraftMarkdown } from "./goal-draft";
+import { useGoalMode } from "./use-goal-mode";
 import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
 import { FileOverlay } from "../file-preview/FileOverlay";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -847,8 +845,6 @@ export function ChatPanel() {
   const isPermissionPending = effectiveStatus === "permission";
   const hasNoModel = effectiveStatus === "idle" && !currentModel;
   const commandPopup = useCommandPopup();
-  const startSetup = useGoalStore((s) => s.startSetup);
-  const refineGoal = useGoalStore((s) => s.refineGoal);
 
   const streamVersion = useChatStore(
     useCallback(
@@ -895,15 +891,40 @@ export function ChatPanel() {
   const pushNotif = useNotificationStore((s) => s.push);
   const clearMessageSelection = useTurnStore((s) => s.clearSelection);
   const [isAborting, setIsAborting] = useState(false);
-  const [goalMode, setGoalMode] = useState(false);
-  const [isCreatingGoal, setIsCreatingGoal] = useState(false);
-  const [isRefiningGoal, setIsRefiningGoal] = useState(false);
-  const [refineStep, setRefineStep] = useState(0); // 0=idle, 1=gathering, 2=calling LLM, 3=done
-  const [goalDraft, setGoalDraft] = useState("");
-  const [isGoalDraftEditing, setIsGoalDraftEditing] = useState(false);
-  const preGoalInputRef = useRef("");
-  const preEditGoalDraftRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    goalMode,
+    isCreatingGoal,
+    isRefiningGoal,
+    refineStep,
+    goalDraft,
+    isGoalDraftEditing,
+    setGoalDraft,
+    startGoalMode,
+    exitGoalMode,
+    generateGoalDraft,
+    handleEditGoalDraft,
+    handleCancelGoalDraftEdit,
+    handleSaveGoalDraftEdit,
+    handleCreateGoal: handleCreateGoalBase,
+    handleRefineGoal,
+  } = useGoalMode({
+    activeSessionId,
+    isViewingSubagent,
+    inputText,
+    setInputText,
+    effectiveStatus,
+    projectName: activeProjectTab?.name ?? chatProjectName,
+    projectPath: chatProjectPath,
+    sessionTitle: chatIdentity?.title ?? "",
+    messageCount: messages.length,
+    attachmentCount,
+    hasComposerPlaceholders,
+    isMobileOrTablet,
+    sendMessage,
+    inputBarRef,
+    commandPopup,
+  });
   const showComposerUtilityRow = !isMobileOrTablet || goalMode || !!returnSourceTarget;
   const hasSendableContent = goalMode
     ? inputText.trim().length > 0 || goalDraft.trim().length > 0
@@ -1191,6 +1212,14 @@ export function ChatPanel() {
     if (navClickScrollingRef.current) releaseSideNavScrollLock();
     handleScrollEnd();
   }, [handleScrollEnd, releaseSideNavScrollLock]);
+
+  // Resume auto-scroll after the goal is actually created. resumeAutoScroll
+  // comes from useActiveScrollTracker (defined later than useGoalMode), so we
+  // wrap handleCreateGoalBase here instead of pulling it into the hook deps.
+  const handleCreateGoal = useCallback(async () => {
+    const created = await handleCreateGoalBase();
+    if (created) resumeAutoScroll();
+  }, [handleCreateGoalBase, resumeAutoScroll]);
 
   const captureTopLoadScrollAnchor = useCallback(() => {
     if (!activeSessionId) return;
@@ -1684,184 +1713,6 @@ export function ChatPanel() {
       inputBarRef.current?.blur();
     }
   };
-
-  const exitGoalMode = useCallback(() => {
-    setGoalMode(false);
-    setGoalDraft("");
-    setIsGoalDraftEditing(false);
-    setInputText(preGoalInputRef.current);
-    preGoalInputRef.current = "";
-    preEditGoalDraftRef.current = "";
-  }, [setInputText]);
-
-  const startGoalMode = useCallback(
-    (objective?: string) => {
-      if (isViewingSubagent) return;
-      if (goalMode) {
-        exitGoalMode();
-        return;
-      }
-      const draftHint = objective ?? inputText;
-      const draft = buildGoalDraftMarkdown({
-        projectName: activeProjectTab?.name ?? chatProjectName,
-        projectPath: chatProjectPath,
-        sessionTitle: chatIdentity?.title ?? "",
-        hint: draftHint,
-        messageCount: messages.length,
-        hasAttachments: attachmentCount > 0 || hasComposerPlaceholders,
-      });
-      preGoalInputRef.current = inputText;
-      setInputText(draftHint);
-      setGoalDraft(draft);
-      setIsGoalDraftEditing(false);
-      preEditGoalDraftRef.current = "";
-      setGoalMode(true);
-      commandPopup.closePopup();
-      requestAnimationFrame(() => inputBarRef.current?.focus?.());
-    },
-    [
-      activeProjectTab?.name,
-      attachmentCount,
-      chatIdentity?.title,
-      chatProjectName,
-      chatProjectPath,
-      commandPopup,
-      exitGoalMode,
-      goalMode,
-      hasComposerPlaceholders,
-      inputText,
-      isViewingSubagent,
-      messages.length,
-      setInputText,
-    ],
-  );
-
-  const generateGoalDraft = useCallback(() => {
-    const draft = buildGoalDraftMarkdown({
-      projectName: activeProjectTab?.name ?? chatProjectName,
-      projectPath: chatProjectPath,
-      sessionTitle: chatIdentity?.title ?? "",
-      hint: inputText,
-      messageCount: messages.length,
-      hasAttachments: attachmentCount > 0 || hasComposerPlaceholders,
-    });
-    setGoalDraft(draft);
-    setIsGoalDraftEditing(false);
-  }, [
-    activeProjectTab?.name,
-    attachmentCount,
-    chatIdentity?.title,
-    chatProjectName,
-    chatProjectPath,
-    hasComposerPlaceholders,
-    inputText,
-    messages.length,
-  ]);
-
-  const handleEditGoalDraft = useCallback(() => {
-    preEditGoalDraftRef.current = goalDraft;
-    setIsGoalDraftEditing(true);
-  }, [goalDraft]);
-
-  const handleCancelGoalDraftEdit = useCallback(() => {
-    if (preEditGoalDraftRef.current) {
-      setGoalDraft(preEditGoalDraftRef.current);
-    }
-    setIsGoalDraftEditing(false);
-  }, []);
-
-  const handleSaveGoalDraftEdit = useCallback(() => {
-    preEditGoalDraftRef.current = "";
-    setIsGoalDraftEditing(false);
-  }, []);
-
-  const handleCreateGoal = useCallback(async () => {
-    const objective = (goalDraft || inputText).trim();
-    if (!activeSessionId || !objective || isCreatingGoal) return;
-    setIsCreatingGoal(true);
-    try {
-      // The goal channel is only available after the pi subprocess is
-      // running. If the session is idle (no pi process), sendMessage first
-      // to bootstrap the subprocess, then retry startSetup until the channel
-      // is ready (up to ~5s).
-      const needsBootstrap = effectiveStatus === "idle" || effectiveStatus === undefined;
-      if (needsBootstrap) {
-        setInputText(objective);
-        await sendMessage();
-        const setupResult = await bootstrapGoalSetupWithRetry(activeSessionId, objective, {
-          startSetup,
-        });
-        if (!setupResult.started) {
-          pushNotif({
-            message: t("goal.startSetupFailed", {
-              defaultValue: `Goal 启动失败：${setupResult.error ?? "unknown"}`,
-              error: setupResult.error ?? "",
-            }),
-            level: "error",
-          });
-          log.warn("Goal startSetup did not become ready", {
-            sessionId: activeSessionId,
-            error: setupResult.error,
-          });
-          return;
-        }
-      } else {
-        await startSetup(activeSessionId, objective);
-        setInputText(objective);
-        await sendMessage();
-      }
-      setInputText("");
-      setGoalDraft("");
-      setIsGoalDraftEditing(false);
-      setGoalMode(false);
-      preGoalInputRef.current = "";
-      preEditGoalDraftRef.current = "";
-      resumeAutoScroll();
-      if (isMobileOrTablet) {
-        inputBarRef.current?.blur();
-      }
-    } finally {
-      setIsCreatingGoal(false);
-    }
-  }, [
-    activeSessionId,
-    effectiveStatus,
-    goalDraft,
-    inputText,
-    isCreatingGoal,
-    isMobileOrTablet,
-    log,
-    pushNotif,
-    resumeAutoScroll,
-    sendMessage,
-    startSetup,
-    t,
-  ]);
-
-  const handleRefineGoal = useCallback(async () => {
-    const objective = (goalDraft || inputText).trim();
-    if (!activeSessionId || !objective || isRefiningGoal) return;
-    setIsRefiningGoal(true);
-    setRefineStep(1);
-    // Simulate the gathering step visible to user, then call LLM
-    await new Promise((r) => setTimeout(r, 300));
-    setRefineStep(2);
-    try {
-      const result = await refineGoal(activeSessionId, objective);
-      if (result.success && result.objective) {
-        if (goalDraft) {
-          setGoalDraft(result.objective);
-        } else {
-          setInputText(result.objective);
-        }
-      }
-      setRefineStep(3);
-      await new Promise((r) => setTimeout(r, 600));
-    } finally {
-      setIsRefiningGoal(false);
-      setRefineStep(0);
-    }
-  }, [activeSessionId, goalDraft, inputText, isRefiningGoal, refineGoal, setInputText]);
 
   const [handleFollowUp, isFollowUpRunning] = useAsyncGuard(async () => {
     if (!inputText.trim() || !isStreaming) return;
