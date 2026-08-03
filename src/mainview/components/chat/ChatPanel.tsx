@@ -78,6 +78,7 @@ import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalMode } from "./use-goal-mode";
 import { useMessageActions } from "./use-message-actions";
+import { useAttachmentDrop } from "./use-attachment-drop";
 import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
 import { FileOverlay } from "../file-preview/FileOverlay";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -1600,62 +1601,14 @@ export function ChatPanel() {
     await sendFollowUp();
   });
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    const files: File[] = [];
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind === "file") {
-          const file = item.getAsFile();
-          if (file) files.push(file);
-        }
-      }
-    }
-    const clipboardFiles = Array.from(e.clipboardData?.files ?? []);
-    for (const file of clipboardFiles) {
-      if (!files.some((existing) => existing.name === file.name && existing.size === file.size)) {
-        files.push(file);
-      }
-    }
-    if (files.length > 0) {
-      e.preventDefault();
-      useAttachmentStore.getState().addFiles(files);
-    }
-  }, []);
+  const {
+    isDragOver,
+    handlePaste,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+  } = useAttachmentDrop();
 
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    const items = e.dataTransfer?.items;
-    if (!items) return;
-    const files: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file) files.push(file);
-      }
-    }
-    if (files.length > 0) {
-      useAttachmentStore.getState().addFiles(files);
-    }
-  }, []);
 
   useEffect(() => {
     if (!isAtTop || !hasMoreMessages || isViewingSubagent || messageViewMode === "focus") {
