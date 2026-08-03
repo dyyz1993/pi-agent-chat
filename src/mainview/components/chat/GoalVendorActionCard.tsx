@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ClipboardList, Eye, Loader2, Pencil, Target } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, Eye, Loader2, Pencil, Target, X } from "lucide-react";
 import { useMemo, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoalVendorStatus, GoalVendorTaskItem } from "../../../shared/modules/goal";
@@ -8,6 +8,7 @@ import { useGoalStore } from "../../stores/use-goal-store";
 interface GoalVendorActionCardProps {
   sessionId: string | null;
   onEdit: (objective?: string) => void;
+  onCancel?: (sessionId: string) => void;
 }
 
 const HIDDEN_RAW_STATUSES = new Set(["none", "cancelled"]);
@@ -93,7 +94,7 @@ function summarizeTasks(tasks: GoalVendorTaskItem[]) {
   return { total, met, focus };
 }
 
-export function GoalVendorActionCard({ sessionId, onEdit }: GoalVendorActionCardProps) {
+export function GoalVendorActionCard({ sessionId, onEdit, onCancel }: GoalVendorActionCardProps) {
   const { t } = useTranslation("chat");
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
   const sessionState = useGoalStore((s) => (sessionId ? s.bySession[sessionId] : undefined));
@@ -120,6 +121,10 @@ export function GoalVendorActionCard({ sessionId, onEdit }: GoalVendorActionCard
   const handleEdit = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     onEdit(objective);
+  };
+  const handleCancel = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (sessionId) onCancel?.(sessionId);
   };
 
   return (
@@ -190,6 +195,17 @@ export function GoalVendorActionCard({ sessionId, onEdit }: GoalVendorActionCard
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="rounded-md p-1.5 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-status-error"
+              title={t("goal.quickCancel")}
+              aria-label={t("goal.quickCancel")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </section>

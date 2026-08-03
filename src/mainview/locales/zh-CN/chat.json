@@ -23,6 +23,8 @@
   "goal.startSetupFailed": "Goal 启动失败：{{error}}",
   "goal.cancelCompose": "退出目标模式",
   "goal.edit": "编辑目标",
+  "goal.quickCancel": "取消目标",
+  "goal.cancelled": "已取消目标",
   "goal.cancel": "取消目标",
   "goal.openPanel": "打开 Goal 面板",
   "goal.activeCardLabel": "当前 Goal",

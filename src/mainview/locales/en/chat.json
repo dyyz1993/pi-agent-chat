@@ -23,6 +23,8 @@
   "goal.startSetupFailed": "Goal setup failed: {{error}}",
   "goal.cancelCompose": "Exit goal mode",
   "goal.edit": "Edit goal",
+  "goal.quickCancel": "Cancel goal",
+  "goal.cancelled": "Goal cancelled",
   "goal.cancel": "Cancel goal",
   "goal.openPanel": "Open Goal panel",
   "goal.activeCardLabel": "Current Goal",

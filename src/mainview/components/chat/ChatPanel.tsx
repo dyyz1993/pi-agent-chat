@@ -75,6 +75,7 @@ import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalMode } from "./use-goal-mode";
+import { useGoalStore } from "../../stores/use-goal-store";
 import { useMessageActions } from "./use-message-actions";
 import { useAttachmentDrop } from "./use-attachment-drop";
 import { useSendMessage } from "./use-send-message";
@@ -1749,7 +1750,14 @@ export function ChatPanel() {
             ) : (
               <>
                 {!goalMode && (
-                  <GoalVendorActionCard sessionId={activeSessionId} onEdit={startGoalMode} />
+                  <GoalVendorActionCard
+                    sessionId={activeSessionId}
+                    onEdit={startGoalMode}
+                    onCancel={(sid) => {
+                      void useGoalStore.getState().clearGoal(sid);
+                      pushNotif({ message: t("goal.cancelled"), level: "info" });
+                    }}
+                  />
                 )}
                 <div className="flex items-end gap-1.5">
                   <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">

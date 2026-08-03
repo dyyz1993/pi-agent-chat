@@ -13,6 +13,7 @@ vi.mock("react-i18next", () => ({
         "goal.cardTitle": "Goal",
         "goal.checklistProgress": `${String(params?.met ?? "")}/${String(params?.total ?? "")}`,
         "goal.edit": "Edit goal",
+        "goal.quickCancel": "Cancel goal",
         "goal.openPanel": "Open Goal panel",
         "goal.pendingAuthoritySummary": `Waiting for ${String(params?.count ?? "")} authorization(s): ${String(params?.details ?? "")}`,
         "goal.state.awaiting_authority": "Waiting for authorization",
@@ -113,6 +114,41 @@ describe("GoalVendorActionCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit goal" }));
 
     expect(onEdit).toHaveBeenCalledWith("Build a Tetris game");
+  });
+
+  it("calls onCancel with sessionId when the X button is clicked", () => {
+    const onCancel = vi.fn();
+    useGoalStore.setState({
+      bySession: {
+        "sess-1": {
+          status: makeStatus({ state: "running", rawStatus: "running", rawPhase: "execute" }),
+          taskReports: [],
+          triggerRecords: [],
+        },
+      },
+    });
+
+    render(<GoalVendorActionCard sessionId="sess-1" onEdit={vi.fn()} onCancel={onCancel} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel goal" }));
+
+    expect(onCancel).toHaveBeenCalledWith("sess-1");
+  });
+
+  it("does not render the X button when onCancel is omitted (backward compat)", () => {
+    useGoalStore.setState({
+      bySession: {
+        "sess-1": {
+          status: makeStatus(),
+          taskReports: [],
+          triggerRecords: [],
+        },
+      },
+    });
+
+    render(<GoalVendorActionCard sessionId="sess-1" onEdit={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Cancel goal" })).not.toBeInTheDocument();
   });
 
   it("explains pending authority amendments instead of a generic blocked label", () => {
