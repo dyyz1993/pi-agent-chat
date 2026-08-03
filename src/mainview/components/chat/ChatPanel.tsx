@@ -77,6 +77,7 @@ import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalMode } from "./use-goal-mode";
+import { useMessageActions } from "./use-message-actions";
 import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
 import { FileOverlay } from "../file-preview/FileOverlay";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -101,46 +102,6 @@ const MAX_MSG_IDS_CACHE = 10;
 const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
 
 export { ChatReloadButton, shouldShowChatReloadButton };
-
-function stringifyMessageBlock(block: ChatMessage["content"][number]): string {
-  switch (block.type) {
-    case "text":
-      return block.text;
-    case "thinking":
-      return `[thinking]\n${block.thinking}`;
-    case "toolCall":
-      return `[tool call: ${block.name}]\n${block.input}`;
-    case "toolResult":
-      return `[tool result: ${block.toolName}${block.isError ? " error" : ""}]\n${block.content}`;
-    case "toolExecution": {
-      const parts = [`[tool execution: ${block.toolName} ${block.status}]`];
-      if (block.description) parts.push(block.description);
-      if (block.args) parts.push(`args:\n${block.args}`);
-      if (block.output) parts.push(`output:\n${block.output}`);
-      return parts.join("\n");
-    }
-    case "compactionSummary":
-      return `[compaction summary]\n${block.summary}`;
-    case "custom":
-      return `[${block.customType}]\n${JSON.stringify(block.data)}`;
-    case "imageBlock":
-      return `[image: ${block.alt ?? block.url}]`;
-    default:
-      return JSON.stringify(block);
-  }
-}
-
-function buildSelectedMemoryContent(messages: ChatMessage[], ids: string[]): string {
-  const selected = new Set(ids);
-  return messages
-    .filter((message) => selected.has(message.id))
-    .map((message) => {
-      const body = message.content.map(stringifyMessageBlock).filter(Boolean).join("\n\n");
-      return `## ${message.role} ${message.id}\n\n${body || "(empty)"}`;
-    })
-    .join("\n\n---\n\n")
-    .trim();
-}
 
 interface TopLoadScrollAnchor {
   sessionId: string;
@@ -999,101 +960,21 @@ export function ChatPanel() {
     }, [activeSessionId, activeSubId, isAborting, pushNotif]),
   );
 
-  const handleDeleteSelectedMessages = useCallback(
-    async (ids: string[]) => {
-      const targetSessionId = isViewingSubagent ? activeSubId : activeSessionId;
-      if (!targetSessionId || ids.length === 0) return;
-
-      const targetIds = Array.from(new Set(ids));
-      deleteMessagesForSession(targetSessionId, targetIds);
-      clearMessageSelection();
-
-      try {
-        await apiClient.call("agent.deleteEntries", {
-          sessionId: targetSessionId,
-          targetIds,
-        });
-        await loadSessionMessages(targetSessionId, { force: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        pushNotif({ message: `删除消息失败：${message}`, level: "error" });
-        await loadSessionMessages(targetSessionId, { force: true }).catch(() => undefined);
-      }
-    },
-    [
-      activeSessionId,
-      activeSubId,
-      clearMessageSelection,
-      deleteMessagesForSession,
-      isViewingSubagent,
-      loadSessionMessages,
-      pushNotif,
-    ],
-  );
-
-  const handleSummarizeSelectedMessages = useCallback(
-    async (ids: string[]) => {
-      const targetSessionId = isViewingSubagent ? activeSubId : activeSessionId;
-      if (!targetSessionId || ids.length === 0) return;
-
-      const targetIds = Array.from(new Set(ids));
-      clearMessageSelection();
-
-      try {
-        await apiClient.call("agent.summarizeEntries", {
-          sessionId: targetSessionId,
-          targetIds,
-        });
-        await loadSessionMessages(targetSessionId, { force: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        pushNotif({ message: `总结消息失败：${message}`, level: "error" });
-      }
-    },
-    [
-      activeSessionId,
-      activeSubId,
-      clearMessageSelection,
-      isViewingSubagent,
-      loadSessionMessages,
-      pushNotif,
-    ],
-  );
-
-  const handleRememberSelectedMessages = useCallback(
-    async (ids: string[]) => {
-      const targetSessionId = isViewingSubagent ? activeSubId : activeSessionId;
-      if (!targetSessionId || ids.length === 0) return;
-
-      const targetIds = Array.from(new Set(ids));
-      const content = buildSelectedMemoryContent(messages, targetIds);
-      if (!content) return;
-
-      clearMessageSelection();
-
-      try {
-        await apiClient.call("memory.remember", {
-          projectPath: chatProjectPath,
-          sessionId: targetSessionId,
-          messageIds: targetIds,
-          content,
-        });
-        pushNotif({ message: "已提交到 Learning 记忆", level: "info" });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        pushNotif({ message: `保存记忆失败：${message}`, level: "error" });
-      }
-    },
-    [
-      activeSessionId,
-      activeSubId,
-      chatProjectPath,
-      clearMessageSelection,
-      isViewingSubagent,
-      messages,
-      pushNotif,
-    ],
-  );
+  const {
+    handleDeleteSelectedMessages,
+    handleSummarizeSelectedMessages,
+    handleRememberSelectedMessages,
+  } = useMessageActions({
+    activeSessionId,
+    activeSubId,
+    isViewingSubagent,
+    messages,
+    chatProjectPath,
+    deleteMessagesForSession,
+    clearMessageSelection,
+    loadSessionMessages,
+    pushNotif,
+  });
 
   const [handleSubagentFork, isForking] = useAsyncGuard(
     useCallback(async () => {
