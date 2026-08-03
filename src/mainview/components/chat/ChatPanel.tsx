@@ -411,9 +411,9 @@ export function GoalDraftCard({
   return (
     <div
       data-testid="goal-draft-card"
-      className="mx-2 mt-2 overflow-hidden rounded-lg border border-accent/25 bg-accent/5"
+      className="mx-2 mt-2 overflow-hidden rounded-lg border border-accent/25 bg-accent/5 max-sm:mx-0 max-sm:rounded-none"
     >
-      <div className="flex flex-col gap-2 border-b border-accent/15 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 border-b border-accent/15 px-3 py-2 sm:flex-row sm:items-center sm:justify-between max-sm:px-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Target className="h-3.5 w-3.5 shrink-0 text-accent" />
           <div className="min-w-0">
@@ -492,13 +492,13 @@ export function GoalDraftCard({
           </button>
         </div>
       </div>
-      <div className="max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh]">
+      <div className="max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh] max-sm:px-2">
         {editing ? (
           <textarea
             value={draft}
             data-testid="goal-draft-editor"
             onChange={(event) => onChange(event.target.value)}
-            className="min-h-48 w-full resize-y rounded-md border border-border-primary bg-bg-elevated px-3 py-2 font-mono text-xs leading-5 text-text-primary outline-none transition-colors focus:border-border-focus"
+            className="min-h-48 w-full resize-y rounded-md border border-border-primary bg-bg-elevated px-3 py-2 font-mono text-xs leading-5 text-text-primary outline-none transition-colors focus:border-border-focus max-sm:min-h-64 max-sm:px-2"
             aria-label={t("goal.draft.editorLabel")}
           />
         ) : (
