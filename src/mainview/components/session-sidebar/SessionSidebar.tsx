@@ -24,7 +24,8 @@ import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SessionStatus, SubagentSessionInfo } from "../../types";
 import { ConfirmDialog } from "../explorer/ConfirmDialog";
-import { DropdownSelect, useCopyFeedback } from "../primitives";
+import { DropdownSelect } from "../primitives";
+import { useClipboard } from "../chat/preview/use-clipboard";
 import { agentColorStyle } from "../../utils/agent-color";
 import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 import { jumpToSessionById } from "../chat/primitives/useJumpToSession";
@@ -861,8 +862,9 @@ function SessionItem({
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const copyWithFeedback = useCopyFeedback();
-  const [copiedId, setCopiedId] = useState(false);
+  const { copied: copiedId, copy: copySessionId } = useClipboard(1500, {
+    showToast: true,
+  });
   const visibleDelegateChildren = useMemo(
     () => getVisibleDelegateChildren(children, subsessions),
     [children, subsessions],
@@ -905,11 +907,9 @@ function SessionItem({
   const handleCopyId = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      copyWithFeedback(session.sessionId);
-      setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 1500);
+      copySessionId(session.sessionId);
     },
-    [copyWithFeedback, session.sessionId],
+    [copySessionId, session.sessionId],
   );
   const pushNotif = useNotificationStore((s) => s.push);
   const [isReloading, setIsReloading] = useState(false);
@@ -1247,8 +1247,9 @@ function SubagentItem({
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const copyWithFeedback = useCopyFeedback();
-  const [copiedId, setCopiedId] = useState(false);
+  const { copied: copiedId, copy: copySessionId } = useClipboard(1500, {
+    showToast: true,
+  });
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -1269,11 +1270,9 @@ function SubagentItem({
   const handleCopyId = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      copyWithFeedback(sub.sessionId);
-      setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 1500);
+      copySessionId(sub.sessionId);
     },
-    [copyWithFeedback, sub.sessionId],
+    [copySessionId, sub.sessionId],
   );
 
   const handleStartRename = useCallback(

@@ -9,6 +9,7 @@ import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
 import { getMimeType } from "./gateway/mime";
+import { safeWsSend } from "./gateway/ws-broadcast";
 import { type WebSocket } from "ws";
 import { createLogger, setLogSink } from "./shared/lib/logger";
 import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
@@ -75,9 +76,7 @@ const apiHandler = createHttpHandler({
   broadcastEvent: (event: Record<string, unknown>) => {
     const msg = JSON.stringify(event);
     for (const ws of wss.clients as Set<WebSocket>) {
-      try {
-        ws.send(msg);
-      } catch {}
+      safeWsSend(ws, msg);
     }
   },
   sandboxEnabled: config.sandboxEnabled,
@@ -88,7 +87,11 @@ const apiHandler = createHttpHandler({
         try {
           const instance = await mgr.getOrCreate(userId);
           return instance.endpoint ?? null;
-        } catch {
+        } catch (err) {
+          log.warn("Failed to get sandbox preview endpoint", {
+            userId,
+            error: err instanceof Error ? err.message : String(err),
+          });
           return null;
         }
       }

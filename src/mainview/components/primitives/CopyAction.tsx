@@ -1,10 +1,10 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback } from "react";
 import { Check, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cx } from "../../lib/classes";
 import { IconButton } from "./IconButton";
 import { Tooltip } from "./Tooltip";
-import { useCopyFeedback } from "./use-copy-feedback";
+import { useClipboard } from "../chat/preview/use-clipboard";
 
 type CopyActionSize = "xs" | "sm";
 
@@ -44,25 +44,16 @@ export const CopyAction = memo(function CopyAction({
   tooltipSide = "top",
 }: CopyActionProps) {
   const { t } = useTranslation("common");
-  const [copied, setCopied] = useState(false);
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyWithFeedback = useCopyFeedback({ successMessage, failureMessage, showToast });
+  const { copied, copy } = useClipboard(1500, {
+    successMessage,
+    failureMessage,
+    showToast,
+  });
 
-  useEffect(() => {
-    return () => {
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    };
-  }, []);
-
-  const handleCopy = useCallback(async () => {
+  const handleCopy = useCallback(() => {
     const resolvedText = textGetter ? textGetter() : (text ?? "");
-    const ok = await copyWithFeedback(resolvedText);
-    if (!ok) return;
-
-    setCopied(true);
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    resetTimerRef.current = setTimeout(() => setCopied(false), 1500);
-  }, [copyWithFeedback, text, textGetter]);
+    copy(resolvedText);
+  }, [copy, text, textGetter]);
 
   const copyLabel = title ?? t("copy");
   const label = copied ? (copiedTitle ?? t("copied")) : copyLabel;
