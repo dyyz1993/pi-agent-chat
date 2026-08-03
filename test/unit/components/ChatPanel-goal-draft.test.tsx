@@ -1,11 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildGoalDraftMarkdown } from "../../../src/mainview/components/chat/goal-draft";
-import { GoalDraftCard } from "../../../src/mainview/components/chat/ChatPanel";
-
-afterEach(() => {
-  cleanup();
-});
 
 describe("ChatPanel goal draft", () => {
   it("builds an Xcode-like target manifest for a goal draft", () => {
@@ -42,26 +36,5 @@ describe("ChatPanel goal draft", () => {
     expect(markdown).toContain("# Target: 围绕 当前项目 生成一个可执行、可验收的开发目标。");
     expect(markdown).toContain("- Project: 当前项目");
     expect(markdown).toContain("- Entry: 当前会话");
-  });
-
-  it("exposes a close action for exiting goal draft mode", () => {
-    const onClose = vi.fn();
-    render(
-      <GoalDraftCard
-        draft="# Target: Demo"
-        editing={false}
-        onChange={vi.fn()}
-        onGenerate={vi.fn()}
-        onEdit={vi.fn()}
-        onSave={vi.fn()}
-        onCancel={vi.fn()}
-        onClose={onClose}
-        onAdd={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId("goal-draft-close"));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

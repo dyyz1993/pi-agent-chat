@@ -17,8 +17,6 @@ import {
   FolderOpen,
   Sparkles,
   Target,
-  Eye,
-  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Message } from "@dyyz1993/pi-ai";
@@ -52,7 +50,6 @@ import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { GoalVendorActionCard } from "./GoalVendorActionCard";
-import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import {
   useReturnToSourceSession,
   type ReturnSourceTarget,
@@ -384,134 +381,6 @@ function RefineGoalOverlay({ step }: { step: number }) {
   );
 }
 
-export function GoalDraftCard({
-  draft,
-  editing,
-  disabled,
-  onChange,
-  onGenerate,
-  onEdit,
-  onSave,
-  onCancel,
-  onClose,
-  onAdd,
-}: {
-  draft: string;
-  editing: boolean;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-  onGenerate: () => void;
-  onEdit: () => void;
-  onSave: () => void;
-  onCancel: () => void;
-  onClose: () => void;
-  onAdd: () => void;
-}) {
-  const { t } = useTranslation("chat");
-  return (
-    <CardPrimitive
-      tone="accent"
-      data-testid="goal-draft-card"
-      className="mx-2 mt-2 overflow-hidden max-sm:mx-0 max-sm:rounded-none"
-    >
-      <div className="flex items-center gap-2 border-b border-accent/15 px-3 py-2 max-sm:px-2">
-        <button
-          type="button"
-          data-testid="goal-draft-close"
-          onClick={onClose}
-          disabled={disabled}
-          className="shrink-0 rounded-md p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-          title={t("goal.cancelCompose")}
-          aria-label={t("goal.cancelCompose")}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Target className="h-3.5 w-3.5 shrink-0 text-accent" />
-          <div className="min-w-0">
-            <div className="text-xs font-medium text-text-primary">{t("goal.draft.title")}</div>
-            <div className="text-[11px] text-text-tertiary">{t("goal.draft.subtitle")}</div>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                data-testid="goal-draft-cancel-edit"
-                onClick={onCancel}
-                disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-transparent px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <X className="h-3 w-3" />
-                {t("goal.draft.cancelEdit")}
-              </button>
-              <button
-                type="button"
-                data-testid="goal-draft-save-preview"
-                onClick={onSave}
-                disabled={(disabled ?? false) || !draft.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Eye className="h-3 w-3" />
-                {t("goal.draft.save")}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                data-testid="goal-draft-regenerate"
-                onClick={onGenerate}
-                disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-transparent px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <RefreshCw className="h-3 w-3" />
-                <span className="max-sm:hidden">{t("goal.draft.regenerate")}</span>
-                <span className="sm:hidden">{t("goal.draft.generateShort")}</span>
-              </button>
-              <button
-                type="button"
-                data-testid="goal-draft-add"
-                onClick={onAdd}
-                disabled={(disabled ?? false) || !draft.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Check className="h-3 w-3" />
-                {t("goal.draft.confirm")}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      <div
-        className={`max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh] max-sm:px-2${
-          editing ? "" : " cursor-pointer"
-        }`}
-        onClick={editing ? undefined : onEdit}
-      >
-        {editing ? (
-          <textarea
-            value={draft}
-            data-testid="goal-draft-editor"
-            onChange={(event) => onChange(event.target.value)}
-            className="min-h-48 w-full resize-y rounded-md border border-border-primary bg-bg-elevated px-3 py-2 font-mono text-xs leading-5 text-text-primary outline-none transition-colors focus:border-border-focus max-sm:min-h-64 max-sm:px-2"
-            aria-label={t("goal.draft.editorLabel")}
-          />
-        ) : (
-          <>
-            <div className="prose prose-sm max-w-none text-xs text-text-secondary dark:prose-invert prose-headings:my-2 prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">
-              <CachedReactMarkdown>{draft}</CachedReactMarkdown>
-            </div>
-            <div className="mt-1 border-t border-dashed border-border-primary/50 pt-1 text-[10px] text-text-tertiary">
-              ✏️ {t("goal.draft.clickToEdit")}
-            </div>
-          </>
-        )}
-      </div>
-    </CardPrimitive>
-  );
-}
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
@@ -862,14 +731,9 @@ export function ChatPanel() {
     isRefiningGoal,
     refineStep,
     goalDraft,
-    isGoalDraftEditing,
     setGoalDraft,
     startGoalMode,
     exitGoalMode,
-    generateGoalDraft,
-    handleEditGoalDraft,
-    handleCancelGoalDraftEdit,
-    handleSaveGoalDraftEdit,
     handleCreateGoal: handleCreateGoalBase,
     handleRefineGoal,
   } = useGoalMode({
@@ -1768,52 +1632,6 @@ export function ChatPanel() {
                     {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
                     {!goalMode && <AttachmentBar />}
                     {!goalMode && <ComposerPlaceholderBar />}
-                    {goalMode && (
-                      <div className="mx-2 mt-2 flex flex-col gap-2 rounded-lg border border-border-primary/70 bg-bg-secondary/60 px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0 text-[11px] leading-4 text-text-tertiary">
-                          <span className="font-medium text-text-secondary">
-                            {t("goal.draft.entryTitle")}
-                          </span>
-                          <span className="ml-1">{t("goal.draft.entryHint")}</span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={generateGoalDraft}
-                            disabled={isCreatingGoal || isRefiningGoal}
-                            className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-surface-dim px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" />
-                            {goalDraft ? t("goal.draft.regenerate") : t("goal.draft.generate")}
-                          </button>
-                          <button
-                            type="button"
-                            data-testid="goal-draft-entry-close"
-                            onClick={exitGoalMode}
-                            disabled={isCreatingGoal || isRefiningGoal}
-                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                            title={t("goal.cancelCompose")}
-                            aria-label={t("goal.cancelCompose")}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {goalMode && goalDraft && (
-                      <GoalDraftCard
-                        draft={goalDraft}
-                        editing={isGoalDraftEditing}
-                        disabled={isCreatingGoal || isRefiningGoal}
-                        onChange={setGoalDraft}
-                        onGenerate={generateGoalDraft}
-                        onEdit={handleEditGoalDraft}
-                        onSave={handleSaveGoalDraftEdit}
-                        onCancel={handleCancelGoalDraftEdit}
-                        onClose={exitGoalMode}
-                        onAdd={() => void handleCreateGoal()}
-                      />
-                    )}
                     {activeRemoteDisconnected && (
                       <CardPrimitive
                         tone="error"
@@ -1860,6 +1678,9 @@ export function ChatPanel() {
                       onPopupCancel={commandPopup.closePopup}
                       onPopupArrowUp={commandPopup.navigateUp}
                       onPopupArrowDown={commandPopup.navigateDown}
+                      goalMode={goalMode}
+                      goalDraft={goalDraft}
+                      onGoalDraftChange={setGoalDraft}
                     />
                     {showComposerUtilityRow && (
                       <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5 max-lg:min-h-8 max-lg:py-1">
