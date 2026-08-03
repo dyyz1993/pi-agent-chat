@@ -75,6 +75,7 @@ import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalMode } from "./use-goal-mode";
 import { useGoalStore } from "../../stores/use-goal-store";
 import { CardPrimitive } from "../primitives/CardPrimitive";
+import { useProjectPendingCount } from "./UIPendingCenter";
 import { useMessageActions } from "./use-message-actions";
 import { useAttachmentDrop } from "./use-attachment-drop";
 import { useSendMessage } from "./use-send-message";
@@ -892,7 +893,9 @@ export function ChatPanel() {
   const hasSendableContent = goalMode
     ? inputText.trim().length > 0 || goalDraft.trim().length > 0
     : inputText.trim().length > 0 || attachmentCount > 0 || hasComposerPlaceholders;
-  const composerInputDisabled = !activeSessionId || isCreatingGoal || activeRemoteDisconnected;
+  const projectPendingCount = useProjectPendingCount();
+  const composerInputDisabled =
+    !activeSessionId || isCreatingGoal || activeRemoteDisconnected || projectPendingCount > 0;
   const sendDisabled =
     !agentReady ||
     isAborting ||
@@ -1750,7 +1753,7 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
-                {!goalMode && (
+                {!goalMode && projectPendingCount === 0 && (
                   <GoalVendorActionCard
                     sessionId={activeSessionId}
                     onEdit={startGoalMode}
