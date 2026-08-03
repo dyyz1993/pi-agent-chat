@@ -93,7 +93,7 @@ describe("ChatPanel.handleNavDotClick — uses guarded message scroll", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
     const handleClickSection = source.slice(
       source.indexOf("const handleNavDotClick"),
-      source.indexOf("const handleSend"),
+      source.indexOf("} = useAttachmentDrop()"),
     );
     expect(handleClickSection).toContain("(target: SideNavTarget)");
     expect(handleClickSection).toContain("scrollToMessage(target.messageId");

@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { ImageContent, Message } from "@dyyz1993/pi-ai";
+import type { Message } from "@dyyz1993/pi-ai";
 import { createLogger } from "../../../shared/lib/logger";
 import { normalizeToolBlocks, useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -67,8 +67,6 @@ import { TextSelectionToolbar } from "./TextSelectionToolbar";
 import { ComposerPlaceholderBar } from "./ComposerPlaceholderBar";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import {
-  composeInputWithPlaceholders,
-  persistComposerPlaceholders,
   useComposerPlaceholderStore,
 } from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
@@ -79,6 +77,7 @@ import { agentColorStyle } from "../../utils/agent-color";
 import { useGoalMode } from "./use-goal-mode";
 import { useMessageActions } from "./use-message-actions";
 import { useAttachmentDrop } from "./use-attachment-drop";
+import { useSendMessage } from "./use-send-message";
 import { ChatReloadButton, shouldShowChatReloadButton } from "./SessionReloadButton";
 import { FileOverlay } from "../file-preview/FileOverlay";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -1103,6 +1102,18 @@ export function ChatPanel() {
     if (created) resumeAutoScroll();
   }, [handleCreateGoalBase, resumeAutoScroll]);
 
+  const handleSend = useSendMessage({
+    inputText,
+    attachmentCount,
+    hasComposerPlaceholders,
+    isStreaming,
+    isMobileOrTablet,
+    sendMessage,
+    sendSteer,
+    resumeAutoScroll,
+    inputBarRef,
+  });
+
   const captureTopLoadScrollAnchor = useCallback(() => {
     if (!activeSessionId) return;
     const el = messagesScrollRef.current;
@@ -1517,84 +1528,6 @@ export function ChatPanel() {
     ],
   );
 
-  const handleSend = async () => {
-    if (!inputText.trim() && attachmentCount === 0 && !hasComposerPlaceholders) return;
-
-    const attachmentStore = useAttachmentStore.getState();
-    const hasAttachments = attachmentStore.attachments.length > 0;
-
-    if (hasAttachments) {
-      const attachments = attachmentStore.attachments;
-      const imageAttachments = attachments.filter((a) => a.type.startsWith("image/"));
-      const fileAttachments = attachments.filter((a) => !a.type.startsWith("image/"));
-
-      const images: ImageContent[] = [];
-      for (const att of imageAttachments) {
-        try {
-          const arrayBuffer = await att.file.arrayBuffer();
-          const { Buffer: BunBuffer } = await import("buffer");
-          const base64 = BunBuffer.from(arrayBuffer).toString("base64");
-          const ext = att.name.split(".").pop()?.toLowerCase();
-          const mimeType =
-            ext === "jpg" || ext === "jpeg"
-              ? "image/jpeg"
-              : ext === "gif"
-                ? "image/gif"
-                : ext === "webp"
-                  ? "image/webp"
-                  : "image/png";
-          images.push({ type: "image", data: base64, mimeType });
-        } catch {
-          fileAttachments.push(att);
-        }
-      }
-
-      let filePaths: string[] = [];
-      if (fileAttachments.length > 0) {
-        attachmentStore.clearAll();
-        for (const att of fileAttachments) {
-          useAttachmentStore.getState().addFiles([att.file]);
-        }
-        const uploaded = await useAttachmentStore.getState().uploadAll();
-        filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
-      }
-
-      attachmentStore.clearAll();
-
-      if (images.length > 0) {
-        useChatStore.getState().setPendingImages(images);
-      }
-
-      if (filePaths.length > 0) {
-        const fileRefs = filePaths.map((p) => `@${p}`).join(" ");
-        const currentText = useChatStore.getState().inputText;
-        const text = currentText.trim() ? `${currentText.trim()}\n${fileRefs}` : fileRefs;
-        useChatStore.getState().setInputText(text);
-      }
-    }
-
-    const placeholders = useComposerPlaceholderStore.getState().placeholders;
-    if (placeholders.length > 0) {
-      await persistComposerPlaceholders(placeholders, (path, content) =>
-        apiClient.call("file.writeFile", { path, content }),
-      );
-      const currentText = useChatStore.getState().inputText;
-      useChatStore.getState().setInputText(composeInputWithPlaceholders(currentText, placeholders));
-    }
-
-    if (isStreaming) {
-      await sendSteer();
-    } else {
-      await sendMessage();
-    }
-    if (placeholders.length > 0) {
-      useComposerPlaceholderStore.getState().clearPlaceholders();
-    }
-    resumeAutoScroll();
-    if (isMobileOrTablet) {
-      inputBarRef.current?.blur();
-    }
-  };
 
   const [handleFollowUp, isFollowUpRunning] = useAsyncGuard(async () => {
     if (!inputText.trim() || !isStreaming) return;
