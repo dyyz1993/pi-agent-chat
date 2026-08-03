@@ -47,4 +47,29 @@ describe("useLayoutStore", () => {
     expect(useLayoutStore.getState().statusPanel).toBe("visible");
     expect(useLayoutStore.getState().activePanelTab).toBe("supervisor");
   });
+
+  it("forces status panel to visible on mobile when it was pinned (so RightSidebar renders)", () => {
+    useLayoutStore.setState({ statusPanel: "pinned", breakpoint: "mobile" });
+
+    useLayoutStore.getState().openStatusPanel("goal");
+
+    expect(useLayoutStore.getState().statusPanel).toBe("visible");
+    expect(useLayoutStore.getState().activePanelTab).toBe("goal");
+  });
+
+  it("forces status panel to visible on tablet when it was pinned", () => {
+    useLayoutStore.setState({ statusPanel: "pinned", breakpoint: "tablet" });
+
+    useLayoutStore.getState().openStatusPanel("goal");
+
+    expect(useLayoutStore.getState().statusPanel).toBe("visible");
+  });
+
+  it("forces status panel to visible on mobile when it was hidden", () => {
+    useLayoutStore.setState({ statusPanel: "hidden", breakpoint: "mobile" });
+
+    useLayoutStore.getState().openStatusPanel("goal");
+
+    expect(useLayoutStore.getState().statusPanel).toBe("visible");
+  });
 });

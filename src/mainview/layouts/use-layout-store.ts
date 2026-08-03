@@ -239,17 +239,23 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     writeNum(STATUS_WIDTH_KEY, clamped);
   },
   openStatusPanel: (tab) => {
+    const bp = get().breakpoint;
     const cur = get().statusPanel;
     const patch: Partial<LayoutState> = {};
-    if (cur === "hidden") {
+
+    // Mobile/tablet only render RightSidebar when statusPanel === "visible"
+    // (pinned is treated as hidden on small screens). Force visible so the
+    // panel actually shows up when the user requests it.
+    if ((bp === "mobile" || bp === "tablet") && cur !== "visible") {
+      patch.statusPanel = "visible";
+    } else if (cur === "hidden") {
       patch.statusPanel = "visible";
     }
+
     if (tab) patch.activePanelTab = tab;
     if (Object.keys(patch).length > 0) {
       set(patch);
-    }
-    if (cur === "hidden") {
-      writePanel(STATUS_PANEL_KEY, "visible");
+      if (patch.statusPanel) writePanel(STATUS_PANEL_KEY, patch.statusPanel);
     }
   },
 
