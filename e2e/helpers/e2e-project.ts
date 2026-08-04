@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -59,12 +60,17 @@ function rpcCall<T>(method: string, params: Record<string, unknown>): Promise<T>
 
 export async function ensureE2EProject(): Promise<string> {
   preparedProjectPromise ??= (async () => {
-    const projectPath = join(tmpdir(), "pi-agent-chat-e2e-project");
-    await mkdir(projectPath, { recursive: true });
+    // Resolve symlinks (e.g. /var → /private/var on macOS) so goal-vendor's
+    // realpathSync of workspaceRoot matches the lexical cwd it uses for
+    // verification path resolution. Without this, file_exists checks fail
+    // with "verification path leaves the approved workspace".
+    const raw = join(tmpdir(), "pi-agent-chat-e2e-project");
+    await mkdir(raw, { recursive: true });
     await writeFile(
-      join(projectPath, "README.md"),
+      join(raw, "README.md"),
       "# Pi Agent Chat E2E Project\n\nTemporary project opened by Playwright smoke tests.\n",
     );
+    const projectPath = realpathSync(raw);
     await rpcCall("project.open", { path: projectPath });
     return projectPath;
   })();

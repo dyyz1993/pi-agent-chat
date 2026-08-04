@@ -32,9 +32,10 @@ export function buildSampleContract(projectPath: string): {
       { id: "P2", title: "Implement game", dependsOn: ["P1"], criterionIds: ["AC1", "AC2"] },
       { id: "P3", title: "Validate + README", dependsOn: ["P2"], criterionIds: ["AC3"] },
     ],
+    // Use relative paths so goal-vendor resolves them against workspaceRoot
+    // — avoids the /var ↔ /private/var symlink mismatch on macOS.
     verificationChecks: [
-      { id: "VC1", kind: "file_exists", label: "index.html exists", path: `${projectPath}/index.html` },
-      { id: "VC2", kind: "file_exists", label: "game.js exists", path: `${projectPath}/game.js` },
+      { id: "VC1", kind: "file_exists", label: "README exists", path: "README.md" },
     ],
     authorities: [],
     constraints: ["Do not perform npm install or package registry actions", "Use vanilla HTML/CSS/JS"],
