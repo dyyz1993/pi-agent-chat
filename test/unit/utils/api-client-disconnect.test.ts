@@ -80,7 +80,7 @@ describe("apiClient disconnect behavior", () => {
     apiClient.initSyncForDesktop();
 
     // Start a call that will hang
-    const callPromise = apiClient.call("agent.getFullMessages", { sessionId: "test" });
+    const callPromise = apiClient.call("agent.getMessages", { sessionId: "test" });
     await new Promise((r) => setTimeout(r, 50)); // let it register
 
     // Trigger disconnect
