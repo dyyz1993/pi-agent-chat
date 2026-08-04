@@ -30,7 +30,7 @@ import {
   type DelegateReplyMetadata,
   formatDelegateElapsed,
   resolveDelegateSessionPaths,
-  stripParentSessionFromHeader,
+  prepareForkedSession,
   wrapDelegateReply,
   writeDelegateSessionHeader,
 } from "./coordinator-delegate-utils";
@@ -919,7 +919,7 @@ export async function handleCoordinatorDelegateForkOperation<
     copyFileSync(sessionPath, forkedPath);
   }
 
-  stripParentSessionFromHeader(forkedPath);
+  prepareForkedSession(forkedPath, forkedSessionId);
 
   const result = await options.start(forkedSessionId, projectPath, forkedPath, {
     forceNewProcess: true,

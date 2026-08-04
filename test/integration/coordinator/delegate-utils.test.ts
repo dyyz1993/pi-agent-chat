@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   buildDelegateReplyParams,
@@ -12,6 +12,7 @@ import {
   buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
   formatDelegateElapsed,
+  prepareForkedSession,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
   wrapDelegateReply,
@@ -126,6 +127,101 @@ describe("coordinator delegate utils", () => {
     expect(JSON.parse(messageLine)).toEqual({
       type: "message",
       parentSession: "message-parent",
+    });
+  });
+
+  describe("prepareForkedSession", () => {
+    const tmpDir = path.join(os.tmpdir(), "pi-test-prepare-fork");
+    let forkFilePath: string;
+    const forkedSessionId = "sess_fork_1234567890_abcDEF";
+
+    beforeEach(() => {
+      mkdirSync(tmpDir, { recursive: true });
+      forkFilePath = path.join(tmpDir, `${forkedSessionId}.jsonl`);
+    });
+
+    afterEach(() => {
+      rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("updates header.id to the forked session id", () => {
+      const originalSessionId = "67a17add-197c-4c12-8bd6-13025042d6b6";
+      writeFileSync(
+        forkFilePath,
+        [
+          JSON.stringify({ type: "session", version: 3, id: originalSessionId, cwd: "/repo" }),
+          JSON.stringify({ type: "message", id: "msg1", role: "user", content: "hi" }),
+        ].join("\n") + "\n",
+        "utf-8",
+      );
+
+      prepareForkedSession(forkFilePath, forkedSessionId);
+
+      const lines = readFileSync(forkFilePath, "utf-8").trim().split("\n");
+      const header = JSON.parse(lines[0]);
+      expect(header.id).toBe(forkedSessionId);
+      expect(header.id).not.toBe(originalSessionId);
+    });
+
+    it("removes delegate_info entries that would create false child relationships", () => {
+      writeFileSync(
+        forkFilePath,
+        [
+          JSON.stringify({ type: "session", version: 3, id: "orig-123", cwd: "/repo" }),
+          JSON.stringify({ type: "delegate_info", delegateParentSessionId: "orig-parent", delegateType: "fork" }),
+          JSON.stringify({ type: "message", id: "msg1", role: "user", content: "hello" }),
+          JSON.stringify({ type: "delegate_info", delegateParentSessionId: "orig-parent-2", delegateType: "delegate" }),
+          JSON.stringify({ type: "message", id: "msg2", role: "assistant", content: "world" }),
+        ].join("\n") + "\n",
+        "utf-8",
+      );
+
+      prepareForkedSession(forkFilePath, forkedSessionId);
+
+      const lines = readFileSync(forkFilePath, "utf-8").trim().split("\n");
+      const types = lines.map((l) => JSON.parse(l).type);
+      expect(types).not.toContain("delegate_info");
+      // Messages should be preserved
+      expect(types.filter((t) => t === "message").length).toBe(2);
+    });
+
+    it("adds Fork prefix to session_info name", () => {
+      writeFileSync(
+        forkFilePath,
+        [
+          JSON.stringify({ type: "session", version: 3, id: "orig-123", cwd: "/repo" }),
+          JSON.stringify({ type: "session_info", name: "GLM 模型配置问题分析", cwd: "/repo" }),
+          JSON.stringify({ type: "message", id: "msg1", role: "user", content: "hi" }),
+        ].join("\n") + "\n",
+        "utf-8",
+      );
+
+      prepareForkedSession(forkFilePath, forkedSessionId);
+
+      const lines = readFileSync(forkFilePath, "utf-8").trim().split("\n");
+      const sessionInfo = lines
+        .map((l) => JSON.parse(l))
+        .find((e) => e.type === "session_info");
+      expect(sessionInfo.name).toContain("Fork");
+      expect(sessionInfo.name).toContain("GLM 模型配置问题分析");
+    });
+
+    it("handles files with no session_info (no crash, no name change)", () => {
+      writeFileSync(
+        forkFilePath,
+        [
+          JSON.stringify({ type: "session", version: 3, id: "orig-123", cwd: "/repo" }),
+          JSON.stringify({ type: "message", id: "msg1", role: "user", content: "hi" }),
+        ].join("\n") + "\n",
+        "utf-8",
+      );
+
+      // Should not throw
+      expect(() => prepareForkedSession(forkFilePath, forkedSessionId)).not.toThrow();
+
+      const lines = readFileSync(forkFilePath, "utf-8").trim().split("\n");
+      const header = JSON.parse(lines[0]);
+      expect(header.id).toBe(forkedSessionId);
     });
   });
 
