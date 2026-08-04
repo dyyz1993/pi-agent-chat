@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
+import type { RpcDriver, SessionCreateResult } from "./rpc-driver";
 
 export const E2E_AUTH_TOKEN = process.env.E2E_AUTH_TOKEN ?? "test-ci-token";
 export const E2E_PAGE_URL = `/?token=${encodeURIComponent(E2E_AUTH_TOKEN)}`;
@@ -70,3 +71,25 @@ export async function ensureE2EProject(): Promise<string> {
 
   return preparedProjectPromise;
 }
+
+/**
+ * Create a fresh session for the e2e project and start the agent. Use this
+ * in L2/L4 tests that need a real session backed by pi CLI. Returns the
+ * session id and path so callers can drive the goal lifecycle via RpcDriver.
+ */
+export async function ensureE2ESession(driver: RpcDriver): Promise<SessionCreateResult> {
+  const projectPath = await ensureE2EProject();
+  const session = await driver.createSession(projectPath, "e2e-session");
+  await driver.startAgent(session.sessionId, projectPath, session.sessionPath);
+  return session;
+}
+
+/** Cancel any active goal and clean up. Best-effort; ignores errors. */
+export async function cleanupE2ESession(driver: RpcDriver, sessionId: string): Promise<void> {
+  try {
+    await driver.clearGoal(sessionId);
+  } catch {
+    // ignore — goal may already be cleared
+  }
+}
+
