@@ -1564,6 +1564,18 @@ export function ChatPanel() {
             {activeSessionId && !isViewingSubagent && (
               <>
                 <QueueCards sessionId={activeSessionId} />
+                {!goalMode && projectPendingCount === 0 && (
+                  <div className="px-3 py-1.5 flex-shrink-0">
+                    <GoalVendorActionCard
+                      sessionId={activeSessionId}
+                      onEdit={startGoalMode}
+                      onCancel={(sid) => {
+                        void useGoalStore.getState().clearGoal(sid);
+                        pushNotif({ message: t("goal.cancelled"), level: "info" });
+                      }}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1617,16 +1629,6 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
-                {!goalMode && projectPendingCount === 0 && (
-                  <GoalVendorActionCard
-                    sessionId={activeSessionId}
-                    onEdit={startGoalMode}
-                    onCancel={(sid) => {
-                      void useGoalStore.getState().clearGoal(sid);
-                      pushNotif({ message: t("goal.cancelled"), level: "info" });
-                    }}
-                  />
-                )}
                 <div className="flex items-end gap-1.5">
                   <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
                     {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}

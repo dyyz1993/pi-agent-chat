@@ -101,7 +101,7 @@ export function GoalVendorActionCard({ sessionId, onEdit, onCancel }: GoalVendor
     <CardPrimitive
       tone={tone.tone}
       data-testid="goal-vendor-action-card"
-      className="mx-2 mb-2 px-2.5 py-2 transition-colors hover:bg-surface-hover/70 sm:mx-0"
+      className="px-2.5 py-2 transition-colors hover:bg-surface-hover/70"
       aria-label={t("goal.activeCardLabel")}
     >
       <div className="flex min-w-0 items-start gap-2">
