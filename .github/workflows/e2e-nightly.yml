@@ -1,20 +1,20 @@
-name: E2E Tests
+name: E2E Nightly
 
 on:
-  push:
-    branches: [master, main]
-  pull_request:
-    branches: [master, main]
+  schedule:
+    # 3:00 AM UTC every day
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  group: e2e-nightly-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  e2e:
-    name: Playwright E2E
+  nightly:
+    name: L2 goal + L3 extensions
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -26,19 +26,17 @@ jobs:
 
       - run: bunx playwright install --with-deps chromium
 
-      # L1 smoke + legacy core specs (fast, every PR)
       - run: >
           bunx playwright test
-          --project=smoke
-          --project=legacy
+          --project=goal
+          --project=extensions
           --reporter=list
-          --max-failures=5
         env:
           CI: true
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-nightly-report
           path: playwright-report/
-          retention-days: 7
+          retention-days: 14
