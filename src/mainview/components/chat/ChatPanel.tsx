@@ -1708,7 +1708,7 @@ export function ChatPanel() {
                     )}
                   </div>
 
-                  <div className="flex shrink-0 flex-col justify-end gap-1.5 py-1 pr-1.5">
+                  <div className="flex shrink-0 flex-col items-center justify-end gap-1.5 py-1 px-1.5">
                     {goalMode ? (
                       <button
                         onClick={() => void handleRefineGoal()}
