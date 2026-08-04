@@ -146,10 +146,8 @@ export function groupSessions(
   const sortPinnedFirst = (s: SessionMeta[]) =>
     [...s].sort((a, b) => {
       const getPriority = (sess: SessionMeta): number => {
-        const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
         if (isWorkingSession(sess)) return 0;
         if (sess.pinned) return 1;
-        if (isEmpty) return 3;
         return 2;
       };
       const priorityA = getPriority(a);
