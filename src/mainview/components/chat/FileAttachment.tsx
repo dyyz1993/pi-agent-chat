@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from "react";
-import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Target, Plus, Repeat2 } from "lucide-react";
+import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Target, Plus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
@@ -242,16 +242,8 @@ export function AttachmentButtons({
     handleGoalClick();
   }, [handleGoalClick]);
 
-  const openLoopPanel = useCallback(() => {
-    setIsAddMenuOpen(false);
-    openStatusPanel("goal");
-  }, [openStatusPanel]);
-
   const showGoalIndicator =
     mode === "goal" || (!!goalStatus && goalRawStatus !== "none" && goalRawStatus !== "cancelled");
-  const showLoopIndicator =
-    goalStatus?.enabled === true &&
-    (goalStatus.state === "running" || goalStatus.state === "checking");
   const compactStatusIcon: CompactStatusIcon | null = showGoalIndicator
     ? {
         key: "goal",
@@ -262,16 +254,7 @@ export function AttachmentButtons({
         onRemove: mode === "goal" ? onExitGoalMode : undefined,
         pulse: isPulsing,
       }
-    : showLoopIndicator
-      ? {
-          key: "loop",
-          title: t("composerState.loopTitle"),
-          Icon: Repeat2,
-          className: "text-status-info border-status-info/40 bg-status-info/10",
-          onClick: openLoopPanel,
-          pulse: true,
-        }
-      : null;
+    : null;
   const compactStatusKey = compactStatusIcon?.key ?? null;
 
   useEffect(() => {

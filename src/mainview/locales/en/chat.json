@@ -518,9 +518,6 @@
   "composerState.plan": "Plan mode",
   "composerState.planShort": "Plan",
   "composerState.planTitle": "Plan mode is enabled",
-  "composerState.loop": "Loop",
-  "composerState.loopShort": "Loop",
-  "composerState.loopTitle": "The agent is checking or continuing automatically",
   "composerActionsHint": "Add context",
 
   "event.sessionComplete": "Session complete",
