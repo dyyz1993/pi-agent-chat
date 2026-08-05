@@ -224,7 +224,23 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           : Array.isArray((result as Record<string, unknown>)?.result)
             ? ((result as Record<string, unknown>).result as unknown[])
             : [];
-        return items as unknown as R<"change-review.pending">;
+        // Strip bulk content fields before sending over the wire.
+        // Frontend only uses these as a fallback when agent process is gone
+        // (see use-git-store.ts); in normal operation the per-file diff is
+        // fetched on demand. Including them here balloons the response to
+        // 10+ MB on sessions with many file changes (binary assets become
+        // base64 strings), which fills the WS buffer and stalls pagination.
+        const stripped = items.map((it: unknown) => {
+          const i = it as {
+            oldContent?: unknown;
+            newContent?: unknown;
+            unifiedDiff?: unknown;
+            [key: string]: unknown;
+          };
+          const { oldContent: _o, newContent: _n, unifiedDiff: _d, ...rest } = i;
+          return rest;
+        });
+        return stripped as unknown as R<"change-review.pending">;
       } catch (err: unknown) {
         log.warn("review.pending channel call failed, falling back to JSONL", {
           sessionId: params.sessionId,
@@ -237,7 +253,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!params.sessionPath) return [];
     try {
       const items = await readPendingFromJsonl(params.sessionPath);
-      return items as unknown as R<"change-review.pending">;
+      // Same strip as above
+      const stripped = items.map((it) => {
+        const { oldContent: _o, newContent: _n, unifiedDiff: _d, ...rest } = it;
+        return rest;
+      });
+      return stripped as unknown as R<"change-review.pending">;
     } catch (err) {
       log.warn("review.pending JSONL read failed", {
         sessionId: params.sessionId,

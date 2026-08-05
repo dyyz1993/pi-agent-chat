@@ -126,7 +126,8 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
 
         return new Promise<void>((resolve, reject) => {
           try {
-            ws.send(JSON.stringify(message), (err?: Error) => {
+            const payload = JSON.stringify(message);
+            ws.send(payload, (err?: Error) => {
               if (err) {
                 log.error("[ws-out] send failed", {
                   type: msg.type,
