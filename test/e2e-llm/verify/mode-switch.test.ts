@@ -150,7 +150,7 @@ describe.skipIf(shouldRun === false)("Bug1+Bug2 RPC Live Verification", () => {
 
       await agentEndPromise;
 
-      const msgResp = await sendRPC(ws, "agent.getMessages", { sessionId });
+      const msgResp = await sendRPC(ws, "agent.getFullMessages", { sessionId });
       const messages = (msgResp.result as { messages: Array<Record<string, unknown>> }).messages;
 
       const assistantMsgs = messages.filter((m) => m.role === "assistant");

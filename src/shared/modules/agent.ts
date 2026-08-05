@@ -105,10 +105,6 @@ export interface AgentMethods {
       contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
     } | null;
   };
-  "agent.getMessages": {
-    params: { sessionId: string; sessionPath?: string };
-    result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
-  };
   "agent.getFullMessages": {
     params: {
       sessionId: string;

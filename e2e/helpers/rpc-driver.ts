@@ -164,7 +164,7 @@ export class RpcDriver {
   }
 
   async getMessages(sessionId: string, limit = 50): Promise<unknown[]> {
-    const r = await this.call<{ messages?: unknown[] } | unknown[]>('agent.getMessages', { sessionId, limit });
+    const r = await this.call<{ messages?: unknown[] } | unknown[]>('agent.getFullMessages', { sessionId, limit });
     return Array.isArray(r) ? r : (r?.messages ?? []);
   }
 

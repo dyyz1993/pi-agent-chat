@@ -232,7 +232,7 @@ describe_("RpcClient Integration Tests", () => {
     });
 
     it("should get messages (empty new session)", async () => {
-      const resp = await sendRPC(ws!, "agent.getMessages", { sessionId: sessionId! });
+      const resp = await sendRPC(ws!, "agent.getFullMessages", { sessionId: sessionId! });
       expect(resp.error).toBeUndefined();
       const result = resp.result as { messages: unknown[] };
       expect(result.messages).toBeDefined();
@@ -270,7 +270,7 @@ describe_("RpcClient Integration Tests", () => {
     });
 
     it("should have 2 messages after reply", async () => {
-      const resp = await sendRPC(ws!, "agent.getMessages", { sessionId: sessionId! });
+      const resp = await sendRPC(ws!, "agent.getFullMessages", { sessionId: sessionId! });
       expect(resp.error).toBeUndefined();
       const result = resp.result as { messages: Array<Record<string, unknown>> };
       expect(result.messages.length).toBeGreaterThanOrEqual(2);
@@ -392,7 +392,7 @@ describe_("RpcClient Integration Tests", () => {
         const status = (startResp.result as { status: string }).status;
         expect(status === "started" || status === "already_running").toBe(true);
 
-        const msgResp = await sendRPC(ws2, "agent.getMessages", { sessionId: sessionId! });
+        const msgResp = await sendRPC(ws2, "agent.getFullMessages", { sessionId: sessionId! });
         const msgResult = msgResp.result as { messages: Array<Record<string, unknown>> };
         expect(msgResult.messages).toBeDefined();
         expect(Array.isArray(msgResult.messages)).toBe(true);
@@ -514,7 +514,7 @@ describe_("RpcClient Integration Tests", () => {
         });
         expect(startResp.error).toBeUndefined();
 
-        const msgResp = await sendRPC(ws2, "agent.getMessages", { sessionId: sessionId! });
+        const msgResp = await sendRPC(ws2, "agent.getFullMessages", { sessionId: sessionId! });
         expect(msgResp.error).toBeUndefined();
         const msgResult = msgResp.result as { messages: Array<Record<string, unknown>> };
         expect(msgResult.messages.length).toBeGreaterThan(0);
@@ -558,7 +558,7 @@ describe_("RpcClient Integration Tests", () => {
     });
   });
 
-  describe("Suite 4: getMessages replaces session.getEntries", () => {
+  describe("Suite 4: getFullMessages replaces session.getEntries", () => {
     let ws: WebSocket | undefined;
     let sessionId: string | undefined;
     let sessionPath: string | undefined;
@@ -602,7 +602,7 @@ describe_("RpcClient Integration Tests", () => {
       });
       await agentEndPromise;
 
-      const msgResp = await sendRPC(ws!, "agent.getMessages", { sessionId: sessionId! });
+      const msgResp = await sendRPC(ws!, "agent.getFullMessages", { sessionId: sessionId! });
       expect(msgResp.error).toBeUndefined();
       const result = msgResp.result as {
         messages: Array<Record<string, unknown>>;

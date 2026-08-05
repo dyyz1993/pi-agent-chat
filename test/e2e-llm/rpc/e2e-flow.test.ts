@@ -216,8 +216,8 @@ describe.skipIf(shouldRun === false)(
       expect(state).toHaveProperty("messageCount");
     });
 
-    it("Step 7: agent.getMessages 初始消息为空", async () => {
-      const resp = await sendRPC(ws, "agent.getMessages", { sessionId });
+    it("Step 7: agent.getFullMessages 初始消息为空", async () => {
+      const resp = await sendRPC(ws, "agent.getFullMessages", { sessionId });
       expect(resp.error).toBeUndefined();
       const result = resp.result as { messages: unknown[] };
       expect(Array.isArray(result.messages)).toBe(true);
@@ -248,8 +248,8 @@ describe.skipIf(shouldRun === false)(
       await agentEndPromise;
     });
 
-    it("Step 9: agent.getMessages 验证收到回复", async () => {
-      const resp = await sendRPC(ws, "agent.getMessages", { sessionId });
+    it("Step 9: agent.getFullMessages 验证收到回复", async () => {
+      const resp = await sendRPC(ws, "agent.getFullMessages", { sessionId });
       expect(resp.error).toBeUndefined();
       const result = resp.result as { messages: Array<Record<string, unknown>> };
       expect(result.messages.length).toBeGreaterThanOrEqual(2);

@@ -123,7 +123,6 @@ export async function installMockRpcWithDefaults(page: Page, overrides: Record<s
     "agent.getState": { result: { status: "idle" } },
     "agent.getStatus": { result: { status: "idle" } },
     "goal.getStatus": { result: { enabled: false, state: "disabled", rawStatus: "none", rawPhase: "none", continuationSequence: 0, turnCount: 0 } },
-    "agent.getMessages": { result: { messages: [] } },
     ...overrides,
   });
 }
