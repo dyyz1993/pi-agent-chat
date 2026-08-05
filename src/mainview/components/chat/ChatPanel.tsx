@@ -1259,20 +1259,25 @@ export function ChatPanel() {
       });
       const olderMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
-        // Append older items at head; do NOT trim.
-        // Why no trim: previous trim logic set hasMoreNewer=true, which
-        // immediately triggered loadNewerSideNav on the next scroll event
-        // (user is at the bottom of the new content due to browser
-        // auto-adjust). loadNewerSideNav then overwrote sideNavCursor
-        // based on its own head-trim, causing loadMore to repeat the
-        // same request forever. SideNav uses DOM virtualization so a
-        // large data array is cheap to render.
+        // Prepend older items. If array exceeds SIDE_NAV_WINDOW_SIZE, trim
+        // from the TAIL (drop newest items). Crucially: do NOT touch
+        // sideNavCursor here — previous code did setSideNavCursor based on
+        // trim, which combined with loadNewerSideNav's similar cursor
+        // update caused an infinite cursor-overwrite loop.
+        //
+        // Trimmed newer items can be re-fetched via loadNewerSideNav when
+        // the user scrolls back down (hasMoreNewer flag below enables it).
         const merged = mergeSideNavMessages(olderMessages, prev);
         if (prev.length === 0 && merged.length > 0) {
           setSideNavNewestExtraCursor(merged[merged.length - 1]?.id ?? null);
         }
-        return merged;
+        if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
+        const trimmed = merged.slice(0, SIDE_NAV_WINDOW_SIZE);
+        setSideNavNewestExtraCursor(trimmed[trimmed.length - 1]?.id ?? null);
+        setSideNavHasMoreNewer(true);
+        return trimmed;
       });
+      // Cursor only advances from API response — never from trim.
       setSideNavCursor(result.nextCursor ?? null);
       setSideNavHasMore(result.hasMore === true);
       // Browser auto-adjusts scrollTop to maintain visual position when
@@ -1311,11 +1316,15 @@ export function ChatPanel() {
       });
       const newerMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
-        // Append newer items at tail; do NOT trim (same reason as loadMore:
-        // trim mutates sideNavCursor and creates a loadMore/loadNewer loop).
+        // Append newer items at tail. If exceeds cap, trim from HEAD (drop
+        // oldest). Do NOT touch sideNavCursor — same reason as loadMore.
+        // Trimmed older items can be re-fetched via loadMoreSideNav.
         const merged = mergeSideNavMessages(prev, newerMessages);
-        return merged;
+        if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
+        const trimmed = merged.slice(merged.length - SIDE_NAV_WINDOW_SIZE);
+        return trimmed;
       });
+      // Cursor only advances from API response — never from trim.
       setSideNavNewestExtraCursor(result.nextCursor ?? null);
       setSideNavHasMoreNewer(result.hasMore === true);
     } catch (err) {
