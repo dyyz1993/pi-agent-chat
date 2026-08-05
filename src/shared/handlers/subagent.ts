@@ -1,4 +1,6 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
+import * as readline from "node:readline";
+import { createReadStream } from "node:fs";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { SubagentSessionInfo } from "../modules/subagent";
@@ -108,24 +110,34 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { subsessions: [] };
     }
 
-    const content = await readFile(sessionPath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim());
+    // Stream the file line-by-line instead of readFile(end) so a 100MB
+    // session.jsonl doesn't blow memory. Only `customType === "subagent"`
+    // entries are kept in memory after parsing.
     const subsessions: SubagentSessionInfo[] = [];
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
 
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line) as Record<string, unknown>;
+    try {
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line) as Record<string, unknown>;
 
-        if (entry.type === "custom" && entry.customType === "subagent") {
-          const data = normalizePersistedSubagent(
-            (entry.data as Partial<SubagentSessionInfo> | undefined) ?? {},
-          );
-          if (data) subsessions.push(data);
+          if (entry.type === "custom" && entry.customType === "subagent") {
+            const data = normalizePersistedSubagent(
+              (entry.data as Partial<SubagentSessionInfo> | undefined) ?? {},
+            );
+            if (data) subsessions.push(data);
+          }
+        } catch (e) {
+          log.debug("subagent.listBySession: skipping malformed entry", { error: String(e) });
+          continue;
         }
-      } catch (e) {
-        log.debug("subagent.listBySession: skipping malformed entry", { error: String(e) });
-        continue;
       }
+    } finally {
+      rl.close();
     }
 
     const fallbackSubs = await loadFallbackSubagentSessions(sessionPath);
