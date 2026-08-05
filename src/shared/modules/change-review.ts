@@ -25,12 +25,12 @@ export interface ApprovalResult {
 
 export interface ChangeReviewMethods {
   "change-review.pending": {
-    params: { sessionId: string; sessionPath?: string };
-    result: PendingChangeResult[];
+    params: { sessionId: string; sessionPath?: string; limit?: number };
+    result: { items: PendingChangeResult[]; totalCount: number; hasMore: boolean };
   };
   "change-review.approvals": {
-    params: { sessionId: string; sessionPath?: string; status?: ReviewApprovalStatus };
-    result: ApprovalResult[];
+    params: { sessionId: string; sessionPath?: string; status?: ReviewApprovalStatus; limit?: number };
+    result: { items: ApprovalResult[]; totalCount: number; hasMore: boolean };
   };
   "change-review.approve": {
     params: { sessionId: string; path: string };

@@ -124,11 +124,13 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
 
         const approvalsResult = await apiClient.call("change-review.approvals", baseParams);
         const approvals = (
-          Array.isArray(approvalsResult) ? approvalsResult : []
+          Array.isArray(approvalsResult) ? approvalsResult : (approvalsResult?.items ?? [])
         ) as ReviewApproval[];
 
         const pendingResult = await apiClient.call("change-review.pending", baseParams);
-        const pending = (Array.isArray(pendingResult) ? pendingResult : []) as PendingChange[];
+        const pending = (
+          Array.isArray(pendingResult) ? pendingResult : (pendingResult?.items ?? [])
+        ) as PendingChange[];
 
         set({
           approvals,
@@ -180,7 +182,9 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
               sessionId: sub.sessionId,
               sessionPath: sub.sessionPath,
             });
-            const pending = (Array.isArray(pendingResult) ? pendingResult : []) as PendingChange[];
+            const pending = (
+              Array.isArray(pendingResult) ? pendingResult : (pendingResult?.items ?? [])
+            ) as PendingChange[];
             const pendingCount = pending.filter((change) => change.status === "pending").length;
             if (pendingCount === 0) return null;
             return {
