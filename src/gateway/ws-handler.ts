@@ -83,6 +83,10 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
             type: msg.type,
             id: msg.id,
             buffered: ws.bufferedAmount,
+            readyState: ws.readyState,
+            remoteAddress: (ws as WebSocket & { remoteAddress?: string }).remoteAddress,
+            url: (ws as WebSocket & { url?: string }).url,
+            protocol: ws.protocol,
           });
         }
 
@@ -220,17 +224,43 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     }, 30000);
   });
 
-  // Sweep all clients for dead connections every 45s.
-  // Catches connections that haven't responded to ping since last sweep.
+  // Sweep all clients for dead connections every 30s.
+  // Two termination criteria:
+  //   1. isAlive=false  → missed last pong (dead at TCP/JS level)
+  //   2. bufferedAmount > STUCK_BUFFER_THRESHOLD for too long → JS layer
+  //      isn't draining (e.g. tab suspended, headless test runner stuck).
+  //      Without this, a single stuck client fills its send buffer with
+  //      tens of MB, blocking subsequent RPC responses for that client.
+  const STUCK_BUFFER_THRESHOLD = 5 * 1024 * 1024; // 5MB
+  const bufferGrowthSince = new WeakMap<WebSocket, { since: number; amount: number }>();
   setInterval(() => {
+    const now = Date.now();
     for (const ws of clients) {
       const _ws = ws as WebSocket & { isAlive?: boolean };
-      if (_ws.isAlive === false && ws.readyState === WebSocket.OPEN) {
-        log.warn("Sweep: terminating dead connection");
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      if (_ws.isAlive === false) {
+        log.warn("Sweep: terminating dead connection (no pong)");
         ws.terminate();
+        continue;
+      }
+      // Track buffer growth: if a connection has >5MB stuck for >60s,
+      // the client isn't draining. Terminate so it can reconnect clean.
+      if (ws.bufferedAmount > STUCK_BUFFER_THRESHOLD) {
+        const tracked = bufferGrowthSince.get(ws);
+        if (!tracked) {
+          bufferGrowthSince.set(ws, { since: now, amount: ws.bufferedAmount });
+        } else if (now - tracked.since > 60000) {
+          log.warn("Sweep: terminating stuck-buffer connection", {
+            buffered: ws.bufferedAmount,
+            stuckMs: now - tracked.since,
+          });
+          ws.terminate();
+        }
+      } else {
+        bufferGrowthSince.delete(ws);
       }
     }
-  }, 45000);
+  }, 30000);
 
   Object.defineProperty(wss, "clients", {
     get: () => clients,
