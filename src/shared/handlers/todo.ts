@@ -1,9 +1,9 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
+import * as readline from "node:readline";
+import { createReadStream, existsSync } from "node:fs";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { TodoItem } from "../modules/todo";
-import { readFile } from "fs/promises";
-import { existsSync } from "fs";
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("session");
@@ -18,13 +18,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { todos: [] };
     }
 
+    // Stream the file so 100MB sessions don't blow memory.
+    let todos: TodoItem[] = [];
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+
     try {
-      const content = await readFile(sessionPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim());
-
-      let todos: TodoItem[] = [];
-
-      for (const line of lines) {
+      for await (const line of rl) {
+        if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line) as Record<string, unknown>;
 
@@ -53,11 +56,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           continue;
         }
       }
-
-      return { todos };
     } catch (e) {
       log.debug("todo.list: failed to read session file", { sessionPath, error: String(e) });
       return { todos: [] };
+    } finally {
+      rl.close();
     }
+
+    return { todos };
   });
 }
