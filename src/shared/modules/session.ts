@@ -12,7 +12,7 @@ export interface SessionMethods {
   };
   "session.getEntries": {
     params: { sessionPath: string; limit?: number; cursor?: string };
-    result: { entries: SessionEntry[]; hasMore: boolean };
+    result: { entries: SessionEntry[]; nextCursor: string | null; hasMore: boolean };
   };
   "session.create": {
     params: { projectPath: string };
