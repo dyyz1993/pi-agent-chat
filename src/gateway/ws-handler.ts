@@ -50,6 +50,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     log.info("Client connected", { total: clients.size + 1 });
     clients.add(ws);
 
+    // Track alive state for dead-connection detection.
+    // Server pings every 30s; if no pong by next cycle, terminate.
+    (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
+    ws.on("pong", () => {
+      (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
+    });
+
     // Track RPC timing: id → { method, startTime }
     const rpcTimings = new Map<string, { method: string; startTime: number }>();
 
@@ -195,13 +202,35 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     });
 
     const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.ping();
-      } else {
+      if (ws.readyState !== WebSocket.OPEN) {
         clearInterval(pingInterval);
+        return;
       }
+      // Mark as dead; if pong arrives, handler resets to true.
+      // Next cycle will terminate if still false.
+      const _ws = ws as WebSocket & { isAlive?: boolean };
+      if (_ws.isAlive === false) {
+        log.warn("Client missed pong, terminating dead connection");
+        ws.terminate();
+        clearInterval(pingInterval);
+        return;
+      }
+      _ws.isAlive = false;
+      ws.ping();
     }, 30000);
   });
+
+  // Sweep all clients for dead connections every 45s.
+  // Catches connections that haven't responded to ping since last sweep.
+  setInterval(() => {
+    for (const ws of clients) {
+      const _ws = ws as WebSocket & { isAlive?: boolean };
+      if (_ws.isAlive === false && ws.readyState === WebSocket.OPEN) {
+        log.warn("Sweep: terminating dead connection");
+        ws.terminate();
+      }
+    }
+  }, 45000);
 
   Object.defineProperty(wss, "clients", {
     get: () => clients,
