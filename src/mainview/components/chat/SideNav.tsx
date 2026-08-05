@@ -1215,7 +1215,7 @@ export const SideNav = memo(
               height: "100%",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              scrollSnapType: compactMotion ? "none" : "y proximity",
+              scrollSnapType: "none",
             }}
           >
             <div
