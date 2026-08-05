@@ -92,7 +92,12 @@ const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
 const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
 const SIDE_NAV_PAGE_SIZE = 200;
-const SIDE_NAV_WINDOW_SIZE = 200;
+// Match MessageList's MAIN_MESSAGE_HISTORY_WINDOW_SIZE (300): let data grow
+// up to 300 items before trimming. SideNav uses DOM-level virtualization
+// (getSideNavVirtualRange) so rendering cost is independent of array size.
+// Previous value (200) was too aggressive — caused loadNewer to fully
+// displace older items, breaking the "keep scrolling up to load more" UX.
+const SIDE_NAV_WINDOW_SIZE = 300;
 const TOP_LOAD_RESTORE_MAX_ATTEMPTS = 6;
 
 const MAX_MSG_IDS_CACHE = 10;
@@ -1266,18 +1271,11 @@ export function ChatPanel() {
       });
       setSideNavCursor(result.nextCursor ?? null);
       setSideNavHasMore(result.hasMore === true);
-      // After prepending older content, the browser auto-adjusts scrollTop
-      // to keep the user at the same VISUAL position (bottom of new content).
-      // Place user 100px from the top of the older content so they can see
-      // it but don't immediately trigger another loadMore (threshold is 80px).
-      // They can scroll up the remaining 100px to load even older content.
-      if (olderMessages.length > 0) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            sideNavRef.current?.scrollToJustBelowTop?.();
-          });
-        });
-      }
+      // Browser auto-adjusts scrollTop to maintain visual position when
+      // content is prepended, so the user stays at the same items they
+      // were viewing — they can scroll up to see the newly-loaded older
+      // items. Don't override with scrollToJustBelowTop; that competed
+      // with the browser's adjustment and produced inconsistent positions.
     } catch (err) {
       log.warn("Failed to load side nav page", {
         sessionId,
@@ -1309,6 +1307,11 @@ export function ChatPanel() {
       });
       const newerMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
+        // loadNewer appends newer items to the tail. Trim from the HEAD (drop
+        // oldest) to keep the most recent SIDE_NAV_WINDOW_SIZE items. This
+        // matches MessageList's pattern (limitLoadedHistoryWindow keeps the
+        // most-recent WINDOW items). Older items beyond the window can be
+        // re-fetched via loadMore if user scrolls back up.
         const merged = mergeSideNavMessages(prev, newerMessages);
         if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
         const trimmed = merged.slice(merged.length - SIDE_NAV_WINDOW_SIZE);
