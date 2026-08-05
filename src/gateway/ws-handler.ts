@@ -9,7 +9,6 @@ const log = createLogger("gateway");
 
 const SLOW_RPC_THRESHOLD_MS = 1000;
 const BACKPRESSURE_THRESHOLD = 1024 * 1024; // 1MB
-const BACKPRESSURE_DRAIN_TARGET = 512 * 1024; // 512KB
 
 export interface WsHandlerDeps {
   config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
@@ -65,35 +64,19 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
           return;
         }
 
-        // Backpressure: if send buffer is backing up, handle by message type
+        // Backpressure: if send buffer is backing up, only drop event messages
+        // (the next event will replace them). RPC responses MUST be sent —
+        // blocking them causes loading spinners to hang for 30s+ on slow clients.
         if (ws.bufferedAmount > BACKPRESSURE_THRESHOLD) {
-          // Event messages can be dropped during backpressure (next event replaces)
           if (msg.type === "event") {
             log.debug("[ws-out] backpressure: dropping event", { event: msg.eventType });
             return;
           }
-          // RPC responses must wait for buffer to drain
-          await new Promise<void>((resolve) => {
-            const check = () => {
-              if (ws.readyState !== WebSocket.OPEN) {
-                resolve();
-                return;
-              }
-              if (ws.bufferedAmount < BACKPRESSURE_DRAIN_TARGET) {
-                resolve();
-                return;
-              }
-              setTimeout(check, 10);
-            };
-            setTimeout(check, 10);
+          log.warn("[ws-out] backpressure: sending RPC anyway", {
+            type: msg.type,
+            id: msg.id,
+            buffered: ws.bufferedAmount,
           });
-          if (ws.readyState !== WebSocket.OPEN) {
-            log.debug("[ws-out] stale client after backpressure: dropping message", {
-              type: msg.type,
-              id: msg.id,
-            });
-            return;
-          }
         }
 
         // Log all outgoing messages (requests, responses, events)
