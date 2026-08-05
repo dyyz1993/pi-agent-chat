@@ -1259,15 +1259,19 @@ export function ChatPanel() {
       });
       const olderMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
+        // Append older items at head; do NOT trim.
+        // Why no trim: previous trim logic set hasMoreNewer=true, which
+        // immediately triggered loadNewerSideNav on the next scroll event
+        // (user is at the bottom of the new content due to browser
+        // auto-adjust). loadNewerSideNav then overwrote sideNavCursor
+        // based on its own head-trim, causing loadMore to repeat the
+        // same request forever. SideNav uses DOM virtualization so a
+        // large data array is cheap to render.
         const merged = mergeSideNavMessages(olderMessages, prev);
         if (prev.length === 0 && merged.length > 0) {
           setSideNavNewestExtraCursor(merged[merged.length - 1]?.id ?? null);
         }
-        if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
-        const trimmed = merged.slice(0, SIDE_NAV_WINDOW_SIZE);
-        setSideNavNewestExtraCursor(trimmed[trimmed.length - 1]?.id ?? null);
-        setSideNavHasMoreNewer(true);
-        return trimmed;
+        return merged;
       });
       setSideNavCursor(result.nextCursor ?? null);
       setSideNavHasMore(result.hasMore === true);
@@ -1307,20 +1311,10 @@ export function ChatPanel() {
       });
       const newerMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
-        // loadNewer appends newer items to the tail. Trim from the HEAD (drop
-        // oldest) to keep the most recent SIDE_NAV_WINDOW_SIZE items. This
-        // matches MessageList's pattern (limitLoadedHistoryWindow keeps the
-        // most-recent WINDOW items). Older items beyond the window can be
-        // re-fetched via loadMore if user scrolls back up.
+        // Append newer items at tail; do NOT trim (same reason as loadMore:
+        // trim mutates sideNavCursor and creates a loadMore/loadNewer loop).
         const merged = mergeSideNavMessages(prev, newerMessages);
-        if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
-        const trimmed = merged.slice(merged.length - SIDE_NAV_WINDOW_SIZE);
-        const newOldest = trimmed[0];
-        if (newOldest) {
-          setSideNavCursor(newOldest.id);
-          setSideNavHasMore(true);
-        }
-        return trimmed;
+        return merged;
       });
       setSideNavNewestExtraCursor(result.nextCursor ?? null);
       setSideNavHasMoreNewer(result.hasMore === true);
