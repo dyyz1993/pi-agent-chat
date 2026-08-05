@@ -18,6 +18,7 @@ import {
   writeProjectExecutionSandbox,
   normalizeExecutionSandboxMode,
 } from "../lib/execution-sandbox-config";
+import { prepareForkedSession } from "../agent/coordinator-delegate-utils";
 import { getRemoteProjectSshRuntimeKind } from "../agent/remote-runtime-selection";
 import {
   listDisabledSkills,
@@ -622,11 +623,25 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.fork", async (params) => {
-    return m.fork(
+    const result = await m.fork(
       params.sessionId,
       params.entryId,
       params.position ? { position: params.position } : undefined,
-    ) as Promise<R<"agent.fork">>;
+    );
+    if (result && typeof result === "object" && "newSessionFile" in result && "newSessionId" in result) {
+      const { newSessionFile, newSessionId } = result as { newSessionFile: string; newSessionId: string };
+      if (newSessionFile && newSessionId) {
+        try {
+          prepareForkedSession(newSessionFile, newSessionId);
+        } catch (err) {
+          log.warn("[agent.fork] prepareForkedSession failed", {
+            newSessionFile,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+    return result as R<"agent.fork">;
   });
 
   r("agent.navigateTree", async (params) => {
