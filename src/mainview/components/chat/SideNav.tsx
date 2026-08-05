@@ -1032,7 +1032,10 @@ export const SideNav = memo(
         raf = requestAnimationFrame(() => {
           raf = 0;
           syncScrollState();
-          if (container.scrollTop <= 24 && pagination?.hasMore && !pagination.isLoading) {
+          // Threshold is 80 (not 24) because scroll-snap: y proximity can
+          // leave the user at a snap point 32-80px from the top, which would
+          // otherwise prevent loadMore from firing.
+          if (container.scrollTop <= 80 && pagination?.hasMore && !pagination.isLoading) {
             pagination.onLoadMore();
           }
           const distanceToBottom =
@@ -1212,7 +1215,7 @@ export const SideNav = memo(
               height: "100%",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              scrollSnapType: compactMotion ? "none" : "y mandatory",
+              scrollSnapType: compactMotion ? "none" : "y proximity",
             }}
           >
             <div
