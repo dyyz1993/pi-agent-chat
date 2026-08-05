@@ -134,6 +134,23 @@ export class AgentEventHandler {
         );
         return;
       }
+      // Channel responses for RPCs (file-review, etc.) must not be broadcast
+      // as agent.event — they carry bulk file contents (oldContent/newContent/
+      // unifiedDiff for every changed file) that on a 100MB session can be
+      // 10+ MB per event. Broadcast would push that to every connected client
+      // and stall mobile/pagination. The RPC handler already strips bulk
+      // fields before responding to the original caller, so we just drop the
+      // broadcast here.
+      if (
+        ch.name === "file-review" ||
+        ch.name === "snapshot" ||
+        ch.name === "git" ||
+        ch.name === "rules" ||
+        ch.name === "context-usage" ||
+        ch.name === "agent-config"
+      ) {
+        return;
+      }
     }
 
     if (event.type === "extension_ui_request") {
