@@ -959,6 +959,17 @@ export const SideNav = memo(
       () => ({
         getFirstIconId: () => items[0]?.key ?? null,
         getLastIconId: () => items[items.length - 1]?.key ?? null,
+        scrollToTop: () => {
+          const container = scrollRef.current;
+          if (container) container.scrollTop = 0;
+        },
+        // Place user 100px from top so they can see older content but
+        // don't immediately trigger another loadMore (threshold is 80px).
+        // Lets them scroll up the last 100px to load even older content.
+        scrollToJustBelowTop: () => {
+          const container = scrollRef.current;
+          if (container) container.scrollTop = 100;
+        },
       }),
       [items],
     );

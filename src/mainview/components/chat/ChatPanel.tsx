@@ -599,6 +599,8 @@ export function ChatPanel() {
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
+    scrollToTop: () => void;
+    scrollToJustBelowTop: () => void;
   }>(null);
   const showThinking = useSettingsStore((s) => s.showThinking);
   const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
@@ -1070,6 +1072,8 @@ export function ChatPanel() {
     restoreTopLoadScrollAnchor,
   ]);
 
+  // (scroll reset is handled directly in loadMoreSideNav via rAF)
+
   const seekSideNavToOldest = useCallback(async () => {
     if (!useIndependentSideNavHistory) return;
     if (!effectiveScrollSessionId) return;
@@ -1262,6 +1266,18 @@ export function ChatPanel() {
       });
       setSideNavCursor(result.nextCursor ?? null);
       setSideNavHasMore(result.hasMore === true);
+      // After prepending older content, the browser auto-adjusts scrollTop
+      // to keep the user at the same VISUAL position (bottom of new content).
+      // Place user 100px from the top of the older content so they can see
+      // it but don't immediately trigger another loadMore (threshold is 80px).
+      // They can scroll up the remaining 100px to load even older content.
+      if (olderMessages.length > 0) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            sideNavRef.current?.scrollToJustBelowTop?.();
+          });
+        });
+      }
     } catch (err) {
       log.warn("Failed to load side nav page", {
         sessionId,
