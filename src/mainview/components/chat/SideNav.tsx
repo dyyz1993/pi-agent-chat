@@ -163,7 +163,13 @@ const SIDE_NAV_MIN_VIEWPORT_PADDING = 12;
 const SIDE_NAV_CLICK_SCROLL_SUPPRESS_MS = 1000;
 const SIDE_NAV_ACTIVE_SETTLE_DELAYS_MS = [80, 240] as const;
 const SIDE_NAV_INITIAL_ACTIVE_SETTLE_DELAYS_MS = [80, 240, 600, 1200, 2200] as const;
-const SIDE_NAV_VIRTUAL_OVERSCAN_ITEMS = 12;
+// Overscan: how many extra items to render above/below the visible viewport.
+// Higher = less blank space during fast scroll / loadMore transitions, but
+// more DOM nodes. Each nav dot is a tiny colored div (~5 elements), so even
+// 50 overscan × 2 sides = 100 extra nodes is cheap.
+// 12 was too low — fast trackpad scroll or loadMore's 50-item jump could
+// outrun React's render cycle, leaving blank frames.
+const SIDE_NAV_VIRTUAL_OVERSCAN_ITEMS = 50;
 const SIDE_NAV_COMPACT_SMOOTH_MAX_DISTANCE = 96;
 type SideNavScrollStrategy = "center" | "edge";
 
@@ -1006,27 +1012,15 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
-    // Track previous items count to detect prepended items (loadMore).
-    // When items are prepended, the browser auto-adjusts scrollTop during
-    // layout — but useLayoutEffect runs BEFORE layout, so scrollState is
-    // stale. We compute the delta (newCount - prevCount) and add it to
-    // scrollTop so virtualRange renders the correct slice on the FIRST
-    // paint after items change, avoiding blank space.
-    const prevItemCountRef = useRef(items.length);
-    const prependedCount = Math.max(0, items.length - prevItemCountRef.current);
-    // Only apply correction on the same render where items grew.
-    // After this render, prevItemCountRef updates via the effect below.
-    const correctedScrollTop = scrollState.scrollTop + prependedCount * (SIDE_NAV_ITEM_HEIGHT + Math.max(0, viewportMetrics.gap ?? 0));
-
     const virtualRange = useMemo(
       () =>
         getSideNavVirtualRange({
-          scrollTop: correctedScrollTop,
+          scrollTop: scrollState.scrollTop,
           viewportHeight: scrollState.viewportHeight,
           itemCount: items.length,
           gap: viewportMetrics.gap,
         }),
-      [correctedScrollTop, items.length, scrollState.viewportHeight, viewportMetrics.gap],
+      [items.length, scrollState.scrollTop, scrollState.viewportHeight, viewportMetrics.gap],
     );
     const visibleItems = useMemo(
       () => items.slice(virtualRange.startIndex, virtualRange.endIndex),
@@ -1095,10 +1089,9 @@ export const SideNav = memo(
       syncScrollState,
     ]);
 
-    // After items change commits, update prevItemCountRef and schedule a
-    // syncScrollState via RAF (after browser layout has adjusted scrollTop).
+    // After items change, schedule syncScrollState via RAF (after browser
+    // layout has adjusted scrollTop).
     useLayoutEffect(() => {
-      prevItemCountRef.current = items.length;
       syncScrollState();
       refreshVisibleEdgeFallback();
       let secondRaf = 0;
