@@ -91,12 +91,12 @@ const log = createLogger("chat");
 const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
 const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
-const SIDE_NAV_PAGE_SIZE = 200;
-// Match MessageList's MAIN_MESSAGE_HISTORY_WINDOW_SIZE (300): let data grow
-// up to 300 items before trimming. SideNav uses DOM-level virtualization
-// (getSideNavVirtualRange) so rendering cost is independent of array size.
-// Previous value (200) was too aggressive — caused loadNewer to fully
-// displace older items, breaking the "keep scrolling up to load more" UX.
+// Match MessageList's pagination (PAGE_SIZE=50, WINDOW=300). SideNav
+// previously used 200/300 which meant only 1.5 RPCs filled the window,
+// forcing users to scroll through ~200 items between loads. With 50/300
+// the same window supports 6 loads — users scroll only ~50 items between
+// triggers, same UX as the chat message list.
+const SIDE_NAV_PAGE_SIZE = 50;
 const SIDE_NAV_WINDOW_SIZE = 300;
 const TOP_LOAD_RESTORE_MAX_ATTEMPTS = 6;
 
