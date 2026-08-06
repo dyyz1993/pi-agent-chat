@@ -1006,15 +1006,27 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
+    // Track previous items count to detect prepended items (loadMore).
+    // When items are prepended, the browser auto-adjusts scrollTop during
+    // layout — but useLayoutEffect runs BEFORE layout, so scrollState is
+    // stale. We compute the delta (newCount - prevCount) and add it to
+    // scrollTop so virtualRange renders the correct slice on the FIRST
+    // paint after items change, avoiding blank space.
+    const prevItemCountRef = useRef(items.length);
+    const prependedCount = Math.max(0, items.length - prevItemCountRef.current);
+    // Only apply correction on the same render where items grew.
+    // After this render, prevItemCountRef updates via the effect below.
+    const correctedScrollTop = scrollState.scrollTop + prependedCount * (SIDE_NAV_ITEM_HEIGHT + Math.max(0, viewportMetrics.gap ?? 0));
+
     const virtualRange = useMemo(
       () =>
         getSideNavVirtualRange({
-          scrollTop: scrollState.scrollTop,
+          scrollTop: correctedScrollTop,
           viewportHeight: scrollState.viewportHeight,
           itemCount: items.length,
           gap: viewportMetrics.gap,
         }),
-      [items.length, scrollState.scrollTop, scrollState.viewportHeight, viewportMetrics.gap],
+      [correctedScrollTop, items.length, scrollState.viewportHeight, viewportMetrics.gap],
     );
     const visibleItems = useMemo(
       () => items.slice(virtualRange.startIndex, virtualRange.endIndex),
@@ -1083,7 +1095,10 @@ export const SideNav = memo(
       syncScrollState,
     ]);
 
+    // After items change commits, update prevItemCountRef and schedule a
+    // syncScrollState via RAF (after browser layout has adjusted scrollTop).
     useLayoutEffect(() => {
+      prevItemCountRef.current = items.length;
       syncScrollState();
       refreshVisibleEdgeFallback();
       let secondRaf = 0;
