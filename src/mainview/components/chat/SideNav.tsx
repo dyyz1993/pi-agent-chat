@@ -1033,6 +1033,14 @@ export const SideNav = memo(
       );
     }, []);
 
+    // Keep latest pagination in a ref so the scroll listener doesn't need to
+    // be torn down + reattached every time isLoading/hasMore changes (which
+    // happens on every loadMore). Previous code had `pagination` in the
+    // useEffect deps, causing listener churn that could miss scroll events
+    // during rapid state updates — manifesting as "scroll gets stuck".
+    const paginationRef = useRef(pagination);
+    paginationRef.current = pagination;
+
     useEffect(() => {
       const container = scrollRef.current;
       if (!container) return;
@@ -1042,22 +1050,21 @@ export const SideNav = memo(
         if (raf) return;
         raf = requestAnimationFrame(() => {
           raf = 0;
+          const p = paginationRef.current;
+          if (!p) return;
           syncScrollState();
-          // Threshold is 80 (not 24) because scroll-snap: y proximity can
-          // leave the user at a snap point 32-80px from the top, which would
-          // otherwise prevent loadMore from firing.
-          if (container.scrollTop <= 80 && pagination?.hasMore && !pagination.isLoading) {
-            pagination.onLoadMore();
+          if (container.scrollTop <= 80 && p.hasMore && !p.isLoading) {
+            p.onLoadMore();
           }
           const distanceToBottom =
             container.scrollHeight - container.scrollTop - container.clientHeight;
           if (
             distanceToBottom <= 24 &&
-            pagination?.hasMoreNewer &&
-            pagination.onLoadNewer &&
-            !pagination.isLoading
+            p.hasMoreNewer &&
+            p.onLoadNewer &&
+            !p.isLoading
           ) {
-            pagination.onLoadNewer();
+            p.onLoadNewer();
           }
           refreshVisibleEdgeFallback();
         });
@@ -1071,9 +1078,7 @@ export const SideNav = memo(
         if (raf) cancelAnimationFrame(raf);
       };
     }, [
-      pagination,
       refreshVisibleEdgeFallback,
-      items,
       viewportMetrics.viewportHeight,
       syncScrollState,
     ]);
