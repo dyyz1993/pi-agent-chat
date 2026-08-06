@@ -1059,7 +1059,11 @@ export const SideNav = memo(
           const p = paginationRef.current;
           if (!p) return;
           syncScrollState();
-          if (container.scrollTop <= 80 && p.hasMore && !p.isLoading) {
+          // Prefetch threshold = 500px (~15 items). Fires loadMore BEFORE
+          // user reaches the very top, so the next page is already loaded
+          // by the time they get there. This makes scrolling feel continuous
+          // instead of "scroll to top → wait → load → scroll more".
+          if (container.scrollTop <= 500 && p.hasMore && !p.isLoading) {
             p.onLoadMore();
           }
           const distanceToBottom =
