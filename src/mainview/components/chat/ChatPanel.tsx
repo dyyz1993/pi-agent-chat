@@ -896,6 +896,12 @@ export function ChatPanel() {
     releaseSideNavScrollLock();
   }, [activeSessionId, activeSubId, releaseSideNavScrollLock]);
 
+  // Reset sidenav state ONLY when the session changes.
+  // DO NOT include hasMoreMessages / messageNextCursor in deps — those
+  // come from the main chat store and change when the MESSAGE LIST
+  // paginates in the background. Including them here caused the sidenav
+  // to wipe all loaded history mid-scroll whenever the chat list did
+  // anything, making the sidenav appear "stuck" after a few scrolls.
   useEffect(() => {
     setSideNavExtraMessages([]);
     setSideNavCursor(messageNextCursor);
@@ -903,7 +909,7 @@ export function ChatPanel() {
     setSideNavNewestExtraCursor(null);
     setSideNavHasMoreNewer(false);
     setIsSideNavLoadingMore(false);
-  }, [effectiveScrollSessionId, hasMoreMessages, messageNextCursor]);
+  }, [effectiveScrollSessionId]);
 
   useEffect(() => {
     if (sideNavExtraMessages.length > 0 || isSideNavLoadingMore) return;
