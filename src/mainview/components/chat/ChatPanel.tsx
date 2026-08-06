@@ -327,8 +327,10 @@ function mergeSideNavMessages(
   return merged;
 }
 
-export function shouldUseIndependentSideNavHistory(breakpoint: string | null | undefined): boolean {
-  return breakpoint !== "mobile" && breakpoint !== "tablet";
+export function shouldUseIndependentSideNavHistory(
+  _breakpoint: string | null | undefined,
+): boolean {
+  return true;
 }
 
 const EMPTY_MSGS: never[] = [];
