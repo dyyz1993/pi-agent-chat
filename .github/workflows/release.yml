@@ -289,10 +289,98 @@ jobs:
           path: artifacts/
           retention-days: 5
 
+  # ── Web Server Bundle (cross-platform, pure JS) ──
+  build-web:
+    name: Build Web Server Bundle
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install dependencies
+        run: |
+          node scripts/ci-hydrate-yalc.mjs
+          rm -f bun.lockb && bun install
+
+      - name: Build server bundle (bun build --target=bun)
+        run: |
+          mkdir -p dist-server
+          bun build src/server.ts \
+            --target=bun \
+            --outfile=dist-server/server.js \
+            --external:@modelcontextprotocol/sdk \
+            --external:@dyyz1993/rpc-core \
+            --external:ws
+
+          # sandbox-agent (same as build-server.sh, but esbuild for this one)
+          npx esbuild src/sandbox/sandbox-agent.ts \
+            --bundle \
+            --platform=node \
+            --format=esm \
+            --tree-shaking=false \
+            --outfile=dist-server/sandbox-agent.js
+
+      - name: Build Vite frontend
+        run: bun run build
+
+      - name: Install CLI runtime deps (pi-coding-agent + ws + strip-ansi)
+        run: |
+          # Create an isolated dir with a minimal package.json that pulls in the
+          # CLI and its transitive deps. bun install resolves pi-tui to the
+          # latest published version (0.78.2), which is compatible — avoids the
+          # npm 0.78.5 gap documented in AGENTS.md.
+          mkdir -p /tmp/web-deps && cd /tmp/web-deps
+          cat > package.json << 'PKGJSON'
+          {
+            "name": "pi-chat-web-deps",
+            "private": true,
+            "dependencies": {
+              "@dyyz1993/pi-coding-agent": "latest",
+              "ws": "^8.18.0",
+              "strip-ansi": "^7.0.0"
+            }
+          }
+          PKGJSON
+          bun install
+
+      - name: Assemble pi-chat-web directory
+        run: |
+          STAGE="$RUNNER_TEMP/pi-chat-web"
+          mkdir -p "$STAGE"
+
+          # Server bundle + sandbox-agent
+          cp dist-server/server.js "$STAGE/"
+          cp dist-server/sandbox-agent.js "$STAGE/"
+
+          # Frontend static files
+          cp -R dist "$STAGE/dist"
+
+          # CLI runtime deps (platform-independent pure JS)
+          cp -R /tmp/web-deps/node_modules "$STAGE/node_modules"
+
+          # Package as tar.gz
+          cd "$RUNNER_TEMP"
+          tar czf pi-chat-web.tar.gz pi-chat-web/
+          ls -lh pi-chat-web.tar.gz
+
+          # Move to artifacts dir for upload
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          mv pi-chat-web.tar.gz "$GITHUB_WORKSPACE/artifacts/"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-web
+          path: artifacts/
+          retention-days: 5
+
   # ── Publish to GitHub Releases ──
   release:
     name: Publish Release
-    needs: [build-macos-arm64, build-macos-x64, build-linux, build-windows]
+    needs: [build-macos-arm64, build-macos-x64, build-linux, build-windows, build-web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
