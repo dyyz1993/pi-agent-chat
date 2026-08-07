@@ -13,11 +13,13 @@
 #   PORT              Web 服务器端口（默认: 3100）
 #   AUTH_TOKEN        API 认证令牌（必填,用于 WebSocket 鉴权）
 #   INSTALL_DIR       安装目录（默认: ~/.pi-agent-chat-web）
-#   SKIP_DAEMON       设为 1 跳过 launchd/systemd 守护进程配置(用 nohup)
+#   SKIP_DAEMON       设为 1 跳过守护进程配置(用 nohup)
 #
 # 守护进程:
-#   macOS → launchd (~/Library/LaunchAgents/com.pi-agent-chat.web.plist)
-#   Linux → systemd (/etc/systemd/system/pi-agent-chat.service, 需要 sudo)
+#   macOS  → launchd (~/Library/LaunchAgents/com.pi-agent-chat.web.plist)
+#   Linux  → systemd (/etc/systemd/system/pi-agent-chat.service, 需要 sudo)
+#   容器*  → daemon.sh 崩溃重启循环 + cron @reboot 开机自启
+#            (* PID 1 不是 systemd 的容器环境)
 # =============================================================================
 set -euo pipefail
 
@@ -29,6 +31,10 @@ PLIST_LABEL="com.pi-agent-chat.web"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 SERVICE_NAME="pi-agent-chat"
 SYSTEMD_SERVICE="/etc/systemd/system/${SERVICE_NAME}.service"
+DAEMON_SCRIPT="$INSTALL_DIR/daemon.sh"
+
+# node 最低版本(pi-coding-agent 的 undici@8 要求 node >= 22)
+NODE_MIN_MAJOR=22
 
 # ── 颜色 ──
 RED='\033[0;31m'
@@ -69,7 +75,7 @@ info "AUTH_TOKEN: ${AUTH_TOKEN:0:4}****"
 # ═══════════════════════════════════════════════
 # Step 1: 安装 bun（服务器运行时）
 # ═══════════════════════════════════════════════
-info "Step 1/6: 检查/安装 bun..."
+info "Step 1/7: 检查/安装 bun..."
 
 if command -v bun &>/dev/null; then
   ok "bun 已安装: $(bun --version)"
@@ -86,7 +92,7 @@ else
   ok "bun 安装成功: $(bun --version)"
 fi
 
-# 确保 bun 在 PATH 里(launchd 需要完整路径)
+# 确保 bun 在 PATH 里(launchd/systemd 需要完整路径)
 BUN_BIN="$(command -v bun)"
 if [ -z "$BUN_BIN" ]; then
   BUN_BIN="$HOME/.bun/bin/bun"
@@ -94,39 +100,82 @@ fi
 info "bun 路径: $BUN_BIN"
 
 # ═══════════════════════════════════════════════
-# Step 2: 安装 node（CLI 子进程运行时）
+# Step 2: 安装/升级 node（CLI 子进程运行时,需要 >= v22）
 # ═══════════════════════════════════════════════
-info "Step 2/6: 检查/安装 node..."
+info "Step 2/7: 检查/安装 node (需要 >= v${NODE_MIN_MAJOR})..."
 
-if command -v node &>/dev/null; then
-  ok "node 已安装: $(node --version)"
-elif [ -f "/usr/local/bin/node" ] || [ -f "/opt/homebrew/bin/node" ]; then
-  ok "node 已安装(系统路径)"
+# 获取当前 node 主版本号(没有 node 则为 0)
+get_node_major_version() {
+  command -v node &>/dev/null && node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0"
+}
+
+CURRENT_NODE_VER=$(get_node_major_version)
+
+if [ "$CURRENT_NODE_VER" -ge "$NODE_MIN_MAJOR" ]; then
+  ok "node 版本满足要求: $(node --version)"
 else
-  warn "node 未安装!Agent CLI 需要 node 运行时。"
-  info "安装 node (通过 bun)..."
-  # bun 可以 shim node,但更可靠的是直接用 bun 提供的 node shim
-  # 如果 bun --shim 存在就用,否则提示手动安装
-  if [ "$OS" = "Darwin" ]; then
-    info "请在另一终端安装 node: brew install node"
-    info "或从 https://nodejs.org 下载安装包"
-    warn "继续安装,但 Agent 功能在 node 安装前不可用"
+  if [ "$CURRENT_NODE_VER" -gt 0 ]; then
+    warn "node $(node --version) 版本过低 (需要 >= v${NODE_MIN_MAJOR}),undici@8 不兼容旧版 node"
   else
-    info "请安装 node: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs"
-    warn "继续安装,但 Agent 功能在 node 安装前不可用"
+    warn "node 未安装"
+  fi
+  info "通过 n 安装 node LTS..."
+
+  # 判断 sudo 可用性
+  SUDO=""
+  if [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null; then
+    SUDO="sudo"
+  fi
+
+  # 下载 n 版本管理器
+  N_SCRIPT="/tmp/n-install-$$"
+  curl -fsSL https://raw.githubusercontent.com/tj/n/master/bin/n -o "$N_SCRIPT"
+  chmod +x "$N_SCRIPT"
+
+  if [ "$OS" = "Darwin" ]; then
+    # macOS: 装到用户目录(不污染系统)
+    export N_PREFIX="${N_PREFIX:-$HOME/.n}"
+    mkdir -p "$N_PREFIX/bin"
+    N_PREFIX="$N_PREFIX" "$N_SCRIPT" lts
+    # 确保 ~/.n/bin 在 PATH
+    grep -q '.n/bin' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.n/bin:$PATH"' >> "$HOME/.zshrc"
+    grep -q '.n/bin' "$HOME/.bashrc" 2>/dev/null || echo 'export PATH="$HOME/.n/bin:$PATH"' >> "$HOME/.bashrc"
+    export PATH="$HOME/.n/bin:$PATH"
+  else
+    # Linux: root 直接装到 /usr/local; 非 root 先试 sudo,失败则装到用户目录
+    if [ -n "$SUDO" ]; then
+      $SUDO env "PATH=$PATH" "$N_SCRIPT" lts
+    else
+      export N_PREFIX="${N_PREFIX:-$HOME/.n}"
+      mkdir -p "$N_PREFIX/bin"
+      N_PREFIX="$N_PREFIX" "$N_SCRIPT" lts
+      grep -q '.n/bin' "$HOME/.bashrc" 2>/dev/null || echo 'export PATH="$HOME/.n/bin:$PATH"' >> "$HOME/.bashrc"
+      export PATH="$HOME/.n/bin:$PATH"
+    fi
+  fi
+  rm -f "$N_SCRIPT"
+
+  # 验证
+  NEW_NODE_VER=$(get_node_major_version)
+  if [ "$NEW_NODE_VER" -ge "$NODE_MIN_MAJOR" ]; then
+    ok "node 已升级到 $(node --version) ✅"
+  else
+    err "node 升级失败(当前: $(node --version 2>/dev/null || echo '无'))\n  请手动安装 node >= v${NODE_MIN_MAJOR}: https://nodejs.org/"
   fi
 fi
 
 NODE_BIN="$(command -v node 2>/dev/null || echo "/usr/local/bin/node")"
+info "node 路径: $NODE_BIN"
 
 # ═══════════════════════════════════════════════
 # Step 3: 下载并解压 Web 服务器包
 # ═══════════════════════════════════════════════
-info "Step 3/6: 下载 Web 服务器包..."
+info "Step 3/7: 下载 Web 服务器包..."
 
+# 解析 latest 版本号(GitHub API)
 if [ "$VERSION" = "latest" ]; then
-  # Resolve the latest release tag from GitHub API
-  LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+  LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+    | grep '"tag_name"' | head -1 | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
   if [ -z "$LATEST_TAG" ]; then
     err "无法获取最新 Release tag,请指定版本号: bash install-web.sh v1.0.2"
   fi
@@ -154,12 +203,6 @@ elif [ "$OS" = "Linux" ] && [ -f "$SYSTEMD_SERVICE" ]; then
 fi
 pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
 
-# 备份旧的 .env（保留用户的 AUTH_TOKEN 等配置）
-OLD_ENV=""
-if [ -f "$INSTALL_DIR/.env" ]; then
-  OLD_ENV=$(cat "$INSTALL_DIR/.env")
-fi
-
 # 清理旧文件(保留 .env 和 logs)
 rm -rf "$INSTALL_DIR/server.js" "$INSTALL_DIR/sandbox-agent.js" "$INSTALL_DIR/dist" "$INSTALL_DIR/node_modules"
 
@@ -176,9 +219,9 @@ info "安装目录内容:"
 ls -la "$INSTALL_DIR/" | head -10
 
 # ═══════════════════════════════════════════════
-# Step 4: 生成 .env 配置
+# Step 4: 生成 .env 配置 + 授权文件检查
 # ═══════════════════════════════════════════════
-info "Step 4/6: 生成配置文件..."
+info "Step 4/7: 生成配置文件..."
 
 CLI_PATH="$INSTALL_DIR/node_modules/@dyyz1993/pi-coding-agent/dist/cli.js"
 
@@ -209,14 +252,43 @@ mkdir -p "$INSTALL_DIR/logs"
 ok ".env 已生成"
 info "PI_CLI_PATH=$CLI_PATH"
 
+# 授权文件检查(Agent 调 LLM 需要)
+AGENT_DIR="$HOME/.pi/agent"
+AUTH_MISSING=false
+for f in auth.json models.json; do
+  if [ ! -f "$AGENT_DIR/$f" ]; then
+    AUTH_MISSING=true
+  fi
+done
+if [ "$AUTH_MISSING" = true ]; then
+  echo ""
+  warn "⚠  授权文件不完整! Agent 将无法调用 LLM"
+  echo -e "  ${YELLOW}缺少 ~/.pi/agent/ 下的 auth.json 或 models.json${NC}"
+  echo ""
+  echo "  从已有机器拷贝(在源机器上执行):"
+  echo "    mkdir -p 新服务器:~/.pi/agent"
+  echo "    scp ~/.pi/agent/auth.json    新服务器:~/.pi/agent/"
+  echo "    scp ~/.pi/agent/models.json  新服务器:~/.pi/agent/"
+  echo "    scp ~/.pi/agent/settings.json 新服务器:~/.pi/agent/"
+  echo ""
+  echo "  服务可以先启动,但发消息时 Agent 会报错。"
+  echo ""
+fi
+
 # ═══════════════════════════════════════════════
-# Step 5: 配置开机自启守护进程（macOS=launchd / Linux=systemd）
+# Step 5: 配置守护进程（macOS=launchd / Linux=systemd / 容器=daemon.sh）
 # ═══════════════════════════════════════════════
+# 检测是否有真正的 systemd(PID 1 是 systemd)
+HAS_SYSTEMD=false
+if [ "$OS" = "Linux" ]; then
+  if [ "$(cat /proc/1/comm 2>/dev/null)" = "systemd" ] && command -v systemctl &>/dev/null; then
+    HAS_SYSTEMD=true
+  fi
+fi
 
 setup_launchd() {
-  info "Step 5/6: 配置 launchd 开机自启 (macOS)..."
+  info "Step 5/7: 配置 launchd 开机自启 (macOS)..."
 
-  # 先卸载旧的(如果存在)
   if [ -f "$PLIST_PATH" ]; then
     launchctl unload "$PLIST_PATH" 2>/dev/null || true
   fi
@@ -240,7 +312,7 @@ setup_launchd() {
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:${HOME}/.bun/bin</string>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:${HOME}/.bun/bin:${HOME}/.n/bin</string>
         <key>HOME</key>
         <string>${HOME}</string>
         <key>PORT</key>
@@ -272,24 +344,19 @@ PLISTEOF
 }
 
 setup_systemd() {
-  info "Step 5/6: 配置 systemd 开机自启 (Linux)..."
+  info "Step 5/7: 配置 systemd 开机自启 (Linux)..."
 
-  # 先停旧服务(如果存在)
-  if [ -f "$SYSTEMD_SERVICE" ]; then
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
-  fi
-
-  # 判断是否需要 sudo
   SUDO=""
   if [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null; then
     SUDO="sudo"
   fi
 
-  # systemd 需要 node 在系统 PATH 里(systemd 不会读 .bashrc)
-  NODE_FOR_SYSTEMD="$(command -v node 2>/dev/null || echo "$HOME/.n/bin/node")"
+  if [ -f "$SYSTEMD_SERVICE" ]; then
+    $SUDO systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    $SUDO systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+  fi
 
-  cat > /tmp/${SERVICE_NAME}.service << SVCEOF
+  cat > "/tmp/${SERVICE_NAME}.service" << SVCEOF
 [Unit]
 Description=PiAgentChat Web Server
 After=network.target
@@ -315,38 +382,105 @@ StandardError=append:${INSTALL_DIR}/logs/err.log
 WantedBy=multi-user.target
 SVCEOF
 
-  $SUDO cp /tmp/${SERVICE_NAME}.service "$SYSTEMD_SERVICE"
-  rm -f /tmp/${SERVICE_NAME}.service
-
+  $SUDO cp "/tmp/${SERVICE_NAME}.service" "$SYSTEMD_SERVICE"
+  rm -f "/tmp/${SERVICE_NAME}.service"
   $SUDO systemctl daemon-reload
   ok "systemd service 已生成: $SYSTEMD_SERVICE"
 }
 
+# 容器环境(dumb-init / 非 systemd PID 1)的守护方案
+setup_daemon_script() {
+  info "Step 5/7: 配置 daemon.sh 崩溃重启循环 (容器环境)..."
+
+  cat > "$DAEMON_SCRIPT" << 'DAEMONEOF'
+#!/bin/bash
+# PiAgentChat 守护进程 — 崩溃自动重启 + cron 开机自启
+# 由 install-web.sh 自动生成,请勿手动编辑
+
+INSTALL_DIR="INSTALL_DIR_PLACEHOLDER"
+AUTH_TOKEN="AUTH_TOKEN_PLACEHOLDER"
+PORT="PORT_PLACEHOLDER"
+CLI_PATH="CLI_PATH_PLACEHOLDER"
+HOME_DIR="HOME_PLACEHOLDER"
+
+export PATH="$HOME_DIR/.bun/bin:/usr/local/bin:/usr/bin:/bin:$HOME_DIR/.n/bin"
+export HOME="$HOME_DIR"
+cd "$INSTALL_DIR"
+
+LOG="$INSTALL_DIR/logs/daemon.log"
+echo "$(date '+%Y-%m-%dT%H:%M:%S') [daemon] 启动守护循环" >> "$LOG"
+
+while true; do
+  echo "$(date '+%Y-%m-%dT%H:%M:%S') [daemon] 启动 server..." >> "$LOG"
+  PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" \
+    LOG_DIR="$INSTALL_DIR/logs" NODE_ENV=production \
+    bun "$INSTALL_DIR/server.js" >> "$INSTALL_DIR/logs/out.log" 2>&1
+  EXIT_CODE=$?
+  echo "$(date '+%Y-%m-%dT%H:%M:%S') [daemon] server 退出 code=$EXIT_CODE,3秒后重启" >> "$LOG"
+  sleep 3
+done
+DAEMONEOF
+
+  # 替换占位符
+  sed -i.bak \
+    -e "s|INSTALL_DIR_PLACEHOLDER|$INSTALL_DIR|g" \
+    -e "s|AUTH_TOKEN_PLACEHOLDER|$AUTH_TOKEN|g" \
+    -e "s|PORT_PLACEHOLDER|$PORT|g" \
+    -e "s|CLI_PATH_PLACEHOLDER|$CLI_PATH|g" \
+    -e "s|HOME_PLACEHOLDER|$HOME|g" \
+    "$DAEMON_SCRIPT"
+  rm -f "$DAEMON_SCRIPT.bak"
+  chmod +x "$DAEMON_SCRIPT"
+  ok "daemon.sh 已生成: $DAEMON_SCRIPT"
+
+  # 配置 cron @reboot 开机自启
+  if ! command -v crontab &>/dev/null; then
+    info "安装 cron..."
+    if command -v apt-get &>/dev/null; then
+      apt-get install -y cron 2>/dev/null && service cron start 2>/dev/null || true
+    elif command -v yum &>/dev/null; then
+      yum install -y cronie 2>/dev/null && service crond start 2>/dev/null || true
+    fi
+  fi
+
+  if command -v crontab &>/dev/null; then
+    ( crontab -l 2>/dev/null | grep -v "pi-agent-chat-web/daemon.sh" \
+      ; echo "@reboot $DAEMON_SCRIPT >> $INSTALL_DIR/logs/daemon.log 2>&1" \
+    ) | crontab -
+    ok "cron @reboot 已配置(容器重启后自动启动)"
+  else
+    warn "cron 不可用,开机自启未配置(服务仍会在本次运行中崩溃自动重启)"
+  fi
+}
+
 if [ "${SKIP_DAEMON:-0}" = "1" ]; then
-  info "Step 5/6: 跳过守护进程配置(SKIP_DAEMON=1)"
+  info "Step 5/7: 跳过守护进程配置(SKIP_DAEMON=1)"
 elif [ "$OS" = "Darwin" ]; then
   setup_launchd
+elif [ "$HAS_SYSTEMD" = true ]; then
+  setup_systemd
 elif [ "$OS" = "Linux" ]; then
-  if command -v systemctl &>/dev/null; then
-    setup_systemd
-  else
-    warn "Linux 系统无 systemctl,跳过守护进程配置"
-    info "请手动配置进程管理(pm2/supervisor/nohup)"
-  fi
+  # 容器环境(dumb-init 等非 systemd PID 1)
+  setup_daemon_script
 fi
 
 # ═══════════════════════════════════════════════
-# Step 6: 启动服务 + 健康检查
+# Step 6: 启动服务
 # ═══════════════════════════════════════════════
-info "Step 6/6: 启动服务..."
+info "Step 6/7: 启动服务..."
 
-# 先杀掉可能存在的旧进程
+# 先杀掉可能存在的旧进程/旧 daemon
+pkill -f "${INSTALL_DIR}/daemon.sh" 2>/dev/null || true
 pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
 sleep 1
 
-# 判断启动方式
+# 判断 sudo
+SUDO=""
+if [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null; then
+  SUDO="sudo"
+fi
+
 if [ "${SKIP_DAEMON:-0}" = "1" ]; then
-  # 用户要求跳过守护进程,直接 nohup
   cd "$INSTALL_DIR"
   PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
     nohup "$BUN_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
@@ -355,24 +489,26 @@ elif [ "$OS" = "Darwin" ] && [ -f "$PLIST_PATH" ]; then
   launchctl unload "$PLIST_PATH" 2>/dev/null || true
   launchctl load "$PLIST_PATH" 2>/dev/null || err "launchctl load 失败"
   ok "launchd 服务已启动(开机自启 + 崩溃自动重启)"
-elif [ "$OS" = "Linux" ] && [ -f "$SYSTEMD_SERVICE" ]; then
-  SUDO=""
-  if [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null; then
-    SUDO="sudo"
-  fi
+elif [ "$HAS_SYSTEMD" = true ] && [ -f "$SYSTEMD_SERVICE" ]; then
   $SUDO systemctl enable "$SERVICE_NAME" 2>/dev/null || true
   $SUDO systemctl start "$SERVICE_NAME" || err "systemctl start 失败"
   ok "systemd 服务已启动(开机自启 + 崩溃自动重启)"
+elif [ -f "$DAEMON_SCRIPT" ]; then
+  # 容器环境:用 setsid 启动 daemon(脱离 SSH 会话)
+  setsid nohup bash "$DAEMON_SCRIPT" >> "$INSTALL_DIR/logs/daemon.log" 2>&1 < /dev/null &
+  disown 2>/dev/null || true
+  ok "daemon.sh 已启动(崩溃自动重启 + cron 开机自启)"
 else
-  # Fallback: 直接用 bun 启动(后台)
   cd "$INSTALL_DIR"
   PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
     nohup "$BUN_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
   ok "服务已启动 nohup (PID: $!)"
 fi
 
-# 健康检查
-info "等待服务启动..."
+# ═══════════════════════════════════════════════
+# Step 7: 健康检查
+# ═══════════════════════════════════════════════
+info "Step 7/7: 健康检查..."
 HEALTH_OK=false
 for i in 1 2 3 4 5 6 7 8 9 10; do
   sleep 2
@@ -388,12 +524,12 @@ if [ "$HEALTH_OK" = true ]; then
   ok "健康检查通过 ✅ (HTTP 200)"
 else
   warn "健康检查失败(服务可能还在启动中)"
-  info "查看日志: tail -50 $INSTALL_DIR/logs/err.log"
+  info "查看日志: tail -50 $INSTALL_DIR/logs/out.log"
   info "手动检查: curl http://localhost:${PORT}/health"
 fi
 
 # ═══════════════════════════════════════════════
-# 完成
+# 完成总结
 # ═══════════════════════════════════════════════
 LOCAL_IP=""
 if [ "$OS" = "Darwin" ]; then
@@ -419,11 +555,17 @@ if [ "$OS" = "Darwin" ] && [ "${SKIP_DAEMON:-0}" != "1" ]; then
   echo "     查看日志: tail -f ${INSTALL_DIR}/logs/out.log"
   echo "     重启服务: launchctl unload ${PLIST_PATH} && launchctl load ${PLIST_PATH}"
   echo "     停止服务: launchctl unload ${PLIST_PATH}"
-elif [ "$OS" = "Linux" ] && [ "${SKIP_DAEMON:-0}" != "1" ] && [ -f "$SYSTEMD_SERVICE" ]; then
+elif [ "$HAS_SYSTEMD" = true ] && [ "${SKIP_DAEMON:-0}" != "1" ]; then
   echo "     查看状态: systemctl status ${SERVICE_NAME}"
-  echo "     查看日志: journalctl -u ${SERVICE_NAME} -f  或  tail -f ${INSTALL_DIR}/logs/out.log"
-  echo "     重启服务: sudo systemctl restart ${SERVICE_NAME}"
-  echo "     停止服务: sudo systemctl stop ${SERVICE_NAME}"
+  echo "     查看日志: journalctl -u ${SERVICE_NAME} -f"
+  echo "     重启服务: ${SUDO:-sudo} systemctl restart ${SERVICE_NAME}"
+  echo "     停止服务: ${SUDO:-sudo} systemctl stop ${SERVICE_NAME}"
+elif [ -f "$DAEMON_SCRIPT" ]; then
+  echo "     查看进程: ps aux | grep server.js | grep -v grep"
+  echo "     查看日志: tail -f ${INSTALL_DIR}/logs/out.log"
+  echo "     守护日志: tail -f ${INSTALL_DIR}/logs/daemon.log"
+  echo "     重启服务: pkill -f '${INSTALL_DIR}/server.js' (daemon 会自动拉起)"
+  echo "     完全停止: pkill -f '${INSTALL_DIR}/daemon.sh'; pkill -f '${INSTALL_DIR}/server.js'"
 else
   echo "     查看日志: tail -f ${INSTALL_DIR}/logs/out.log"
   echo "     停止服务: pkill -f ${INSTALL_DIR}/server.js"
@@ -432,15 +574,9 @@ echo ""
 echo "  📁 安装目录: ${INSTALL_DIR}"
 echo "  📋 配置文件: ${INSTALL_DIR}/.env"
 echo ""
-if ! command -v node &>/dev/null; then
-  echo -e "  ${YELLOW}⚠  注意: node 未安装,Agent 功能暂不可用${NC}"
-  if [ "$OS" = "Darwin" ]; then
-    echo "     安装 node: brew install node"
-  else
-    echo "     安装 node: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs"
-  fi
+if [ "$AUTH_MISSING" = true ]; then
+  echo -e "  ${RED}⚠  授权文件不完整!请按上方提示从已有机器拷贝 ~/.pi/agent/${NC}"
   echo ""
 fi
-echo "  💡 授权配置(AUTH_TOKEN / API Key)在 ~/.pi/agent/ 目录下"
-echo "     确保 auth.json / models.json 存在,否则 LLM 调用会失败"
+echo "  💡 完整文档: https://github.com/${REPO}/blob/master/DEPLOYMENT.md"
 echo ""
