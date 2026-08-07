@@ -118,8 +118,15 @@ NODE_BIN="$(command -v node 2>/dev/null || echo "/usr/local/bin/node")"
 # ═══════════════════════════════════════════════
 info "Step 3/6: 下载 Web 服务器包..."
 
-TARBALL_URL="https://github.com/$REPO/releases/download/v1.0.2/pi-chat-web.tar.gz"
-if [ "$VERSION" != "latest" ]; then
+if [ "$VERSION" = "latest" ]; then
+  # Resolve the latest release tag from GitHub API
+  LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+  if [ -z "$LATEST_TAG" ]; then
+    err "无法获取最新 Release tag,请指定版本号: bash install-web.sh v1.0.2"
+  fi
+  info "最新版本: $LATEST_TAG"
+  TARBALL_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/pi-chat-web.tar.gz"
+else
   TARBALL_URL="https://github.com/$REPO/releases/download/$VERSION/pi-chat-web.tar.gz"
 fi
 
