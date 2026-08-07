@@ -137,61 +137,226 @@ open build/stable-macos-arm64/PiAgentChat.app  # macOS
 
 ## 🌐 三、Web 服务器部署
 
-PiAgentChat 也可以作为 Web 服务运行（适合团队使用、远程访问）。
+PiAgentChat 可以作为 Web 服务运行（适合团队共享、远程访问、无桌面的服务器）。
 
-### 手动部署
+支持 **macOS** 和 **Linux**（包括容器环境）。一行命令完成安装。
+
+---
+
+### 快速开始（一行安装）
+
+在目标服务器上执行：
 
 ```bash
-# 1. 构建
-bash scripts/build-server.sh
-
-# 2. 配置
-cp .env.example .env
-# 编辑 .env，配置以下必要项：
-#   AUTH_TOKEN=your-secret-token
-#   PI_CLI_PATH=/path/to/pi
-
-# 3. 启动
-bun src/server.ts
-
-# 4. 使用 pm2 持久化
-pm2 start ecosystem.config.js
+curl -fsSL https://raw.githubusercontent.com/dyyz1993/pi-agent-chat/master/scripts/install-web.sh \
+  | AUTH_TOKEN=your-secret-token bash
 ```
+
+脚本会自动完成：
+
+1. 安装 bun（服务器运行时）
+2. 检查/升级 node 到 ≥ v22（Agent CLI 需要）
+3. 下载预构建的 `pi-chat-web.tar.gz`（无需 clone 源码）
+4. 生成 `.env` 配置
+5. 配置守护进程（崩溃自动重启 + 开机自启）
+6. 启动服务 + 健康检查
+
+---
+
+### 前置条件
+
+| 条件             | 说明                                                                                               |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| **SSH 访问权限** | 能 ssh 登录到目标服务器                                                                            |
+| **AUTH_TOKEN**   | 自定义一个密码，用于 WebSocket 鉴权（浏览器登录时也要输入）                                        |
+| **授权文件**     | `~/.pi/agent/` 下需要有 `auth.json` 和 `models.json`（LLM API Key），**缺失则 Agent 无法调用 LLM** |
+| **网络**         | 服务器能访问 `github.com`（下载 Release 资产）和 `bun.sh`（安装运行时）                            |
+
+> ⚠ **授权文件是唯一需要手动准备的**。服务能启动，但缺授权文件时发消息会报错。
+
+---
+
+### 完整部署流程
+
+#### 1. 准备授权文件（在已有 pi 的机器上操作）
+
+从你本机或其他已配置好的服务器，把授权文件拷到目标服务器：
+
+```bash
+# 先在目标服务器创建目录
+ssh 目标服务器 'mkdir -p ~/.pi/agent'
+
+# 拷贝授权文件（在源机器执行）
+scp ~/.pi/agent/auth.json     目标服务器:~/.pi/agent/
+scp ~/.pi/agent/models.json   目标服务器:~/.pi/agent/
+scp ~/.pi/agent/settings.json 目标服务器:~/.pi/agent/
+```
+
+> 这些文件包含你的 LLM API Key。`auth.json` 权限应为 `600`。
+
+#### 2. 一行安装（在目标服务器上执行）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dyyz1993/pi-agent-chat/master/scripts/install-web.sh \
+  | AUTH_TOKEN=your-secret-token PORT=3100 bash
+```
+
+安装完成后会输出访问地址和验证结果。
+
+#### 3. 开放网络访问
+
+**局域网服务器（如 xyz-mac）**：通常无需额外配置，直接访问 `http://服务器IP:3100`。
+
+**云服务器（如腾讯云/阿里云）**：需要在云控制台 → 安全组 → 添加入站规则：
+
+- 协议端口：`TCP:3100`
+- 来源：`0.0.0.0/0`（或限制为你的 IP）
+- 策略：允许
+
+#### 4. 验证
+
+```bash
+# 健康检查
+curl http://服务器IP:3100/health
+# → {"status":"ok","clients":0}
+
+# 浏览器打开
+http://服务器IP:3100
+# 输入 AUTH_TOKEN 登录 → 发消息测试 Agent 是否响应
+```
+
+---
+
+### 使用 80 端口（可选）
+
+默认端口是 3100。如果希望用标准 80 端口（不用加端口号），有两种方式：
+
+**方式 A：直接改端口（服务器上没有 nginx/apache）**
+
+```bash
+# 重新安装时指定 PORT=80
+curl ... | AUTH_TOKEN=xxx PORT=80 bash
+```
+
+**方式 B：nginx 反向代理（服务器上已有 nginx）**
+
+在 nginx 配置中添加：
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    location /ws {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+然后 `nginx -s reload`。
+
+---
+
+### 守护进程（自动管理）
+
+脚本会根据平台自动选择守护方案：
+
+| 平台                          | 守护方式                  | 崩溃重启          | 开机自启     |
+| ----------------------------- | ------------------------- | ----------------- | ------------ |
+| **macOS**                     | launchd plist             | ✅ KeepAlive      | ✅ RunAtLoad |
+| **Linux (systemd)**           | systemd service           | ✅ Restart=always | ✅ enable    |
+| **Linux 容器** (dumb-init 等) | daemon.sh 重启循环 + cron | ✅ while 循环     | ✅ @reboot   |
+
+容器环境检测逻辑：如果 `/proc/1/comm` 不是 `systemd`（如 `dumb-init`、`tini`），自动使用 daemon.sh 方案。
+
+---
+
+### 管理命令速查
+
+**macOS（launchd）：**
+
+```bash
+launchctl list | grep pi-agent-chat          # 查看状态
+launchctl unload ~/Library/LaunchAgents/com.pi-agent-chat.web.plist   # 停止
+launchctl load ~/Library/LaunchAgents/com.pi-agent-chat.web.plist     # 启动
+tail -f ~/.pi-agent-chat-web/logs/out.log    # 查看日志
+```
+
+**Linux（systemd）：**
+
+```bash
+systemctl status pi-agent-chat               # 查看状态
+sudo systemctl restart pi-agent-chat         # 重启
+sudo systemctl stop pi-agent-chat            # 停止
+journalctl -u pi-agent-chat -f               # 查看日志
+```
+
+**Linux 容器（daemon.sh）：**
+
+```bash
+ps aux | grep server.js | grep -v grep       # 查看进程
+pkill -f 'pi-agent-chat-web/server.js'       # 重启(daemon 自动拉起)
+pkill -f 'pi-agent-chat-web/daemon.sh'       # 完全停止(含 daemon)
+tail -f ~/.pi-agent-chat-web/logs/out.log    # 应用日志
+tail -f ~/.pi-agent-chat-web/logs/daemon.log # 守护日志
+```
+
+---
 
 ### 环境变量
 
-| 变量                  | 必填   | 默认值        | 说明                                  |
-| --------------------- | ------ | ------------- | ------------------------------------- |
-| `PORT`                | 否     | `3100`        | HTTP 服务端口                         |
-| `AUTH_TOKEN`          | **是** | —             | API 认证令牌，WebSocket 连接需要      |
-| `PI_CLI_PATH`         | **是** | —             | pi CLI 二进制路径（如 `/usr/bin/pi`） |
-| `PI_CODING_AGENT_DIR` | 否     | `~/.pi/agent` | Agent 配置目录                        |
-| `LOG_DIR`             | 否     | `./logs`      | 日志目录                              |
-| `SANDBOX_ENABLED`     | 否     | `false`       | 是否启用沙箱                          |
-| `REMOTE_SSH_HOST`     | 否     | —             | 远程 SSH runtime 主机                 |
-| `REMOTE_SSH_PORT`     | 否     | `22`          | SSH 端口                              |
-| `REMOTE_SSH_USER`     | 否     | `root`        | SSH 用户                              |
-| `REMOTE_SSH_KEY_PATH` | 否     | —             | SSH 私钥路径                          |
+`.env` 文件位于安装目录（`~/.pi-agent-chat-web/.env`），安装后自动生成：
 
-### CI/CD 自动部署
+| 变量                  | 必填   | 默认值          | 说明                              |
+| --------------------- | ------ | --------------- | --------------------------------- |
+| `PORT`                | 否     | `3100`          | HTTP 服务端口                     |
+| `AUTH_TOKEN`          | **是** | —               | API 认证令牌，WebSocket 连接需要  |
+| `PI_CLI_PATH`         | 自动   | 包内            | pi CLI 路径（随包自带，无需修改） |
+| `LOG_DIR`             | 否     | `安装目录/logs` | 日志目录                          |
+| `PI_CODING_AGENT_DIR` | 否     | `~/.pi/agent`   | Agent 配置目录（含授权文件）      |
 
-该仓库包含 GitHub Actions 工作流 `.github/workflows/deploy-web.yml`，支持自动部署到服务器。
+---
 
-**前置条件：** 在 GitHub 仓库的 Settings → Secrets 中配置：
+### 升级 / 重新安装
 
-| Secret 名称      | 说明                                 |
-| ---------------- | ------------------------------------ |
-| `DEPLOY_HOST`    | 服务器 IP 或域名                     |
-| `DEPLOY_PORT`    | SSH 端口（默认 22）                  |
-| `DEPLOY_USER`    | SSH 用户（默认 root）                |
-| `DEPLOY_SSH_KEY` | SSH 私钥内容                         |
-| `DEPLOY_PATH`    | 服务端部署路径（默认 /root/pi-chat） |
-| `APP_PORT`       | 应用端口（用于健康检查，默认 3100）  |
+只需再次执行同一行命令，会自动停止旧服务、替换文件、重启：
 
-**触发方式：**
+```bash
+curl -fsSL https://raw.githubusercontent.com/dyyz1993/pi-agent-chat/master/scripts/install-web.sh \
+  | AUTH_TOKEN=your-token bash
+```
 
-- **自动**：推送代码到 `main` 分支且修改了 `src/`、`package.json` 等文件
-- **手动**：在 GitHub Actions 页面选择 `Deploy Web Server` → `Run workflow`
+`.env` 和 `logs/` 会保留，不会丢失配置和历史日志。
+
+---
+
+### 高级：从源码构建（开发者用）
+
+如果需要自定义构建（如改了代码后部署），可以从源码构建：
+
+```bash
+# 1. 构建服务器 bundle + 前端
+bash scripts/build-server.sh
+
+# 2. 手动启动(开发/调试用)
+bun dist-server/server.js
+
+# 3. 或用 pm2 持久化
+pm2 start ecosystem.config.js
+```
+
+> 生产部署推荐使用一行安装脚本（预构建 Release 资产），不需要 clone 源码。
 
 ---
 
