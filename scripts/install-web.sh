@@ -13,7 +13,11 @@
 #   PORT              Web 服务器端口（默认: 3100）
 #   AUTH_TOKEN        API 认证令牌（必填,用于 WebSocket 鉴权）
 #   INSTALL_DIR       安装目录（默认: ~/.pi-agent-chat-web）
-#   SKIP_LAUNCHD      设为 1 跳过 launchd 开机自启配置
+#   SKIP_DAEMON       设为 1 跳过 launchd/systemd 守护进程配置(用 nohup)
+#
+# 守护进程:
+#   macOS → launchd (~/Library/LaunchAgents/com.pi-agent-chat.web.plist)
+#   Linux → systemd (/etc/systemd/system/pi-agent-chat.service, 需要 sudo)
 # =============================================================================
 set -euo pipefail
 
@@ -23,6 +27,8 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.pi-agent-chat-web}"
 PORT="${PORT:-3100}"
 PLIST_LABEL="com.pi-agent-chat.web"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
+SERVICE_NAME="pi-agent-chat"
+SYSTEMD_SERVICE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 # ── 颜色 ──
 RED='\033[0;31m'
@@ -141,9 +147,12 @@ info "解压到 $INSTALL_DIR ..."
 mkdir -p "$INSTALL_DIR"
 
 # 如果已有旧版本,先停止服务再替换
-if [ -f "$PLIST_PATH" ]; then
+if [ "$OS" = "Darwin" ] && [ -f "$PLIST_PATH" ]; then
   launchctl unload "$PLIST_PATH" 2>/dev/null || true
+elif [ "$OS" = "Linux" ] && [ -f "$SYSTEMD_SERVICE" ]; then
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 fi
+pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
 
 # 备份旧的 .env（保留用户的 AUTH_TOKEN 等配置）
 OLD_ENV=""
@@ -201,10 +210,16 @@ ok ".env 已生成"
 info "PI_CLI_PATH=$CLI_PATH"
 
 # ═══════════════════════════════════════════════
-# Step 5: 配置 launchd 开机自启（仅 macOS）
+# Step 5: 配置开机自启守护进程（macOS=launchd / Linux=systemd）
 # ═══════════════════════════════════════════════
-if [ "${SKIP_LAUNCHD:-0}" != "1" ] && [ "$OS" = "Darwin" ]; then
-  info "Step 5/6: 配置 launchd 开机自启..."
+
+setup_launchd() {
+  info "Step 5/6: 配置 launchd 开机自启 (macOS)..."
+
+  # 先卸载旧的(如果存在)
+  if [ -f "$PLIST_PATH" ]; then
+    launchctl unload "$PLIST_PATH" 2>/dev/null || true
+  fi
 
   mkdir -p "$(dirname "$PLIST_PATH")"
 
@@ -254,8 +269,70 @@ if [ "${SKIP_LAUNCHD:-0}" != "1" ] && [ "$OS" = "Darwin" ]; then
 PLISTEOF
 
   ok "plist 已生成: $PLIST_PATH"
-else
-  info "Step 5/6: 跳过 launchd 配置"
+}
+
+setup_systemd() {
+  info "Step 5/6: 配置 systemd 开机自启 (Linux)..."
+
+  # 先停旧服务(如果存在)
+  if [ -f "$SYSTEMD_SERVICE" ]; then
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+  fi
+
+  # 判断是否需要 sudo
+  SUDO=""
+  if [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null; then
+    SUDO="sudo"
+  fi
+
+  # systemd 需要 node 在系统 PATH 里(systemd 不会读 .bashrc)
+  NODE_FOR_SYSTEMD="$(command -v node 2>/dev/null || echo "$HOME/.n/bin/node")"
+
+  cat > /tmp/${SERVICE_NAME}.service << SVCEOF
+[Unit]
+Description=PiAgentChat Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=$(whoami)
+WorkingDirectory=${INSTALL_DIR}
+Environment="PATH=${HOME}/.bun/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.n/bin"
+Environment="HOME=${HOME}"
+Environment="PORT=${PORT}"
+Environment="AUTH_TOKEN=${AUTH_TOKEN}"
+Environment="PI_CLI_PATH=${CLI_PATH}"
+Environment="LOG_DIR=${INSTALL_DIR}/logs"
+Environment="NODE_ENV=production"
+ExecStart=${BUN_BIN} ${INSTALL_DIR}/server.js
+Restart=always
+RestartSec=10
+StandardOutput=append:${INSTALL_DIR}/logs/out.log
+StandardError=append:${INSTALL_DIR}/logs/err.log
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+  $SUDO cp /tmp/${SERVICE_NAME}.service "$SYSTEMD_SERVICE"
+  rm -f /tmp/${SERVICE_NAME}.service
+
+  $SUDO systemctl daemon-reload
+  ok "systemd service 已生成: $SYSTEMD_SERVICE"
+}
+
+if [ "${SKIP_DAEMON:-0}" = "1" ]; then
+  info "Step 5/6: 跳过守护进程配置(SKIP_DAEMON=1)"
+elif [ "$OS" = "Darwin" ]; then
+  setup_launchd
+elif [ "$OS" = "Linux" ]; then
+  if command -v systemctl &>/dev/null; then
+    setup_systemd
+  else
+    warn "Linux 系统无 systemctl,跳过守护进程配置"
+    info "请手动配置进程管理(pm2/supervisor/nohup)"
+  fi
 fi
 
 # ═══════════════════════════════════════════════
@@ -267,17 +344,31 @@ info "Step 6/6: 启动服务..."
 pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
 sleep 1
 
-if [ "${SKIP_LAUNCHD:-0}" != "1" ] && [ "$OS" = "Darwin" ]; then
-  # 用 launchctl 启动(开机自启 + 崩溃自动重启)
-  launchctl unload "$PLIST_PATH" 2>/dev/null || true
-  launchctl load "$PLIST_PATH" 2>/dev/null || err "launchctl load 失败"
-  ok "launchd 服务已启动(开机自启 + 崩溃自动重启)"
-else
-  # 直接用 bun 启动(前台/后台)
+# 判断启动方式
+if [ "${SKIP_DAEMON:-0}" = "1" ]; then
+  # 用户要求跳过守护进程,直接 nohup
   cd "$INSTALL_DIR"
   PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
     nohup "$BUN_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
-  ok "服务已启动(PID: $!)"
+  ok "服务已启动 nohup (PID: $!)"
+elif [ "$OS" = "Darwin" ] && [ -f "$PLIST_PATH" ]; then
+  launchctl unload "$PLIST_PATH" 2>/dev/null || true
+  launchctl load "$PLIST_PATH" 2>/dev/null || err "launchctl load 失败"
+  ok "launchd 服务已启动(开机自启 + 崩溃自动重启)"
+elif [ "$OS" = "Linux" ] && [ -f "$SYSTEMD_SERVICE" ]; then
+  SUDO=""
+  if [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null; then
+    SUDO="sudo"
+  fi
+  $SUDO systemctl enable "$SERVICE_NAME" 2>/dev/null || true
+  $SUDO systemctl start "$SERVICE_NAME" || err "systemctl start 失败"
+  ok "systemd 服务已启动(开机自启 + 崩溃自动重启)"
+else
+  # Fallback: 直接用 bun 启动(后台)
+  cd "$INSTALL_DIR"
+  PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
+    nohup "$BUN_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
+  ok "服务已启动 nohup (PID: $!)"
 fi
 
 # 健康检查
@@ -319,21 +410,35 @@ echo ""
 echo "  📡 访问地址:"
 echo "     本机:   http://localhost:${PORT}"
 if [ -n "$LOCAL_IP" ]; then
-  echo "     局域网: http://${LOCAL_IP}:${PORT}"
+  echo "     网络:   http://${LOCAL_IP}:${PORT}"
 fi
 echo ""
 echo "  🔧 管理命令:"
-echo "     查看状态: launchctl list | grep ${PLIST_LABEL}"
-echo "     查看日志: tail -f ${INSTALL_DIR}/logs/out.log"
-echo "     重启服务: launchctl unload ${PLIST_PATH} && launchctl load ${PLIST_PATH}"
-echo "     停止服务: launchctl unload ${PLIST_PATH}"
+if [ "$OS" = "Darwin" ] && [ "${SKIP_DAEMON:-0}" != "1" ]; then
+  echo "     查看状态: launchctl list | grep ${PLIST_LABEL}"
+  echo "     查看日志: tail -f ${INSTALL_DIR}/logs/out.log"
+  echo "     重启服务: launchctl unload ${PLIST_PATH} && launchctl load ${PLIST_PATH}"
+  echo "     停止服务: launchctl unload ${PLIST_PATH}"
+elif [ "$OS" = "Linux" ] && [ "${SKIP_DAEMON:-0}" != "1" ] && [ -f "$SYSTEMD_SERVICE" ]; then
+  echo "     查看状态: systemctl status ${SERVICE_NAME}"
+  echo "     查看日志: journalctl -u ${SERVICE_NAME} -f  或  tail -f ${INSTALL_DIR}/logs/out.log"
+  echo "     重启服务: sudo systemctl restart ${SERVICE_NAME}"
+  echo "     停止服务: sudo systemctl stop ${SERVICE_NAME}"
+else
+  echo "     查看日志: tail -f ${INSTALL_DIR}/logs/out.log"
+  echo "     停止服务: pkill -f ${INSTALL_DIR}/server.js"
+fi
 echo ""
 echo "  📁 安装目录: ${INSTALL_DIR}"
 echo "  📋 配置文件: ${INSTALL_DIR}/.env"
 echo ""
 if ! command -v node &>/dev/null; then
   echo -e "  ${YELLOW}⚠  注意: node 未安装,Agent 功能暂不可用${NC}"
-  echo "     安装 node: brew install node"
+  if [ "$OS" = "Darwin" ]; then
+    echo "     安装 node: brew install node"
+  else
+    echo "     安装 node: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs"
+  fi
   echo ""
 fi
 echo "  💡 授权配置(AUTH_TOKEN / API Key)在 ~/.pi/agent/ 目录下"
