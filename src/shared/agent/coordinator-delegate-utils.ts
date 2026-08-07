@@ -132,6 +132,53 @@ export function stripParentSessionFromHeader(filePath: string): void {
   }
 }
 
+/**
+ * Prepares a forked session file by:
+ * 1. Updating header.id to the new forkedSessionId (so pi CLI's internal
+ *    sessionId matches the dev server's registered id)
+ * 2. Removing parentSession from the header (same as stripParentSessionFromHeader)
+ * 3. Removing delegate_info entries (fork should not inherit child session
+ *    relationships from the original)
+ * 4. Adding "Fork:" prefix to session_info name (so users can distinguish)
+ */
+export function prepareForkedSession(filePath: string, forkedSessionId: string): void {
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const lines = content.split("\n");
+    if (lines.length === 0 || !lines[0].trim()) return;
+
+    // Update header: set new id + remove parentSession
+    const header = JSON.parse(lines[0]) as Record<string, unknown>;
+    header.id = forkedSessionId;
+    delete header.parentSession;
+    lines[0] = JSON.stringify(header);
+
+    // Filter out delegate_info entries + prefix session_info name
+    const filtered: string[] = [lines[0]];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>;
+        // Skip delegate_info — fork should not carry child relationships
+        if (entry.type === "delegate_info") continue;
+        // Prefix session_info name so users can identify the fork
+        if (entry.type === "session_info" && typeof entry.name === "string") {
+          entry.name = `Fork: ${entry.name}`;
+        }
+        filtered.push(JSON.stringify(entry));
+      } catch {
+        // Keep malformed lines as-is
+        filtered.push(line);
+      }
+    }
+
+    writeFileSync(filePath, filtered.join("\n") + "\n", "utf-8");
+  } catch {
+    // Preserve best-effort behavior for malformed or missing fork files
+  }
+}
+
 export function buildCoordinatorDelegatePrompt(options: {
   newSessionId: string;
   parentSessionId: string;

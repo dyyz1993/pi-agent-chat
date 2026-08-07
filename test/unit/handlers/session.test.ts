@@ -81,7 +81,7 @@ describe("session handler", () => {
       const handler = server.handlers.get("session.getEntries")!;
       const result = await handler({ sessionPath: "/no/such/file.jsonl" });
 
-      expect(result).toEqual({ entries: [], hasMore: false });
+      expect(result).toEqual({ entries: [], nextCursor: null, hasMore: false });
     });
 
     it("parses JSONL entries correctly", async () => {
@@ -111,12 +111,14 @@ describe("session handler", () => {
       const handler = server.handlers.get("session.getEntries")!;
       const result = (await handler({ sessionPath: filePath })) as {
         entries: Array<{ id: string; type: string }>;
+        hasMore: boolean;
       };
 
       expect(result.entries).toHaveLength(3);
       expect(result.entries[0].id).toBe("s1");
       expect(result.entries[1].id).toBe("m1");
       expect(result.entries[2].id).toBe("m2");
+      expect(result.hasMore).toBe(false);
     });
 
     it("skips malformed JSON lines", async () => {
@@ -136,6 +138,34 @@ describe("session handler", () => {
       };
 
       expect(result.entries).toHaveLength(2);
+    });
+
+    it("honors limit param and sets hasMore + nextCursor", async () => {
+      const filePath = join(tempDir, "paginated.jsonl");
+      const lines: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        lines.push(JSON.stringify({ type: "message", id: `m${i}`, timestamp: "2025-01-01T00:00:00Z" }));
+      }
+      await writeFile(filePath, lines.join("\n"));
+
+      const handler = server.handlers.get("session.getEntries")!;
+      const page1 = (await handler({ sessionPath: filePath, limit: 4 })) as {
+        entries: Array<{ id: string }>;
+        nextCursor: string;
+        hasMore: boolean;
+      };
+
+      expect(page1.entries).toHaveLength(4);
+      expect(page1.hasMore).toBe(true);
+      expect(page1.nextCursor).toBeTruthy();
+
+      const page2 = (await handler({ sessionPath: filePath, limit: 4, cursor: page1.nextCursor })) as {
+        entries: Array<{ id: string }>;
+        nextCursor: string;
+        hasMore: boolean;
+      };
+      expect(page2.entries).toHaveLength(4);
+      expect(page2.entries[0].id).toBe(`m${4}`);
     });
   });
 

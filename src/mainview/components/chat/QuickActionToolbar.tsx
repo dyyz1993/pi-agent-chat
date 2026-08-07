@@ -19,7 +19,6 @@ import {
   Brain,
   BookOpen,
   Target,
-  Repeat2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -124,11 +123,11 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
     if (goalStatus.state === "blocked" || goalRawStatus === "interrupted") {
       return "text-status-warning border border-status-warning/40 bg-status-warning/10";
     }
+    if (goalRunning) {
+      return "text-status-info border border-status-info/40 bg-status-info/10";
+    }
     return "text-accent border border-accent/40 bg-accent/10";
   })();
-  const goalActiveButtonClass = goalRunning
-    ? "text-status-info border border-status-info/40 bg-status-info/10"
-    : "text-text-tertiary border border-transparent";
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -559,7 +558,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   };
 
   return (
-    <div ref={containerRef} className="relative px-2.5 pt-0.5" data-testid="quick-action-toolbar">
+    <div ref={containerRef} className="relative px-2.5 pt-0.5 pb-0.5" data-testid="quick-action-toolbar">
       <div className="flex min-h-8 items-center gap-1">
         <div className="flex items-center gap-0.5">
           <input
@@ -629,19 +628,6 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             </div>
           </button>
           <button
-            onClick={() => openStatusPanel("goal")}
-            className={`${toolbarButtonClass} whitespace-nowrap ${goalActiveButtonClass}`}
-            title={t("composerState.loopTitle")}
-            aria-label={t("composerState.loopTitle")}
-          >
-            <div className="flex items-center gap-1 whitespace-nowrap">
-              <Repeat2
-                className={`${toolbarIconClass} ${goalRunning ? "animate-pulse" : ""}`}
-              />
-              <span className="max-sm:sr-only">{t("composerState.loopShort", "Loop")}</span>
-            </div>
-          </button>
-          <button
             onClick={() => {
               if (onGoalClick) {
                 onGoalClick();
@@ -654,7 +640,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             aria-label={t("goal.entry")}
           >
             <div className="flex items-center gap-1 whitespace-nowrap">
-              <Target className={toolbarIconClass} />
+              <Target className={`${toolbarIconClass} ${goalRunning ? "animate-pulse" : ""}`} />
               <span className="max-sm:sr-only">Goal</span>
             </div>
           </button>

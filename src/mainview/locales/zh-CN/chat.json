@@ -518,9 +518,6 @@
   "composerState.plan": "计划模式",
   "composerState.planShort": "计划",
   "composerState.planTitle": "计划模式已启用",
-  "composerState.loop": "Loop",
-  "composerState.loopShort": "Loop",
-  "composerState.loopTitle": "Agent 正在持续检查或续执行",
   "composerActionsHint": "添加上下文",
 
   "event.sessionComplete": "会话完成",

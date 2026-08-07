@@ -182,7 +182,7 @@ describe.skipIf(shouldRun === false)("Subagent Timeout Verification", () => {
       const endData = endPayload.event as Record<string, unknown>;
       console.log("[PASS] Agent turn completed. stopReason:", endData.stopReason);
 
-      const msgResp = await sendRPC(ws, "agent.getMessages", { sessionId });
+      const msgResp = await sendRPC(ws, "agent.getFullMessages", { sessionId });
       const messages = (msgResp.result as { messages: Array<Record<string, unknown>> }).messages;
 
       const assistantMsgs = messages.filter((m) => m.role === "assistant");

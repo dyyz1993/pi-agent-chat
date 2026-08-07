@@ -207,7 +207,28 @@ async function readApprovalsFromJsonl(
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
+  // Cap on items returned per RPC. Sessions can have thousands of file
+  // changes (especially auto-generated assets); uncapped responses grow
+  // into MBs and stall WS pagination on mobile. Frontend paginates by
+  // calling again with a higher limit if needed.
+  const DEFAULT_LIMIT = 200;
+  const MAX_LIMIT = 1000;
+
+  const resolveLimit = (requested: number | undefined): number =>
+    Math.min(Math.max(1, requested ?? DEFAULT_LIMIT), MAX_LIMIT);
+
+  const paginate = <T>(items: T[], limit: number) => {
+    const totalCount = items.length;
+    const sliced = items.slice(0, limit);
+    return {
+      items: sliced,
+      totalCount,
+      hasMore: totalCount > sliced.length,
+    };
+  };
+
   r("change-review.pending", async (params) => {
+    const limit = resolveLimit(params.limit);
     const manager = getProcessManager();
 
     // CLI process available → call file-review channel (optimized getBatchFileContents O(M))
@@ -224,7 +245,23 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           : Array.isArray((result as Record<string, unknown>)?.result)
             ? ((result as Record<string, unknown>).result as unknown[])
             : [];
-        return items as unknown as R<"change-review.pending">;
+        // Strip bulk content fields before sending over the wire.
+        // Frontend only uses these as a fallback when agent process is gone
+        // (see use-git-store.ts); in normal operation the per-file diff is
+        // fetched on demand. Including them here balloons the response to
+        // 10+ MB on sessions with many file changes (binary assets become
+        // base64 strings), which fills the WS buffer and stalls pagination.
+        const stripped = items.map((it: unknown) => {
+          const i = it as {
+            oldContent?: unknown;
+            newContent?: unknown;
+            unifiedDiff?: unknown;
+            [key: string]: unknown;
+          };
+          const { oldContent: _o, newContent: _n, unifiedDiff: _d, ...rest } = i;
+          return rest;
+        });
+        return paginate(stripped, limit) as unknown as R<"change-review.pending">;
       } catch (err: unknown) {
         log.warn("review.pending channel call failed, falling back to JSONL", {
           sessionId: params.sessionId,
@@ -234,20 +271,26 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
 
     // No CLI process or channel call failed → read pending list from JSONL
-    if (!params.sessionPath) return [];
+    if (!params.sessionPath) return { items: [], totalCount: 0, hasMore: false };
     try {
       const items = await readPendingFromJsonl(params.sessionPath);
-      return items as unknown as R<"change-review.pending">;
+      // Same strip as above
+      const stripped = items.map((it) => {
+        const { oldContent: _o, newContent: _n, unifiedDiff: _d, ...rest } = it;
+        return rest;
+      });
+      return paginate(stripped, limit) as R<"change-review.pending">;
     } catch (err) {
       log.warn("review.pending JSONL read failed", {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
-      return [];
+      return { items: [], totalCount: 0, hasMore: false };
     }
   });
 
   r("change-review.approvals", async (params) => {
+    const limit = resolveLimit(params.limit);
     const manager = getProcessManager();
 
     if (manager && manager.hasSession(params.sessionId)) {
@@ -263,7 +306,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           : Array.isArray((result as Record<string, unknown>)?.result)
             ? ((result as Record<string, unknown>).result as unknown[])
             : [];
-        return items as unknown as R<"change-review.approvals">;
+        return paginate(items, limit) as R<"change-review.approvals">;
       } catch (err: unknown) {
         log.warn("review.approvals channel call failed, falling back to JSONL", {
           sessionId: params.sessionId,
@@ -272,16 +315,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       }
     }
 
-    if (!params.sessionPath) return [];
+    if (!params.sessionPath) return { items: [], totalCount: 0, hasMore: false };
     try {
       const items = await readApprovalsFromJsonl(params.sessionPath, params.status);
-      return items as unknown as R<"change-review.approvals">;
+      return paginate(items, limit) as R<"change-review.approvals">;
     } catch (err) {
       log.warn("review.approvals JSONL read failed", {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
-      return [];
+      return { items: [], totalCount: 0, hasMore: false };
     }
   });
 

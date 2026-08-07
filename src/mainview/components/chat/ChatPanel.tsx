@@ -17,8 +17,6 @@ import {
   FolderOpen,
   Sparkles,
   Target,
-  Eye,
-  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Message } from "@dyyz1993/pi-ai";
@@ -52,7 +50,6 @@ import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { GoalVendorActionCard } from "./GoalVendorActionCard";
-import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import {
   useReturnToSourceSession,
   type ReturnSourceTarget,
@@ -94,8 +91,13 @@ const log = createLogger("chat");
 const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
 const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
-const SIDE_NAV_PAGE_SIZE = 200;
-const SIDE_NAV_WINDOW_SIZE = 200;
+// Match MessageList's pagination (PAGE_SIZE=50, WINDOW=300). SideNav
+// previously used 200/300 which meant only 1.5 RPCs filled the window,
+// forcing users to scroll through ~200 items between loads. With 50/300
+// the same window supports 6 loads — users scroll only ~50 items between
+// triggers, same UX as the chat message list.
+const SIDE_NAV_PAGE_SIZE = 50;
+const SIDE_NAV_WINDOW_SIZE = 300;
 const TOP_LOAD_RESTORE_MAX_ATTEMPTS = 6;
 
 const MAX_MSG_IDS_CACHE = 10;
@@ -325,8 +327,10 @@ function mergeSideNavMessages(
   return merged;
 }
 
-export function shouldUseIndependentSideNavHistory(breakpoint: string | null | undefined): boolean {
-  return breakpoint !== "mobile" && breakpoint !== "tablet";
+export function shouldUseIndependentSideNavHistory(
+  _breakpoint: string | null | undefined,
+): boolean {
+  return true;
 }
 
 const EMPTY_MSGS: never[] = [];
@@ -384,134 +388,6 @@ function RefineGoalOverlay({ step }: { step: number }) {
   );
 }
 
-export function GoalDraftCard({
-  draft,
-  editing,
-  disabled,
-  onChange,
-  onGenerate,
-  onEdit,
-  onSave,
-  onCancel,
-  onClose,
-  onAdd,
-}: {
-  draft: string;
-  editing: boolean;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-  onGenerate: () => void;
-  onEdit: () => void;
-  onSave: () => void;
-  onCancel: () => void;
-  onClose: () => void;
-  onAdd: () => void;
-}) {
-  const { t } = useTranslation("chat");
-  return (
-    <CardPrimitive
-      tone="accent"
-      data-testid="goal-draft-card"
-      className="mx-2 mt-2 overflow-hidden max-sm:mx-0 max-sm:rounded-none"
-    >
-      <div className="flex items-center gap-2 border-b border-accent/15 px-3 py-2 max-sm:px-2">
-        <button
-          type="button"
-          data-testid="goal-draft-close"
-          onClick={onClose}
-          disabled={disabled}
-          className="shrink-0 rounded-md p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-          title={t("goal.cancelCompose")}
-          aria-label={t("goal.cancelCompose")}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Target className="h-3.5 w-3.5 shrink-0 text-accent" />
-          <div className="min-w-0">
-            <div className="text-xs font-medium text-text-primary">{t("goal.draft.title")}</div>
-            <div className="text-[11px] text-text-tertiary">{t("goal.draft.subtitle")}</div>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                data-testid="goal-draft-cancel-edit"
-                onClick={onCancel}
-                disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-transparent px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <X className="h-3 w-3" />
-                {t("goal.draft.cancelEdit")}
-              </button>
-              <button
-                type="button"
-                data-testid="goal-draft-save-preview"
-                onClick={onSave}
-                disabled={(disabled ?? false) || !draft.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Eye className="h-3 w-3" />
-                {t("goal.draft.save")}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                data-testid="goal-draft-regenerate"
-                onClick={onGenerate}
-                disabled={disabled}
-                className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-transparent px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <RefreshCw className="h-3 w-3" />
-                <span className="max-sm:hidden">{t("goal.draft.regenerate")}</span>
-                <span className="sm:hidden">{t("goal.draft.generateShort")}</span>
-              </button>
-              <button
-                type="button"
-                data-testid="goal-draft-add"
-                onClick={onAdd}
-                disabled={(disabled ?? false) || !draft.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Check className="h-3 w-3" />
-                {t("goal.draft.confirm")}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      <div
-        className={`max-h-[34vh] overflow-y-auto px-3 py-2 max-sm:max-h-[28vh] max-sm:px-2${
-          editing ? "" : " cursor-pointer"
-        }`}
-        onClick={editing ? undefined : onEdit}
-      >
-        {editing ? (
-          <textarea
-            value={draft}
-            data-testid="goal-draft-editor"
-            onChange={(event) => onChange(event.target.value)}
-            className="min-h-48 w-full resize-y rounded-md border border-border-primary bg-bg-elevated px-3 py-2 font-mono text-xs leading-5 text-text-primary outline-none transition-colors focus:border-border-focus max-sm:min-h-64 max-sm:px-2"
-            aria-label={t("goal.draft.editorLabel")}
-          />
-        ) : (
-          <>
-            <div className="prose prose-sm max-w-none text-xs text-text-secondary dark:prose-invert prose-headings:my-2 prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">
-              <CachedReactMarkdown>{draft}</CachedReactMarkdown>
-            </div>
-            <div className="mt-1 border-t border-dashed border-border-primary/50 pt-1 text-[10px] text-text-tertiary">
-              ✏️ {t("goal.draft.clickToEdit")}
-            </div>
-          </>
-        )}
-      </div>
-    </CardPrimitive>
-  );
-}
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
@@ -730,6 +606,8 @@ export function ChatPanel() {
   const sideNavRef = useRef<{
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
+    scrollToTop: () => void;
+    scrollToJustBelowTop: () => void;
   }>(null);
   const showThinking = useSettingsStore((s) => s.showThinking);
   const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
@@ -862,14 +740,9 @@ export function ChatPanel() {
     isRefiningGoal,
     refineStep,
     goalDraft,
-    isGoalDraftEditing,
     setGoalDraft,
     startGoalMode,
     exitGoalMode,
-    generateGoalDraft,
-    handleEditGoalDraft,
-    handleCancelGoalDraftEdit,
-    handleSaveGoalDraftEdit,
     handleCreateGoal: handleCreateGoalBase,
     handleRefineGoal,
   } = useGoalMode({
@@ -1025,6 +898,12 @@ export function ChatPanel() {
     releaseSideNavScrollLock();
   }, [activeSessionId, activeSubId, releaseSideNavScrollLock]);
 
+  // Reset sidenav state ONLY when the session changes.
+  // DO NOT include hasMoreMessages / messageNextCursor in deps — those
+  // come from the main chat store and change when the MESSAGE LIST
+  // paginates in the background. Including them here caused the sidenav
+  // to wipe all loaded history mid-scroll whenever the chat list did
+  // anything, making the sidenav appear "stuck" after a few scrolls.
   useEffect(() => {
     setSideNavExtraMessages([]);
     setSideNavCursor(messageNextCursor);
@@ -1032,7 +911,7 @@ export function ChatPanel() {
     setSideNavNewestExtraCursor(null);
     setSideNavHasMoreNewer(false);
     setIsSideNavLoadingMore(false);
-  }, [effectiveScrollSessionId, hasMoreMessages, messageNextCursor]);
+  }, [effectiveScrollSessionId]);
 
   useEffect(() => {
     if (sideNavExtraMessages.length > 0 || isSideNavLoadingMore) return;
@@ -1205,6 +1084,8 @@ export function ChatPanel() {
     messageIds,
     restoreTopLoadScrollAnchor,
   ]);
+
+  // (scroll reset is handled directly in loadMoreSideNav via rAF)
 
   const seekSideNavToOldest = useCallback(async () => {
     if (!useIndependentSideNavHistory) return;
@@ -1386,6 +1267,14 @@ export function ChatPanel() {
       });
       const olderMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
+        // Prepend older items. If array exceeds SIDE_NAV_WINDOW_SIZE, trim
+        // from the TAIL (drop newest items). Crucially: do NOT touch
+        // sideNavCursor here — previous code did setSideNavCursor based on
+        // trim, which combined with loadNewerSideNav's similar cursor
+        // update caused an infinite cursor-overwrite loop.
+        //
+        // Trimmed newer items can be re-fetched via loadNewerSideNav when
+        // the user scrolls back down (hasMoreNewer flag below enables it).
         const merged = mergeSideNavMessages(olderMessages, prev);
         if (prev.length === 0 && merged.length > 0) {
           setSideNavNewestExtraCursor(merged[merged.length - 1]?.id ?? null);
@@ -1396,8 +1285,14 @@ export function ChatPanel() {
         setSideNavHasMoreNewer(true);
         return trimmed;
       });
+      // Cursor only advances from API response — never from trim.
       setSideNavCursor(result.nextCursor ?? null);
       setSideNavHasMore(result.hasMore === true);
+      // Browser auto-adjusts scrollTop to maintain visual position when
+      // content is prepended, so the user stays at the same items they
+      // were viewing — they can scroll up to see the newly-loaded older
+      // items. Don't override with scrollToJustBelowTop; that competed
+      // with the browser's adjustment and produced inconsistent positions.
     } catch (err) {
       log.warn("Failed to load side nav page", {
         sessionId,
@@ -1429,16 +1324,15 @@ export function ChatPanel() {
       });
       const newerMessages = mapNavMessages(result.messages);
       setSideNavExtraMessages((prev) => {
+        // Append newer items at tail. If exceeds cap, trim from HEAD (drop
+        // oldest). Do NOT touch sideNavCursor — same reason as loadMore.
+        // Trimmed older items can be re-fetched via loadMoreSideNav.
         const merged = mergeSideNavMessages(prev, newerMessages);
         if (merged.length <= SIDE_NAV_WINDOW_SIZE) return merged;
         const trimmed = merged.slice(merged.length - SIDE_NAV_WINDOW_SIZE);
-        const newOldest = trimmed[0];
-        if (newOldest) {
-          setSideNavCursor(newOldest.id);
-          setSideNavHasMore(true);
-        }
         return trimmed;
       });
+      // Cursor only advances from API response — never from trim.
       setSideNavNewestExtraCursor(result.nextCursor ?? null);
       setSideNavHasMoreNewer(result.hasMore === true);
     } catch (err) {
@@ -1700,6 +1594,18 @@ export function ChatPanel() {
             {activeSessionId && !isViewingSubagent && (
               <>
                 <QueueCards sessionId={activeSessionId} />
+                {!goalMode && projectPendingCount === 0 && (
+                  <div className="px-3 py-1.5 flex-shrink-0">
+                    <GoalVendorActionCard
+                      sessionId={activeSessionId}
+                      onEdit={startGoalMode}
+                      onCancel={(sid) => {
+                        void useGoalStore.getState().clearGoal(sid);
+                        pushNotif({ message: t("goal.cancelled"), level: "info" });
+                      }}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1753,67 +1659,11 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
-                {!goalMode && projectPendingCount === 0 && (
-                  <GoalVendorActionCard
-                    sessionId={activeSessionId}
-                    onEdit={startGoalMode}
-                    onCancel={(sid) => {
-                      void useGoalStore.getState().clearGoal(sid);
-                      pushNotif({ message: t("goal.cancelled"), level: "info" });
-                    }}
-                  />
-                )}
                 <div className="flex items-end gap-1.5">
                   <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
                     {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
                     {!goalMode && <AttachmentBar />}
                     {!goalMode && <ComposerPlaceholderBar />}
-                    {goalMode && (
-                      <div className="mx-2 mt-2 flex flex-col gap-2 rounded-lg border border-border-primary/70 bg-bg-secondary/60 px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0 text-[11px] leading-4 text-text-tertiary">
-                          <span className="font-medium text-text-secondary">
-                            {t("goal.draft.entryTitle")}
-                          </span>
-                          <span className="ml-1">{t("goal.draft.entryHint")}</span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={generateGoalDraft}
-                            disabled={isCreatingGoal || isRefiningGoal}
-                            className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-surface-dim px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" />
-                            {goalDraft ? t("goal.draft.regenerate") : t("goal.draft.generate")}
-                          </button>
-                          <button
-                            type="button"
-                            data-testid="goal-draft-entry-close"
-                            onClick={exitGoalMode}
-                            disabled={isCreatingGoal || isRefiningGoal}
-                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                            title={t("goal.cancelCompose")}
-                            aria-label={t("goal.cancelCompose")}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {goalMode && goalDraft && (
-                      <GoalDraftCard
-                        draft={goalDraft}
-                        editing={isGoalDraftEditing}
-                        disabled={isCreatingGoal || isRefiningGoal}
-                        onChange={setGoalDraft}
-                        onGenerate={generateGoalDraft}
-                        onEdit={handleEditGoalDraft}
-                        onSave={handleSaveGoalDraftEdit}
-                        onCancel={handleCancelGoalDraftEdit}
-                        onClose={exitGoalMode}
-                        onAdd={() => void handleCreateGoal()}
-                      />
-                    )}
                     {activeRemoteDisconnected && (
                       <CardPrimitive
                         tone="error"
@@ -1860,6 +1710,9 @@ export function ChatPanel() {
                       onPopupCancel={commandPopup.closePopup}
                       onPopupArrowUp={commandPopup.navigateUp}
                       onPopupArrowDown={commandPopup.navigateDown}
+                      goalMode={goalMode}
+                      goalDraft={goalDraft}
+                      onGoalDraftChange={setGoalDraft}
                     />
                     {showComposerUtilityRow && (
                       <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-primary/70 px-2.5 py-1.5 max-lg:min-h-8 max-lg:py-1">
@@ -1885,7 +1738,7 @@ export function ChatPanel() {
                     )}
                   </div>
 
-                  <div className="flex shrink-0 flex-col justify-end gap-1.5 py-1">
+                  <div className="flex shrink-0 flex-col items-center justify-end gap-1.5 py-1 px-1.5">
                     {goalMode ? (
                       <button
                         onClick={() => void handleRefineGoal()}

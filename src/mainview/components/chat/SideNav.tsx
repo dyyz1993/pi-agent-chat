@@ -163,7 +163,13 @@ const SIDE_NAV_MIN_VIEWPORT_PADDING = 12;
 const SIDE_NAV_CLICK_SCROLL_SUPPRESS_MS = 1000;
 const SIDE_NAV_ACTIVE_SETTLE_DELAYS_MS = [80, 240] as const;
 const SIDE_NAV_INITIAL_ACTIVE_SETTLE_DELAYS_MS = [80, 240, 600, 1200, 2200] as const;
-const SIDE_NAV_VIRTUAL_OVERSCAN_ITEMS = 12;
+// Overscan: how many extra items to render above/below the visible viewport.
+// Higher = less blank space during fast scroll / loadMore transitions, but
+// more DOM nodes. Each nav dot is a tiny colored div (~5 elements), so even
+// 50 overscan × 2 sides = 100 extra nodes is cheap.
+// 12 was too low — fast trackpad scroll or loadMore's 50-item jump could
+// outrun React's render cycle, leaving blank frames.
+const SIDE_NAV_VIRTUAL_OVERSCAN_ITEMS = 50;
 const SIDE_NAV_COMPACT_SMOOTH_MAX_DISTANCE = 96;
 type SideNavScrollStrategy = "center" | "edge";
 
@@ -959,6 +965,17 @@ export const SideNav = memo(
       () => ({
         getFirstIconId: () => items[0]?.key ?? null,
         getLastIconId: () => items[items.length - 1]?.key ?? null,
+        scrollToTop: () => {
+          const container = scrollRef.current;
+          if (container) container.scrollTop = 0;
+        },
+        // Place user 100px from top so they can see older content but
+        // don't immediately trigger another loadMore (threshold is 80px).
+        // Lets them scroll up the last 100px to load even older content.
+        scrollToJustBelowTop: () => {
+          const container = scrollRef.current;
+          if (container) container.scrollTop = 100;
+        },
       }),
       [items],
     );
@@ -1022,6 +1039,14 @@ export const SideNav = memo(
       );
     }, []);
 
+    // Keep latest pagination in a ref so the scroll listener doesn't need to
+    // be torn down + reattached every time isLoading/hasMore changes (which
+    // happens on every loadMore). Previous code had `pagination` in the
+    // useEffect deps, causing listener churn that could miss scroll events
+    // during rapid state updates — manifesting as "scroll gets stuck".
+    const paginationRef = useRef(pagination);
+    paginationRef.current = pagination;
+
     useEffect(() => {
       const container = scrollRef.current;
       if (!container) return;
@@ -1031,19 +1056,25 @@ export const SideNav = memo(
         if (raf) return;
         raf = requestAnimationFrame(() => {
           raf = 0;
+          const p = paginationRef.current;
+          if (!p) return;
           syncScrollState();
-          if (container.scrollTop <= 24 && pagination?.hasMore && !pagination.isLoading) {
-            pagination.onLoadMore();
+          // Prefetch threshold = 500px (~15 items). Fires loadMore BEFORE
+          // user reaches the very top, so the next page is already loaded
+          // by the time they get there. This makes scrolling feel continuous
+          // instead of "scroll to top → wait → load → scroll more".
+          if (container.scrollTop <= 500 && p.hasMore && !p.isLoading) {
+            p.onLoadMore();
           }
           const distanceToBottom =
             container.scrollHeight - container.scrollTop - container.clientHeight;
           if (
             distanceToBottom <= 24 &&
-            pagination?.hasMoreNewer &&
-            pagination.onLoadNewer &&
-            !pagination.isLoading
+            p.hasMoreNewer &&
+            p.onLoadNewer &&
+            !p.isLoading
           ) {
-            pagination.onLoadNewer();
+            p.onLoadNewer();
           }
           refreshVisibleEdgeFallback();
         });
@@ -1057,13 +1088,13 @@ export const SideNav = memo(
         if (raf) cancelAnimationFrame(raf);
       };
     }, [
-      pagination,
       refreshVisibleEdgeFallback,
-      items,
       viewportMetrics.viewportHeight,
       syncScrollState,
     ]);
 
+    // After items change, schedule syncScrollState via RAF (after browser
+    // layout has adjusted scrollTop).
     useLayoutEffect(() => {
       syncScrollState();
       refreshVisibleEdgeFallback();
@@ -1212,7 +1243,7 @@ export const SideNav = memo(
               height: "100%",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              scrollSnapType: compactMotion ? "none" : "y mandatory",
+              scrollSnapType: "none",
             }}
           >
             <div

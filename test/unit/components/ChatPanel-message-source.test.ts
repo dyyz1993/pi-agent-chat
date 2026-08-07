@@ -57,10 +57,12 @@ describe("ChatPanel displayed message source", () => {
 });
 
 describe("ChatPanel SideNav history mode", () => {
-  it("keeps independent SideNav history off on mobile and tablet", () => {
-    expect(shouldUseIndependentSideNavHistory("mobile")).toBe(false);
-    expect(shouldUseIndependentSideNavHistory("tablet")).toBe(false);
+  it("keeps independent SideNav history enabled at every breakpoint", () => {
+    expect(shouldUseIndependentSideNavHistory("mobile")).toBe(true);
+    expect(shouldUseIndependentSideNavHistory("tablet")).toBe(true);
     expect(shouldUseIndependentSideNavHistory("desktop")).toBe(true);
     expect(shouldUseIndependentSideNavHistory("wide")).toBe(true);
+    expect(shouldUseIndependentSideNavHistory(null)).toBe(true);
+    expect(shouldUseIndependentSideNavHistory(undefined)).toBe(true);
   });
 });

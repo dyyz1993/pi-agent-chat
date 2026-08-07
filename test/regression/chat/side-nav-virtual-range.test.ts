@@ -78,18 +78,18 @@ describe("SideNav virtual range", () => {
 });
 
 describe("SideNav mobile history behavior", () => {
-  it("does not enable the independent SideNav history window on mobile", () => {
+  it("keeps the independent SideNav history window wired on mobile and tablet", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
 
     expect(source).toContain("shouldUseIndependentSideNavHistory(breakpoint)");
-    expect(source).toContain("if (!useIndependentSideNavHistory) return undefined");
+    expect(source).toContain("pagination={sideNavPagination}");
     expect(source).toContain("compactMotion={isMobileOrTablet}");
   });
 
-  it("uses compact motion for mobile SideNav follow behavior", () => {
+  it("uses compact motion limits without scroll snapping for mobile SideNav follow behavior", () => {
     const source = readSource("src/mainview/components/chat/SideNav.tsx");
 
-    expect(source).toContain('scrollSnapType: compactMotion ? "none" : "y mandatory"');
+    expect(source).toContain('scrollSnapType: "none"');
     expect(source).toContain("SIDE_NAV_COMPACT_SMOOTH_MAX_DISTANCE");
   });
 

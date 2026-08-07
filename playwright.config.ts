@@ -7,6 +7,31 @@ const authToken = process.env.E2E_AUTH_TOKEN ?? "test-ci-token";
 const appBaseUrl = `http://${e2eHost}:${appPort}`;
 const apiBaseUrl = `http://${e2eHost}:${apiPort}`;
 
+const launchOptions = {
+  executablePath:
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+};
+
+const webServer = [
+  {
+    command: `PORT=${apiPort} AUTH_TOKEN=${authToken} bun src/server.ts`,
+    url: `${apiBaseUrl}/health`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 15000,
+    env: {
+      PORT: apiPort,
+      AUTH_TOKEN: authToken,
+    },
+  },
+  {
+    command: `VITE_API_TARGET=${apiBaseUrl} VITE_AUTH_TOKEN=${authToken} npx vite --host ${e2eHost} --port ${appPort} --strictPort`,
+    url: appBaseUrl,
+    reuseExistingServer: !process.env.CI,
+    timeout: 30000,
+  },
+];
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -19,30 +44,44 @@ export default defineConfig({
     trace: "on-first-retry",
     headless: true,
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: "off",
   },
   projects: [
+    // L1 smoke: fast (<60s), every commit. Basic page load + UI shell.
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: "smoke",
+      testMatch: /e2e\/smoke\/.*\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], launchOptions },
+    },
+    // L2 goal flow: real RPC, ~45s. Goal lifecycle + UI sync.
+    // Single worker — goal RPC calls collide if parallel.
+    {
+      name: "goal",
+      testMatch: /e2e\/goal\/.*\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], launchOptions },
+      workers: 1,
+      timeout: 120_000,
+    },
+    // L3 extensions: extension load smoke, ~12s. Each ext doesn't crash UI.
+    {
+      name: "extensions",
+      testMatch: /e2e\/extensions\/.*\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], launchOptions },
+    },
+    // L4 LLM: real model, ~10min. Skips without API key.
+    {
+      name: "llm",
+      testMatch: /e2e\/llm\/.*\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], launchOptions },
+      workers: 1,
+      timeout: 600_000,
+    },
+    // Legacy: existing root-level specs (app/input-bar/responsive/etc.)
+    {
+      name: "legacy",
+      testMatch: /e2e\/[^/]+\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], launchOptions },
     },
   ],
-  webServer: [
-    {
-      command: `PORT=${apiPort} AUTH_TOKEN=${authToken} bun src/server.ts`,
-      url: `${apiBaseUrl}/health`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 15000,
-      env: {
-        PORT: apiPort,
-        AUTH_TOKEN: authToken,
-      },
-    },
-    {
-      command: `VITE_API_TARGET=${apiBaseUrl} VITE_AUTH_TOKEN=${authToken} npx vite --host ${e2eHost} --port ${appPort} --strictPort`,
-      url: appBaseUrl,
-      reuseExistingServer: !process.env.CI,
-      timeout: 30000,
-    },
-  ],
+  webServer,
 });

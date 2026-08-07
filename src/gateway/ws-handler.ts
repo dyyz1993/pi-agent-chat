@@ -9,7 +9,6 @@ const log = createLogger("gateway");
 
 const SLOW_RPC_THRESHOLD_MS = 1000;
 const BACKPRESSURE_THRESHOLD = 1024 * 1024; // 1MB
-const BACKPRESSURE_DRAIN_TARGET = 512 * 1024; // 512KB
 
 export interface WsHandlerDeps {
   config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
@@ -51,6 +50,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     log.info("Client connected", { total: clients.size + 1 });
     clients.add(ws);
 
+    // Track alive state for dead-connection detection.
+    // Server pings every 30s; if no pong by next cycle, terminate.
+    (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
+    ws.on("pong", () => {
+      (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
+    });
+
     // Track RPC timing: id → { method, startTime }
     const rpcTimings = new Map<string, { method: string; startTime: number }>();
 
@@ -65,35 +71,23 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
           return;
         }
 
-        // Backpressure: if send buffer is backing up, handle by message type
+        // Backpressure: if send buffer is backing up, only drop event messages
+        // (the next event will replace them). RPC responses MUST be sent —
+        // blocking them causes loading spinners to hang for 30s+ on slow clients.
         if (ws.bufferedAmount > BACKPRESSURE_THRESHOLD) {
-          // Event messages can be dropped during backpressure (next event replaces)
           if (msg.type === "event") {
             log.debug("[ws-out] backpressure: dropping event", { event: msg.eventType });
             return;
           }
-          // RPC responses must wait for buffer to drain
-          await new Promise<void>((resolve) => {
-            const check = () => {
-              if (ws.readyState !== WebSocket.OPEN) {
-                resolve();
-                return;
-              }
-              if (ws.bufferedAmount < BACKPRESSURE_DRAIN_TARGET) {
-                resolve();
-                return;
-              }
-              setTimeout(check, 10);
-            };
-            setTimeout(check, 10);
+          log.warn("[ws-out] backpressure: sending RPC anyway", {
+            type: msg.type,
+            id: msg.id,
+            buffered: ws.bufferedAmount,
+            readyState: ws.readyState,
+            remoteAddress: (ws as WebSocket & { remoteAddress?: string }).remoteAddress,
+            url: (ws as WebSocket & { url?: string }).url,
+            protocol: ws.protocol,
           });
-          if (ws.readyState !== WebSocket.OPEN) {
-            log.debug("[ws-out] stale client after backpressure: dropping message", {
-              type: msg.type,
-              id: msg.id,
-            });
-            return;
-          }
         }
 
         // Log all outgoing messages (requests, responses, events)
@@ -132,7 +126,8 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
 
         return new Promise<void>((resolve, reject) => {
           try {
-            ws.send(JSON.stringify(message), (err?: Error) => {
+            const payload = JSON.stringify(message);
+            ws.send(payload, (err?: Error) => {
               if (err) {
                 log.error("[ws-out] send failed", {
                   type: msg.type,
@@ -212,13 +207,61 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     });
 
     const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.ping();
-      } else {
+      if (ws.readyState !== WebSocket.OPEN) {
         clearInterval(pingInterval);
+        return;
       }
+      // Mark as dead; if pong arrives, handler resets to true.
+      // Next cycle will terminate if still false.
+      const _ws = ws as WebSocket & { isAlive?: boolean };
+      if (_ws.isAlive === false) {
+        log.warn("Client missed pong, terminating dead connection");
+        ws.terminate();
+        clearInterval(pingInterval);
+        return;
+      }
+      _ws.isAlive = false;
+      ws.ping();
     }, 30000);
   });
+
+  // Sweep all clients for dead connections every 30s.
+  // Two termination criteria:
+  //   1. isAlive=false  → missed last pong (dead at TCP/JS level)
+  //   2. bufferedAmount > STUCK_BUFFER_THRESHOLD for too long → JS layer
+  //      isn't draining (e.g. tab suspended, headless test runner stuck).
+  //      Without this, a single stuck client fills its send buffer with
+  //      tens of MB, blocking subsequent RPC responses for that client.
+  const STUCK_BUFFER_THRESHOLD = 5 * 1024 * 1024; // 5MB
+  const bufferGrowthSince = new WeakMap<WebSocket, { since: number; amount: number }>();
+  setInterval(() => {
+    const now = Date.now();
+    for (const ws of clients) {
+      const _ws = ws as WebSocket & { isAlive?: boolean };
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      if (_ws.isAlive === false) {
+        log.warn("Sweep: terminating dead connection (no pong)");
+        ws.terminate();
+        continue;
+      }
+      // Track buffer growth: if a connection has >5MB stuck for >60s,
+      // the client isn't draining. Terminate so it can reconnect clean.
+      if (ws.bufferedAmount > STUCK_BUFFER_THRESHOLD) {
+        const tracked = bufferGrowthSince.get(ws);
+        if (!tracked) {
+          bufferGrowthSince.set(ws, { since: now, amount: ws.bufferedAmount });
+        } else if (now - tracked.since > 60000) {
+          log.warn("Sweep: terminating stuck-buffer connection", {
+            buffered: ws.bufferedAmount,
+            stuckMs: now - tracked.since,
+          });
+          ws.terminate();
+        }
+      } else {
+        bufferGrowthSince.delete(ws);
+      }
+    }
+  }, 30000);
 
   Object.defineProperty(wss, "clients", {
     get: () => clients,

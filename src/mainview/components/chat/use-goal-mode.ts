@@ -37,14 +37,9 @@ export interface GoalModeApi {
   isRefiningGoal: boolean;
   refineStep: number;
   goalDraft: string;
-  isGoalDraftEditing: boolean;
   setGoalDraft: (text: string) => void;
   startGoalMode: (objective?: string) => void;
   exitGoalMode: () => void;
-  generateGoalDraft: () => void;
-  handleEditGoalDraft: () => void;
-  handleCancelGoalDraftEdit: () => void;
-  handleSaveGoalDraftEdit: () => void;
   /**
    * Submits the goal. Caller is responsible for post-create UI cleanup
    * (resumeAutoScroll etc.) — see handleCreateGoalWithCleanup below.
@@ -72,9 +67,7 @@ export function useGoalMode(deps: UseGoalModeDeps): GoalModeApi {
   const [isRefiningGoal, setIsRefiningGoal] = useState(false);
   const [refineStep, setRefineStep] = useState(0);
   const [goalDraft, setGoalDraft] = useState("");
-  const [isGoalDraftEditing, setIsGoalDraftEditing] = useState(false);
   const preGoalInputRef = useRef("");
-  const preEditGoalDraftRef = useRef("");
 
   const startSetup = useGoalStore((s) => s.startSetup);
   const refineGoal = useGoalStore((s) => s.refineGoal);
@@ -82,10 +75,8 @@ export function useGoalMode(deps: UseGoalModeDeps): GoalModeApi {
   const exitGoalMode = useCallback(() => {
     setGoalMode(false);
     setGoalDraft("");
-    setIsGoalDraftEditing(false);
     deps.setInputText(preGoalInputRef.current);
     preGoalInputRef.current = "";
-    preEditGoalDraftRef.current = "";
   }, [deps]);
 
   const startGoalMode = useCallback(
@@ -107,44 +98,12 @@ export function useGoalMode(deps: UseGoalModeDeps): GoalModeApi {
       preGoalInputRef.current = deps.inputText;
       deps.setInputText(draftHint);
       setGoalDraft(draft);
-      setIsGoalDraftEditing(false);
-      preEditGoalDraftRef.current = "";
       setGoalMode(true);
       deps.commandPopup.closePopup();
       requestAnimationFrame(() => deps.inputBarRef.current?.focus?.());
     },
     [deps, exitGoalMode, goalMode],
   );
-
-  const generateGoalDraft = useCallback(() => {
-    const draft = buildGoalDraftMarkdown({
-      projectName: deps.projectName,
-      projectPath: deps.projectPath,
-      sessionTitle: deps.sessionTitle,
-      hint: deps.inputText,
-      messageCount: deps.messageCount,
-      hasAttachments: deps.attachmentCount > 0 || deps.hasComposerPlaceholders,
-    });
-    setGoalDraft(draft);
-    setIsGoalDraftEditing(false);
-  }, [deps]);
-
-  const handleEditGoalDraft = useCallback(() => {
-    preEditGoalDraftRef.current = goalDraft;
-    setIsGoalDraftEditing(true);
-  }, [goalDraft]);
-
-  const handleCancelGoalDraftEdit = useCallback(() => {
-    if (preEditGoalDraftRef.current) {
-      setGoalDraft(preEditGoalDraftRef.current);
-    }
-    setIsGoalDraftEditing(false);
-  }, []);
-
-  const handleSaveGoalDraftEdit = useCallback(() => {
-    preEditGoalDraftRef.current = "";
-    setIsGoalDraftEditing(false);
-  }, []);
 
   const handleCreateGoal = useCallback(async () => {
     const objective = (goalDraft || deps.inputText).trim();
@@ -180,10 +139,8 @@ export function useGoalMode(deps: UseGoalModeDeps): GoalModeApi {
       }
       deps.setInputText("");
       setGoalDraft("");
-      setIsGoalDraftEditing(false);
       setGoalMode(false);
       preGoalInputRef.current = "";
-      preEditGoalDraftRef.current = "";
       if (deps.isMobileOrTablet) {
         deps.inputBarRef.current?.blur();
       }
@@ -223,14 +180,9 @@ export function useGoalMode(deps: UseGoalModeDeps): GoalModeApi {
     isRefiningGoal,
     refineStep,
     goalDraft,
-    isGoalDraftEditing,
     setGoalDraft,
     startGoalMode,
     exitGoalMode,
-    generateGoalDraft,
-    handleEditGoalDraft,
-    handleCancelGoalDraftEdit,
-    handleSaveGoalDraftEdit,
     handleCreateGoal,
     handleRefineGoal,
   };

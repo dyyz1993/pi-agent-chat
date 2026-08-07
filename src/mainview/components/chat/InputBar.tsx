@@ -35,6 +35,9 @@ interface InputBarProps {
   onPopupCancel?: () => void;
   onPopupArrowUp?: () => void;
   onPopupArrowDown?: () => void;
+  goalMode?: boolean;
+  goalDraft?: string;
+  onGoalDraftChange?: (text: string) => void;
 }
 
 const COLLAPSED_INPUT_HEIGHT = 72;
@@ -57,6 +60,9 @@ export const InputBar = memo(
       onPopupCancel,
       onPopupArrowUp,
       onPopupArrowDown,
+      goalMode = false,
+      goalDraft = "",
+      onGoalDraftChange,
     },
     ref,
   ) {
@@ -68,8 +74,20 @@ export const InputBar = memo(
     const setInputText = useChatStore((s) => s.setInputText);
     const attachmentCount = useAttachmentStore((s) => s.attachments.length);
 
-    const valueRef = useRef(inputText);
-    valueRef.current = inputText;
+    const effectiveValue = goalMode ? goalDraft : inputText;
+    const setEffectiveValue = useCallback(
+      (next: string) => {
+        if (goalMode) {
+          onGoalDraftChange?.(next);
+          return;
+        }
+        setInputText(next);
+      },
+      [goalMode, onGoalDraftChange, setInputText],
+    );
+
+    const valueRef = useRef(effectiveValue);
+    valueRef.current = effectiveValue;
 
     const {
       saveToHistory,
@@ -166,7 +184,7 @@ export const InputBar = memo(
       (next: string) => {
         const prev = valueRef.current;
         if (next === prev) return;
-        setInputText(next);
+        setEffectiveValue(next);
         resetIndex();
 
         const isSingleCharAdded = prev.length === next.length - 1;
@@ -187,7 +205,7 @@ export const InputBar = memo(
           }
         }
       },
-      [setInputText, resetIndex, popupOpen],
+      [setEffectiveValue, resetIndex, popupOpen],
     );
 
     const handleChange = useCallback(
@@ -238,14 +256,16 @@ export const InputBar = memo(
     );
 
     const handleClear = useCallback(() => {
-      setInputText("");
-      clearHistory();
-      resetIndex();
+      setEffectiveValue("");
+      if (!goalMode) {
+        clearHistory();
+        resetIndex();
+      }
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
         textareaRef.current.style.height = `${expanded ? EXPANDED_INPUT_HEIGHT : COLLAPSED_INPUT_HEIGHT}px`;
       }
-    }, [setInputText, expanded, clearHistory, resetIndex]);
+    }, [setEffectiveValue, goalMode, expanded, clearHistory, resetIndex]);
 
     const toggleExpand = useCallback(() => {
       setExpanded((prev) => !prev);
@@ -290,16 +310,20 @@ export const InputBar = memo(
           : `${Math.min(el.scrollHeight, maxHeight ?? 160)}px`;
       });
       return () => cancelAnimationFrame(rafId);
-    }, [inputText, expanded, maxHeight]);
+    }, [effectiveValue, expanded, maxHeight]);
 
-    const hasContent = inputText.trim().length > 0;
+    const hasContent = effectiveValue.trim().length > 0;
 
     return (
       <div
         className={`flex-1 overflow-hidden transition-colors ${
           embedded
-            ? "bg-transparent"
-            : "rounded-lg border border-border-primary bg-bg-elevated/95 focus-within:border-border-focus focus-within:shadow-sm"
+            ? goalMode
+              ? "bg-accent/5"
+              : "bg-transparent"
+            : goalMode
+              ? "rounded-lg border border-accent/40 bg-accent/5 focus-within:border-accent focus-within:shadow-sm"
+              : "rounded-lg border border-border-primary bg-bg-elevated/95 focus-within:border-border-focus focus-within:shadow-sm"
         }`}
         style={{
           minHeight: expanded ? `${EXPANDED_INPUT_HEIGHT}px` : `${COLLAPSED_INPUT_HEIGHT}px`,
@@ -309,7 +333,7 @@ export const InputBar = memo(
           <textarea
             data-testid="chat-input"
             ref={textareaRef}
-            value={inputText}
+            value={effectiveValue}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}

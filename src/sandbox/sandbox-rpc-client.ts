@@ -231,10 +231,6 @@ export class SandboxRpcClient {
     return this.call("agent.setSessionName", name);
   }
 
-  async getMessages(): Promise<AgentMessage[]> {
-    return this.call("agent.getMessages");
-  }
-
   async getFullMessages(options?: {
     afterEntryId?: string;
     limit?: number;

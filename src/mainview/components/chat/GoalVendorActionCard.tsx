@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ClipboardList, Eye, Loader2, Pencil, Target, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, Loader2, Pencil, Target, X } from "lucide-react";
 import { useMemo, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoalVendorStatus, GoalVendorTaskItem } from "../../../shared/modules/goal";
@@ -101,7 +101,7 @@ export function GoalVendorActionCard({ sessionId, onEdit, onCancel }: GoalVendor
     <CardPrimitive
       tone={tone.tone}
       data-testid="goal-vendor-action-card"
-      className="mx-2 mb-2 px-2.5 py-2 transition-colors hover:bg-surface-hover/70 sm:mx-0"
+      className="px-2.5 py-2 transition-colors hover:bg-surface-hover/70"
       aria-label={t("goal.activeCardLabel")}
     >
       <div className="flex min-w-0 items-start gap-2">
@@ -148,15 +148,6 @@ export function GoalVendorActionCard({ sessionId, onEdit, onCancel }: GoalVendor
           )}
         </button>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={handleOpenPanel}
-            className="rounded-md p-1.5 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-accent"
-            title={t("goal.openPanel")}
-            aria-label={t("goal.openPanel")}
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </button>
           <button
             type="button"
             onClick={handleEdit}

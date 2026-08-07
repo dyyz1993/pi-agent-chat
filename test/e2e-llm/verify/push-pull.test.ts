@@ -262,11 +262,11 @@ describe.skipIf(shouldRun === false)("Reconnect Data Pull Verification", () => {
     expect(state).toHaveProperty("isStreaming");
   });
 
-  it("step 7: pull getMessages — should have messages from previous turn", async () => {
-    const resp = await sendRPC(ws, "agent.getMessages", { sessionId });
+  it("step 7: pull getFullMessages — should have messages from previous turn", async () => {
+    const resp = await sendRPC(ws, "agent.getFullMessages", { sessionId });
     expect(resp.error).toBeUndefined();
     const result = resp.result as { messages: Array<Record<string, unknown>> };
-    console.log(`[PASS] getMessages: ${result.messages.length} messages`);
+    console.log(`[PASS] getFullMessages: ${result.messages.length} messages`);
     expect(result.messages.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -295,7 +295,7 @@ describe.skipIf(shouldRun === false)("Reconnect Data Pull Verification", () => {
       const state = stateResp.result as Record<string, unknown>;
       console.log("[PASS] Reconnect getState:", state.status);
 
-      const msgResp = await sendRPC(ws2, "agent.getMessages", { sessionId });
+      const msgResp = await sendRPC(ws2, "agent.getFullMessages", { sessionId });
       expect(msgResp.error).toBeUndefined();
       const msgs = msgResp.result as { messages: Array<Record<string, unknown>> };
       console.log(`[PASS] Reconnect getMessages: ${msgs.messages.length} messages`);

@@ -272,12 +272,12 @@ describe.skipIf(shouldRun === false)("Fork 派发测试: 通过 RPC JSON 触发 
     const childSession = firstChild.session as Record<string, unknown>;
     const childSessionId = childSession.sessionId as string;
 
-    const msgResp = await sendRPC(ws, "agent.getMessages", {
+    const msgResp = await sendRPC(ws, "agent.getFullMessages", {
       sessionId: childSessionId,
     });
 
     if (msgResp.error) {
-      console.log(`  ⚠️ getMessages 失败: ${msgResp.error.message}`);
+      console.log(`  ⚠️ getFullMessages 失败: ${msgResp.error.message}`);
     } else {
       const result = msgResp.result as { messages: Array<Record<string, unknown>> };
       console.log(`\n=== 子会话消息 (sessionId: ${childSessionId.substring(0, 25)}...) ===`);

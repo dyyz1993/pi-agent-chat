@@ -3,7 +3,7 @@ import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { SessionEntry } from "../modules/session";
 import { readFile, writeFile, appendFile, mkdir, unlink, readdir, stat } from "fs/promises";
-import { existsSync, createReadStream } from "fs";
+import { existsSync, createReadStream, openSync, writeSync, closeSync, fsyncSync } from "fs";
 import * as readline from "readline";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -18,41 +18,68 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("session.getEntries", async (params) => {
     const { sessionPath } = params;
+    // Honor limit + cursor to bound response size on long sessions.
+    // Without this, a 100MB session.jsonl is parsed end-to-end and the
+    // entire entries array is sent over the WS, blowing the buffer and
+    // stalling mobile clients. Default cap matches what callers expect
+    // for a single page (200 entries ≈ 100-500 KB depending on payload).
+    const DEFAULT_LIMIT = 200;
+    const MAX_LIMIT = 2000;
+    const limit = Math.min(Math.max(1, params.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
+    const cursor = params.cursor; // line index of the last returned entry
 
     if (!existsSync(sessionPath)) {
-      return { entries: [], hasMore: false };
+      return { entries: [], nextCursor: null, hasMore: false };
     }
 
     const entries: SessionEntry[] = [];
     let lineIdx = 0;
+    let startLine = cursor ? parseInt(cursor, 10) : 0;
+    if (Number.isNaN(startLine) || startLine < 0) startLine = 0;
+    let nextCursor: string | null = null;
+    let hasMore = false;
 
     const rl = readline.createInterface({
       input: createReadStream(sessionPath, { encoding: "utf-8" }),
       crlfDelay: Infinity,
     });
 
-    for await (const line of rl) {
-      if (!line.trim()) {
+    try {
+      for await (const line of rl) {
+        // Skip lines before cursor (resuming a previous paginated read)
+        if (lineIdx < startLine) {
+          lineIdx++;
+          continue;
+        }
+        if (!line.trim()) {
+          lineIdx++;
+          continue;
+        }
+        if (entries.length >= limit) {
+          // There's more data; stop reading to avoid parsing the whole file.
+          hasMore = true;
+          nextCursor = String(lineIdx);
+          break;
+        }
+        try {
+          const parsed = JSON.parse(line) as Record<string, unknown>;
+          entries.push({
+            id: (parsed.id as string) ?? `entry-${lineIdx}`,
+            type: ((parsed.type as string) ?? "custom") as SessionEntry["type"],
+            parentId: (parsed.parentId as string | null) ?? null,
+            timestamp: new Date((parsed.timestamp as string | number) ?? 0).getTime(),
+            data: parsed,
+          });
+        } catch (err) {
+          log.debug("skipping malformed JSONL entry:", { err: String(err) });
+        }
         lineIdx++;
-        continue;
       }
-      try {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        entries.push({
-          id: (parsed.id as string) ?? `entry-${lineIdx}`,
-          type: ((parsed.type as string) ?? "custom") as SessionEntry["type"],
-          parentId: (parsed.parentId as string | null) ?? null,
-          timestamp: new Date((parsed.timestamp as string | number) ?? 0).getTime(),
-          data: parsed,
-        });
-      } catch (err) {
-        log.debug("skipping malformed JSONL entry:", { err: String(err) });
-      }
-      lineIdx++;
+    } finally {
+      rl.close();
     }
 
-    rl.close();
-    return { entries, hasMore: false };
+    return { entries, nextCursor, hasMore };
   });
 
   r("session.create", async (params) => {
@@ -65,12 +92,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     const header = {
       type: "session",
-      version: 1,
+      version: 3,
       id: sessionId,
       timestamp: new Date().toISOString(),
       cwd: projectPath,
     };
-    await writeFile(sessionPath, JSON.stringify(header) + "\n", "utf-8");
+    // Write + fsync to guarantee the header is on disk before pi CLI spawns
+    // and reads the file via --session flag. Without fsync, the spawn can
+    // race ahead of the write buffer, see an empty file, and truncate it.
+    const fd = openSync(sessionPath, "w");
+    try {
+      writeSync(fd, JSON.stringify(header) + "\n", 0, "utf-8");
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
 
     return { sessionId, sessionPath };
   });

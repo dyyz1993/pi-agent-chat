@@ -147,6 +147,7 @@ class APIClientImpl {
   private _reconnectDetected: boolean = false;
   private _connectionStatus: "connected" | "disconnected" = "connected";
   private _connectionListeners: Set<(status: "connected" | "disconnected") => void> = new Set();
+  private _pendingDisconnectRejects = new Set<(error: Error) => void>();
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private _reconnectAttempts: number = 0;
   private _maxReconnectAttempts: number = 10;
@@ -182,6 +183,16 @@ class APIClientImpl {
     if (this._connectionStatus === status) return;
     this._connectionStatus = status;
     this._connectionListeners.forEach((fn) => fn(status));
+    if (status === "disconnected") {
+      const error = new Error("WebSocket disconnected");
+      this._pendingDisconnectRejects.forEach((reject) => reject(error));
+      this._pendingDisconnectRejects.clear();
+    }
+  }
+
+  /** Test-only helper to simulate connection status changes. */
+  testSetConnectionStatus(status: "connected" | "disconnected"): void {
+    this.setConnectionStatus(status);
   }
 
   initSyncForDesktop(): void {
@@ -442,11 +453,32 @@ class APIClientImpl {
           ? { timeoutMs: LONG_RPC_CALL_TIMEOUT_MS }
           : undefined,
       );
-      const result = options?.signal
-        ? await raceWithAbortSignal(callPromise, options.signal)
-        : await callPromise;
-      this.debugLog("response", method as string, result);
-      return result;
+
+      // Race the RPC call against a disconnect signal so that pending
+      // calls reject immediately when the WebSocket drops, instead of
+      // waiting for the 60s RPC timeout. This prevents loading spinners
+      // from getting stuck for a full minute on network issues.
+      let disconnectReject!: (error: Error) => void;
+      const disconnectPromise = new Promise<never>((_, reject) => {
+        disconnectReject = reject;
+        if (this._connectionStatus === "disconnected") {
+          reject(new Error("WebSocket disconnected"));
+          return;
+        }
+        this._pendingDisconnectRejects.add(reject);
+      });
+
+      try {
+        const racers: Promise<unknown>[] = [callPromise, disconnectPromise];
+        if (options?.signal) {
+          racers.push(raceWithAbortSignal(callPromise, options.signal));
+        }
+        const result = await Promise.race(racers) as MethodResult<RPCMethods, K>;
+        this.debugLog("response", method as string, result);
+        return result;
+      } finally {
+        this._pendingDisconnectRejects.delete(disconnectReject);
+      }
     } catch (err) {
       this.debugLog("response", method as string, {
         error: err instanceof Error ? err.message : String(err),
