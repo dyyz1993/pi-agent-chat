@@ -88,7 +88,7 @@ export function useSendMessage(deps: UseSendMessageDeps) {
       if (fileAttachments.length > 0) {
         attachmentStore.clearAll();
         for (const att of fileAttachments) {
-          useAttachmentStore.getState().addFiles([att.file]);
+          await useAttachmentStore.getState().addFiles([att.file]);
         }
         const uploaded = await useAttachmentStore.getState().uploadAll();
         filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
@@ -101,7 +101,7 @@ export function useSendMessage(deps: UseSendMessageDeps) {
       if (!supportsVision && imageAttachments.length > 0) {
         attachmentStore.clearAll();
         for (const att of imageAttachments) {
-          useAttachmentStore.getState().addFiles([att.file]);
+          await useAttachmentStore.getState().addFiles([att.file]);
         }
         const uploadedImages = await useAttachmentStore.getState().uploadAll();
         const imagePaths = uploadedImages
