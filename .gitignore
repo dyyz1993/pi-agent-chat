@@ -149,14 +149,12 @@ test-*-*.mjs
 investigate-high.mjs
 scan-project.mjs
 
-# Promo drafts
+# Promo / marketing drafts (not part of the codebase)
 promo/
-!promo/
-promo/*
-!promo/press-kit/
-!promo/press-kit/**
-promo/press-kit/videos/frames/
-promo/press-kit/videos/raw/
+
+# Agent session artifacts & evidence (local-only)
+.codex-evidence/
+.zcode/
 
 # Temporary plan docs
 .compaction-verify-plan.md
