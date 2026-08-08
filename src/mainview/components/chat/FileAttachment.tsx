@@ -232,10 +232,9 @@ export function AttachmentButtons({
   }, []);
 
   const openImagePicker = useCallback(() => {
-    if (!supportsVision) return;
     setIsAddMenuOpen(false);
     imageInputRef.current?.click();
-  }, [supportsVision]);
+  }, []);
 
   const openGoalComposer = useCallback(() => {
     setIsAddMenuOpen(false);
@@ -319,9 +318,8 @@ export function AttachmentButtons({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-hover"
                 onClick={openImagePicker}
-                disabled={!supportsVision}
                 role="menuitem"
               >
                 <ImageIcon className="h-4 w-4 shrink-0 text-text-secondary" />
@@ -332,7 +330,7 @@ export function AttachmentButtons({
                   <span className="block truncate text-xs text-text-tertiary">
                     {supportsVision
                       ? t("composerAddMenu.imageDesc")
-                      : t("composerAddMenu.imageDisabled")}
+                      : t("composerAddMenu.imageMcp")}
                   </span>
                 </span>
               </button>
@@ -404,22 +402,20 @@ export function AttachmentButtons({
         </div>
       )}
 
-      {supportsVision && (
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={handleImageSelect}
-        />
-      )}
-      {supportsVision && !isCompact && (
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleImageSelect}
+      />
+      {!isCompact && (
         <button
           type="button"
           onClick={() => imageInputRef.current?.click()}
           className={buttonClass}
-          title={t("fileAttachment.addImage")}
+          title={supportsVision ? t("fileAttachment.addImage") : t("fileAttachment.addImageMcp")}
         >
           <ImageIcon className={iconClass} />
         </button>
