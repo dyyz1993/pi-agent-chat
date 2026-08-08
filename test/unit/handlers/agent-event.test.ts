@@ -258,6 +258,7 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
 vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
     getState: vi.fn(() => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() })),
+    setState: vi.fn(),
   },
 }));
 

@@ -139,7 +139,7 @@ interface StatusState {
   yoloLoading: boolean;
   planMode: boolean;
   shellActive: boolean;
-  mcpServers: MCPServerInfo[];
+  mcpServersBySession: Record<string, MCPServerInfo[]>;
   lspStatus: "connected" | "disconnected" | "connecting";
   plugins: PluginInfo[];
   skills: SkillInfo[];
@@ -166,7 +166,8 @@ interface StatusState {
   togglePlan: () => void;
   toggleSection: (section: StatusSection) => void;
   expandSection: (section: StatusSection) => void;
-  setMcpServers: (servers: StatusState["mcpServers"]) => void;
+  setMcpServers: (sessionId: string, servers: MCPServerInfo[]) => void;
+  clearMcpSession: (sessionId: string) => void;
   setLspStatus: (status: StatusState["lspStatus"]) => void;
   setPlugins: (plugins: StatusState["plugins"]) => void;
   setSkills: (skills: StatusState["skills"]) => void;
@@ -192,7 +193,7 @@ export const useStatusStore = create<StatusState>((set) => ({
   yoloLoading: false,
   planMode: true,
   shellActive: false,
-  mcpServers: [],
+  mcpServersBySession: {},
   lspStatus: "disconnected",
   plugins: [],
   skills: [],
@@ -361,7 +362,15 @@ export const useStatusStore = create<StatusState>((set) => ({
       next.delete(section);
       return { collapsedSections: next };
     }),
-  setMcpServers: (servers) => set({ mcpServers: servers }),
+  setMcpServers: (sessionId, servers) =>
+    set((s) => ({ mcpServersBySession: { ...s.mcpServersBySession, [sessionId]: servers } })),
+  clearMcpSession: (sessionId) =>
+    set((s) => {
+      if (!s.mcpServersBySession[sessionId]) return s;
+      const next = { ...s.mcpServersBySession };
+      delete next[sessionId];
+      return { mcpServersBySession: next };
+    }),
   setLspStatus: (status) => set({ lspStatus: status }),
   setPlugins: (plugins) => set({ plugins }),
   setSkills: (skills) => set({ skills }),
@@ -452,11 +461,18 @@ export const useStatusStore = create<StatusState>((set) => ({
       .call("agent.toggleMcpServer", { sessionId, name, enabled })
       .then((res) => {
         if (res.success) {
-          set((s) => ({
-            mcpServers: s.mcpServers.map((srv) =>
-              srv.name === name ? { ...srv, disabled: !enabled } : srv,
-            ),
-          }));
+          set((s) => {
+            const slot = s.mcpServersBySession[sessionId];
+            if (!slot) return s;
+            return {
+              mcpServersBySession: {
+                ...s.mcpServersBySession,
+                [sessionId]: slot.map((srv) =>
+                  srv.name === name ? { ...srv, disabled: !enabled } : srv,
+                ),
+              },
+            };
+          });
         }
       })
       .catch((err) => {
@@ -479,7 +495,7 @@ export const useStatusStore = create<StatusState>((set) => ({
       yoloLoading: false,
       planMode: true,
       shellActive: false,
-      mcpServers: [],
+      mcpServersBySession: {},
       lspStatus: "disconnected",
       plugins: [],
       skills: [],

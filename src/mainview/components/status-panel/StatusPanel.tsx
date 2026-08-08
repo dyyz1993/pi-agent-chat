@@ -1005,14 +1005,23 @@ export function StatusPanel() {
   );
 }
 
+const EMPTY_MCP_SERVERS: MCPServerInfo[] = [];
+
 function MCPToolsSection() {
   const { t } = useTranslation("status");
-  const mcpServers = useStatusStore((s) => s.mcpServers);
+  const activeSessionId = useEffectiveSessionId();
+  // useShallow keeps the selector result referentially stable across renders
+  // when the slot is undefined (would otherwise return a fresh [] each time
+  // and trigger an infinite re-render loop in zustand's snapshot check).
+  const mcpServers = useStatusStore(
+    useShallow((s) =>
+      activeSessionId ? (s.mcpServersBySession[activeSessionId] ?? EMPTY_MCP_SERVERS) : EMPTY_MCP_SERVERS,
+    ),
+  );
   const expandedMcpServer = useStatusStore((s) => s.expandedMcpServer);
   const toggleMcpExpanded = useStatusStore((s) => s.toggleMcpExpanded);
   const toggleMcpServer = useStatusStore((s) => s.toggleMcpServer);
   const restartMcpServer = useStatusStore((s) => s.restartMcpServer);
-  const activeSessionId = useEffectiveSessionId();
   const [restarting, setRestarting] = useState<string | null>(null);
 
   if (mcpServers.length === 0) {
