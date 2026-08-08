@@ -165,7 +165,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => {
   interface StatusState {
     plugins: unknown[];
     skills: unknown[];
-    mcpServers: MCPServerInfo[];
+    mcpServersBySession: Record<string, MCPServerInfo[]>;
     setPlugins: () => void;
     setSkills: () => void;
     _setMcpServers: () => void;
@@ -173,7 +173,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => {
   const useStatusStore = create<StatusState>(() => ({
     plugins: [],
     skills: [],
-    mcpServers: [],
+    mcpServersBySession: {},
     setPlugins: () => {},
     setSkills: () => {},
     setMcpServers: () => {},

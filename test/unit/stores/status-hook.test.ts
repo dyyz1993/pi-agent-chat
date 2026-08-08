@@ -28,7 +28,7 @@ beforeEach(() => {
     yoloEnabled: false,
     planMode: true,
     shellActive: false,
-    mcpServers: [],
+    mcpServersBySession: {},
     lspStatus: "disconnected",
     plugins: [],
     skills: [],
@@ -40,11 +40,11 @@ beforeEach(() => {
 });
 
 describe("useStatusStore", () => {
-  it("initial state: permissionProfile=normal, planMode=true, mcpServers=[], plugins=[], skills=[]", () => {
+  it("initial state: permissionProfile=normal, planMode=true, mcpServersBySession={}, plugins=[], skills=[]", () => {
     const s = useStatusStore.getState();
     expect(s.permissionProfile).toBe("normal");
     expect(s.planMode).toBe(true);
-    expect(s.mcpServers).toEqual([]);
+    expect(s.mcpServersBySession).toEqual({});
     expect(s.plugins).toEqual([]);
     expect(s.skills).toEqual([]);
   });
@@ -83,7 +83,7 @@ describe("useStatusStore", () => {
     expect(useStatusStore.getState().collapsedSections.has("supervisor")).toBe(false);
   });
 
-  it("setMcpServers sets mcpServers", () => {
+  it("setMcpServers sets mcpServersBySession for the session", () => {
     const servers = [
       {
         name: "srv",
@@ -93,8 +93,8 @@ describe("useStatusStore", () => {
         scope: "project" as const,
       },
     ];
-    useStatusStore.getState().setMcpServers(servers);
-    expect(useStatusStore.getState().mcpServers).toEqual(servers);
+    useStatusStore.getState().setMcpServers("sess-1", servers);
+    expect(useStatusStore.getState().mcpServersBySession["sess-1"]).toEqual(servers);
   });
 
   it("setLspStatus sets lspStatus", () => {

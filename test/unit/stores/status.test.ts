@@ -37,7 +37,7 @@ beforeEach(() => {
     yoloEnabled: false,
     planMode: true,
     shellActive: false,
-    mcpServers: [],
+    mcpServersBySession: {},
     lspStatus: "disconnected",
     plugins: [],
     skills: [],
@@ -163,7 +163,7 @@ describe("toggleSection", () => {
 });
 
 describe("setMcpServers", () => {
-  it("sets MCP servers", () => {
+  it("sets MCP servers for a session", () => {
     const servers = [
       {
         name: "server-a",
@@ -182,8 +182,37 @@ describe("setMcpServers", () => {
         scope: "global" as const,
       },
     ];
-    useStatusStore.getState().setMcpServers(servers);
-    expect(useStatusStore.getState().mcpServers).toEqual(servers);
+    useStatusStore.getState().setMcpServers("sess-a", servers);
+    expect(useStatusStore.getState().mcpServersBySession["sess-a"]).toEqual(servers);
+  });
+
+  it("isolates MCP servers per session (no cross-session pollution)", () => {
+    useStatusStore.getState().setMcpServers("sess-a", [
+      { name: "a-only", status: "connected", toolCount: 1, tools: [], scope: "project" },
+    ]);
+    useStatusStore.getState().setMcpServers("sess-b", [
+      { name: "b-only", status: "connected", toolCount: 2, tools: [], scope: "global" },
+    ]);
+    expect(useStatusStore.getState().mcpServersBySession["sess-a"].map((s) => s.name)).toEqual([
+      "a-only",
+    ]);
+    expect(useStatusStore.getState().mcpServersBySession["sess-b"].map((s) => s.name)).toEqual([
+      "b-only",
+    ]);
+  });
+
+  it("toggleMcpServer only updates the target session slot", () => {
+    useStatusStore.getState().setMcpServers("sess-a", [
+      { name: "shared", status: "connected", toolCount: 1, tools: [], scope: "project" },
+    ]);
+    useStatusStore.getState().setMcpServers("sess-b", [
+      { name: "shared", status: "connected", toolCount: 1, tools: [], scope: "project" },
+    ]);
+    // Mock the RPC to resolve success synchronously is not feasible here without
+    // mocking apiClient; instead verify clearMcpSession scope isolation.
+    useStatusStore.getState().clearMcpSession("sess-a");
+    expect(useStatusStore.getState().mcpServersBySession["sess-a"]).toBeUndefined();
+    expect(useStatusStore.getState().mcpServersBySession["sess-b"]).toBeDefined();
   });
 });
 

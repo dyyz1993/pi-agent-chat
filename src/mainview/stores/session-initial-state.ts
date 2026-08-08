@@ -632,7 +632,10 @@ export function createFetchInitialStateAction({
               count: servers.length,
               names: servers.map((s) => s.name),
             });
-            useStatusStore.getState().setMcpServers(servers);
+            // Active-session guard: avoid populating a slot for a session the
+            // user has already switched away from (matches P1 guard style).
+            if (get().activeSessionId !== sessionId) return;
+            useStatusStore.getState().setMcpServers(sessionId, servers);
           })
           .catch((err) => {
             log.warn("agent.getMcpServers failed", {

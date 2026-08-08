@@ -2009,7 +2009,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       tools?: Array<{ originalName: string; fullName: string; description: string }>;
     };
     useStatusStore.setState((s) => {
-      const existing = s.mcpServers.find((srv) => srv.name === name);
+      const current = s.mcpServersBySession[sessionId] ?? [];
+      const existing = current.find((srv) => srv.name === name);
       const updated: MCPServerInfo = {
         name,
         status,
@@ -2022,13 +2023,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         scope: existing?.scope ?? "global",
         disabled: existing?.disabled,
       };
-      const idx = s.mcpServers.findIndex((srv) => srv.name === name);
-      if (idx >= 0) {
-        const servers = [...s.mcpServers];
-        servers[idx] = updated;
-        return { mcpServers: servers };
-      }
-      return { mcpServers: [...s.mcpServers, updated] };
+      const idx = current.findIndex((srv) => srv.name === name);
+      const next = idx >= 0 ? current.map((srv, i) => (i === idx ? updated : srv)) : [...current, updated];
+      return { mcpServersBySession: { ...s.mcpServersBySession, [sessionId]: next } };
     });
     return;
   }

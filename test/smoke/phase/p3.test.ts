@@ -161,7 +161,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => {
   interface StatusState {
     plugins: unknown[];
     skills: unknown[];
-    mcpServers: MCPServerInfo[];
+    mcpServersBySession: Record<string, MCPServerInfo[]>;
     setPlugins: () => void;
     setSkills: () => void;
     _setMcpServers: () => void;
@@ -169,7 +169,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => {
   const useStatusStore = create<StatusState>(() => ({
     plugins: [],
     skills: [],
-    mcpServers: [],
+    mcpServersBySession: {},
     setPlugins: () => {},
     setSkills: () => {},
     setMcpServers: () => {},
@@ -315,7 +315,7 @@ function resetStores() {
   useStatusStore.setState({
     plugins: [],
     skills: [],
-    mcpServers: [],
+    mcpServersBySession: {},
   });
   Object.keys(toolCallNameMap).forEach((k) => delete toolCallNameMap[k]);
 }
@@ -411,7 +411,7 @@ describe("P3 Edge Tests", () => {
 
   it("T20.1 — MCP connection change events", async () => {
     await player.play(mcpConnectionChangeScenario());
-    const servers = useStatusStore.getState().mcpServers;
+    const servers = useStatusStore.getState().mcpServersBySession[SID] ?? [];
     expect(servers.length).toBeGreaterThanOrEqual(2);
     const fs = servers.find((s) => s.name === "filesystem");
     expect(fs).toBeDefined();

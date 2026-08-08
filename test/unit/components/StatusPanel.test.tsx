@@ -89,7 +89,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
       toggleMcpExpanded: vi.fn(),
       toggleMcpServer: vi.fn(),
       restartMcpServer: vi.fn(),
-      mcpServers: [],
+      mcpServersBySession: { "test-session": [] },
     };
     return selector ? selector(state) : state;
   },
