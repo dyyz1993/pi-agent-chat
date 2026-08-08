@@ -7,6 +7,8 @@ import {
   persistComposerPlaceholders,
   useComposerPlaceholderStore,
 } from "../../stores/use-composer-placeholder-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { isVisionModel } from "../../lib/vision-detection";
 import { apiClient } from "../../lib/api-client";
 import type { InputBarHandle } from "./InputBar";
 
@@ -52,6 +54,23 @@ export function useSendMessage(deps: UseSendMessageDeps) {
       const imageAttachments = attachments.filter((a) => a.type.startsWith("image/"));
       const fileAttachments = attachments.filter((a) => !a.type.startsWith("image/"));
 
+      // Determine if the current model supports vision. When it does NOT,
+      // images are later stripped by pi-ai's transformMessages and replaced
+      // with "(image omitted: model does not support images)". To keep the
+      // image accessible to the agent (via `read` or MCP vision tools like
+      // `analyze_image`), we also upload each image to /tmp/pi-uploads/ and
+      // append an @path reference to the message text — mirroring how
+      // non-image file attachments already work.
+      const sessionStore = useSessionStore.getState();
+      const { currentModel, availableModels } = sessionStore;
+      const supportsVision = currentModel
+        ? isVisionModel(
+            availableModels.find(
+              (m) => m.provider === currentModel.provider && m.id === currentModel.id,
+            ) ?? {},
+          )
+        : false;
+
       const images: ImageContent[] = [];
       for (const att of imageAttachments) {
         try {
@@ -64,6 +83,7 @@ export function useSendMessage(deps: UseSendMessageDeps) {
         }
       }
 
+      // Upload all file attachments (non-images) to disk as before.
       let filePaths: string[] = [];
       if (fileAttachments.length > 0) {
         attachmentStore.clearAll();
@@ -72,6 +92,22 @@ export function useSendMessage(deps: UseSendMessageDeps) {
         }
         const uploaded = await useAttachmentStore.getState().uploadAll();
         filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
+      }
+
+      // When the model lacks vision, also upload images to disk so we can
+      // append recoverable @path references. For vision models this is
+      // skipped — the ImageContent blocks are sent inline and no redundant
+      // @path is added.
+      if (!supportsVision && imageAttachments.length > 0) {
+        attachmentStore.clearAll();
+        for (const att of imageAttachments) {
+          useAttachmentStore.getState().addFiles([att.file]);
+        }
+        const uploadedImages = await useAttachmentStore.getState().uploadAll();
+        const imagePaths = uploadedImages
+          .map((a) => a.uploadedPath)
+          .filter(Boolean) as string[];
+        filePaths = [...filePaths, ...imagePaths];
       }
 
       attachmentStore.clearAll();
