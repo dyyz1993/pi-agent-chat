@@ -97,6 +97,7 @@ export const GOAL_METHODS = {
   SUBMIT_CONTRACT: "submitContract",
   APPROVE_CONTRACT: "approveContract",
   APPROVE_AUTHORITY_AMENDMENT: "approveAuthorityAmendment",
+  REJECT_AUTHORITY_AMENDMENT: "rejectAuthorityAmendment",
   REJECT_CONTRACT: "rejectContract",
   CLEAR_GOAL: "clearGoal",
   FORCE_CONTINUE: "forceContinue",
@@ -148,6 +149,8 @@ export const ALL_CHANNEL_METHODS: ReadonlySet<string> = new Set([
   ...Object.values(RULES_METHODS),
   ...Object.values(COORDINATOR_METHODS),
   ...Object.values(REMOTE_SSH_METHODS),
+  "getStatus",
+  "getConfig",
 ]);
 
 /** Channel name → valid methods mapping */
@@ -164,4 +167,5 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),
   "remote-ssh": new Set(Object.values(REMOTE_SSH_METHODS)),
+  "issue-monitor": new Set(["getStatus", "getConfig"]),
 };

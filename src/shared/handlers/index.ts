@@ -20,6 +20,7 @@ import { register as snapshot } from "./snapshot";
 import { register as changeReview } from "./change-review";
 import { register as goal } from "./goal";
 import { register as updater } from "./updater";
+import { register as issueMonitor } from "./issue-monitor";
 import { unregister as agentCleanup } from "./agent";
 
 type RegisterFn = (server: RPCServer, options: HandlerOptions) => void;
@@ -46,6 +47,7 @@ export const handlerMap: Record<string, RegisterFn> = {
   changeReview,
   goal,
   updater,
+  issueMonitor,
 };
 
 export const cleanupMap: Record<string, CleanupFn> = {

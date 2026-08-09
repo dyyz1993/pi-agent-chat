@@ -139,6 +139,7 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
   handleRulesChannelData: (sessionId: string, event: ChannelDataEvent) => void;
   handleMemoryChannelData: (sessionId: string, event: ChannelDataEvent) => void;
   handleLearningChannelData?: (sessionId: string, event: ChannelDataEvent) => void;
+  handleIssueMonitorChannelData?: (sessionId: string, event: ChannelDataEvent) => void;
   now?: () => number;
 }): void {
   const managed = options.getActiveManaged(options.sessionId);
@@ -153,6 +154,7 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
     if (ch.name === "rules-engine") return options.handleRulesChannelData(options.sessionId, ch);
     if (ch.name === "memory") return options.handleMemoryChannelData(options.sessionId, ch);
     if (ch.name === "learning") return options.handleLearningChannelData?.(options.sessionId, ch);
+    if (ch.name === "issue-monitor") return options.handleIssueMonitorChannelData?.(options.sessionId, ch);
     if (ch.name === "coordinator") {
       log.warn(
         "coordinator channel_data reached handleEvent — should have been intercepted in start()",

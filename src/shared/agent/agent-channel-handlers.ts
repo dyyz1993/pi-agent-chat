@@ -287,3 +287,24 @@ export async function handleLearningChannelDataOperation(options: {
     });
   }
 }
+
+/** Issue Monitor channel data → broadcast to frontend */
+export async function handleIssueMonitorChannelDataOperation(options: {
+  sessionId: string;
+  channelMsg: ChannelDataEvent;
+  broadcastEvent: BroadcastEvent;
+}): Promise<void> {
+  const data = options.channelMsg.data as Record<string, unknown> | undefined;
+  if (!data) return;
+
+  log.info("Issue monitor channel data", {
+    sessionId: options.sessionId,
+    type: data.type,
+  });
+
+  await options.broadcastEvent(
+    "issue-monitor.event",
+    { sessionId: options.sessionId, ...data },
+    { sessionId: options.sessionId },
+  );
+}

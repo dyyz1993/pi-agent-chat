@@ -17,6 +17,7 @@ import type { HooksMethods, HooksEvents } from "./modules/hooks";
 import type { SnapshotMethods } from "./modules/snapshot";
 import type { ChangeReviewMethods } from "./modules/change-review";
 import type { CoordinatorEvents } from "./modules/coordinator";
+import type { IssueMonitorMethods, IssueMonitorEvents } from "./modules/issue-monitor";
 import type { GoalMethods, GoalEvents } from "./modules/goal";
 import type { UpdaterMethods } from "./modules/updater";
 
@@ -41,7 +42,8 @@ export interface RPCMethods
     SnapshotMethods,
     ChangeReviewMethods,
     GoalMethods,
-    UpdaterMethods {}
+    UpdaterMethods,
+    IssueMonitorMethods {}
 
 export interface RPCEvents
   extends
@@ -57,7 +59,8 @@ export interface RPCEvents
     LearningEvents,
     FileEvents,
     CoordinatorEvents,
-    GoalEvents {}
+    GoalEvents,
+    IssueMonitorEvents {}
 
 export interface HandlerOptions {
   platform: "desktop" | "web";
