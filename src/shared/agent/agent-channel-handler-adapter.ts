@@ -10,6 +10,7 @@ import {
   handleRulesChannelDataOperation,
   handleSubagentChannelDataOperation,
   handleTodoChannelDataOperation,
+  handleIssueMonitorChannelDataOperation,
 } from "./agent-channel-handlers";
 import type { DelegateChildMap, SyncDelegateResolver } from "./coordinator-session-state";
 
@@ -38,6 +39,7 @@ export interface AgentChannelHandlerAdapter {
   handleRulesChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleMemoryChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleLearningChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
+  handleIssueMonitorChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
 }
 
 export function createAgentChannelHandlerAdapter<TManaged extends ChannelManagedClient>(deps: {
@@ -78,6 +80,7 @@ export function createAgentChannelHandlerAdapter<TManaged extends ChannelManaged
         handleRulesChannelData: adapter.handleRulesChannelData,
         handleMemoryChannelData: adapter.handleMemoryChannelData,
         handleLearningChannelData: adapter.handleLearningChannelData,
+        handleIssueMonitorChannelData: adapter.handleIssueMonitorChannelData,
       });
     },
     async handleSubagentChannelData(parentSessionId, channelMsg) {
@@ -141,6 +144,13 @@ export function createAgentChannelHandlerAdapter<TManaged extends ChannelManaged
     },
     async handleLearningChannelData(sessionId, channelMsg) {
       await handleLearningChannelDataOperation({
+        sessionId,
+        channelMsg,
+        broadcastEvent: deps.broadcastEvent,
+      });
+    },
+    async handleIssueMonitorChannelData(sessionId, channelMsg) {
+      await handleIssueMonitorChannelDataOperation({
         sessionId,
         channelMsg,
         broadcastEvent: deps.broadcastEvent,

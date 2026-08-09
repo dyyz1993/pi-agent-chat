@@ -11,6 +11,7 @@ import {
   Plug,
   Network,
   Puzzle,
+  Radar,
   CheckCircle2,
   Circle,
   AlertTriangle,
@@ -36,6 +37,7 @@ import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
+import { useIssueMonitorStore } from "../../stores/use-issue-monitor-store";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RemoteProjectRef } from "../../../shared/modules/project";
@@ -66,6 +68,9 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       `${t("pathFieldLabel")} ${plugin.path}`,
       `${t("toolsFieldLabel", { count: plugin.toolNames.length })} ${plugin.toolNames.join(", ") || t("none")}`,
       `${t("commandsFieldLabel", { count: plugin.commandNames.length })} ${plugin.commandNames.join(", ") || t("none")}`,
+      `${t("channelsFieldLabel", { count: plugin.channelNames.length })} ${plugin.channelNames.join(", ") || t("none")}`,
+      `${t("eventsFieldLabel", { count: plugin.eventNames.length })} ${plugin.eventNames.join(", ") || t("none")}`,
+      `${t("permissionProvidersFieldLabel", { count: plugin.permissionProviderNames.length })} ${plugin.permissionProviderNames.join(", ") || t("none")}`,
     ];
     if (plugin.usageNotice) {
       lines.push(`${t("usageNoticeLabel")} ${plugin.usageNotice.message}`);
@@ -313,6 +318,7 @@ export function StatusPanel() {
     { id: "lsp", label: t("lsp"), icon: Network },
     { id: "plugins", label: t("plugins"), icon: Puzzle },
     { id: "skills", label: t("skills"), icon: BookOpen },
+    { id: "issue-monitor", label: "Issue Monitor", icon: Radar },
   ];
   const SECTIONS = BASE_SECTIONS.filter(
     (section) => section.id !== "remote" || activeProjectIsRemote,
@@ -649,6 +655,7 @@ export function StatusPanel() {
                       <span>{t("idle")}</span>
                     ))}
                   {id === "mcp" && <MCPToolsSection />}
+                  {id === "issue-monitor" && <IssueMonitorSection />}
                   {id === "lsp" && (
                     <div className="space-y-1">
                       {!lspData || lspData.startupComplete ? (
@@ -810,6 +817,21 @@ export function StatusPanel() {
                                     {t("pluginCommands", { count: p.commandNames.length })}
                                   </span>
                                 )}
+                                {p.channelNames.length > 0 && (
+                                  <span className="text-text-tertiary">
+                                    {t("pluginChannels", { count: p.channelNames.length })}
+                                  </span>
+                                )}
+                                {p.eventNames.length > 0 && (
+                                  <span className="text-text-tertiary">
+                                    {t("pluginEvents", { count: p.eventNames.length })}
+                                  </span>
+                                )}
+                                {p.permissionProviderNames.length > 0 && (
+                                  <span className="text-text-tertiary">
+                                    {t("pluginPermissionProviders", { count: p.permissionProviderNames.length })}
+                                  </span>
+                                )}
                                 {p.usageNotice && (
                                   <span
                                     className="text-[9px] px-1 py-px rounded shrink-0 max-w-[72px] truncate bg-status-info/15 text-status-info"
@@ -896,11 +918,66 @@ export function StatusPanel() {
                                       </div>
                                     </div>
                                   )}
-                                  {p.toolNames.length === 0 && p.commandNames.length === 0 && (
-                                    <div className="text-text-tertiary">
-                                      {t("noToolsOrCommands")}
+                                  {p.channelNames.length > 0 && (
+                                    <div>
+                                      <span className="text-text-tertiary block mb-0.5">
+                                        {t("channelsLabel")}
+                                      </span>
+                                      <div className="space-y-px">
+                                        {p.channelNames.map((cn) => (
+                                          <div
+                                            key={cn}
+                                            className="text-text-tertiary pl-2 font-mono truncate"
+                                          >
+                                            {cn}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
+                                  {p.eventNames.length > 0 && (
+                                    <div>
+                                      <span className="text-text-tertiary block mb-0.5">
+                                        {t("eventsLabel")}
+                                      </span>
+                                      <div className="space-y-px">
+                                        {p.eventNames.map((en) => (
+                                          <div
+                                            key={en}
+                                            className="text-text-tertiary pl-2 font-mono truncate"
+                                          >
+                                            {en}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {p.permissionProviderNames.length > 0 && (
+                                    <div>
+                                      <span className="text-text-tertiary block mb-0.5">
+                                        {t("permissionProvidersLabel")}
+                                      </span>
+                                      <div className="space-y-px">
+                                        {p.permissionProviderNames.map((pn) => (
+                                          <div
+                                            key={pn}
+                                            className="text-text-tertiary pl-2 font-mono truncate"
+                                          >
+                                            {pn}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {p.toolNames.length === 0 &&
+                                    p.commandNames.length === 0 &&
+                                    p.channelNames.length === 0 &&
+                                    p.eventNames.length === 0 &&
+                                    p.permissionProviderNames.length === 0 && (
+                                      <div className="text-text-tertiary">
+                                        {t("noToolsOrCommands")}
+                                      </div>
+                                    )}
                                   <PluginCopyButton plugin={p} />
                                   {!p.enabled && (
                                     <div className="text-status-warning/70">
@@ -1159,5 +1236,67 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
       {copied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
+  );
+}
+
+// ── Issue Monitor Section ──────────────────────────────────────────────
+
+function IssueMonitorSection() {
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const status = useIssueMonitorStore(
+    (s) => (activeSessionId ? s.statusBySession[activeSessionId] : undefined),
+  );
+
+  if (!status) {
+    return (
+      <div className="px-2.5 py-1.5 text-[11px] text-text-tertiary">
+        Issue Monitor 未激活
+      </div>
+    );
+  }
+
+  const scanAgo = status.lastScanTime
+    ? `${Math.round((Date.now() - status.lastScanTime) / 1000)}s ago`
+    : "never";
+
+  return (
+    <div className="space-y-1.5 px-2.5 py-1.5">
+      <div className="flex items-center gap-1.5">
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            status.isRunning ? "bg-status-success animate-pulse" : "bg-text-secondary"
+          }`}
+        />
+        <span className="text-[11px] text-text-secondary">
+          {status.isRunning ? "监控中" : "已停止"}
+        </span>
+        <span className="text-[11px] text-text-tertiary">· 上次扫描: {scanAgo}</span>
+      </div>
+
+      {status.lastScanError && (
+        <div className="text-[11px] text-status-error">
+          ⚠ {status.lastScanError.slice(0, 80)}
+        </div>
+      )}
+
+      {status.repos.length > 0 ? (
+        <div className="space-y-1">
+          {status.repos.map((repo) => (
+            <div key={repo.repo} className="flex items-center justify-between gap-1">
+              <span className="text-[11px] text-text-primary truncate">{repo.repo}</span>
+              <span className="text-[11px] text-text-tertiary shrink-0">
+                {repo.seenCount} seen / {repo.openCount} open
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-[11px] text-text-tertiary">无监控仓库</div>
+      )}
+
+      <div className="text-[11px] text-text-tertiary">
+        总计: {status.totalSeen} issues 已处理
+      </div>
+    </div>
   );
 }

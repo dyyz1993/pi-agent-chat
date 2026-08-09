@@ -15,7 +15,8 @@ export type StatusSection =
   | "mcp"
   | "lsp"
   | "plugins"
-  | "skills";
+  | "skills"
+  | "issue-monitor";
 
 export type PermissionProfileName = "normal" | "autopilot" | "readonly" | "yolo";
 export type ExecutionSandboxMode = "off" | "filesystem";
@@ -55,6 +56,9 @@ export interface PluginInfo {
   enabled: boolean;
   toolNames: string[];
   commandNames: string[];
+  channelNames: string[];
+  eventNames: string[];
+  permissionProviderNames: string[];
   scope: PluginScope;
   usageNotice?: {
     level: "info" | "warning";
