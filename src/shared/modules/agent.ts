@@ -275,6 +275,9 @@ export interface AgentMethods {
         resolvedPath: string;
         toolNames: string[];
         commandNames: string[];
+        channelNames: string[];
+        eventNames: string[];
+        permissionProviderNames: string[];
       }>;
     };
   };
@@ -786,6 +789,15 @@ export type PermissionMeta =
       subject: string;
       toolCallId?: string;
       metadata?: Record<string, unknown>;
+    }
+  | {
+      type: "goal_approval";
+      kind: "contract" | "authority_amendment" | "pending_risk";
+      goalId: string;
+      generation: number;
+      objective?: string;
+      rationale?: string;
+      authorities?: Array<Record<string, unknown>>;
     };
 
 export interface AskUserQuestionOption {

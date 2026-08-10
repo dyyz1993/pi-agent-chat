@@ -767,8 +767,19 @@ export function ChatPanel() {
     ? inputText.trim().length > 0 || goalDraft.trim().length > 0
     : inputText.trim().length > 0 || attachmentCount > 0 || hasComposerPlaceholders;
   const projectPendingCount = useProjectPendingCount();
+  const goalSessionId = isViewingSubagent ? activeSubId : activeSessionId;
+  const goalStatus = useGoalStore(
+    useCallback((s) => (goalSessionId ? s.bySession[goalSessionId]?.status : null), [goalSessionId]),
+  );
+  const goalApprovalPending =
+    goalStatus?.rawStatus === "awaiting_approval" ||
+    !!goalStatus?.interrupt?.pendingAuthorityAmendment;
   const composerInputDisabled =
-    !activeSessionId || isCreatingGoal || activeRemoteDisconnected || projectPendingCount > 0;
+    !activeSessionId ||
+    isCreatingGoal ||
+    activeRemoteDisconnected ||
+    projectPendingCount > 0 ||
+    goalApprovalPending;
   const sendDisabled =
     !agentReady ||
     isAborting ||
@@ -777,7 +788,8 @@ export function ChatPanel() {
     !hasSendableContent ||
     !activeSessionId ||
     hasNoModel ||
-    activeRemoteDisconnected;
+    activeRemoteDisconnected ||
+    goalApprovalPending;
 
   useEffect(() => {
     if (!activeSessionPath) return;
@@ -1594,7 +1606,7 @@ export function ChatPanel() {
             {activeSessionId && !isViewingSubagent && (
               <>
                 <QueueCards sessionId={activeSessionId} />
-                {!goalMode && projectPendingCount === 0 && (
+                {!goalMode && (projectPendingCount === 0 || goalApprovalPending) && (
                   <div className="px-3 py-1.5 flex-shrink-0">
                     <GoalVendorActionCard
                       sessionId={activeSessionId}

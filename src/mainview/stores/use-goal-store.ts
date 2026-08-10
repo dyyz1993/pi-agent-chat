@@ -51,6 +51,10 @@ interface GoalStoreState {
     sessionId: string,
     options?: { signal?: AbortSignal },
   ) => Promise<{ approved: boolean; count?: number; error?: string }>;
+  rejectAuthorityAmendment: (
+    sessionId: string,
+    reason?: string,
+  ) => Promise<{ rejected: boolean; error?: string }>;
   rejectContract: (sessionId: string, reason?: string) => Promise<{ rejected: boolean }>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
@@ -234,6 +238,24 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     } catch (error) {
       log.warn("Failed to approve goal authority amendment", { sessionId, error });
       return { approved: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
+  rejectAuthorityAmendment: async (sessionId, reason) => {
+    try {
+      const result = (await apiClient.call("goal.rejectAuthorityAmendment", {
+        sessionId,
+        reason,
+      })) as { rejected: boolean; error?: string };
+      if (result.rejected) {
+        loadedStatusSessions.delete(sessionId);
+        loadedTaskReportSessions.delete(sessionId);
+        await useGoalStore.getState().fetchStatus(sessionId, { force: true });
+      }
+      return result;
+    } catch (error) {
+      log.warn("Failed to reject goal authority amendment", { sessionId, error });
+      return { rejected: false, error: error instanceof Error ? error.message : String(error) };
     }
   },
 

@@ -118,6 +118,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return result ?? { approved: false, error: "Channel call failed" };
   });
 
+  r("goal.rejectAuthorityAmendment", async (params) => {
+    const { sessionId, reason } = params as { sessionId: string; reason?: string };
+    const result = await forwardToChannel<{ rejected: boolean; error?: string }>(
+      { sessionId },
+      "goal",
+      "rejectAuthorityAmendment",
+      { reason },
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("goal.rejectAuthorityAmendment channel call failed", { sessionId });
+    return result ?? { rejected: false, error: "Channel call failed" };
+  });
+
   r("goal.rejectContract", async (params) => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
     const result = await forwardToChannel<{ rejected: boolean }>(

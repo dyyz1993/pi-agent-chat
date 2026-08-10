@@ -16,6 +16,12 @@ vi.mock("react-i18next", () => ({
         "goal.quickCancel": "Cancel goal",
         "goal.openPanel": "Open Goal panel",
         "goal.pendingAuthoritySummary": `Waiting for ${String(params?.count ?? "")} authorization(s): ${String(params?.details ?? "")}`,
+        "goal.approvalRequired": "Review the structured Goal approval request",
+        "goal.approvalProcessing": "Working...",
+        "goal.approve": "Approve",
+        "goal.panel.approveAuthorities": "Approve these authorities",
+        "goal.panel.approveContract": "Approve contract",
+        "goal.panel.reject": "Reject",
         "goal.state.awaiting_authority": "Waiting for authorization",
         "goal.state.blocked": "Blocked",
         "goal.state.complete": "Complete",
@@ -194,6 +200,52 @@ describe("GoalVendorActionCard", () => {
     const card = screen.getByTestId("goal-vendor-action-card");
     expect(card).toHaveTextContent("Waiting for authorization");
     expect(card).toHaveTextContent("Run zero-dependency unit tests via node");
+  });
+
+  it("does not expose a direct RPC approval button for authority amendments", () => {
+    useGoalStore.setState({
+      bySession: {
+        "sess-1": {
+          status: makeStatus({
+            interrupt: {
+              class: "RISK",
+              message: "Narrow authority amendment requested",
+              attempts: [],
+              need: "Human approval",
+              recommendation: "Review and approve.",
+              createdAt: "2026-07-30T00:00:00.000Z",
+              pendingAuthorityAmendment: {
+                rationale: "Tests require node",
+                requestedAt: "2026-07-30T00:00:00.000Z",
+                authorities: [],
+              },
+            },
+          }),
+          taskReports: [],
+          triggerRecords: [],
+        },
+      },
+    });
+
+    render(<GoalVendorActionCard sessionId="sess-1" onEdit={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Approve these authorities" })).not.toBeInTheDocument();
+  });
+
+  it("does not expose a direct RPC approval button for submitted contracts", () => {
+    useGoalStore.setState({
+      bySession: {
+        "sess-1": {
+          status: makeStatus({ state: "setup", rawStatus: "awaiting_approval", rawPhase: "setup" }),
+          taskReports: [],
+          triggerRecords: [],
+        },
+      },
+    });
+
+    render(<GoalVendorActionCard sessionId="sess-1" onEdit={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Approve contract" })).not.toBeInTheDocument();
   });
 
   it("hides when there is no active goal", () => {

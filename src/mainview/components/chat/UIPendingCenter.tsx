@@ -75,6 +75,7 @@ function approvalRisk(req: UIPendingRequest): ApprovalRisk | null {
     }
     return "Low";
   }
+  if (meta?.type === "goal_approval") return "High";
   if (req.hookMeta?.command) {
     return isHighRiskCommand(req.hookMeta.command) ? "High" : "Medium";
   }
@@ -117,6 +118,11 @@ function buildApprovalSummaryRows(
     push({ label: "Tool", value: meta.provider });
     push({ label: "Operation", value: meta.subject, mono: true });
     push({ label: "Target", value: command ?? meta.subject, mono: true });
+  } else if (meta?.type === "goal_approval") {
+    push({ label: "Approval", value: meta.kind.replaceAll("_", " ") });
+    push({ label: "Goal", value: meta.goalId, mono: true });
+    push({ label: "Generation", value: String(meta.generation) });
+    push({ label: "Objective", value: meta.objective ?? "" });
   } else if (meta?.type) {
     push({ label: "Tool", value: meta.toolName });
     push({ label: "Operation", value: meta.scope });
@@ -467,6 +473,7 @@ function PanelCard({
           message: req.message,
           questions: req.questions,
           sessionId: req.sessionId,
+          permissionMeta: req.permissionMeta,
           timeout: req.timeout,
         }}
       />,

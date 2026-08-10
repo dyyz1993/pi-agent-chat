@@ -944,6 +944,43 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(document.querySelector('[data-ui-request-id="r1"]')).toBeInTheDocument();
   });
 
+  it("renders Goal approvals through the same structured UI request dock", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "goal-contract-1",
+        sessionId: "sess-1",
+        method: "askUserQuestion",
+        title: "Approve Goal contract",
+        message: "请确认 Goal 合同",
+        questions: [
+          {
+            id: "goal-contract",
+            header: "Goal contract",
+            question: "Approve this complete Goal contract?",
+            options: [
+              { label: "Approve", description: "Allow the displayed Goal contract." },
+              { label: "Reject", description: "Do not grant the Goal contract." },
+            ],
+          },
+        ],
+        permissionMeta: {
+          type: "goal_approval",
+          kind: "contract",
+          goalId: "goal-1",
+          generation: 2,
+          objective: "Build a Tetris game",
+        },
+      }),
+    ];
+
+    setupProject();
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Approve Goal contract")).toBeInTheDocument();
+    expect(screen.getByText("Approve this complete Goal contract?")).toBeInTheDocument();
+    expect(screen.getByText("Approve")).toBeInTheDocument();
+  });
+
   it("shows auto-deny timeout for active-session hook approval requests", () => {
     currentPending = [
       makeRequest({

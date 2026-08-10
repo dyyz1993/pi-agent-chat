@@ -145,6 +145,20 @@ describe("goal handler", () => {
       expect(result).toEqual({ approved: true, count: 2 });
     });
 
+    it("goal.rejectAuthorityAmendment forwards optional reason", async () => {
+      channelMocks.forwardToChannel.mockResolvedValueOnce({ rejected: true });
+      const result = await callHandler(server, "goal.rejectAuthorityAmendment", {
+        sessionId: "sess-1",
+        reason: "not needed",
+      });
+      expect(lastForwardedCall()).toEqual({
+        channel: "goal",
+        method: "rejectAuthorityAmendment",
+        payload: { reason: "not needed" },
+      });
+      expect(result).toEqual({ rejected: true });
+    });
+
     it("goal.rejectContract forwards optional reason", async () => {
       channelMocks.forwardToChannel.mockResolvedValueOnce({ rejected: true });
       await callHandler(server, "goal.rejectContract", { sessionId: "sess-1", reason: "bad" });

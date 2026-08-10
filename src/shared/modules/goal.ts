@@ -156,6 +156,10 @@ export interface GoalMethods {
     params: { sessionId: string };
     result: { approved: boolean; count?: number; error?: string };
   };
+  "goal.rejectAuthorityAmendment": {
+    params: { sessionId: string; reason?: string };
+    result: { rejected: boolean; error?: string };
+  };
   "goal.rejectContract": {
     params: { sessionId: string; reason?: string };
     result: { rejected: boolean };

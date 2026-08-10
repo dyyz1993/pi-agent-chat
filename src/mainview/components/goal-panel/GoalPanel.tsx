@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Play, Square, CheckCircle, XCircle, Target, Zap, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Play, Square, Target, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useGoalStore } from "../../stores/use-goal-store";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
@@ -26,9 +26,6 @@ export function GoalPanel() {
   const sessionId = useEffectiveSessionId();
   const sessionState = useGoalStore((s) => (sessionId ? s.bySession[sessionId] : null));
   const startSetup = useGoalStore((s) => s.startSetup);
-  const approveContract = useGoalStore((s) => s.approveContract);
-  const approveAuthorityAmendment = useGoalStore((s) => s.approveAuthorityAmendment);
-  const rejectContract = useGoalStore((s) => s.rejectContract);
   const clearGoal = useGoalStore((s) => s.clearGoal);
   const forceContinue = useGoalStore((s) => s.forceContinue);
   const enable = useGoalStore((s) => s.enable);
@@ -56,33 +53,6 @@ export function GoalPanel() {
     try {
       await startSetup(sessionId, objectiveInput.trim());
       setObjectiveInput("");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleApprove = async () => {
-    setBusy(true);
-    try {
-      await approveContract(sessionId);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleReject = async () => {
-    setBusy(true);
-    try {
-      await rejectContract(sessionId, "rejected from panel");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleApproveAuthorityAmendment = async () => {
-    setBusy(true);
-    try {
-      await approveAuthorityAmendment(sessionId);
     } finally {
       setBusy(false);
     }
@@ -178,43 +148,11 @@ export function GoalPanel() {
                   </div>
                 );
               })}
-              <button
-                type="button"
-                onClick={handleApproveAuthorityAmendment}
-                disabled={busy}
-                className="mt-1 flex w-full items-center justify-center gap-1 rounded-md bg-status-warning/20 px-3 py-1.5 text-sm text-status-warning hover:bg-status-warning/30 disabled:opacity-50"
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {t("goal.panel.approveAuthorities")}
-              </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Contract approval (when awaiting_approval) */}
-      {isSettingUp && (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={busy}
-            className="flex items-center gap-1 rounded-md bg-status-success/20 px-3 py-1.5 text-sm text-status-success hover:bg-status-success/30"
-          >
-            <CheckCircle className="h-3.5 w-3.5" />
-            {t("goal.panel.approveContract")}
-          </button>
-          <button
-            type="button"
-            onClick={handleReject}
-            disabled={busy}
-            className="flex items-center gap-1 rounded-md bg-status-error/20 px-3 py-1.5 text-sm text-status-error hover:bg-status-error/30"
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            {t("goal.panel.reject")}
-          </button>
-        </div>
-      )}
 
       {/* Start setup input */}
       {!hasActiveGoal && (
