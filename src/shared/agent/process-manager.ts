@@ -1931,6 +1931,9 @@ export class AgentProcessManager {
       resolvedPath: string;
       toolNames: string[];
       commandNames: string[];
+      channelNames: string[];
+      eventNames: string[];
+      permissionProviderNames: string[];
     }>;
   }> {
     return getExtensionsOperation({

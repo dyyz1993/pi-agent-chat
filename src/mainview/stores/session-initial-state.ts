@@ -24,6 +24,9 @@ interface ExtensionEntry {
   path: string;
   toolNames: string[];
   commandNames: string[];
+  channelNames?: string[];
+  eventNames?: string[];
+  permissionProviderNames?: string[];
 }
 
 interface SkillEntry {
@@ -529,6 +532,9 @@ export function createFetchInitialStateAction({
                 enabled: !disabledPluginSet.has(e.path),
                 toolNames: e.toolNames,
                 commandNames: e.commandNames,
+                channelNames: e.channelNames ?? [],
+                eventNames: e.eventNames ?? [],
+                permissionProviderNames: e.permissionProviderNames ?? [],
                 scope: derivePluginScope(e.path),
                 usageNotice: derivePluginUsageNotice(name),
               };

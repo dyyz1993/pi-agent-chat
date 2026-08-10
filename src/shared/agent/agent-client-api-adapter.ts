@@ -177,6 +177,9 @@ export interface AgentClientApiAdapter {
       resolvedPath: string;
       toolNames: string[];
       commandNames: string[];
+      channelNames: string[];
+      eventNames: string[];
+      permissionProviderNames: string[];
     }>;
   }>;
   getSkills: (sessionId: string) => Promise<{

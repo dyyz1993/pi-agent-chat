@@ -276,6 +276,9 @@ export async function getExtensionsOperation<TManaged extends ManagedClientLike>
     resolvedPath: string;
     toolNames: string[];
     commandNames: string[];
+    channelNames: string[];
+    eventNames: string[];
+    permissionProviderNames: string[];
   }>;
 }> {
   const managed = options.getActiveManaged(options.sessionId);
