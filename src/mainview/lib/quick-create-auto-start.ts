@@ -213,6 +213,22 @@ export function buildQuickCreateGoalContract(
         },
         maxUses: 20,
       },
+      {
+        id: "AUTH_NODE_PREVIEW_SERVER",
+        label: "Start the generated project's exact preview server",
+        actionClass: "local_process",
+        toolName: "bash",
+        targets: [
+          { path: "command.executable", equals: "node" },
+          { path: "cwd", equals: root },
+        ],
+        command: {
+          executable: "node",
+          argsPrefix: ["scripts/preview-server.mjs"],
+          trailingArgs: "none",
+        },
+        maxUses: 2,
+      },
     ],
     constraints: [
       "Do not declare package registry/install, publication, login, or credential actions in the Goal contract.",

@@ -112,6 +112,11 @@ describe("quick create auto start", () => {
           actionClass: "local_process",
           command: { executable: "node", argsPrefix: ["--check"], trailingArgs: "workspace_paths" },
         }),
+        expect.objectContaining({
+          id: "AUTH_NODE_PREVIEW_SERVER",
+          actionClass: "local_process",
+          command: { executable: "node", argsPrefix: ["scripts/preview-server.mjs"], trailingArgs: "none" },
+        }),
       ]),
     );
     expect(JSON.stringify(contract.phases)).not.toMatch(/npm install|pnpm add|yarn add/);
