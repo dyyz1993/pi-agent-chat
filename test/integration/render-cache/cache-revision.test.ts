@@ -6,12 +6,15 @@
  * simultaneously), updates to non-last blocks were invisible because the
  * cache revision didn't change → stale render → "waiting" shown forever.
  *
- * These tests ensure the revision captures changes in ALL blocks, not
- * just the last one, so the render cache invalidates correctly.
+ * These tests ensure the revision captures changes in ALL rendered fields,
+ * including streamed tool args, so the render cache invalidates correctly.
  */
 import { describe, it, expect } from "vitest";
 import type { ChatMessage, ContentBlock } from "../../../src/mainview/types";
-import { computeMessagesRevision } from "../../../src/mainview/components/chat/MessageListView";
+import {
+  computeMessagesRevision,
+  getProcessedMessagesForSession,
+} from "../../../src/mainview/components/chat/MessageListView";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 type TextBlock = Extract<ContentBlock, { type: "text" }>;
@@ -28,12 +31,14 @@ function makeToolBlock(
   toolCallId: string,
   status: "running" | "done" | "error",
   output = "",
+  args = '{"command":"echo test"}',
+  toolName = "bash",
 ): ToolExecBlock {
   return {
     type: "toolExecution",
     toolCallId,
-    toolName: "bash",
-    args: '{"command":"echo test"}',
+    toolName,
+    args,
     status,
     output,
     startedAt: Date.now(),
@@ -51,8 +56,8 @@ describe("computeMessagesRevision — parallel tool execution", () => {
     const messages: ChatMessage[] = [
       makeAssistantMessage([
         makeTextBlock("Running two commands..."),
-        makeToolBlock("call_a96", "running", ""),      // ← non-last, empty
-        makeToolBlock("call_9c0", "running", ""),      // ← last, empty
+        makeToolBlock("call_a96", "running", ""), // ← non-last, empty
+        makeToolBlock("call_9c0", "running", ""), // ← last, empty
       ]),
     ];
 
@@ -62,8 +67,8 @@ describe("computeMessagesRevision — parallel tool execution", () => {
     const updated: ChatMessage[] = [
       makeAssistantMessage([
         makeTextBlock("Running two commands..."),
-        makeToolBlock("call_a96", "running", "1\n2\n3\n"),  // ← GREW
-        makeToolBlock("call_9c0", "running", ""),           // ← unchanged
+        makeToolBlock("call_a96", "running", "1\n2\n3\n"), // ← GREW
+        makeToolBlock("call_9c0", "running", ""), // ← unchanged
       ]),
     ];
 
@@ -86,7 +91,7 @@ describe("computeMessagesRevision — parallel tool execution", () => {
     const updated: ChatMessage[] = [
       makeAssistantMessage([
         makeToolBlock("call_a96", "running", "1\n"),
-        makeToolBlock("call_9c0", "running", "1\n"),  // ← grew
+        makeToolBlock("call_9c0", "running", "1\n"), // ← grew
       ]),
     ];
 
@@ -131,9 +136,7 @@ describe("computeMessagesRevision — parallel tool execution", () => {
 
   it("detects block count change (new tool added)", () => {
     const messages: ChatMessage[] = [
-      makeAssistantMessage([
-        makeToolBlock("call_a96", "running", ""),
-      ]),
+      makeAssistantMessage([makeToolBlock("call_a96", "running", "")]),
     ];
 
     const rev1 = computeMessagesRevision(messages);
@@ -141,7 +144,7 @@ describe("computeMessagesRevision — parallel tool execution", () => {
     const updated: ChatMessage[] = [
       makeAssistantMessage([
         makeToolBlock("call_a96", "running", ""),
-        makeToolBlock("call_9c0", "running", ""),  // ← new block
+        makeToolBlock("call_9c0", "running", ""), // ← new block
       ]),
     ];
 
@@ -149,32 +152,64 @@ describe("computeMessagesRevision — parallel tool execution", () => {
     expect(rev2).not.toBe(rev1);
   });
 
-  it("detects status change even when output length stays the same", () => {
-    // When a block transitions from running→done with the same output,
-    // the output length doesn't change but blocks.length is the same.
-    // However, the revision still needs to change for re-render.
-    // Note: current implementation may NOT detect this (output length
-    // is the same). This test documents the limitation.
+  it("changes while streamed write args reveal the file path", () => {
     const messages: ChatMessage[] = [
+      makeAssistantMessage([makeToolBlock("write-1", "running", "", "{}", "write")]),
+    ];
+    const rev1 = computeMessagesRevision(messages);
+
+    const updated: ChatMessage[] = [
       makeAssistantMessage([
-        makeToolBlock("call_a96", "running", "done output"),
+        makeToolBlock("write-1", "running", "", '{"path":"src/App.tsx"}', "write"),
       ]),
+    ];
+    const rev2 = computeMessagesRevision(updated);
+
+    expect(rev2).not.toBe(rev1);
+  });
+
+  it("invalidates processed-message cache when streamed tool args change", () => {
+    const sessionId = "streamed-write-args";
+    const initialMessages: ChatMessage[] = [
+      makeAssistantMessage([makeToolBlock("write-2", "running", "", "{}", "write")]),
+    ];
+    const initial = getProcessedMessagesForSession({
+      activeSessionId: sessionId,
+      visibleMessages: initialMessages,
+      showMemoryEntries: true,
+    });
+
+    const updatedArgs = '{"path":"src/components/StreamingCard.tsx"}';
+    const updatedMessages: ChatMessage[] = [
+      makeAssistantMessage([makeToolBlock("write-2", "running", "", updatedArgs, "write")]),
+    ];
+    const updated = getProcessedMessagesForSession({
+      activeSessionId: sessionId,
+      visibleMessages: updatedMessages,
+      showMemoryEntries: true,
+    });
+
+    expect(updated).not.toBe(initial);
+    expect(updated[0]?.msg.content[0]).toMatchObject({
+      type: "toolExecution",
+      args: updatedArgs,
+      status: "running",
+    });
+  });
+
+  it("detects status change even when output length stays the same", () => {
+    const messages: ChatMessage[] = [
+      makeAssistantMessage([makeToolBlock("call_a96", "running", "done output")]),
     ];
 
     const rev1 = computeMessagesRevision(messages);
 
     const updated: ChatMessage[] = [
-      makeAssistantMessage([
-        makeToolBlock("call_a96", "done", "done output"),
-      ]),
+      makeAssistantMessage([makeToolBlock("call_a96", "done", "done output")]),
     ];
 
     const rev2 = computeMessagesRevision(updated);
-    // Status-only changes (same output length) may not change revision.
-    // This is acceptable because tool_execution_end always includes
-    // the full output which typically differs from partial output.
-    // Documenting the behavior:
-    expect(rev2).toBe(rev1); // known limitation: same-length output
+    expect(rev2).not.toBe(rev1);
   });
 
   // ================================================================

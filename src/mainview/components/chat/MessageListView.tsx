@@ -28,14 +28,18 @@ interface CacheEntry<T> {
 
 /**
  * Lightweight structural revision key for message arrays.
- * Captures message count + last message id/content-length to detect
- * changes that would affect cardMeta/processedMessages caches.
+ * Captures message count + last message id/rendered-content size/state to
+ * detect changes that would affect cardMeta/processedMessages caches.
  *
- * IMPORTANT: sums ALL blocks' content sizes, not just the last block.
+ * IMPORTANT: sums ALL blocks' rendered content sizes, not just the last block.
  * During parallel tool execution, multiple blocks grow simultaneously
  * (e.g. two bash commands streaming output). If we only checked the
  * last block, updates to earlier blocks would be invisible (cache hit
  * with stale data → "waiting" shown forever).
+ *
+ * Tool args are included because write/edit paths arrive through streamed
+ * args before the tool produces output. Omitting args leaves the first empty
+ * running card cached until tool_execution_end, so its title/path appears late.
  */
 export function computeMessagesRevision(messages: ChatMessage[]): string {
   const n = messages.length;
@@ -44,6 +48,7 @@ export function computeMessagesRevision(messages: ChatMessage[]): string {
   const last = messages[n - 1];
   const blocks = last.content;
   let totalSize = 0;
+  let toolState = "";
   for (let i = 0; i < n; i++) {
     if (messages[i].isStreaming) streamingCount++;
   }
@@ -51,9 +56,12 @@ export function computeMessagesRevision(messages: ChatMessage[]): string {
   for (const block of blocks) {
     if (block.type === "text") totalSize += block.text.length;
     else if (block.type === "thinking") totalSize += block.thinking.length;
-    else if (block.type === "toolExecution") totalSize += (block.output ?? "").length;
+    else if (block.type === "toolExecution") {
+      totalSize += (block.args ?? "").length + (block.output ?? "").length;
+      toolState += `${block.toolCallId}:${block.status};`;
+    }
   }
-  return `${n}:${last.id}:${blocks.length}:${totalSize}:${streamingCount}`;
+  return `${n}:${last.id}:${blocks.length}:${totalSize}:${streamingCount}:${toolState}`;
 }
 
 const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
