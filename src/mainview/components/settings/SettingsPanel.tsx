@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   FolderOpen,
   Network,
-  Radar,
   RotateCcw,
   SlidersHorizontal,
   Target,
@@ -96,7 +95,7 @@ const MAX_DELAY_OPTIONS = [
   { value: 3600000, label: "60min" },
 ];
 
-type SettingsTabId = "display" | "retry" | "models" | "network" | "usage" | "project" | "issue-monitor";
+type SettingsTabId = "display" | "retry" | "models" | "network" | "usage" | "project";
 type SettingsGroupId = "conversation" | "agent" | "connection" | "workspace";
 
 const SETTINGS_TABS: Array<{
@@ -110,7 +109,6 @@ const SETTINGS_TABS: Array<{
   { id: "usage", icon: Trophy, label: "战绩" },
   { id: "project", icon: FolderOpen, label: "项目" },
   { id: "network", icon: Network, label: "网络" },
-  { id: "issue-monitor", icon: Radar, label: "Issue Monitor" },
 ];
 
 const SETTINGS_GROUPS: Array<{
@@ -122,7 +120,7 @@ const SETTINGS_GROUPS: Array<{
   { id: "conversation", icon: SlidersHorizontal, label: "对话", items: ["display", "retry"] },
   { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage"] },
   { id: "workspace", icon: FolderOpen, label: "工作区", items: ["project"] },
-  { id: "connection", icon: Network, label: "连接", items: ["network", "issue-monitor"] },
+  { id: "connection", icon: Network, label: "连接", items: ["network"] },
 ];
 
 function getSettingsTab(tabId: SettingsTabId) {
@@ -595,7 +593,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     network: networkContent,
     usage: usageContent,
     project: projectContent,
-    "issue-monitor": <IssueMonitorSettingsContent />,
   };
   const activeGroup =
     SETTINGS_GROUPS.find((group) => group.items.includes(activeTab)) ?? SETTINGS_GROUPS[0];
@@ -869,154 +866,5 @@ function ToggleSwitch({
         }`}
       />
     </button>
-  );
-}
-
-// ── Issue Monitor Settings ─────────────────────────────────────────────
-
-function IssueMonitorSettingsContent() {
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const [config, setConfig] = useState<{
-    repos: string[];
-    interval: number;
-    autoFix: boolean;
-    labels: string[];
-    branchPrefix: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [newRepo, setNewRepo] = useState("");
-
-  useEffect(() => {
-    if (!activeSessionId) return;
-    setLoading(true);
-    apiClient
-      .call("issue-monitor.callChannel", {
-        sessionId: activeSessionId,
-        method: "getConfig",
-      })
-      .then((result) => {
-        if (result.ok && "config" in result) {
-          const cfg = result.config;
-          setConfig({
-            repos: cfg.repos ?? [],
-            interval: cfg.interval ?? 300,
-            autoFix: cfg.autoFix ?? false,
-            labels: cfg.labels ?? [],
-            branchPrefix: cfg.branchPrefix ?? "fix/issue-",
-          });
-        } else {
-          setConfig(null);
-        }
-      })
-      .catch(() => {
-        setConfig(null);
-      })
-      .finally(() => setLoading(false));
-  }, [activeSessionId]);
-
-  const saveConfig = useCallback(
-    (updates: Partial<typeof config>) => {
-      if (!config || !activeSessionId) return;
-      const next = { ...config, ...updates };
-      setConfig(next);
-      // 通过 settings 持久化
-      apiClient.call("agent.getSettings", { sessionId: activeSessionId, scope: "global" }).then((settings) => {
-        const merged = { ...(settings as Record<string, unknown>), issueMonitor: next };
-        apiClient.call("agent.setSettings", { sessionId: activeSessionId, scope: "global", settings: merged }).then(() => {
-          apiClient.call("agent.reload", { sessionId: activeSessionId }).catch(() => {});
-        });
-      });
-    },
-    [config, activeSessionId],
-  );
-
-  if (loading) {
-    return <div className="p-4 text-sm text-text-tertiary">加载中...</div>;
-  }
-
-  if (!config) {
-    return (
-      <div className="p-4 space-y-2">
-        <p className="text-sm text-text-secondary">Issue Monitor 未配置</p>
-        <p className="text-xs text-text-tertiary">
-          在 settings.json 里添加 issueMonitor.repos 来启用自动监控。
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 p-4">
-      <div>
-        <h3 className="text-sm font-medium text-text-primary mb-2">监控仓库</h3>
-        <div className="space-y-1.5">
-          {config.repos.map((repo, i) => (
-            <div key={repo} className="flex items-center gap-2">
-              <span className="text-sm text-text-secondary flex-1 font-mono">{repo}</span>
-              <button
-                type="button"
-                onClick={() => saveConfig({ repos: config.repos.filter((_, j) => j !== i) })}
-                className="text-xs text-status-error hover:underline"
-              >
-                删除
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <input
-            type="text"
-            value={newRepo}
-            onChange={(e) => setNewRepo(e.target.value)}
-            placeholder="owner/repo"
-            className="flex-1 px-2 py-1 text-sm rounded border border-border-primary bg-bg-primary text-text-primary"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              if (newRepo.trim()) {
-                saveConfig({ repos: [...config.repos, newRepo.trim()] });
-                setNewRepo("");
-              }
-            }}
-            className="px-3 py-1 text-sm rounded bg-accent text-white hover:opacity-90"
-          >
-            添加
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-medium text-text-primary mb-2">扫描间隔</h3>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            value={config.interval}
-            onChange={(e) => saveConfig({ interval: parseInt(e.target.value) || 300 })}
-            min={30}
-            className="w-24 px-2 py-1 text-sm rounded border border-border-primary bg-bg-primary text-text-primary"
-          />
-          <span className="text-sm text-text-tertiary">秒</span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-medium text-text-primary">自动修复</h3>
-          <p className="text-xs text-text-tertiary">发现新 issue 时自动触发 Agent 修复</p>
-        </div>
-        <ToggleSwitch checked={config.autoFix} onChange={() => saveConfig({ autoFix: !config.autoFix })} />
-      </div>
-
-      <div>
-        <h3 className="text-sm font-medium text-text-primary mb-2">分支前缀</h3>
-        <input
-          type="text"
-          value={config.branchPrefix}
-          onChange={(e) => saveConfig({ branchPrefix: e.target.value })}
-          className="w-full px-2 py-1 text-sm rounded border border-border-primary bg-bg-primary text-text-primary font-mono"
-        />
-      </div>
-    </div>
   );
 }

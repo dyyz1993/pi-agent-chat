@@ -1246,56 +1246,179 @@ function IssueMonitorSection() {
   const status = useIssueMonitorStore(
     (s) => (activeSessionId ? s.statusBySession[activeSessionId] : undefined),
   );
+  const config = useIssueMonitorStore(
+    (s) => (activeSessionId ? s.configBySession[activeSessionId] : undefined),
+  );
+  const configLoading = useIssueMonitorStore(
+    (s) => (activeSessionId ? s.configLoadingBySession[activeSessionId] : false),
+  );
+  const loadConfig = useIssueMonitorStore((s) => s.loadConfig);
+  const saveConfig = useIssueMonitorStore((s) => s.saveConfig);
+  const [newRepo, setNewRepo] = useState("");
 
-  if (!status) {
-    return (
-      <div className="px-2.5 py-1.5 text-[11px] text-text-tertiary">
-        Issue Monitor 未激活
-      </div>
-    );
-  }
+  // 挂载时加载配置
+  useEffect(() => {
+    if (!activeSessionId) return;
+    loadConfig(activeSessionId);
+  }, [activeSessionId, loadConfig]);
 
-  const scanAgo = status.lastScanTime
+  // ── 状态显示部分 ──
+  const scanAgo = status?.lastScanTime
     ? `${Math.round((Date.now() - status.lastScanTime) / 1000)}s ago`
     : "never";
 
   return (
-    <div className="space-y-1.5 px-2.5 py-1.5">
-      <div className="flex items-center gap-1.5">
-        <span
-          className={`w-1.5 h-1.5 rounded-full ${
-            status.isRunning ? "bg-status-success animate-pulse" : "bg-text-secondary"
-          }`}
-        />
-        <span className="text-[11px] text-text-secondary">
-          {status.isRunning ? "监控中" : "已停止"}
-        </span>
-        <span className="text-[11px] text-text-tertiary">· 上次扫描: {scanAgo}</span>
-      </div>
+    <div className="space-y-2 px-2.5 py-1.5">
+      {/* 运行状态 */}
+      {status ? (
+        <>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                status.isRunning ? "bg-status-success animate-pulse" : "bg-text-secondary"
+              }`}
+            />
+            <span className="text-[11px] text-text-secondary">
+              {status.isRunning ? "监控中" : "已停止"}
+            </span>
+            <span className="text-[11px] text-text-tertiary">· 上次扫描: {scanAgo}</span>
+          </div>
 
-      {status.lastScanError && (
-        <div className="text-[11px] text-status-error">
-          ⚠ {status.lastScanError.slice(0, 80)}
-        </div>
-      )}
-
-      {status.repos.length > 0 ? (
-        <div className="space-y-1">
-          {status.repos.map((repo) => (
-            <div key={repo.repo} className="flex items-center justify-between gap-1">
-              <span className="text-[11px] text-text-primary truncate">{repo.repo}</span>
-              <span className="text-[11px] text-text-tertiary shrink-0">
-                {repo.seenCount} seen / {repo.openCount} open
-              </span>
+          {status.lastScanError && (
+            <div className="text-[11px] text-status-error">
+              ⚠ {status.lastScanError.slice(0, 80)}
             </div>
-          ))}
-        </div>
+          )}
+
+          {status.repos.length > 0 ? (
+            <div className="space-y-0.5">
+              {status.repos.map((repo) => (
+                <div key={repo.repo} className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] text-text-primary truncate">{repo.repo}</span>
+                  <span className="text-[11px] text-text-tertiary shrink-0">
+                    {repo.seenCount} seen / {repo.openCount} open
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] text-text-tertiary">无监控仓库</div>
+          )}
+
+          <div className="text-[11px] text-text-tertiary">
+            总计: {status.totalSeen} issues 已处理
+          </div>
+        </>
       ) : (
-        <div className="text-[11px] text-text-tertiary">无监控仓库</div>
+        <div className="text-[11px] text-text-tertiary">Issue Monitor 未激活</div>
       )}
 
-      <div className="text-[11px] text-text-tertiary">
-        总计: {status.totalSeen} issues 已处理
+      {/* ── 配置部分 ── */}
+      <div className="border-t border-border-secondary pt-2 space-y-2">
+        <div className="text-[11px] font-medium text-text-secondary">配置</div>
+
+        {configLoading ? (
+          <div className="text-[11px] text-text-tertiary">加载配置中...</div>
+        ) : !config || !activeSessionId ? (
+          <div className="text-[11px] text-text-tertiary">
+            无法加载配置（Agent 未运行或 extension 未安装）
+          </div>
+        ) : (
+          <>
+            {/* 监控仓库列表 */}
+            <div className="space-y-0.5">
+              {config.repos.map((repo, i) => (
+                <div key={repo} className="flex items-center gap-1">
+                  <span className="text-[11px] text-text-primary flex-1 truncate font-mono">
+                    {repo}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      saveConfig(activeSessionId, {
+                        repos: config.repos.filter((_, j) => j !== i),
+                      })
+                    }
+                    className="text-[11px] text-status-error hover:underline shrink-0"
+                  >
+                    删除
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* 添加仓库 */}
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={newRepo}
+                onChange={(e) => setNewRepo(e.target.value)}
+                placeholder="owner/repo"
+                className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = newRepo.trim();
+                  if (trimmed && !config.repos.includes(trimmed)) {
+                    saveConfig(activeSessionId, { repos: [...config.repos, trimmed] });
+                    setNewRepo("");
+                  }
+                }}
+                className="px-2 py-0.5 text-[11px] rounded bg-accent text-white hover:opacity-90 shrink-0"
+              >
+                添加
+              </button>
+            </div>
+
+            {/* 扫描间隔 */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-text-secondary shrink-0">扫描间隔</span>
+              <input
+                type="number"
+                value={config.interval}
+                onChange={(e) =>
+                  saveConfig(activeSessionId, {
+                    interval: parseInt(e.target.value) || 300,
+                  })
+                }
+                min={30}
+                className="w-16 px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary"
+              />
+              <span className="text-[11px] text-text-tertiary">秒</span>
+            </div>
+
+            {/* 自动修复开关 */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-text-secondary">自动修复</span>
+              <button
+                type="button"
+                onClick={() =>
+                  saveConfig(activeSessionId, { autoFix: !config.autoFix })
+                }
+                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${config.autoFix ? "bg-status-success" : "bg-text-secondary"}`}
+                title={config.autoFix ? "关闭自动修复" : "开启自动修复"}
+              >
+                <span
+                  className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform ${config.autoFix ? "left-3.5" : "left-0.5"}`}
+                />
+              </button>
+            </div>
+
+            {/* 分支前缀 */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-text-secondary shrink-0">分支前缀</span>
+              <input
+                type="text"
+                value={config.branchPrefix}
+                onChange={(e) =>
+                  saveConfig(activeSessionId, { branchPrefix: e.target.value })
+                }
+                className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary font-mono"
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
