@@ -167,5 +167,5 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),
   "remote-ssh": new Set(Object.values(REMOTE_SSH_METHODS)),
-  "issue-monitor": new Set(["getStatus", "getConfig"]),
+  "loop-scheduler": new Set(["list", "create", "update", "toggle", "remove", "getStatus"]),
 };

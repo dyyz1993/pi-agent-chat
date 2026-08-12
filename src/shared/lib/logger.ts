@@ -44,7 +44,7 @@ export type LogModule =
   | "model-proxy"
   | "gateway:debug"
   | "gateway:proxy"
-  | "issue-monitor";
+  | "loop-scheduler";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const VALID_LOG_LEVELS: Readonly<LogLevel[]> = ["debug", "info", "warn", "error"] as const;

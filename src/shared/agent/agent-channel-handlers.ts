@@ -288,8 +288,8 @@ export async function handleLearningChannelDataOperation(options: {
   }
 }
 
-/** Issue Monitor channel data → broadcast to frontend */
-export async function handleIssueMonitorChannelDataOperation(options: {
+/** Loop Scheduler channel data → broadcast to frontend */
+export async function handleLoopSchedulerChannelDataOperation(options: {
   sessionId: string;
   channelMsg: ChannelDataEvent;
   broadcastEvent: BroadcastEvent;
@@ -297,13 +297,13 @@ export async function handleIssueMonitorChannelDataOperation(options: {
   const data = options.channelMsg.data as Record<string, unknown> | undefined;
   if (!data) return;
 
-  log.info("Issue monitor channel data", {
+  log.info("Loop scheduler channel data", {
     sessionId: options.sessionId,
     type: data.type,
   });
 
   await options.broadcastEvent(
-    "issue-monitor.event",
+    "loop-scheduler.event",
     { sessionId: options.sessionId, ...data },
     { sessionId: options.sessionId },
   );

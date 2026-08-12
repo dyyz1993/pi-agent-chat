@@ -11,7 +11,6 @@ import {
   Plug,
   Network,
   Puzzle,
-  Radar,
   CheckCircle2,
   Circle,
   AlertTriangle,
@@ -22,6 +21,7 @@ import {
   Copy,
   Check,
   RotateCw,
+  Repeat,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
@@ -37,7 +37,7 @@ import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
-import { useIssueMonitorStore } from "../../stores/use-issue-monitor-store";
+import { useLoopStore } from "../../stores/use-loop-store";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RemoteProjectRef } from "../../../shared/modules/project";
@@ -318,7 +318,7 @@ export function StatusPanel() {
     { id: "lsp", label: t("lsp"), icon: Network },
     { id: "plugins", label: t("plugins"), icon: Puzzle },
     { id: "skills", label: t("skills"), icon: BookOpen },
-    { id: "issue-monitor", label: "Issue Monitor", icon: Radar },
+    { id: "loop", label: "Loop", icon: Repeat },
   ];
   const SECTIONS = BASE_SECTIONS.filter(
     (section) => section.id !== "remote" || activeProjectIsRemote,
@@ -655,7 +655,7 @@ export function StatusPanel() {
                       <span>{t("idle")}</span>
                     ))}
                   {id === "mcp" && <MCPToolsSection />}
-                  {id === "issue-monitor" && <IssueMonitorSection />}
+                  {id === "loop" && <LoopSection />}
                   {id === "lsp" && (
                     <div className="space-y-1">
                       {!lspData || lspData.startupComplete ? (
@@ -1239,187 +1239,224 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
   );
 }
 
-// ── Issue Monitor Section ──────────────────────────────────────────────
+// ── Loop Section（通用定时任务）──────────────────────────────────────────
 
-function IssueMonitorSection() {
+function LoopSection() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const status = useIssueMonitorStore(
-    (s) => (activeSessionId ? s.statusBySession[activeSessionId] : undefined),
-  );
-  const config = useIssueMonitorStore(
-    (s) => (activeSessionId ? s.configBySession[activeSessionId] : undefined),
-  );
-  const configLoading = useIssueMonitorStore(
-    (s) => (activeSessionId ? s.configLoadingBySession[activeSessionId] : false),
-  );
-  const loadConfig = useIssueMonitorStore((s) => s.loadConfig);
-  const saveConfig = useIssueMonitorStore((s) => s.saveConfig);
-  const [newRepo, setNewRepo] = useState("");
+  const configs = useLoopStore((s) => (activeSessionId ? s.configsBySession[activeSessionId] : undefined));
+  const statuses = useLoopStore((s) => (activeSessionId ? s.statusBySession[activeSessionId] : undefined));
+  const loading = useLoopStore((s) => (activeSessionId ? s.loadingBySession[activeSessionId] : false));
+  const createLoop = useLoopStore((s) => s.create);
+  const toggleLoop = useLoopStore((s) => s.toggle);
+  const removeLoop = useLoopStore((s) => s.remove);
+  const updateLoop = useLoopStore((s) => s.update);
 
-  // 挂载时加载配置
-  useEffect(() => {
-    if (!activeSessionId) return;
-    loadConfig(activeSessionId);
-  }, [activeSessionId, loadConfig]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formCron, setFormCron] = useState("*/5 * * * *");
+  const [formPrompt, setFormPrompt] = useState("");
+  const [formDeliverAs, setFormDeliverAs] = useState<"followUp" | "steer">("followUp");
 
-  // ── 状态显示部分 ──
-  const scanAgo = status?.lastScanTime
-    ? `${Math.round((Date.now() - status.lastScanTime) / 1000)}s ago`
-    : "never";
+  const getStatus = (id: string) => statuses?.find((s) => s.id === id);
+  const formatTime = (ts: number | null) => {
+    if (!ts) return "—";
+    const diff = Date.now() - ts;
+    if (diff < 60000) return `${Math.round(diff / 1000)}秒前`;
+    if (diff < 3600000) return `${Math.round(diff / 60000)}分钟前`;
+    return new Date(ts).toLocaleString();
+  };
+
+  const openAddForm = () => {
+    setEditingId(null);
+    setFormName("");
+    setFormCron("*/5 * * * *");
+    setFormPrompt("");
+    setFormDeliverAs("followUp");
+    setShowForm(true);
+  };
+
+  const openEditForm = (config: { id: string; name: string; cron: string; prompt: string; deliverAs: "followUp" | "steer" }) => {
+    setEditingId(config.id);
+    setFormName(config.name);
+    setFormCron(config.cron);
+    setFormPrompt(config.prompt);
+    setFormDeliverAs(config.deliverAs);
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!activeSessionId || !formName.trim() || !formCron.trim() || !formPrompt.trim()) return;
+    if (editingId) {
+      await updateLoop(activeSessionId, editingId, {
+        name: formName,
+        cron: formCron,
+        prompt: formPrompt,
+        deliverAs: formDeliverAs,
+      });
+    } else {
+      await createLoop(activeSessionId, {
+        name: formName,
+        cron: formCron,
+        prompt: formPrompt,
+        deliverAs: formDeliverAs,
+      });
+    }
+    setShowForm(false);
+    setEditingId(null);
+  };
 
   return (
     <div className="space-y-2 px-2.5 py-1.5">
-      {/* 运行状态 */}
-      {status ? (
-        <>
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                status.isRunning ? "bg-status-success animate-pulse" : "bg-text-secondary"
-              }`}
-            />
-            <span className="text-[11px] text-text-secondary">
-              {status.isRunning ? "监控中" : "已停止"}
-            </span>
-            <span className="text-[11px] text-text-tertiary">· 上次扫描: {scanAgo}</span>
-          </div>
-
-          {status.lastScanError && (
-            <div className="text-[11px] text-status-error">
-              ⚠ {status.lastScanError.slice(0, 80)}
-            </div>
-          )}
-
-          {status.repos.length > 0 ? (
-            <div className="space-y-0.5">
-              {status.repos.map((repo) => (
-                <div key={repo.repo} className="flex items-center justify-between gap-1">
-                  <span className="text-[11px] text-text-primary truncate">{repo.repo}</span>
-                  <span className="text-[11px] text-text-tertiary shrink-0">
-                    {repo.seenCount} seen / {repo.openCount} open
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-[11px] text-text-tertiary">无监控仓库</div>
-          )}
-
-          <div className="text-[11px] text-text-tertiary">
-            总计: {status.totalSeen} issues 已处理
-          </div>
-        </>
+      {loading ? (
+        <div className="text-[11px] text-text-tertiary">加载中...</div>
+      ) : !configs || configs.length === 0 ? (
+        <div className="text-[11px] text-text-tertiary">暂无定时任务</div>
       ) : (
-        <div className="text-[11px] text-text-tertiary">Issue Monitor 未激活</div>
+        configs.map((config) => {
+          const st = getStatus(config.id);
+          return (
+            <div key={config.id} className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    config.enabled ? "bg-status-success animate-pulse" : "bg-text-secondary"
+                  }`}
+                />
+                <span className="text-[11px] text-text-primary flex-1 truncate">{config.name}</span>
+                <button
+                  type="button"
+                  onClick={() => activeSessionId && toggleLoop(activeSessionId, config.id, !config.enabled)}
+                  className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${
+                    config.enabled ? "bg-status-success" : "bg-text-secondary"
+                  }`}
+                  title={config.enabled ? "暂停" : "启用"}
+                >
+                  <span
+                    className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform ${
+                      config.enabled ? "left-3.5" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="text-[11px] text-text-tertiary pl-3 font-mono">{config.cron}</div>
+              <div className="text-[11px] text-text-tertiary pl-3">
+                {st ? `已运行 ${st.runCount} 次` : ""} · 上次: {formatTime(st?.lastRun ?? null)}
+              </div>
+              {st?.lastError && (
+                <div className="text-[11px] text-status-error pl-3 truncate">⚠ {st.lastError.slice(0, 60)}</div>
+              )}
+              <div className="flex gap-2 pl-3">
+                <button
+                  type="button"
+                  onClick={() => openEditForm(config)}
+                  className="text-[11px] text-text-secondary hover:underline"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => activeSessionId && removeLoop(activeSessionId, config.id)}
+                  className="text-[11px] text-status-error hover:underline"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          );
+        })
       )}
 
-      {/* ── 配置部分 ── */}
-      <div className="border-t border-border-secondary pt-2 space-y-2">
-        <div className="text-[11px] font-medium text-text-secondary">配置</div>
-
-        {configLoading ? (
-          <div className="text-[11px] text-text-tertiary">加载配置中...</div>
-        ) : !config || !activeSessionId ? (
-          <div className="text-[11px] text-text-tertiary">
-            无法加载配置（Agent 未运行或 extension 未安装）
+      {/* 添加/编辑表单 */}
+      {showForm && activeSessionId && (
+        <div className="border-t border-border-secondary pt-2 space-y-1.5">
+          <input
+            type="text"
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="任务名称"
+            className="w-full px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary"
+          />
+          <input
+            type="text"
+            value={formCron}
+            onChange={(e) => setFormCron(e.target.value)}
+            placeholder="cron 表达式，如 */5 * * * *"
+            className="w-full px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary font-mono"
+          />
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { label: "每5分钟", cron: "*/5 * * * *" },
+              { label: "每小时", cron: "0 * * * *" },
+              { label: "每天9点", cron: "0 9 * * *" },
+              { label: "工作日8点", cron: "0 8 * * 1-5" },
+            ].map((preset) => (
+              <button
+                key={preset.cron}
+                type="button"
+                onClick={() => setFormCron(preset.cron)}
+                className="px-1.5 py-0.5 text-[10px] rounded bg-bg-secondary text-text-secondary hover:bg-surface-hover"
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          <>
-            {/* 监控仓库列表 */}
-            <div className="space-y-0.5">
-              {config.repos.map((repo, i) => (
-                <div key={repo} className="flex items-center gap-1">
-                  <span className="text-[11px] text-text-primary flex-1 truncate font-mono">
-                    {repo}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      saveConfig(activeSessionId, {
-                        repos: config.repos.filter((_, j) => j !== i),
-                      })
-                    }
-                    className="text-[11px] text-status-error hover:underline shrink-0"
-                  >
-                    删除
-                  </button>
-                </div>
-              ))}
-            </div>
+          <textarea
+            value={formPrompt}
+            onChange={(e) => setFormPrompt(e.target.value)}
+            placeholder="cron 触发时发给 Agent 的 prompt"
+            rows={3}
+            className="w-full px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary resize-none"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-text-secondary">投递:</span>
+            <button
+              type="button"
+              onClick={() => setFormDeliverAs("followUp")}
+              className={`px-1.5 py-0.5 text-[11px] rounded ${formDeliverAs === "followUp" ? "bg-accent text-white" : "border border-border-primary text-text-secondary"}`}
+            >
+              排队
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormDeliverAs("steer")}
+              className={`px-1.5 py-0.5 text-[11px] rounded ${formDeliverAs === "steer" ? "bg-accent text-white" : "border border-border-primary text-text-secondary"}`}
+            >
+              插话
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setEditingId(null);
+              }}
+              className="px-2 py-0.5 text-[11px] rounded border border-border-primary text-text-secondary hover:bg-surface-hover"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!formName.trim() || !formCron.trim() || !formPrompt.trim()}
+              className="px-2 py-0.5 text-[11px] rounded bg-accent text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {editingId ? "更新" : "添加"}
+            </button>
+          </div>
+        </div>
+      )}
 
-            {/* 添加仓库 */}
-            <div className="flex items-center gap-1">
-              <input
-                type="text"
-                value={newRepo}
-                onChange={(e) => setNewRepo(e.target.value)}
-                placeholder="owner/repo"
-                className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const trimmed = newRepo.trim();
-                  if (trimmed && !config.repos.includes(trimmed)) {
-                    saveConfig(activeSessionId, { repos: [...config.repos, trimmed] });
-                    setNewRepo("");
-                  }
-                }}
-                className="px-2 py-0.5 text-[11px] rounded bg-accent text-white hover:opacity-90 shrink-0"
-              >
-                添加
-              </button>
-            </div>
-
-            {/* 扫描间隔 */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-text-secondary shrink-0">扫描间隔</span>
-              <input
-                type="number"
-                value={config.interval}
-                onChange={(e) =>
-                  saveConfig(activeSessionId, {
-                    interval: parseInt(e.target.value) || 300,
-                  })
-                }
-                min={30}
-                className="w-16 px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary"
-              />
-              <span className="text-[11px] text-text-tertiary">秒</span>
-            </div>
-
-            {/* 自动修复开关 */}
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-text-secondary">自动修复</span>
-              <button
-                type="button"
-                onClick={() =>
-                  saveConfig(activeSessionId, { autoFix: !config.autoFix })
-                }
-                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${config.autoFix ? "bg-status-success" : "bg-text-secondary"}`}
-                title={config.autoFix ? "关闭自动修复" : "开启自动修复"}
-              >
-                <span
-                  className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform ${config.autoFix ? "left-3.5" : "left-0.5"}`}
-                />
-              </button>
-            </div>
-
-            {/* 分支前缀 */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-text-secondary shrink-0">分支前缀</span>
-              <input
-                type="text"
-                value={config.branchPrefix}
-                onChange={(e) =>
-                  saveConfig(activeSessionId, { branchPrefix: e.target.value })
-                }
-                className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] rounded border border-border-primary bg-bg-primary text-text-primary font-mono"
-              />
-            </div>
-          </>
-        )}
-      </div>
+      {!showForm && (
+        <button
+          type="button"
+          onClick={openAddForm}
+          className="text-[11px] text-accent hover:underline"
+        >
+          + 添加定时任务
+        </button>
+      )}
     </div>
   );
 }

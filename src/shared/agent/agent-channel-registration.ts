@@ -11,7 +11,7 @@ export const AGENT_CHANNEL_NAMES = [
   "goal",
   "file-snapshot",
   "file-review",
-  "issue-monitor",
+  "loop-scheduler",
 ] as const;
 
 export type AgentChannelName = (typeof AGENT_CHANNEL_NAMES)[number];

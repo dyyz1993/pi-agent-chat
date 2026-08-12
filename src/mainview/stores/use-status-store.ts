@@ -16,7 +16,7 @@ export type StatusSection =
   | "lsp"
   | "plugins"
   | "skills"
-  | "issue-monitor";
+  | "loop";
 
 export type PermissionProfileName = "normal" | "autopilot" | "readonly" | "yolo";
 export type ExecutionSandboxMode = "off" | "filesystem";
