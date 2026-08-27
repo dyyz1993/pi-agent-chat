@@ -99,6 +99,8 @@ export const GOAL_METHODS = {
   APPROVE_AUTHORITY_AMENDMENT: "approveAuthorityAmendment",
   REJECT_AUTHORITY_AMENDMENT: "rejectAuthorityAmendment",
   REJECT_CONTRACT: "rejectContract",
+  GET_PENDING_CONTRACT: "getPendingContract",
+  REFINE_CONTRACT: "refineContract",
   CLEAR_GOAL: "clearGoal",
   FORCE_CONTINUE: "forceContinue",
   DISABLE: "disable",

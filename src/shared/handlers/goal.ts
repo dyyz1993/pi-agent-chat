@@ -132,6 +132,47 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return result ?? { rejected: false, error: "Channel call failed" };
   });
 
+  r("goal.getPendingContract", async (params) => {
+    const { sessionId } = params as { sessionId: string };
+    const result = await forwardToChannel<{
+      hasPending: boolean;
+      status?: string;
+      goalId?: string;
+      generation?: number;
+      objective?: string;
+      criteria?: Array<Record<string, unknown>>;
+      plan?: Array<{ id: string; title: string; status: string; criterionIds?: string[] }>;
+      verificationChecks?: Array<Record<string, unknown>>;
+      authorities?: Array<Record<string, unknown>>;
+      constraints?: string[];
+      nonGoals?: string[];
+      workspaceRoots?: string[];
+    }>(
+      { sessionId },
+      "goal",
+      "getPendingContract",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("goal.getPendingContract channel call failed", { sessionId });
+    return result ?? { hasPending: false };
+  });
+
+  r("goal.refineContract", async (params) => {
+    const { sessionId } = params as { sessionId: string };
+    const result = await forwardToChannel<{ refined: boolean }>(
+      { sessionId },
+      "goal",
+      "refineContract",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("goal.refineContract channel call failed", { sessionId });
+    return result ?? { refined: false };
+  });
+
   r("goal.rejectContract", async (params) => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
     const result = await forwardToChannel<{ rejected: boolean }>(

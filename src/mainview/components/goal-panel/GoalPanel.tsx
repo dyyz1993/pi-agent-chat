@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Play, Square, Target, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useGoalStore } from "../../stores/use-goal-store";
@@ -30,15 +30,75 @@ export function GoalPanel() {
   const forceContinue = useGoalStore((s) => s.forceContinue);
   const enable = useGoalStore((s) => s.enable);
   const disable = useGoalStore((s) => s.disable);
+  const approveContract = useGoalStore((s) => s.approveContract);
+  const rejectContract = useGoalStore((s) => s.rejectContract);
+  const refineContract = useGoalStore((s) => s.refineContract);
+  const getPendingContract = useGoalStore((s) => s.getPendingContract);
 
   const [objectiveInput, setObjectiveInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingContract, setPendingContract] = useState<{
+    objective?: string;
+    criteria?: Array<Record<string, unknown>>;
+    plan?: Array<{ id: string; title: string; status: string; criterionIds?: string[] }>;
+    verificationChecks?: Array<Record<string, unknown>>;
+    authorities?: Array<Record<string, unknown>>;
+    constraints?: string[];
+    nonGoals?: string[];
+  } | null>(null);
+  const [contractLoading, setContractLoading] = useState(false);
+
+  // 拉取待审批契约
+  const isAwaitingApprovalNow = sessionState?.status?.rawStatus === "awaiting_approval";
+  useEffect(() => {
+    if (!sessionId || !isAwaitingApprovalNow) {
+      setPendingContract(null);
+      return;
+    }
+    setContractLoading(true);
+    getPendingContract(sessionId)
+      .then((r) => setPendingContract(r.hasPending ? r : null))
+      .catch(() => setPendingContract(null))
+      .finally(() => setContractLoading(false));
+  }, [sessionId, isAwaitingApprovalNow]);
+
+  const handleApprove = async () => {
+    if (!sessionId) return;
+    setBusy(true);
+    try {
+      await approveContract(sessionId);
+      setPendingContract(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const handleRefine = async () => {
+    if (!sessionId) return;
+    setBusy(true);
+    try {
+      await refineContract(sessionId);
+      setPendingContract(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const handleReject = async () => {
+    if (!sessionId) return;
+    setBusy(true);
+    try {
+      await rejectContract(sessionId, "rejected from panel");
+      setPendingContract(null);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (!sessionId) {
     return <div className="p-3 text-sm text-text-tertiary">{t("goal.panel.noActiveSession")}</div>;
   }
 
   const status = sessionState?.status;
+  const isAwaitingApproval = status?.rawStatus === "awaiting_approval";
   const stateInfo = status
     ? (STATE_LABELS[status.state] ?? { labelKey: status.state, color: "text-text-secondary" })
     : null;
@@ -173,6 +233,82 @@ export function GoalPanel() {
             <Play className="h-3.5 w-3.5" />
             {t("goal.panel.startGoal")}
           </button>
+        </div>
+      )}
+
+      {/* Contract approval card */}
+      {isAwaitingApproval && (
+        <div className="rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 space-y-2">
+          <div className="text-xs font-semibold text-status-warning">
+            契约等待审批
+          </div>
+          {contractLoading ? (
+            <div className="text-xs text-text-tertiary">加载中…</div>
+          ) : pendingContract ? (
+            <>
+              {pendingContract.objective && (
+                <div className="text-xs text-text-secondary">{pendingContract.objective}</div>
+              )}
+              {!!pendingContract.criteria?.length && (
+                <div>
+                  <div className="text-[11px] text-text-tertiary mb-0.5">{t("goal.panel.acceptanceCriteria")}</div>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {pendingContract.criteria.map((ac) => {
+                      const label = String((ac as { label?: string }).label ?? (ac as { description?: string }).description ?? JSON.stringify(ac).slice(0, 60));
+                      return (
+                        <li key={String((ac as { id?: string }).id ?? label)} className="text-[11px] text-text-secondary">
+                          {label}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {!!pendingContract.authorities?.length && (
+                <div>
+                  <div className="text-[11px] text-text-tertiary mb-0.5">{t("goal.panel.requestedAuthorities", "申请的权限")}</div>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {pendingContract.authorities.map((a) => {
+                      const au = a as { id?: string; label?: string; toolName?: string };
+                      return (
+                        <li key={au.id ?? au.label ?? ""} className="text-[11px] text-text-secondary">
+                          {au.label ?? au.id} {au.toolName ? `(${au.toolName})` : ""}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleApprove}
+                  disabled={busy}
+                  className="rounded-md bg-status-success/20 px-3 py-1.5 text-xs text-status-success hover:bg-status-success/30 disabled:opacity-50"
+                >
+                  批准
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRefine}
+                  disabled={busy}
+                  className="rounded-md bg-status-info/20 px-3 py-1.5 text-xs text-status-info hover:bg-status-info/30 disabled:opacity-50"
+                >
+                  修改
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReject}
+                  disabled={busy}
+                  className="rounded-md bg-status-error/20 px-3 py-1.5 text-xs text-status-error hover:bg-status-error/30 disabled:opacity-50"
+                >
+                  拒绝
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="text-[11px] text-text-tertiary">加载中…</div>
+          )}
         </div>
       )}
 
