@@ -30,7 +30,7 @@ export interface LoopSchedulerMethods {
   "loop-scheduler.callChannel": {
     params: {
       sessionId: string;
-      method: "list" | "create" | "update" | "toggle" | "remove" | "getStatus";
+      method: "list" | "create" | "update" | "toggle" | "remove" | "getStatus" | "becomeScheduler";
       args?: Record<string, unknown>;
     };
     result: LoopChannelResult;

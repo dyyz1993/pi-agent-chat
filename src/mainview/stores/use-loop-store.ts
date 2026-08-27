@@ -41,7 +41,11 @@ interface LoopState {
   clearSession: (sessionId: string) => void;
 }
 
-async function callLoop(sessionId: string, method: "list" | "create" | "update" | "toggle" | "remove" | "getStatus", args?: Record<string, unknown>) {
+async function callLoop(
+  sessionId: string,
+  method: "list" | "create" | "update" | "toggle" | "remove" | "getStatus" | "becomeScheduler",
+  args?: Record<string, unknown>,
+) {
   const result = await apiClient.call("loop-scheduler.callChannel", { sessionId, method, args });
   if (!result.ok) throw new Error(result.error);
   return result;
@@ -67,16 +71,22 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         callLoop(sessionId, "list"),
         callLoop(sessionId, "getStatus"),
       ]);
+      const loops = (listRes as { loops: LoopConfig[] }).loops ?? [];
       set((s) => ({
         configsBySession: {
           ...s.configsBySession,
-          [sessionId]: (listRes as { loops: LoopConfig[] }).loops ?? [],
+          [sessionId]: loops,
         },
         statusBySession: {
           ...s.statusBySession,
           [sessionId]: (statusRes as { status: { loops: LoopStatus[] } }).status?.loops ?? [],
         },
       }));
+      // 用户切回本 session：让它成为 active scheduler（lease 抢占，
+      // 旧持有者心跳退位）。仅当该 session 有 loop 配置时才抢。
+      if (loops.length > 0 && !(listRes as { isScheduler?: boolean }).isScheduler) {
+        await callLoop(sessionId, "becomeScheduler").catch(() => {});
+      }
     } catch {
       // extension not running
     } finally {

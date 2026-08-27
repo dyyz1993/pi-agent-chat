@@ -457,6 +457,7 @@ async function createRpcClient(
   sessionPath: string | undefined,
   userId?: string,
   excludeLsp = false,
+  extraEnv?: Record<string, string>,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
   const runtime = await resolveActiveRuntimeSelection(cwd);
@@ -591,6 +592,7 @@ async function createRpcClient(
   const childEnv: Record<string, string> = {
     ...applyExecutionSandboxEnv(process.env, readProjectExecutionSandbox(cwd).mode),
     NODE_OPTIONS: "--max-old-space-size=8192",
+    ...(extraEnv ?? {}),
   };
   if (excludeLsp) {
     childEnv.PI_SKIP_MCP = "1";
@@ -814,7 +816,9 @@ export class AgentProcessManager {
     this.warmPending.add(poolKey);
     void (async () => {
       try {
-        const { client } = await createRpcClient(config.piCliPath, projectPath, "", undefined);
+        const { client } = await createRpcClient(config.piCliPath, projectPath, "", undefined, false, {
+          PI_WARM_STANDBY: "1",
+        });
         const managed = {
           client,
           info: {
