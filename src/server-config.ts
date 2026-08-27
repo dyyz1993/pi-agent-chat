@@ -200,6 +200,11 @@ export const config = {
   proxyPublicDomain: process.env.PROXY_PUBLIC_DOMAIN ?? "",
   /** 沙箱模式：启用后 agent 在隔离沙箱中运行 */
   sandboxEnabled: process.env.SANDBOX_ENABLED === "true",
+  /**
+   * 预热进程池：session 启动后后台预 spawn 一个 CLI 进程，下次进会话
+   * 通过快速 switchSession 秒绑（省掉 1-2s 冷启动）。默认开启。
+   */
+  warmProcessPoolEnabled: process.env.PI_WARM_POOL !== "off",
   /** 沙盒/远程后端类型: local | sandbox-box | ssh | cloudflare */
   sandboxProvider: (process.env.SANDBOX_PROVIDER ?? "local") as
     | "local"
