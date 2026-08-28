@@ -1648,7 +1648,7 @@ export function ChatPanel() {
         )}
 
         <div
-          className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-accent/50 bg-accent/5" : ""}`}
+          className={`px-2 sm:px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-accent/50 bg-accent/5" : ""} ${isMobileOrTablet ? "pb-[env(safe-area-inset-bottom)]" : ""}`}
           style={
             isMobileOrTablet
               ? undefined

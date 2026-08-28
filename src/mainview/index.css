@@ -486,10 +486,19 @@ a:focus-visible,
 }
 
 @media (max-width: 768px) {
+  html {
+    font-size: 15px;
+  }
+
+  body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
+  }
+
   button,
   [role="button"] {
-    min-width: 28px;
-    min-height: 28px;
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
