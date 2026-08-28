@@ -55,9 +55,10 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
 interface RightSidebarProps {
   width: number;
   overlay: boolean;
+  className?: string;
 }
 
-export function RightSidebar({ width, overlay }: RightSidebarProps) {
+export function RightSidebar({ width, overlay, className }: RightSidebarProps) {
   const { t } = useTranslation("sidebar");
   useEffectiveSessionResourceSync();
   const statusPanel = useLayoutStore((s) => s.statusPanel);
@@ -219,7 +220,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
       data-testid="right-sidebar"
       className={`flex flex-col bg-bg-secondary border-l border-border-primary overflow-hidden z-20 ${
         overlay ? "animate-slide-in-right shadow-xl shadow-black/10 dark:shadow-black/30" : ""
-      }`}
+      }${className ? ` ${className}` : ""}`}
       style={overlay ? { position: "absolute", right: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >

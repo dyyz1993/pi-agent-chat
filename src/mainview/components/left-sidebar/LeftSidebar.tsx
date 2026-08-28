@@ -11,9 +11,10 @@ import { useAsyncGuard } from "../../hooks/use-async-guard";
 interface LeftSidebarProps {
   width: number;
   overlay: boolean;
+  className?: string;
 }
 
-export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
+export function LeftSidebar({ width, overlay, className }: LeftSidebarProps) {
   const { t } = useTranslation("sidebar");
   const sessionPanel = useLayoutStore((s) => s.sessionPanel);
   const toggleSession = useLayoutStore((s) => s.toggleSession);
@@ -55,7 +56,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         overlay
           ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform overflow-hidden"
           : ""
-      }`}
+      }${className ? ` ${className}` : ""}`}
       style={overlay ? { position: "absolute", left: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >

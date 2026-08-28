@@ -109,7 +109,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               i === activeIndex ? "bg-surface-hover" : ""
             } ${
               item.danger
-                ? "text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:bg-red-50 dark:focus:bg-red-900/30"
+                ? "text-status-error hover:bg-status-error/5 dark:hover:bg-status-error/10 focus:bg-status-error/5 dark:focus:bg-status-error/10"
                 : "text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover focus:bg-surface-hover dark:focus:bg-surface-hover"
             }`}
             onClick={() => {

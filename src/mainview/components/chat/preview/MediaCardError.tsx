@@ -37,7 +37,7 @@ export const MediaCardError = memo(function MediaCardError({
 
   return (
     <div className="flex flex-col items-center gap-1.5 py-6 px-4">
-      <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-xs">
+      <div className="flex items-center gap-1.5 text-status-error text-xs">
         <ErrorIcon className="w-3.5 h-3.5 shrink-0" />
         <span>{errorKind ? t(ERROR_I18N_MAP[errorKind]) : t("failedToLoadImage")}</span>
       </div>

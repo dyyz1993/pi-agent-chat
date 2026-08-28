@@ -9,7 +9,7 @@ export const MarkdownCard = memo(function MarkdownCard({ details }: { details: P
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary bg-bg-elevated">
       <CardHeader
-        icon={<FileText className="w-3.5 h-3.5 text-teal-500 dark:text-teal-400 shrink-0" />}
+        icon={<FileText className="w-3.5 h-3.5 text-semantic-memory shrink-0" />}
         label={details.title ?? details.source}
         absolutePath={details.absolutePath}
       />

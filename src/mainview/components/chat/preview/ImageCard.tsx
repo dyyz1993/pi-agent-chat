@@ -37,7 +37,7 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <CardHeader
-        icon={<ImageIcon className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />}
+        icon={<ImageIcon className="w-3.5 h-3.5 text-status-success shrink-0" />}
         label={details.title ?? details.source}
         meta={details.size ? formatFileSize(details.size) : undefined}
         absolutePath={renderableSource}

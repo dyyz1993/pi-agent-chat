@@ -34,7 +34,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
     const label = isSteering ? t("queuedSteeringLabel") : t("queuedFollowUpLabel");
     const preview = item.text.split(/\r?\n/, 1)[0] || item.text;
     const colorClass = isSteering
-      ? "text-amber-600 dark:text-amber-400/90"
+      ? "text-status-warning"
       : "text-accent";
 
     return (

@@ -160,15 +160,15 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
   if (loading && !svg && !error) {
     return (
       <div className="rounded-lg border border-border-secondary bg-bg-elevated dark:bg-surface-code/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
-        <div className="inline-block w-4 h-4 border-2 border-indigo-500 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
+        <div className="inline-block w-4 h-4 border-2 border-accent dark:border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-300/50 dark:border-red-900/50 bg-bg-elevated dark:bg-surface-code/60 my-3 overflow-hidden">
-        <div className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-b border-red-300/30 dark:border-red-900/30"></div>
+      <div className="rounded-lg border border-status-error/50 dark:border-status-error/30 bg-bg-elevated dark:bg-surface-code/60 my-3 overflow-hidden">
+        <div className="px-3 py-1.5 text-xs text-status-error bg-status-error/5 dark:bg-status-error/10 border-b border-status-error/30 dark:border-status-error/30"></div>
         <pre className="p-3 text-xs text-text-primary dark:text-text-secondary overflow-x-auto font-mono">
           <code>{code}</code>
         </pre>

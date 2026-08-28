@@ -823,10 +823,10 @@ function getSelectedTone(color: string): { bar: string; scrollBar: string } {
         bar: "bg-semantic-notify opacity-100 ",
         scrollBar: "bg-semantic-notify/60 opacity-100 ",
       };
-    case "text-pink-400":
+    case "text-semantic-media":
       return {
-        bar: "bg-pink-400 opacity-100 ",
-        scrollBar: "bg-pink-400/60 opacity-100 ",
+        bar: "bg-semantic-media opacity-100 ",
+        scrollBar: "bg-semantic-media/60 opacity-100 ",
       };
     case "text-accent":
       return {

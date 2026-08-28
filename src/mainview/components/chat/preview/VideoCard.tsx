@@ -26,7 +26,7 @@ export const VideoCard = memo(function VideoCard({ details }: { details: Preview
     return (
       <div className="rounded-lg overflow-hidden border border-border-secondary bg-bg-elevated">
         <CardHeader
-          icon={<Video className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" />}
+          icon={<Video className="w-3.5 h-3.5 text-semantic-agent shrink-0" />}
           label={details.title ?? details.source}
         />
         <div className="px-3 py-4 text-xs text-text-tertiary italic">{t("noPathForPreview")}</div>
@@ -37,7 +37,7 @@ export const VideoCard = memo(function VideoCard({ details }: { details: Preview
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary bg-bg-elevated">
       <CardHeader
-        icon={<Video className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" />}
+        icon={<Video className="w-3.5 h-3.5 text-semantic-agent shrink-0" />}
         label={details.title ?? details.source}
         absolutePath={renderableSource}
         onRetry={error || !!previewSource.error ? handleRetryAndReload : undefined}

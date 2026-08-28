@@ -355,7 +355,7 @@ export const InputBar = memo(
             <div className="flex flex-col">
               <button
                 onClick={handleClear}
-                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
+                className={`w-11 h-11 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
                 title={t("clearInput")}
                 aria-label={t("clearInput")}
               >
@@ -367,7 +367,7 @@ export const InputBar = memo(
             >
               <button
                 onClick={toggleExpand}
-                className="w-7 h-7 md:w-5 md:h-5 rounded border border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover transition-colors flex items-center justify-center"
+                className="w-11 h-11 md:w-5 md:h-5 rounded border border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover transition-colors flex items-center justify-center"
                 title={expanded ? t("collapse") : t("expand")}
                 aria-expanded={expanded}
                 aria-label={expanded ? t("collapseInput") : t("expandInput")}
@@ -381,7 +381,7 @@ export const InputBar = memo(
               <button
                 onClick={handleNavPrev}
                 disabled={!historyEnabled || !hasPrev}
-                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${historyEnabled && hasPrev ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
+                className={`w-11 h-11 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${historyEnabled && hasPrev ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
                 title={t("collapse")}
                 aria-label={t("prevHistory")}
               >
@@ -390,7 +390,7 @@ export const InputBar = memo(
               <button
                 onClick={handleNavNext}
                 disabled={!historyEnabled || !hasNext}
-                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${historyEnabled && hasNext ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
+                className={`w-11 h-11 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${historyEnabled && hasNext ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
                 title={t("expand")}
                 aria-label={t("nextHistory")}
               >
