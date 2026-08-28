@@ -458,7 +458,9 @@ export function setupSubscriptions(
     memorySubscriptions,
     coordinatorSubscriptions,
     goalSubscriptions,
-    loopSchedulerSubscriptions,
+    // loop-scheduler landed after these stores were introduced; tolerate test
+    // states (and any stale persisted snapshots) that lack the field.
+    loopSchedulerSubscriptions: loopSchedulerSubscriptionsMap = {},
   } = state;
   if (!agentSubscriptions[id]) {
     set((s) => ({
@@ -1042,7 +1044,7 @@ export function setupSubscriptions(
 
 
   // ── Loop Scheduler 订阅 ──
-  if (!loopSchedulerSubscriptions[id]) {
+  if (!loopSchedulerSubscriptionsMap[id]) {
     set((s) => ({
       loopSchedulerSubscriptions: { ...s.loopSchedulerSubscriptions, [id]: "__pending__" },
     }));
@@ -1082,7 +1084,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
     state.notifySubscriptions,
     state.coordinatorSubscriptions,
     state.goalSubscriptions,
-    state.loopSchedulerSubscriptions,
+    state.loopSchedulerSubscriptions ?? {},
   ];
 
   for (const map of singleSubMaps) {
