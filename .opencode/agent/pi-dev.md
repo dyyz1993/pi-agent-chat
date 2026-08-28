@@ -611,17 +611,16 @@ log.info("message sent", { sessionId, content });
 - 17 个 spec 文件：smoke, theme, sidebar, session, tab-bar, scroll, modal, responsive, mobile-interactions, mobile-smoke, tablet-interactions, activity-bar, z-index, settings-retry, rollback, rollback-debug, app
 - 响应式测试：`page.setViewportSize()` 模拟 375x812 / 768x1024 / 1440x900
 
-## UI 自动化测试（ui-tester 子智能体）
+## UI 自动化测试（zcode 的 ui-tester 子智能体）
 
-当需要进行 UI 自动化测试（截图验证、交互测试、回归测试、响应式布局验证）时，**必须使用 ui-tester 子智能体**，不要自己操作浏览器。
+> **2026-08-29 起 ui-\* 智能体家族（ui-tester/ui-debugger/ui-orchestrator/ui-automator）已迁移到 zcode**：
+> 定义在 `~/.zcode/agents/` + 注册于 `~/.zcode/cli/config.json`，OpenCode 侧定义已退役（备份 `~/.config/opencode/agent/retired-20260829/`）。
+> UI 自动化测试请在 **zcode** 里执行：`Agent(subagent_type: "ui-tester", prompt: "...")`。
+> 知识库仍在项目内（`.ui-tester/knowledge/`、`.ui-debugger/knowledge/`），两边共享。
 
-### 触发方式
+当需要进行 UI 自动化测试（截图验证、交互测试、回归测试、响应式布局验证）时，使用 zcode 的 ui-tester 子智能体，不要自己操作浏览器。在 OpenCode 会话中遇到此类需求时，提示用户切换到 zcode 执行。
 
-```
-Task(subagent_type: "ui-tester", prompt: "...")
-```
-
-### 什么时候应该主动触发 ui-tester
+### 什么时候应该主动触发 ui-tester（在 zcode 中）
 
 - 需要验证 UI 页面的实际渲染效果
 - 需要截图对比不同尺寸下的布局
@@ -632,8 +631,11 @@ Task(subagent_type: "ui-tester", prompt: "...")
 
 ### ui-tester 核心能力
 
-- 使用 `agent-browser` CLI 控制浏览器
+- 使用 `xbrowser` CLI 控制浏览器（命令链省 token、`observe` 输出 ref+CSS 选择器+actions；agent-browser 仅 viewer 人工介入/WebSocket/响应体捕获兜底）
 - 6 阶段生命周期：Bootstrap → Plan → Explore → Execute → Persist(含复验) → Report
+- **执行中自愈**：知识库选择器失效当场修复（version+1）并继续，不等收尾
+- **知识复用度量**：报告含 Knowledge Reuse 段（复用选择器数/跳过探索数/修复数/新增沉淀数）
+- **工具反馈闭环**：xbrowser 本身的问题写 `.ui-tester/feedback/xbrowser/{bugs,suggestions}/`（含源码只读定位）
 - **多尺寸截图**：自动在移动 (375×812)、平板 (768×1024)、PC (1440×900) 三个尺寸下截图
 - **HTML/Markdown 报告**：测试完成后自动生成包含截图证据的完整报告
 - 知识沉淀目录：`.ui-tester/knowledge/<module>/`（selectors.yml + patterns.yml + sessions/）
@@ -674,8 +676,8 @@ Task(subagent_type: "ui-tester", prompt: "...")
 ### 注意事项
 
 - 确保 dev server 已启动（`bun run hmr`）再调用 ui-tester
-- ui-tester 使用独立的 agent-browser session，不会影响用户正在使用的浏览器
-- 截图文件存在 `/tmp/` 下，重启后会清理；如需持久保存请复制到项目目录
+- ui-tester 使用独立的 xbrowser session（`--session` flag 隔离），不会影响用户正在使用的浏览器
+- 截图存放在 `~/.xbrowser/screenshots/`（xbrowser 自动管理）；如需持久保存请复制到项目目录
 - 知识沉淀在 `.ui-tester/knowledge/` 下，可以 git 跟踪
 
 ## ESLint 规则

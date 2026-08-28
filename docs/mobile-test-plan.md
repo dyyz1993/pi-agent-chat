@@ -1,6 +1,6 @@
 # Pi-Agent-Chat 移动端测试方案 (T26.x)
 
-> 使用 @ui-tester (agent-browser) + Playwright 驱动
+> 使用 zcode 的 ui-tester 子智能体（xbrowser 驱动，2026-08-29 起）+ Playwright 驱动
 
 ## 架构
 
