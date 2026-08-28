@@ -217,7 +217,7 @@ export function ExplorerSidebar({
         <div
           className={`flex-1 overflow-y-auto p-1 transition-colors ${
             isDragOver
-              ? "bg-indigo-100/50 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500/50"
+              ? "bg-accent/10 ring-1 ring-inset ring-accent/50"
               : ""
           }`}
           onContextMenu={handleBlankContextMenu}

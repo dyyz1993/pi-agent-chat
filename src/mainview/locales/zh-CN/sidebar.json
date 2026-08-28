@@ -193,5 +193,10 @@
   "closeProjectStop": "停止",
   "closeProjectClose": "关闭",
   "hasPendingPermissions": "有待处理的权限请求",
-  "changeReview": "变更审核"
+  "changeReview": "变更审核",
+  "today": "今天",
+  "yesterday": "昨天",
+  "thisWeek": "本周",
+  "earlier": "更早",
+  "pinned": "已置顶"
 }

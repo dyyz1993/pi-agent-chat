@@ -193,5 +193,10 @@
   "closeProjectStop": "Stop",
   "closeProjectClose": "Close",
   "hasPendingPermissions": "Has pending permission requests",
-  "changeReview": "Change Review"
+  "changeReview": "Change Review",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "thisWeek": "This Week",
+  "earlier": "Earlier",
+  "pinned": "Pinned"
 }

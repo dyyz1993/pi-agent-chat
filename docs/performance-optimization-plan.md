@@ -3,6 +3,8 @@
 > 调研日期：2026-04-25
 > 涉及 12 个优化点，按 P0/P1/P2 三档优先级排列
 > 每项包含：问题描述、根因分析、优化方案、验证步骤、风险评估
+>
+> 观测入口：先读 [性能观测与快速排查方案](./performance-observability.md)，按分层指标建立优化前基线，再实施本清单中的方案。
 
 ---
 
@@ -33,6 +35,7 @@
 **问题**: `ChatPanel.tsx:200,220` 的 `MessagesArea` 和 `SubagentMessagesArea` 用 `.map()` 渲染全部消息。长会话（100+ 消息 × 多个 ContentBlock）导致 DOM 节点爆炸。
 
 **根因**:
+
 - `@tanstack/react-virtual` 已安装但仅用于 `VirtualizedCodeView.tsx`（文件预览），聊天列表完全未用
 - 每条 assistant 消息含 1 thinking + N toolExecution + 1 text = 7+ 个重度 ContentBlock
 - 50 条 assistant 消息 = 350+ 个 block，全部挂载在 DOM
@@ -45,6 +48,7 @@
 4. 可选：将正在流式更新的最后一条消息从虚拟列表中分离，独立渲染
 
 **修改文件**:
+
 - `src/mainview/components/chat/ChatPanel.tsx` — 新增 `VirtualizedMessagesArea`
 - `src/mainview/hooks/use-active-scroll-tracker.ts` — `scrollToMessage` 改为 index-based
 
@@ -58,10 +62,17 @@ function estimateMessageSize(msg: ChatMessage): number {
   let h = 48;
   for (const block of msg.content) {
     switch (block.type) {
-      case "text": h += Math.min(200, Math.max(40, (block.text.length / 80) * 22)); break;
-      case "thinking": h += 80; break;
-      case "toolExecution": h += block.status === "running" ? 180 : 120; break;
-      default: h += 60;
+      case "text":
+        h += Math.min(200, Math.max(40, (block.text.length / 80) * 22));
+        break;
+      case "thinking":
+        h += 80;
+        break;
+      case "toolExecution":
+        h += block.status === "running" ? 180 : 120;
+        break;
+      default:
+        h += 60;
     }
   }
   return h;
@@ -86,7 +97,11 @@ function VirtualizedMessagesArea({ messages, scrollRef, onScroll }: Props) {
   }, [messages.length, virtualizer]);
 
   return (
-    <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto px-4 py-3" onScroll={onScroll}>
+    <div
+      ref={scrollRef as React.Ref<HTMLDivElement>}
+      className="h-full overflow-y-auto px-4 py-3"
+      onScroll={onScroll}
+    >
       <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
         {virtualizer.getVirtualItems().map((vr) => {
           const msg = messages[vr.index];
@@ -95,9 +110,17 @@ function VirtualizedMessagesArea({ messages, scrollRef, onScroll }: Props) {
               key={msg.id}
               data-index={vr.index}
               ref={virtualizer.measureElement}
-              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${vr.start}px)`,
+              }}
             >
-              <div className="py-1"><MessageBubble message={msg} /></div>
+              <div className="py-1">
+                <MessageBubble message={msg} />
+              </div>
             </div>
           );
         })}
@@ -108,12 +131,14 @@ function VirtualizedMessagesArea({ messages, scrollRef, onScroll }: Props) {
 ```
 
 **验证步骤**:
+
 1. Chrome DevTools Elements → 搜索 `data-msg-id`，对比优化前后 DOM 节点数（100条消息: 优化前≈100+节点 → 优化后≈10-15节点）
 2. React DevTools Profiler 录制流式对话，对比 MessageBubble render 次数
 3. 功能回归：自动滚到底部、手动上滚不跳回、SideNav 点击跳转、SideNav 同步高亮
 4. 边界场景：空消息列表、单条消息、超长单条消息、快速切换会话
 
 **风险**:
+
 - `scrollToMessage` 依赖 virtualizer index 而非 DOM querySelector，需同时改造 `useActiveScrollTracker`
 - 流式更新时高度频繁变化可能导致 virtualizer 频繁重测量 → 建议分离 streaming 消息独立渲染
 - 切换会话时需给 virtualizer 加 `key={sessionId}` 重置缓存
@@ -125,6 +150,7 @@ function VirtualizedMessagesArea({ messages, scrollRef, onScroll }: Props) {
 **问题**: 每个 `message_update`/`tool_execution_update` 事件都 `[...messages]` 替换整个消息数组。200 条消息 × 30 次/秒 = 6000 次浅拷贝/秒。
 
 **根因**:
+
 - `use-session-store.ts:571,664` — `chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {...lastMsg}])`
 - `use-subagent-store.ts:133,247` — 同样模式
 - `use-chat-store.ts:162` — `setMessagesForSession` 每次创建新 `messagesBySession` 对象
@@ -153,7 +179,10 @@ export function batchMessageUpdate(sessionId: string, apply: () => void) {
 }
 
 export function flushNow() {
-  if (rafId) { cancelAnimationFrame(rafId); flush(); }
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    flush();
+  }
 }
 ```
 
@@ -178,12 +207,14 @@ incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamConten
 ```
 
 **验证步骤**:
+
 1. 在 `flush()` 中临时加 `console.log` 验证合并效果：batch 前可能 30+ 次/秒 → batch 后 ~16 次/秒
 2. React DevTools Profiler 对比优化前后 ChatPanel render 耗时
 3. 功能回归：流式文本输出、工具执行输出、message_end 正确结束、快速切换 session
 4. Chrome Memory tab 对比 10 秒流式对话的内存增长
 
 **风险**:
+
 - batch 合并可能丢弃 tool_execution_update 的增量 output → 需在 batch 回调中累积增量而非只保留最后一次
 - `message_end` 必须 `flushNow()` 立即执行，不能进 batch
 
@@ -194,6 +225,7 @@ incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamConten
 **问题**: 后端 `session.getEntries` 支持 cursor 分页，但前端一次性加载 200/500 条消息，无"加载更多"机制。
 
 **根因**:
+
 - `use-chat-store.ts:184` — `apiClient.call("session.getEntries", { sessionPath, limit: 200 })` 不传 cursor
 - `use-subagent-store.ts:66` — `limit: 500`，同样不传 cursor
 - 后端 `session.ts:34` 虽然支持 cursor 但每次仍全量 readFile
@@ -227,7 +259,7 @@ loadMoreMessages: async (sessionPath) => {
   if (!hasMoreBySession[sessionId] || loadingMoreBySession[sessionId]) return;
   const result = await apiClient.call("session.getEntries", { sessionPath, limit: 50, cursor });
   // ... prepend 到现有消息前 ...
-}
+};
 ```
 
 **修改 `ChatPanel.tsx` MessagesArea** — 检测滚动到顶部时触发加载:
@@ -245,12 +277,14 @@ const handleScrollInternal = useCallback(() => {
 ```
 
 **验证步骤**:
+
 1. 构造 300+ 条消息的 JSONL fixture，验证首次只加载 50 条
 2. 滚到顶部触发加载更多，验证 prepend 后滚动位置不跳动
 3. 流式新消息正常追加到末尾，不受分页影响
 4. 切换会话后切回，使用缓存不重新加载
 
 **风险**:
+
 - cursor 在流式写入期间行号可能偏移 → 加载历史时暂停 cursor 更新
 - `normalizeToolBlocks` 依赖全量消息做 toolCall→toolResult 匹配，分页后可能跨批次 → 需跨批次保留 `toolCallNameMap`
 - 滚动位置跳动 → 用 `prevHeightRef` 补偿
@@ -265,12 +299,12 @@ const handleScrollInternal = useCallback(() => {
 
 ```typescript
 // line 119-131
-const updated: ContentBlock[] = [...blocks];  // 浅拷贝数组
+const updated: ContentBlock[] = [...blocks]; // 浅拷贝数组
 for (const block of content) {
   if (block.type === "text") {
     const lastBlock = updated[updated.length - 1];
     if (lastBlock?.type === "text") {
-      (lastBlock as { text: string }).text += block.text;  // ⚠️ 直接变异！
+      (lastBlock as { text: string }).text += block.text; // ⚠️ 直接变异！
     }
   }
 }
@@ -279,6 +313,7 @@ for (const block of content) {
 `[...blocks]` 只拷贝了数组，内部元素仍是同一引用。对 `lastBlock.text` 的 `+=` 直接修改了 zustand state 中的 ContentBlock 对象。
 
 **可能引发的 Bug**:
+
 - React memo 浅比较失效（block 对象引用没变，memo 跳过渲染，UI 不更新）
 - zustand devtools 时间旅行失效
 - 并发事件竞态导致不一致
@@ -306,6 +341,7 @@ for (const block of content) {
 **额外发现**: `use-chat-store.ts:83` 的 `normalizeToolBlocks` 中 `splice` 操作在 store 外部（局部变量），风险低但建议后续重构为纯函数。
 
 **验证步骤**:
+
 1. 单元测试：模拟连续两个 `message_update` 事件，验证 `stateBefore !== stateAfter1 !== stateAfter2`（引用不等）
 2. 手动测试：启动 subagent 任务，观察 streaming 文本是否实时更新
 3. React DevTools Profiler 确认 `SubagentExecutionCard` 在每次 message_update 后有重渲染
@@ -330,18 +366,15 @@ const selectedIds = useChatNavStore((s) => s.selectedIds);
 const isSelected = selectedIds.has(message.id);
 
 // 改后:
-const isSelected = useChatNavStore(
-  useCallback((s) => s.selectedIds.has(message.id), [message.id])
-);
+const isSelected = useChatNavStore(useCallback((s) => s.selectedIds.has(message.id), [message.id]));
 // activeId 同理:
-const isActive = useChatNavStore(
-  useCallback((s) => s.activeId === message.id, [message.id])
-);
+const isActive = useChatNavStore(useCallback((s) => s.activeId === message.id, [message.id]));
 ```
 
 **原理**: selector 返回 `boolean`，`Object.is(true, true)` 直接通过，toggle 不相关 id 不会触发重渲染。
 
 **验证步骤**:
+
 1. React DevTools Profiler 录制 → 右键 toggle 一条消息 → 改前所有 MessageBubble 高亮，改后仅 1 个高亮
 2. 临时加 `console.count('render-' + message.id)` 确认只有被操作的 bubble count++
 
@@ -386,6 +419,7 @@ useEffect(() => {
 ```
 
 **验证步骤**:
+
 1. 不打开 RPC Panel → 执行对话 → `debugLog` 不执行（加临时计数器验证）
 2. 打开 RPC Panel → 执行对话 → 调试数据正常显示
 3. 关闭 Panel → 确认计数器不再增长
@@ -424,6 +458,7 @@ const streamVersion = useChatStore((s) => s.streamContentVersion);
 ```
 
 **验证步骤**:
+
 1. 流式自动滚动正常（发送消息后自动滚到底部）
 2. 用户上滚后不自动跳回（手动上滚暂停自动滚动）
 3. 用户滚回底部后恢复自动滚动
@@ -458,6 +493,7 @@ const NavSubDot = memo(function NavSubDot({ ... }) { ... });
 ```
 
 **验证步骤**:
+
 1. 临时在 memo 组件内加 `console.log`，流式时只有 active 的 NavDotGroup 输出
 2. React DevTools Profiler 确认非 active NavDotGroup 跳过渲染
 
@@ -470,6 +506,7 @@ const NavSubDot = memo(function NavSubDot({ ... }) { ... });
 **问题**: `MessageBubble.tsx:143` 每个 text block 独立实例化 `<ReactMarkdown remarkPlugins={[remarkGfm]}>`，无解析缓存。流式结束时所有 block 同时解析 markdown，造成峰值。
 
 **根因**:
+
 - ReactMarkdown v10 每次调用都 `createProcessor` + `parse` + `runSync` + `toJsxRuntime`
 - `remarkPlugins={[remarkGfm]}` 每次创建新数组
 - 流式结束 `isStreaming: true → false` 时，所有 text block 同时切换到 ReactMarkdown
@@ -490,10 +527,7 @@ import { VFile } from "vfile";
 
 const MAX_CACHE = 200;
 
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkRehype);
+const processor = unified().use(remarkParse).use(remarkGfm).use(remarkRehype);
 
 const cache = new Map<string, ReturnType<typeof processor.runSync>>();
 
@@ -514,7 +548,9 @@ function parseToHast(text: string) {
 
 export const CachedReactMarkdown = memo(function CachedReactMarkdown({
   children,
-}: { children: string }) {
+}: {
+  children: string;
+}) {
   const hast = parseToHast(children);
   return toJsxRuntime(hast, {
     Fragment,
@@ -535,6 +571,7 @@ export const CachedReactMarkdown = memo(function CachedReactMarkdown({
 ```
 
 **验证步骤**:
+
 1. 发送长消息（5+ text block），用 `performance.now()` 测量 message_end 后首帧渲染时间
 2. 滚动回看历史消息，验证缓存命中率（cache.size 增长但解析时间接近 0）
 3. 测试 GFM 表格、删除线、代码块渲染正确性
@@ -571,10 +608,21 @@ r("session.getEntries", async (params) => {
   });
 
   for await (const line of rl) {
-    if (!line.trim()) { lineIdx++; continue; }
-    if (lineIdx < startIdx) { lineIdx++; continue; }
-    if (entries.length >= limit) { hasMore = true; break; }
-    try { entries.push(parseLine(line, lineIdx)); } catch {}
+    if (!line.trim()) {
+      lineIdx++;
+      continue;
+    }
+    if (lineIdx < startIdx) {
+      lineIdx++;
+      continue;
+    }
+    if (entries.length >= limit) {
+      hasMore = true;
+      break;
+    }
+    try {
+      entries.push(parseLine(line, lineIdx));
+    } catch {}
     lineIdx++;
   }
   rl.close();
@@ -585,6 +633,7 @@ r("session.getEntries", async (params) => {
 **收益**: 54MB 文件首页请求 → 内存峰值从 ~160MB 降至 ~10MB。
 
 **验证步骤**:
+
 1. 单元测试：对比优化前后 `getEntries` 返回结果完全一致
 2. 大文件基准：对比内存峰值和响应延迟
 3. `session-scanner.ts` 中的 `parseJsonlHeader`/`parseJsonlMeta` 同步优化
@@ -605,10 +654,16 @@ r("session.getEntries", async (params) => {
 function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): TreeNode[] {
   let changed = false;
   const result = nodes.map((n) => {
-    if (n.path === path) { changed = true; return { ...n, expanded }; }
+    if (n.path === path) {
+      changed = true;
+      return { ...n, expanded };
+    }
     if (n.children) {
       const newChildren = updateExpanded(n.children, path, expanded);
-      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+      if (newChildren !== n.children) {
+        changed = true;
+        return { ...n, children: newChildren };
+      }
     }
     return n;
   });
@@ -617,6 +672,7 @@ function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): Tre
 ```
 
 **验证步骤**:
+
 1. 展开一个目录，React DevTools 确认只有该目录节点的子树 re-render
 2. 同层其他文件夹节点不 re-render
 
@@ -629,6 +685,7 @@ function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): Tre
 **问题**: `TokenStatusBar.tsx:74,38` 未使用 `memo`。
 
 **调研结论**: **不建议优先优化**。原因：
+
 - Zustand selector `s.sessionContextMap[sessionId]` 已经隔离了无关 session 更新
 - 重渲染频率低（每轮对话仅 3-4 次，非流式高频事件）
 - DOM 极轻量（1 个 18×18 SVG + 5 个 span）
@@ -644,17 +701,17 @@ function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): Tre
 
 ### 执行顺序（推荐）
 
-| 批次 | 优化项 | 预计改动量 | 预计收益 |
-|------|--------|-----------|---------|
-| **Batch 1** (Bug Fix) | P0-4 Subagent 变异 | ~10 行 | 修复潜在 Bug |
-| **Batch 2** (Quick Wins) | P1-5 selectedIds、P1-6 debugLog、P1-7 streamVersion | ~30 行 | 减少 40-50% 无效渲染 |
-| **Batch 3** (Memo) | P1-8 NavDot memo、P2-12 TokenStatusBar memo | ~80 行 | 减少 9-25% 帧预算浪费 |
-| **Batch 4** (Batching) | P0-2 流式批次合并 | 新增 1 文件 + 修改 ~20 行 | 减少 40-50% 无效更新 |
-| **Batch 5** (Virtualization) | P0-1 消息列表虚拟化 | ~100 行 | DOM 节点减少 90%+ |
-| **Batch 6** (Pagination) | P0-3 前端分页 | ~80 行 | 首屏加载减少 60%+ |
-| **Batch 7** (Cache) | P1-9 ReactMarkdown 缓存 | 新增 1 文件 + 改 1 行 | 解析时间减少 80-95% |
-| **Batch 8** (Backend) | P2-10 JSONL 流式读取 | ~30 行 | 内存峰值减少 95%+ |
-| **Batch 9** (Explorer) | P2-11 树拷贝优化 | ~20 行 | 减少不必要 re-render |
+| 批次                         | 优化项                                              | 预计改动量                | 预计收益              |
+| ---------------------------- | --------------------------------------------------- | ------------------------- | --------------------- |
+| **Batch 1** (Bug Fix)        | P0-4 Subagent 变异                                  | ~10 行                    | 修复潜在 Bug          |
+| **Batch 2** (Quick Wins)     | P1-5 selectedIds、P1-6 debugLog、P1-7 streamVersion | ~30 行                    | 减少 40-50% 无效渲染  |
+| **Batch 3** (Memo)           | P1-8 NavDot memo、P2-12 TokenStatusBar memo         | ~80 行                    | 减少 9-25% 帧预算浪费 |
+| **Batch 4** (Batching)       | P0-2 流式批次合并                                   | 新增 1 文件 + 修改 ~20 行 | 减少 40-50% 无效更新  |
+| **Batch 5** (Virtualization) | P0-1 消息列表虚拟化                                 | ~100 行                   | DOM 节点减少 90%+     |
+| **Batch 6** (Pagination)     | P0-3 前端分页                                       | ~80 行                    | 首屏加载减少 60%+     |
+| **Batch 7** (Cache)          | P1-9 ReactMarkdown 缓存                             | 新增 1 文件 + 改 1 行     | 解析时间减少 80-95%   |
+| **Batch 8** (Backend)        | P2-10 JSONL 流式读取                                | ~30 行                    | 内存峰值减少 95%+     |
+| **Batch 9** (Explorer)       | P2-11 树拷贝优化                                    | ~20 行                    | 减少不必要 re-render  |
 
 ### 注意事项
 

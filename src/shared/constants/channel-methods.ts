@@ -99,6 +99,8 @@ export const GOAL_METHODS = {
   APPROVE_AUTHORITY_AMENDMENT: "approveAuthorityAmendment",
   REJECT_AUTHORITY_AMENDMENT: "rejectAuthorityAmendment",
   REJECT_CONTRACT: "rejectContract",
+  GET_PENDING_CONTRACT: "getPendingContract",
+  REFINE_CONTRACT: "refineContract",
   CLEAR_GOAL: "clearGoal",
   FORCE_CONTINUE: "forceContinue",
   DISABLE: "disable",
@@ -167,5 +169,5 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   "rules-engine": new Set(Object.values(RULES_METHODS)),
   coordinator: new Set(Object.values(COORDINATOR_METHODS)),
   "remote-ssh": new Set(Object.values(REMOTE_SSH_METHODS)),
-  "issue-monitor": new Set(["getStatus", "getConfig"]),
+  "loop-scheduler": new Set(["list", "create", "update", "toggle", "remove", "getStatus", "becomeScheduler"]),
 };

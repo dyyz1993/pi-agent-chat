@@ -164,6 +164,27 @@ export interface GoalMethods {
     params: { sessionId: string; reason?: string };
     result: { rejected: boolean };
   };
+  "goal.getPendingContract": {
+    params: { sessionId: string };
+    result: {
+      hasPending: boolean;
+      status?: string;
+      goalId?: string;
+      generation?: number;
+      objective?: string;
+      criteria?: Array<Record<string, unknown>>;
+      plan?: Array<{ id: string; title: string; status: string; criterionIds?: string[] }>;
+      verificationChecks?: Array<Record<string, unknown>>;
+      authorities?: Array<Record<string, unknown>>;
+      constraints?: string[];
+      nonGoals?: string[];
+      workspaceRoots?: string[];
+    };
+  };
+  "goal.refineContract": {
+    params: { sessionId: string };
+    result: { refined: boolean };
+  };
   "goal.clearGoal": {
     params: { sessionId: string; reason?: string };
     result: { cleared: boolean };

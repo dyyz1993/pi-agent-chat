@@ -11,6 +11,7 @@ export const CHAT_CARD_HEADER_BASE_CLASS =
 export const CHAT_COMPACT_BLOCK_CLASS = "my-0";
 
 export const CHAT_COMPACT_ROW_BUTTON_BASE_CLASS =
-  "w-full px-3 py-0.5 min-h-6 flex items-center gap-1.5 text-[11px] rounded cursor-pointer select-none";
+  "w-full px-3 py-0.5 min-h-6 flex items-center gap-1.5 text-[11px] rounded-md cursor-pointer select-none";
 
-export const CARD_CONTAINER_BASE = "rounded-none border-x-0 border-t border-b overflow-hidden";
+export const CARD_CONTAINER_BASE =
+  "rounded-none border-x-0 border-t border-b overflow-hidden dark:border-white/[0.04]";

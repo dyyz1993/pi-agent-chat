@@ -91,7 +91,7 @@ const LOCAL_SLASH_COMMANDS: PopupItem[] = [
     label: "compact",
     description: "手动压缩当前会话上下文",
     icon: "filetext",
-    accentColor: "text-amber-400",
+    accentColor: "text-status-warning",
     insertText: "/compact",
   },
   {
@@ -99,7 +99,7 @@ const LOCAL_SLASH_COMMANDS: PopupItem[] = [
     label: "compact-force",
     description: "兼容旧入口：手动触发上下文压缩",
     icon: "filetext",
-    accentColor: "text-amber-400",
+    accentColor: "text-status-warning",
     insertText: "/compact-force",
   },
 ];
@@ -156,7 +156,7 @@ export function useCommandPopup(): CommandPopupState {
         label: item.label,
         description: item.description,
         icon: "session",
-        accentColor: action === "jump" ? "text-cyan-400" : "text-blue-400",
+        accentColor: action === "jump" ? "text-semantic-tool" : "text-status-info",
         insertText: item.insertText,
         sessionId: item.sessionId,
         sessionAction: item.action,
@@ -190,7 +190,7 @@ export function useCommandPopup(): CommandPopupState {
             label: toolName,
             description: ext.path,
             icon: "tool",
-            accentColor: "text-purple-400",
+            accentColor: "text-semantic-agent",
             insertText: `@${toolName}`,
           });
         }
@@ -207,7 +207,7 @@ export function useCommandPopup(): CommandPopupState {
           label: skill.name,
           description: skill.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `@${skill.name}`,
         });
       }
@@ -234,7 +234,7 @@ export function useCommandPopup(): CommandPopupState {
             label: e.name,
             description: e.path,
             icon: e.type === "directory" ? "folder" : "file",
-            accentColor: e.type === "directory" ? "text-amber-400" : "text-blue-400",
+            accentColor: e.type === "directory" ? "text-status-warning" : "text-status-info",
             insertText: e.type === "directory" ? "" : `@${e.path}`,
             isFolder: e.type === "directory",
             folderPath: e.path,
@@ -254,7 +254,7 @@ export function useCommandPopup(): CommandPopupState {
             label: n.name,
             description: n.path,
             icon: n.type === "directory" ? "folder" : "file",
-            accentColor: n.type === "directory" ? "text-amber-400" : "text-blue-400",
+            accentColor: n.type === "directory" ? "text-status-warning" : "text-status-info",
             insertText: n.type === "directory" ? "" : `@${n.path}`,
             isFolder: n.type === "directory",
             folderPath: n.path,
@@ -289,7 +289,7 @@ export function useCommandPopup(): CommandPopupState {
           label: f.filename,
           description: f.description ?? f.type ?? undefined,
           icon: f.type === "bookmark" ? "book" : "brain",
-          accentColor: "text-teal-400",
+          accentColor: "text-semantic-memory",
           insertText: `@memory:${f.filename}`,
         });
       }
@@ -321,7 +321,7 @@ export function useCommandPopup(): CommandPopupState {
               : cmd.source === "extension"
                 ? "puzzle"
                 : "filetext",
-          accentColor: cmd.source === "skill" ? "text-cyan-400" : "text-amber-400",
+          accentColor: cmd.source === "skill" ? "text-semantic-tool" : "text-status-warning",
           insertText: `/${cmd.name}`,
         });
       }
@@ -344,7 +344,7 @@ export function useCommandPopup(): CommandPopupState {
           label: skill.name,
           description: skill.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `/${skill.name}`,
         });
       }

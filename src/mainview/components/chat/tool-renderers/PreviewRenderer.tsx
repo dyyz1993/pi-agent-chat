@@ -37,9 +37,9 @@ export const PreviewRenderer = memo(function PreviewRenderer({
         data-block-id={blockId}
         className={`border-x-0 border-t border-b overflow-hidden ${
           isRunning
-            ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
+            ? "border-status-info/25 bg-status-info/5"
             : isError
-              ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
+              ? "border-status-error/15 bg-status-error/5"
               : "border-border-secondary/30 bg-surface-dim"
         }`}
       >
@@ -55,11 +55,11 @@ export const PreviewRenderer = memo(function PreviewRenderer({
           endedAt={block.endedAt}
           badge={
             isRunning ? (
-              <span className="text-[10px] text-blue-500 dark:text-blue-400 animate-pulse shrink-0">
+              <span className="text-[10px] text-status-info animate-pulse shrink-0">
                 previewing
               </span>
             ) : isError ? (
-              <span className="text-[10px] text-red-500 dark:text-red-400 shrink-0">error</span>
+              <span className="text-[10px] text-status-error shrink-0">error</span>
             ) : undefined
           }
         />

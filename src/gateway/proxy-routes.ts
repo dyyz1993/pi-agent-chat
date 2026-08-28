@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { createLogger } from "../shared/lib/logger";
 import { getLocalProxyPreference, setLocalProxyPreference } from "../shared/lib/project-config";
 import type { ProxyRegistrar } from "./proxy-register";
+import { handleDirectProxy, parseProxyTarget } from "./proxy-direct";
 
 const log = createLogger("gateway:proxy");
 
@@ -55,10 +56,21 @@ export async function handleProxyRoute(ctx: ProxyRouteContext): Promise<boolean>
     return true;
   }
 
-  // 端口代理重定向（不需要鉴权，iframe 直接访问）
+  // 端口代理（不需要鉴权，iframe 直接访问）。
+  // 优先走外部代理服务（桌面/内网模式，307 重定向到公网隧道域名）；
+  // 未配置或注册失败时 fallback 到直接路径反代（云部署 gateway 本身公网可达）。
   if (url.pathname.startsWith("/__proxy__/")) {
+    const directTarget = parseProxyTarget(url.pathname);
+    const forwardDirect = () => {
+      if (!directTarget) {
+        res.writeHead(400, { "Content-Type": "text/plain" }).end("Invalid or restricted target");
+        return;
+      }
+      handleDirectProxy(req, res, { ...directTarget, path: directTarget.path + url.search });
+    };
+
     if (!proxyRegistrar) {
-      res.writeHead(502, { "Content-Type": "text/plain" }).end("Proxy not configured");
+      forwardDirect();
       return true;
     }
 
@@ -68,8 +80,14 @@ export async function handleProxyRoute(ctx: ProxyRouteContext): Promise<boolean>
       return true;
     }
 
-    // targetPath format: "localhost:8080" or "localhost:8080/some/path" or "192.168.0.10:3000/path"
-    const slashIdx = targetPath.indexOf("/");
+    const rest = url.pathname.slice("/__proxy__/".length);
+    if (!rest) {
+      res.writeHead(400, { "Content-Type": "text/plain" }).end("Missing target");
+      return true;
+    }
+
+    // rest format: "localhost:8080" or "localhost:8080/some/path" or "192.168.0.10:3000/path"
+    const slashIdx = rest.indexOf("/");
     const hostPort = slashIdx >= 0 ? targetPath.slice(0, slashIdx) : targetPath;
     const remainder = slashIdx >= 0 ? targetPath.slice(slashIdx) : "/";
 
@@ -89,7 +107,8 @@ export async function handleProxyRoute(ctx: ProxyRouteContext): Promise<boolean>
     try {
       const publicUrl = await proxyRegistrar.register(host, port);
       if (!publicUrl) {
-        res.writeHead(502, { "Content-Type": "text/plain" }).end("Failed to register proxy");
+        log.info("Proxy register unavailable, falling back to direct proxy", { host, port });
+        forwardDirect();
         return true;
       }
       const redirect = new URL(publicUrl);
@@ -98,8 +117,8 @@ export async function handleProxyRoute(ctx: ProxyRouteContext): Promise<boolean>
       log.info("Proxy redirect", { host, port, redirectUrl: redirect.toString() });
       res.writeHead(307, { Location: redirect.toString() }).end();
     } catch (err) {
-      log.warn("Proxy register error", { host, port, error: String(err) });
-      res.writeHead(502, { "Content-Type": "text/plain" }).end("Proxy registration failed");
+      log.warn("Proxy register error, falling back to direct proxy", { host, port, error: String(err) });
+      forwardDirect();
     }
     return true;
   }

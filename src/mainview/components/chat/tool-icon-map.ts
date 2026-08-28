@@ -69,7 +69,7 @@ const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   code: { icon: Code, color: "text-semantic-agent", label: "Code" },
   terminal: { icon: Terminal, color: "text-semantic-tool", label: "Terminal" },
   bash: { icon: Terminal, color: "text-semantic-tool", label: "Bash" },
-  image: { icon: ImageIcon, color: "text-pink-400", label: "Image" },
+  image: { icon: ImageIcon, color: "text-semantic-media", label: "Image" },
   folder: { icon: FolderOpen, color: "text-status-warning", label: "Folder" },
   git: { icon: GitBranch, color: "text-semantic-notify", label: "Git" },
   web: { icon: Globe, color: "text-status-info", label: "Web" },
@@ -96,7 +96,7 @@ const DEFAULT_ENTRY: ToolIconEntry = {
 };
 
 const PREVIEW_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
-  image: { icon: ImageIcon, color: "text-pink-400", label: "Image" },
+  image: { icon: ImageIcon, color: "text-semantic-media", label: "Image" },
   url: { icon: Globe, color: "text-status-info", label: "URL" },
   html: { icon: Code, color: "text-semantic-notify", label: "HTML" },
   pdf: { icon: FileText, color: "text-status-error", label: "PDF" },

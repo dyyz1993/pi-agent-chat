@@ -25,7 +25,7 @@ export const AudioCard = memo(function AudioCard({ details }: { details: Preview
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary bg-bg-elevated">
       <CardHeader
-        icon={<Music className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />}
+        icon={<Music className="w-3.5 h-3.5 text-status-warning shrink-0" />}
         label={details.title ?? details.source}
         meta={details.size ? formatFileSize(details.size) : undefined}
         absolutePath={renderableSource}

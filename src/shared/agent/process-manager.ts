@@ -87,7 +87,7 @@ import {
   followUpOperation,
 } from "./agent-client-lifecycle-operations";
 import { getCommandsOperation } from "./agent-client-state-operations";
-import { startAgentClientOperation } from "./agent-start-operations";
+import { startAgentClientOperation, takeWarmProcess, type WarmPoolEntry } from "./agent-start-operations";
 import { stopAgentClientOperation } from "./agent-stop-operations";
 import { buildRemoteAgentChildRuntimeEnv, buildSshCommandRuntimeEnv } from "./runtime-resource-env";
 import {
@@ -457,6 +457,7 @@ async function createRpcClient(
   sessionPath: string | undefined,
   userId?: string,
   excludeLsp = false,
+  extraEnv?: Record<string, string>,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
   const runtime = await resolveActiveRuntimeSelection(cwd);
@@ -591,6 +592,7 @@ async function createRpcClient(
   const childEnv: Record<string, string> = {
     ...applyExecutionSandboxEnv(process.env, readProjectExecutionSandbox(cwd).mode),
     NODE_OPTIONS: "--max-old-space-size=8192",
+    ...(extraEnv ?? {}),
   };
   if (excludeLsp) {
     childEnv.PI_SKIP_MCP = "1";
@@ -716,6 +718,14 @@ export class AgentProcessManager {
   private clients = new Map<string, ManagedClient>();
   /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
   private processByCwd = new Map<string, Set<ManagedClient>>();
+  /**
+   * Warm process pool: pre-spawned CLI processes awaiting a session bind.
+   * One per poolKey; consumed by start() via fast same-cwd switchSession.
+   * Refilled lazily after consumption so the next session start finds one.
+   */
+  private warmPool = new Map<string, WarmPoolEntry<ManagedClient>[]>();
+  /** Prevents duplicate concurrent prefork spawns for the same poolKey. */
+  private warmPending = new Set<string>();
   private servers = new Set<RPCServer>();
   /** Per-session start de-dupe: repeated UI/subscription starts share the same client startup. */
   private _startPromises = new Map<string, Promise<AgentStartResult>>();
@@ -785,6 +795,65 @@ export class AgentProcessManager {
   private getPoolKey(projectPath: string, userId?: string): string {
     return makeProcessPoolKey(projectPath, userId, config.sandboxEnabled);
   }
+
+  /**
+   * Pre-spawn a CLI process for projectPath into the warm pool. Called
+   * fire-and-forget when a session starts (to benefit the NEXT start) —
+   * never blocks the current start. Safe to call repeatedly: deduped per
+   * poolKey while a spawn is in flight or a warm entry already exists.
+   */
+  preforkForProject(projectPath: string, userId?: string): void {
+    if (!config.piCliPath) return;
+    if (!config.warmProcessPoolEnabled) return;
+    // Sandbox/user-pool keys have their own lifecycle; keep the warm pool
+    // only for plain project sessions.
+    if (config.sandboxEnabled) return;
+    const poolKey = this.getPoolKey(projectPath, userId);
+    if (this.warmPending.has(poolKey)) return;
+    const existing = this.warmPool.get(poolKey);
+    if (existing && existing.some((e) => e.cwd === projectPath)) return;
+
+    this.warmPending.add(poolKey);
+    void (async () => {
+      try {
+        const { client } = await createRpcClient(config.piCliPath, projectPath, "", undefined, false, {
+          PI_WARM_STANDBY: "1",
+        });
+        const managed = {
+          client,
+          info: {
+            sessionId: "",
+            projectPath,
+            sessionPath: "",
+            status: "idle",
+          },
+          unsubscribe: () => undefined,
+          _activeSessionId: "",
+          lastActiveAt: Date.now(),
+          activeBackgroundTools: new Set<string>(),
+        } as unknown as ManagedClient;
+        try {
+          managed.unsubscribe = client.onEvent(() => undefined);
+        } catch {
+          managed.unsubscribe = () => undefined;
+        }
+        const list = this.warmPool.get(poolKey) ?? [];
+        list.push({ managed, cwd: projectPath, createdAt: Date.now() });
+        this.warmPool.set(poolKey, list);
+        // TEMP DEBUG: dump warm process spawn-time stderr tail
+        const stderrTail = (client as unknown as { stderr?: string }).stderr ?? "";
+        log.info("Warm process ready", { projectPath, poolKey, stderrTail: stderrTail.slice(-600) });
+      } catch (err) {
+        log.warn("Prefork failed (warm pool disabled for this round)", {
+          projectPath,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        this.warmPending.delete(poolKey);
+      }
+    })();
+  }
+
 
   private messageReader: SessionMessageReader;
   private eventHandler!: AgentEventHandler;
@@ -1127,6 +1196,7 @@ export class AgentProcessManager {
       getPoolKey: (p, u) => this.getPoolKey(p, u),
       evictLRU: (k) => this.evictLRU(k),
       addToPool: (k, m) => this.addToPool(k, m),
+      takeWarmProcess: (k, p) => takeWarmProcess(this.warmPool, k, p),
       createRpcClient: (cliPath, cwd, sp, userId) =>
         createRpcClient(cliPath, cwd, sp, userId, options?.forceNewProcess === true),
       registerAgentChannels: (args) => registerAgentChannels(args),
@@ -1141,6 +1211,11 @@ export class AgentProcessManager {
     this._startPromises.set(sessionId, startPromise);
     try {
       const result = await startPromise;
+      // A start consumed (or lacked) a warm process — refill the pool in the
+      // background so the next session start finds one ready.
+      if (result.status === "started" && !options?.forceNewProcess) {
+        this.preforkForProject(projectPath, options?.userId);
+      }
       const persistedAgent = options?.delegateParentSessionId
         ? null
         : readPersistedSessionAgent(sessionPath);

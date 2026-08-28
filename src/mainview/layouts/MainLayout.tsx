@@ -151,7 +151,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- Mobile drawer backdrop ---- */}
         {isMobile && (sessionPanel === "visible" || statusPanel === "visible") && (
           <div
-            className="absolute inset-0 bg-bg-overlay backdrop-blur-[1px] z-10 animate-in fade-in duration-150"
+            className="absolute inset-0 bg-bg-overlay backdrop-blur-sm z-10 animate-in fade-in duration-150"
             onClick={handleChatAreaClick}
           />
         )}
@@ -161,8 +161,9 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           !sessionCollapsed &&
           (!isMobile || sessionPanel === "visible") && (
             <LeftSidebar
-              width={isMobile ? Math.min(320, Math.round(contentWidth * 0.8)) : sessionWidth}
+              width={isMobile ? Math.min(360, Math.round(contentWidth * 0.85)) : sessionWidth}
               overlay={sessionPanel === "visible"}
+              className={isMobile ? "animate-in slide-in-from-left duration-200" : undefined}
             />
           )}
 
@@ -213,9 +214,14 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && (
           <RightSidebar
             width={
-              isMobile || isTablet ? Math.min(320, Math.round(contentWidth * 0.8)) : statusWidth
+              isMobile || isTablet
+                ? Math.min(360, Math.round(contentWidth * 0.85))
+                : statusWidth
             }
             overlay={statusPanel === "visible"}
+            className={
+              isMobile ? "animate-in slide-in-from-right duration-200" : undefined
+            }
           />
         )}
       </div>

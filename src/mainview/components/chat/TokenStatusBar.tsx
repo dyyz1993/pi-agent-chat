@@ -36,8 +36,8 @@ const BREAKDOWN_META: Record<
   },
   thinking: {
     labelKey: "thinking",
-    className: "bg-pink-400",
-    barClassName: "bg-pink-400",
+    className: "bg-semantic-media",
+    barClassName: "bg-semantic-media",
   },
   memory: {
     labelKey: "memory",
@@ -71,13 +71,13 @@ const BREAKDOWN_META: Record<
   },
   tool_inputs: {
     labelKey: "toolInputs",
-    className: "bg-orange-300",
-    barClassName: "bg-orange-300",
+    className: "bg-semantic-tool/70",
+    barClassName: "bg-semantic-tool/70",
   },
   tool_outputs: {
     labelKey: "toolOutputs",
-    className: "bg-teal-300",
-    barClassName: "bg-teal-300",
+    className: "bg-semantic-memory/70",
+    barClassName: "bg-semantic-memory/70",
   },
   tools: {
     labelKey: "tools",
@@ -96,18 +96,18 @@ const BREAKDOWN_META: Record<
   },
   provider_system: {
     labelKey: "providerSystem",
-    className: "bg-violet-400",
-    barClassName: "bg-violet-400",
+    className: "bg-semantic-agent",
+    barClassName: "bg-semantic-agent",
   },
   provider_messages: {
     labelKey: "providerMessages",
-    className: "bg-cyan-300",
-    barClassName: "bg-cyan-300",
+    className: "bg-semantic-tool/70",
+    barClassName: "bg-semantic-tool/70",
   },
   provider_tools: {
     labelKey: "providerTools",
-    className: "bg-amber-300",
-    barClassName: "bg-amber-300",
+    className: "bg-status-warning/70",
+    barClassName: "bg-status-warning/70",
   },
   provider_options: {
     labelKey: "providerOptions",

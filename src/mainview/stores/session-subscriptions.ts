@@ -18,7 +18,7 @@ import { useChatNavStore } from "./use-chat-nav-store";
 import { useGoalStore } from "./use-goal-store";
 import { useStatusStore, type RemoteRuntimeState } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
-import { useIssueMonitorStore } from "./use-issue-monitor-store";
+import { useLoopStore } from "./use-loop-store";
 import { clearSessionFetchInitCache } from "./session-initial-state";
 import { clearRetrySession } from "./use-retry-store";
 import {
@@ -425,7 +425,7 @@ export interface SubscriptionMaps {
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
   goalSubscriptions: Record<string, string>;
-  issueMonitorSubscriptions: Record<string, string>;
+  loopSchedulerSubscriptions: Record<string, string>;
 }
 
 export type TodoPriority = "high" | "medium" | "low";
@@ -458,7 +458,7 @@ export function setupSubscriptions(
     memorySubscriptions,
     coordinatorSubscriptions,
     goalSubscriptions,
-    issueMonitorSubscriptions,
+    loopSchedulerSubscriptions,
   } = state;
   if (!agentSubscriptions[id]) {
     set((s) => ({
@@ -1040,41 +1040,32 @@ export function setupSubscriptions(
     dispatchMs: Math.round(performance.now() - t0),
   });
 
-  if (!issueMonitorSubscriptions[id]) {
+
+  // ── Loop Scheduler 订阅 ──
+  if (!loopSchedulerSubscriptions[id]) {
     set((s) => ({
-      issueMonitorSubscriptions: { ...s.issueMonitorSubscriptions, [id]: "__pending__" },
+      loopSchedulerSubscriptions: { ...s.loopSchedulerSubscriptions, [id]: "__pending__" },
     }));
 
     apiClient
       .subscribe(
-        "issue-monitor.event",
+        "loop-scheduler.event",
         (payload: { sessionId?: string } & Record<string, unknown>) => {
           if (payload.sessionId !== id) return;
-          useIssueMonitorStore.getState().handleEvent(id, payload);
+          useLoopStore.getState().handleEvent(id, payload);
         },
         { sessionId: id },
       )
       .then((subId) => {
         set((s) => ({
-          issueMonitorSubscriptions: { ...s.issueMonitorSubscriptions, [id]: subId },
+          loopSchedulerSubscriptions: { ...s.loopSchedulerSubscriptions, [id]: subId },
         }));
-        // 获取初始状态
-        apiClient
-          .call("issue-monitor.callChannel", {
-            sessionId: id,
-            method: "getStatus",
-          })
-          .then((result) => {
-            if (result.ok && "data" in result) {
-              useIssueMonitorStore.getState().handleEvent(id, result.data as unknown as Record<string, unknown>);
-            }
-          })
-          .catch(() => {});
+        useLoopStore.getState().load(id);
       })
       .catch(() => {
         set((s) => {
-          const { [id]: _, ...rest } = s.issueMonitorSubscriptions;
-          return { issueMonitorSubscriptions: rest };
+          const { [id]: _, ...rest } = s.loopSchedulerSubscriptions;
+          return { loopSchedulerSubscriptions: rest };
         });
       });
   }
@@ -1091,7 +1082,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
     state.notifySubscriptions,
     state.coordinatorSubscriptions,
     state.goalSubscriptions,
-    state.issueMonitorSubscriptions,
+    state.loopSchedulerSubscriptions,
   ];
 
   for (const map of singleSubMaps) {
@@ -1181,9 +1172,9 @@ export function clearSubscriptionState(
   const { [sessionId]: _h, ...restMemory } = state.memorySubscriptions;
   const { [sessionId]: _j, ...restCoord } = state.coordinatorSubscriptions;
   const { [sessionId]: _l, ...restGoal } = state.goalSubscriptions;
-  const { [sessionId]: _im, ...restIssueMonitor } = state.issueMonitorSubscriptions;
+  const { [sessionId]: _ls, ...restLoopScheduler } = state.loopSchedulerSubscriptions;
   const { [sessionId]: _i, ...restReady } = state.sessionReady;
-  useIssueMonitorStore.getState().clearSession(sessionId);
+  useLoopStore.getState().clearSession(sessionId);
   return {
     agentSubscriptions: restAgent,
     subagentSubscriptions: restSubagent,
@@ -1195,7 +1186,7 @@ export function clearSubscriptionState(
     memorySubscriptions: restMemory,
     coordinatorSubscriptions: restCoord,
     goalSubscriptions: restGoal,
-    issueMonitorSubscriptions: restIssueMonitor,
+    loopSchedulerSubscriptions: restLoopScheduler,
     sessionReady: restReady,
   };
 }

@@ -165,13 +165,13 @@ export const UIInteractionAnchor = memo(function UIInteractionAnchor({
 });
 
 const HOOK_TOOL_ICONS: Record<string, { icon: typeof Terminal; color: string }> = {
-  bash: { icon: Terminal, color: "text-orange-400" },
-  read: { icon: Eye, color: "text-blue-400" },
-  write: { icon: FileText, color: "text-green-400" },
-  edit: { icon: Pencil, color: "text-amber-400" },
-  grep: { icon: Search, color: "text-purple-400" },
-  find: { icon: FolderOpen, color: "text-cyan-400" },
-  ls: { icon: FolderOpen, color: "text-cyan-400" },
+  bash: { icon: Terminal, color: "text-semantic-tool" },
+  read: { icon: Eye, color: "text-status-info" },
+  write: { icon: FileText, color: "text-status-success" },
+  edit: { icon: Pencil, color: "text-status-warning" },
+  grep: { icon: Search, color: "text-semantic-agent" },
+  find: { icon: FolderOpen, color: "text-semantic-tool" },
+  ls: { icon: FolderOpen, color: "text-semantic-tool" },
 };
 
 export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock }) {

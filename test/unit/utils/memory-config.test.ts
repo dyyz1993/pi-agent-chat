@@ -145,7 +145,7 @@ describe("memory_irrelevant_marked - config registration", () => {
     const entry = LEGACY_ENTRY_TYPES["memory_irrelevant_marked"];
     expect(entry).toBeDefined();
     expect(entry.icon).toBe(ThumbsDown);
-    expect(entry.color).toBe("text-orange-400");
+    expect(entry.color).toBe("text-semantic-tool");
     expect(entry.label).toBe("已标记不相关");
   });
 

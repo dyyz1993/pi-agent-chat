@@ -12,7 +12,7 @@ const registry = new Map<string, CustomEntryMeta>([
     {
       icon: "SearchCheck",
       label: "Memory Match",
-      color: "text-blue-400",
+      color: "text-status-info",
       standalone: true,
       priority: "high",
     },
@@ -22,7 +22,7 @@ const registry = new Map<string, CustomEntryMeta>([
     {
       icon: "ArrowDownToLine",
       label: "Memory Inject",
-      color: "text-blue-400",
+      color: "text-status-info",
       standalone: true,
       priority: "medium",
     },
@@ -52,7 +52,7 @@ const registry = new Map<string, CustomEntryMeta>([
     {
       icon: "SearchCheck",
       label: "LSP Diagnostics",
-      color: "text-blue-400",
+      color: "text-status-info",
       standalone: true,
       priority: "medium",
     },
@@ -62,7 +62,7 @@ const registry = new Map<string, CustomEntryMeta>([
     {
       icon: "Camera",
       label: "Step Snapshot",
-      color: "text-indigo-400",
+      color: "text-accent",
       standalone: true,
       priority: "medium",
     },
@@ -72,7 +72,7 @@ const registry = new Map<string, CustomEntryMeta>([
     {
       icon: "Archive",
       label: "Compaction",
-      color: "text-purple-400",
+      color: "text-semantic-agent",
       standalone: true,
       priority: "medium",
     },

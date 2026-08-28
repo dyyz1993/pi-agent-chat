@@ -4,6 +4,7 @@ import { RPCServer, type Transport } from "@dyyz1993/rpc-core";
 import { registerAllHandlers, unregisterAllHandlers } from "../shared/register-all-handlers";
 import { createLogger } from "../shared/lib/logger";
 import { isValidToken } from "./auth";
+import { handleDirectProxyUpgrade, parseProxyTarget } from "./proxy-direct";
 
 const log = createLogger("gateway");
 
@@ -28,6 +29,19 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     }
 
     const url = new URL(req.url, "http://localhost");
+
+    // Direct proxy WebSocket forwarding (dev-server HMR etc.)
+    if (url.pathname.startsWith("/__proxy__/")) {
+      const target = parseProxyTarget(url.pathname);
+      if (!target) {
+        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+      handleDirectProxyUpgrade(req, socket, head, { ...target, path: target.path + url.search });
+      return;
+    }
+
     if (url.pathname !== "/ws") {
       socket.destroy();
       return;

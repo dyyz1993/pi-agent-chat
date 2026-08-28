@@ -12,6 +12,10 @@ export interface StartManagedClient {
   client: ChannelRegistrableClient & {
     stop(): Promise<void>;
     onEvent(handler: (event: unknown) => void): () => void;
+    /** Fast same-cwd session switch (fork RPC). Present on warm-eligible clients. */
+    switchSession?(sessionPath: string): Promise<{ cancelled: boolean }>;
+    /** Read current session identity (post-switch sessionId). */
+    getState?(): Promise<{ sessionId: string; sessionFile?: string }>;
   };
   info: AgentProcessInfo;
   unsubscribe: () => void;
@@ -20,6 +24,31 @@ export interface StartManagedClient {
   activeBackgroundTools: Set<string>;
   /** Non-empty for delegated child sessions; LRU eviction skips these. */
   delegateParentSessionId?: string;
+}
+
+/**
+ * Warm process pool: pre-spawned CLI processes waiting for a session to bind.
+ * Keyed by poolKey (projectPath[:userId]) — a warm process spawned for cwd X
+ * can serve any session under X via switchSession (fast same-cwd path).
+ */
+export interface WarmPoolEntry<TManaged = unknown> {
+  managed: TManaged;
+  /** cwd the process was spawned with — must equal projectPath to reuse. */
+  cwd: string;
+  createdAt: number;
+}
+
+export function takeWarmProcess<TManaged extends StartManagedClient>(
+  warmPool: Map<string, WarmPoolEntry[]>,
+  poolKey: string,
+  projectPath: string,
+): TManaged | undefined {
+  const list = warmPool.get(poolKey);
+  if (!list || list.length === 0) return undefined;
+  const idx = list.findIndex((e) => e.cwd === projectPath);
+  if (idx < 0) return undefined;
+  const [entry] = list.splice(idx, 1);
+  return entry.managed as TManaged;
 }
 
 interface CreateRpcClientTimings {
@@ -58,6 +87,8 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
   acquireStartLock?: (sessionId: string) => Promise<boolean>;
   releaseStartLock?: () => void;
   drainPendingDelegates?: () => void;
+  /** Warm pool lookup — when provided, pre-spawned processes are reused via fast switchSession. */
+  takeWarmProcess?: (poolKey: string, projectPath: string) => TManaged | undefined;
 }): Promise<{ agentId: string; status: "started" | "already_running" }> {
   const tStart = performance.now();
   const now = options.now ?? Date.now;
@@ -86,6 +117,61 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
       sessionId: options.sessionId,
       projectPath: options.projectPath,
     });
+
+    // Warm pool fast path: reuse a pre-spawned CLI process via the fork's
+    // fast same-cwd switchSession (~tens of ms) instead of a cold spawn.
+    if (options.takeWarmProcess) {
+      const warm = options.takeWarmProcess(poolKey, options.projectPath);
+      if (warm) {
+        try {
+          perfLog.info("[start] warm pool hit — switching session", { sessionId: options.sessionId });
+          const tSwitch = performance.now();
+          const sw = await warm.client.switchSession?.(options.sessionPath);
+          const switchMs = Math.round(performance.now() - tSwitch);
+          if (sw && !sw.cancelled) {
+            const tState = performance.now();
+            const state = await warm.client.getState?.();
+            const stateMs = Math.round(performance.now() - tState);
+            const newSessionId = state?.sessionId ?? options.sessionId;
+            perfLog.info("[start] warm switch timings", { switchMs, stateMs });
+            perfLog.info("[start] warm switch timings", { switchMs, stateMs, totalMs: Math.round(performance.now() - tStart) });
+            warm._activeSessionId = newSessionId;
+            warm.info.sessionId = newSessionId;
+            warm.info.sessionPath = options.sessionPath;
+            warm.info.projectPath = options.projectPath;
+            warm.lastActiveAt = now();
+            options.sessionPaths.set(newSessionId, options.sessionPath);
+            options.sessionProjectPaths.set(newSessionId, options.projectPath);
+            options.clients.set(newSessionId, warm);
+            options.addToPool(poolKey, warm);
+            options.registerAgentChannels({
+              client: warm.client,
+              getSessionId: () => warm._activeSessionId,
+              handleCoordinatorCall: options.handleCoordinatorCall,
+              handleChannelData: (activeSessionId, event) => {
+                options.handleEvent(activeSessionId, event as AgentEvent);
+              },
+            });
+            log.info("Warm process adopted for session", {
+              sessionId: options.sessionId,
+              newSessionId,
+              totalMs: Math.round(performance.now() - tStart),
+            });
+            options.broadcastSessionStatus(newSessionId, "idle");
+            return { agentId: newSessionId, status: "started" };
+          }
+          // cancelled or no switchSession support — fall through to cold spawn,
+          // but the warm process is now orphaned; stop it.
+          warm.client.stop().catch(() => {});
+        } catch (err) {
+          log.warn("Warm process switch failed, falling back to cold spawn", {
+            sessionId: options.sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+          warm.client.stop().catch(() => {});
+        }
+      }
+    }
 
     options.evictLRU(poolKey);
 

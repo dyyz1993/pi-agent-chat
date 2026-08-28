@@ -7,7 +7,7 @@ import { Button, AnchoredPopover } from "../primitives";
 
 const THEME_DOT_COLORS: Record<Theme, string> = {
   light: "bg-white border border-border-secondary",
-  dark: "bg-[#101722] border border-border-secondary",
+  dark: "bg-bg-elevated border border-border-secondary",
 };
 
 const menuIconSlot = "flex h-4 w-4 shrink-0 items-center justify-center";

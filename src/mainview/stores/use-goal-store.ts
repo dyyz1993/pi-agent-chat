@@ -56,6 +56,23 @@ interface GoalStoreState {
     reason?: string,
   ) => Promise<{ rejected: boolean; error?: string }>;
   rejectContract: (sessionId: string, reason?: string) => Promise<{ rejected: boolean }>;
+  getPendingContract: (
+    sessionId: string,
+  ) => Promise<{
+    hasPending: boolean;
+    status?: string;
+    goalId?: string;
+    generation?: number;
+    objective?: string;
+    criteria?: Array<Record<string, unknown>>;
+    plan?: Array<{ id: string; title: string; status: string; criterionIds?: string[] }>;
+    verificationChecks?: Array<Record<string, unknown>>;
+    authorities?: Array<Record<string, unknown>>;
+    constraints?: string[];
+    nonGoals?: string[];
+    workspaceRoots?: string[];
+  }>;
+  refineContract: (sessionId: string) => Promise<{ refined: boolean }>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   enable: (sessionId: string) => Promise<void>;
@@ -269,6 +286,43 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     } catch (error) {
       log.warn("Failed to reject goal contract", { sessionId, error });
       return { rejected: false };
+    }
+  },
+
+  getPendingContract: async (sessionId) => {
+    try {
+      const result = (await apiClient.call("goal.getPendingContract", {
+        sessionId,
+      })) as {
+        hasPending: boolean;
+        status?: string;
+        goalId?: string;
+        generation?: number;
+        objective?: string;
+        criteria?: Array<Record<string, unknown>>;
+        plan?: Array<{ id: string; title: string; status: string; criterionIds?: string[] }>;
+        verificationChecks?: Array<Record<string, unknown>>;
+        authorities?: Array<Record<string, unknown>>;
+        constraints?: string[];
+        nonGoals?: string[];
+        workspaceRoots?: string[];
+      };
+      return result;
+    } catch (error) {
+      log.warn("Failed to get pending contract", { sessionId, error });
+      return { hasPending: false };
+    }
+  },
+
+  refineContract: async (sessionId) => {
+    try {
+      const result = (await apiClient.call("goal.refineContract", { sessionId })) as {
+        refined: boolean;
+      };
+      return result;
+    } catch (error) {
+      log.warn("Failed to refine goal contract", { sessionId, error });
+      return { refined: false };
     }
   },
 

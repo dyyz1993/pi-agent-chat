@@ -265,9 +265,9 @@ function renderBadge(
         <span
           className={`shrink-0 text-[10px] ${
             isRunning
-              ? "text-blue-500 dark:text-blue-400 animate-pulse"
+              ? "text-status-info animate-pulse"
               : sessionStatus === "streaming"
-                ? "text-amber-500 dark:text-amber-400"
+                ? "text-status-warning"
                 : "text-text-tertiary"
           }`}
         >
@@ -437,9 +437,9 @@ export const ForkCard = memo(function ForkCard({
       data-block-id={blockId}
       className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
         isRunning
-          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
+          ? "border-status-info/25 bg-status-info/5"
           : isError
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
+            ? "border-status-error/15 bg-status-error/5"
             : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
@@ -534,7 +534,7 @@ export const DelegateSendCard = memo(function DelegateSendCard({
       {!collapsed && !isRunning && message && (
         <div className="px-3 pb-2 border-t border-border-secondary/20">
           <div className="text-[10px] text-text-tertiary mb-0.5 select-none">Message</div>
-          <span className="text-[11px] text-blue-600/70 dark:text-blue-400/70 italic block">
+          <span className="text-[11px] text-status-info/70 italic block">
             {message.slice(0, 500)}
           </span>
         </div>

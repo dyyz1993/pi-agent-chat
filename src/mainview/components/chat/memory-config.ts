@@ -21,37 +21,37 @@ export interface MemoryTypeConfig {
 export const ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
   memory_prefetch: {
     icon: SearchCheck,
-    color: "text-blue-400",
+    color: "text-status-info",
     label: "搜索记忆",
   },
   memory_prefetch_result: {
     icon: SearchCheck,
-    color: "text-blue-400",
+    color: "text-status-info",
     label: "记忆搜索",
   },
   memory_inject: {
     icon: ArrowDownToLine,
-    color: "text-blue-400",
+    color: "text-status-info",
     label: "注入 Memory",
   },
   memory_extract: {
     icon: Save,
-    color: "text-green-400",
+    color: "text-status-success",
     label: "保存记忆",
   },
   memory_extract_result: {
     icon: Save,
-    color: "text-green-400",
+    color: "text-status-success",
     label: "提取结果",
   },
   memory_dream: {
     icon: Sparkles,
-    color: "text-purple-400",
+    color: "text-semantic-agent",
     label: "整理记忆",
   },
   memory_dream_result: {
     icon: Sparkles,
-    color: "text-purple-400",
+    color: "text-semantic-agent",
     label: "整合结果",
   },
 };
@@ -59,17 +59,17 @@ export const ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
 export const LEGACY_ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
   memory_created: {
     icon: CheckCircle,
-    color: "text-teal-400",
+    color: "text-semantic-memory",
     label: "已创建收藏",
   },
   memory_failed: {
     icon: XCircle,
-    color: "text-red-400",
+    color: "text-status-error",
     label: "收藏失败",
   },
   memory_irrelevant_marked: {
     icon: ThumbsDown,
-    color: "text-orange-400",
+    color: "text-semantic-tool",
     label: "已标记不相关",
   },
 };
@@ -77,18 +77,18 @@ export const LEGACY_ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
 export const CHANNEL_ONLY_TYPES: Record<string, MemoryTypeConfig> = {
   bookmark_creating: {
     icon: Loader,
-    color: "text-teal-400",
+    color: "text-semantic-memory",
     label: "正在创建收藏...",
     pulse: true,
   },
   memory_updated: {
     icon: Bookmark,
-    color: "text-yellow-400",
+    color: "text-status-warning",
     label: "收藏完成",
   },
   memory_update_failed: {
     icon: Bookmark,
-    color: "text-red-400",
+    color: "text-status-error",
     label: "收藏失败",
   },
 };

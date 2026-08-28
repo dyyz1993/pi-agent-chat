@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   Search,
   ChevronRight,
@@ -15,6 +15,9 @@ import {
   Pin,
   PinOff,
   RefreshCw,
+  Calendar,
+  Clock,
+  History,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -324,6 +327,69 @@ export function getVisibleDelegateChildren(
   );
 }
 
+type TimeGroupKey = "today" | "yesterday" | "thisWeek" | "earlier";
+
+const TIME_GROUP_ORDER: TimeGroupKey[] = ["today", "yesterday", "thisWeek", "earlier"];
+
+const TIME_GROUP_ICON: Record<TimeGroupKey, React.ReactNode> = {
+  today: <Calendar className="w-3 h-3" />,
+  yesterday: <Clock className="w-3 h-3" />,
+  thisWeek: <Calendar className="w-3 h-3" />,
+  earlier: <History className="w-3 h-3" />,
+};
+
+/**
+ * Group sessions into time buckets based on `updatedAt`.
+ * - today: updatedAt is today
+ * - yesterday: updatedAt is yesterday
+ * - thisWeek: updatedAt within last 7 days (excluding today/yesterday)
+ * - earlier: everything else
+ *
+ * Pinned sessions (session.pinned === true) are separated into a "pinned" bucket
+ * and always shown first regardless of time.
+ */
+function groupSessionsByTime(sessions: SessionMeta[]): {
+  pinned: SessionMeta[];
+  groups: { key: TimeGroupKey; sessions: SessionMeta[] }[];
+} {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+  const weekStart = todayStart - 7 * 24 * 60 * 60 * 1000;
+
+  const pinned: SessionMeta[] = [];
+  const buckets: Record<TimeGroupKey, SessionMeta[]> = {
+    today: [],
+    yesterday: [],
+    thisWeek: [],
+    earlier: [],
+  };
+
+  for (const sess of sessions) {
+    if (sess.pinned) {
+      pinned.push(sess);
+      continue;
+    }
+    const updated = sess.updatedAt;
+    if (updated >= todayStart) {
+      buckets.today.push(sess);
+    } else if (updated >= yesterdayStart) {
+      buckets.yesterday.push(sess);
+    } else if (updated >= weekStart) {
+      buckets.thisWeek.push(sess);
+    } else {
+      buckets.earlier.push(sess);
+    }
+  }
+
+  const groups = TIME_GROUP_ORDER.map((key) => ({
+    key,
+    sessions: buckets[key],
+  })).filter((g) => g.sessions.length > 0);
+
+  return { pinned, groups };
+}
+
 interface SessionSidebarProps {
   hideOuterHeader?: boolean;
 }
@@ -549,6 +615,8 @@ function SessionList({
     return next;
   }, [rootSessions, subsessionsByParent, subagentStatusMap, sessionStatusMap]);
 
+  const timeGrouped = useMemo(() => groupSessionsByTime(rootSessions), [rootSessions]);
+
   const hasVisibleItems = rootSessions.length > 0 || standaloneSubagents.length > 0;
 
   useEffect(() => {
@@ -576,18 +644,44 @@ function SessionList({
     );
   }
 
+  const timeGroupLabelMap: Record<TimeGroupKey, string> = {
+    today: t("sidebar:today"),
+    yesterday: t("sidebar:yesterday"),
+    thisWeek: t("sidebar:thisWeek"),
+    earlier: t("sidebar:earlier"),
+  };
+
+  const renderSessionItem = (sess: SessionMeta) => (
+    <SessionItem
+      key={sess.sessionId}
+      session={sess}
+      isActive={sess.sessionId === activeSessionId && !activeSubId}
+      children={childMap[sess.sessionPath]}
+      isExpanded={expandedIds.has(sess.sessionId)}
+      onToggleExpand={() => onToggleExpand(sess.sessionId)}
+      badgeStatus={rootBadgeStatusBySession[sess.sessionId] ?? "idle"}
+    />
+  );
+
   return (
     <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 space-y-1">
-      {rootSessions.map((sess) => (
-        <SessionItem
-          key={sess.sessionId}
-          session={sess}
-          isActive={sess.sessionId === activeSessionId && !activeSubId}
-          children={childMap[sess.sessionPath]}
-          isExpanded={expandedIds.has(sess.sessionId)}
-          onToggleExpand={() => onToggleExpand(sess.sessionId)}
-          badgeStatus={rootBadgeStatusBySession[sess.sessionId] ?? "idle"}
-        />
+      {timeGrouped.pinned.length > 0 && (
+        <>
+          <div className="flex items-center gap-1 text-[10px] font-medium uppercase text-text-tertiary/60 px-3 py-1.5 sticky top-0 bg-bg-secondary/95 backdrop-blur-sm z-10">
+            <Pin className="w-3 h-3" />
+            {t("sidebar:pinned")}
+          </div>
+          {timeGrouped.pinned.map(renderSessionItem)}
+        </>
+      )}
+      {timeGrouped.groups.map((group) => (
+        <React.Fragment key={group.key}>
+          <div className="flex items-center gap-1 text-[10px] font-medium uppercase text-text-tertiary/60 px-3 py-1.5 sticky top-0 bg-bg-secondary/95 backdrop-blur-sm z-10">
+            {TIME_GROUP_ICON[group.key]}
+            {timeGroupLabelMap[group.key]}
+          </div>
+          {group.sessions.map(renderSessionItem)}
+        </React.Fragment>
       ))}
       {standaloneSubagents.map(({ sub, parentSessionId }) => (
         <SubagentItem key={sub.sessionId} sub={sub} parentSessionId={parentSessionId} />

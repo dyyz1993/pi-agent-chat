@@ -26,7 +26,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
     return (
       <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
         <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30">
-          <FileText className="w-3.5 h-3.5 text-red-500 dark:text-red-400 shrink-0" />
+          <FileText className="w-3.5 h-3.5 text-status-error shrink-0" />
           <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
             {details.title ?? details.source}
           </span>
@@ -67,7 +67,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
   if (fullscreen) {
     return (
       <IframeFullscreenOverlay
-        icon={<FileText className="w-3.5 h-3.5 text-red-500 dark:text-red-400 shrink-0" />}
+        icon={<FileText className="w-3.5 h-3.5 text-status-error shrink-0" />}
         title={details.title ?? details.source}
         src={previewSource.src}
         onClose={() => setFullscreen(false)}
@@ -81,7 +81,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30">
-        <FileText className="w-3.5 h-3.5 text-red-500 dark:text-red-400 shrink-0" />
+        <FileText className="w-3.5 h-3.5 text-status-error shrink-0" />
         <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
           {details.title ?? details.source}
         </span>
