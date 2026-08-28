@@ -218,36 +218,50 @@ class APIClientImpl {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
-      const env = this.detectEnvironment();
+      try {
+        const env = this.detectEnvironment();
 
-      if (env === "electrobun") {
-        this.initSyncForDesktop();
-      } else {
-        this._transport = "websocket";
-        const wsUrl = this.getWebSocketUrl();
-        this.wsTransport = new WebSocketTransport({ url: wsUrl, reconnect: false });
-        const WS_CONNECT_TIMEOUT_MS = 5_000;
-        await Promise.race([
-          this.wsTransport.connect(),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("WebSocket connect timed out (5s)")),
-              WS_CONNECT_TIMEOUT_MS,
+        if (env === "electrobun") {
+          this.initSyncForDesktop();
+        } else {
+          this._transport = "websocket";
+          const wsUrl = this.getWebSocketUrl();
+          this.wsTransport = new WebSocketTransport({ url: wsUrl, reconnect: false });
+          const WS_CONNECT_TIMEOUT_MS = 5_000;
+          await Promise.race([
+            this.wsTransport.connect(),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error("WebSocket connect timed out (5s)")),
+                WS_CONNECT_TIMEOUT_MS,
+              ),
             ),
-          ),
-        ]);
-        this.setRpcClients(this.wsTransport);
-        this._reconnectDetected = false;
-        this._reconnectAttempts = 0;
-        this.setupReconnectDetection();
+          ]);
+          this.setRpcClients(this.wsTransport);
+          this._reconnectDetected = false;
+          this._reconnectAttempts = 0;
+          this.setupReconnectDetection();
 
-        const wsUrlObj = new URL(wsUrl);
-        const httpProto = wsUrlObj.protocol === "wss:" ? "https:" : "http:";
-        this._baseUrl = `${httpProto}//${wsUrlObj.host}`;
+          const wsUrlObj = new URL(wsUrl);
+          const httpProto = wsUrlObj.protocol === "wss:" ? "https:" : "http:";
+          this._baseUrl = `${httpProto}//${wsUrlObj.host}`;
 
-        // 启动时读取持久化代理偏好，并确认服务端代理配置真实可用。
-        const defaultProxyPort = wsUrlObj.protocol === "wss:" ? 443 : 80;
-        import("./proxy").then(({ tryEnable }) => tryEnable(wsUrlObj.host, defaultProxyPort));
+          // 启动时读取持久化代理偏好，并确认服务端代理配置真实可用。
+          const defaultProxyPort = wsUrlObj.protocol === "wss:" ? 443 : 80;
+          import("./proxy").then(({ tryEnable }) => tryEnable(wsUrlObj.host, defaultProxyPort));
+        }
+      } catch (e) {
+        // 连接失败后必须清掉缓存的 initPromise 并废弃半死的 transport，
+        // 否则后续所有 initialize() 都会立刻返回同一个 rejection，
+        // 重试逻辑形同虚设，登录重试永远失败只能刷新页面。
+        this.initPromise = null;
+        try {
+          this.wsTransport?.close();
+        } catch {
+          /* transport already dead */
+        }
+        this.wsTransport = null;
+        throw e;
       }
     })();
 
