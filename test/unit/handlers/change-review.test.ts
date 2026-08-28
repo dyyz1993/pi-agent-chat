@@ -111,7 +111,7 @@ describe("change-review handler", () => {
         const result = (await handler({
           sessionId: "test-session",
           sessionPath: "/some/path.jsonl",
-        })) as Array<{ path: string; oldContent: string | null; newContent: string | null; unifiedDiff?: string }>;
+        })) as { items: Array<{ path: string; oldContent: string | null; newContent: string | null; unifiedDiff?: string }>; totalCount: number; hasMore: boolean };
 
         expect(callChannel).toHaveBeenCalledWith(
           "test-session",
@@ -119,13 +119,12 @@ describe("change-review handler", () => {
           "review.pending",
           { sessionId: "test-session" },
         );
-        expect(result).toHaveLength(2);
-        expect(result[0].path).toBe("src/a.ts");
-        expect(result[0].oldContent).toBe("old code");
-        expect(result[0].newContent).toBe("new code");
-        expect(result[0].unifiedDiff).toBeTruthy();
-        expect(result[1].path).toBe("src/b.ts");
-        expect(result[1].fileStatus).toBe("added");
+        expect(result.items).toHaveLength(2);
+        expect(result.totalCount).toBe(2);
+        expect(result.hasMore).toBe(false);
+        expect(result.items[0].path).toBe("src/a.ts");
+        expect(result.items[1].path).toBe("src/b.ts");
+        expect(result.items[1].fileStatus).toBe("added");
       });
 
       it("should fall back to JSONL when channel call throws", async () => {
@@ -148,11 +147,13 @@ describe("change-review handler", () => {
         const result = (await handler({
           sessionId: "test-session",
           sessionPath: jsonlPath,
-        })) as Array<{ path: string }>;
+        })) as { items: Array<{ path: string }>; totalCount: number; hasMore: boolean };
 
         expect(callChannel).toHaveBeenCalled();
-        expect(result).toHaveLength(1);
-        expect(result[0].path).toBe("src/fallback.ts");
+        expect(result.items).toHaveLength(1);
+        expect(result.totalCount).toBe(1);
+        expect(result.hasMore).toBe(false);
+        expect(result.items[0].path).toBe("src/fallback.ts");
       });
     });
 
@@ -170,12 +171,14 @@ describe("change-review handler", () => {
         const result = (await handler({
           sessionId: "test-session",
           sessionPath: jsonlPath,
-        })) as Array<{ path: string; fileStatus: string; status: string }>;
+        })) as { items: Array<{ path: string; fileStatus: string; status: string }>; totalCount: number; hasMore: boolean };
 
-        expect(result).toHaveLength(1);
-        expect(result[0].path).toBe("src/a.ts");
-        expect(result[0].fileStatus).toBe("modified");
-        expect(result[0].status).toBe("pending");
+        expect(result.items).toHaveLength(1);
+        expect(result.totalCount).toBe(1);
+        expect(result.hasMore).toBe(false);
+        expect(result.items[0].path).toBe("src/a.ts");
+        expect(result.items[0].fileStatus).toBe("modified");
+        expect(result.items[0].status).toBe("pending");
       });
 
       it("should exclude approved files", async () => {
@@ -194,7 +197,7 @@ describe("change-review handler", () => {
           sessionPath: jsonlPath,
         });
 
-        expect(result).toEqual([]);
+        expect(result.items).toEqual([]);
       });
 
       it("should exclude rejected files", async () => {
@@ -213,7 +216,7 @@ describe("change-review handler", () => {
           sessionPath: jsonlPath,
         });
 
-        expect(result).toEqual([]);
+        expect(result.items).toEqual([]);
       });
 
       it("should return multiple pending files, excluding approved ones", async () => {
@@ -234,14 +237,16 @@ describe("change-review handler", () => {
         const result = (await handler({
           sessionId: "test-session",
           sessionPath: jsonlPath,
-        })) as Array<{ path: string; status: string }>;
+        })) as { items: Array<{ path: string; status: string }>; totalCount: number; hasMore: boolean };
 
-        expect(result).toHaveLength(2);
-        const paths = result.map((r) => r.path);
+        expect(result.items).toHaveLength(2);
+        expect(result.totalCount).toBe(2);
+        expect(result.hasMore).toBe(false);
+        const paths = result.items.map((r) => r.path);
         expect(paths).toContain("src/a.ts");
         expect(paths).toContain("src/c.ts");
         expect(paths).not.toContain("src/b.ts");
-        expect(result.every((r) => r.status === "pending")).toBe(true);
+        expect(result.items.every((r) => r.status === "pending")).toBe(true);
       });
 
       it("should apply net-zero rule: skip added-then-deleted without approval", async () => {
@@ -260,7 +265,7 @@ describe("change-review handler", () => {
           sessionPath: jsonlPath,
         });
 
-        expect(result).toEqual([]);
+        expect(result.items).toEqual([]);
       });
 
       it("should NOT apply net-zero when file was previously approved", async () => {
@@ -283,12 +288,14 @@ describe("change-review handler", () => {
         const result = (await handler({
           sessionId: "test-session",
           sessionPath: jsonlPath,
-        })) as Array<{ path: string; fileStatus: string; status: string }>;
+        })) as { items: Array<{ path: string; fileStatus: string; status: string }>; totalCount: number; hasMore: boolean };
 
-        expect(result).toHaveLength(1);
-        expect(result[0].path).toBe("src/a.ts");
-        expect(result[0].fileStatus).toBe("deleted");
-        expect(result[0].status).toBe("pending");
+        expect(result.items).toHaveLength(1);
+        expect(result.totalCount).toBe(1);
+        expect(result.hasMore).toBe(false);
+        expect(result.items[0].path).toBe("src/a.ts");
+        expect(result.items[0].fileStatus).toBe("deleted");
+        expect(result.items[0].status).toBe("pending");
       });
 
       it("should return empty array when sessionPath is not provided", async () => {
@@ -299,7 +306,7 @@ describe("change-review handler", () => {
           sessionId: "test-session",
         });
 
-        expect(result).toEqual([]);
+        expect(result.items).toEqual([]);
       });
 
       it("should return empty array when JSONL file does not exist", async () => {
@@ -311,7 +318,7 @@ describe("change-review handler", () => {
           sessionPath: "/no/such/path/session.jsonl",
         });
 
-        expect(result).toEqual([]);
+        expect(result.items).toEqual([]);
       });
     });
   });
@@ -337,7 +344,7 @@ describe("change-review handler", () => {
       const result = (await handler({
         sessionId: "test-session",
         status: "approved",
-      })) as Array<{ path: string; status: string; snapshotEntryId?: string }>;
+      })) as { items: Array<{ path: string; status: string; snapshotEntryId?: string }>; totalCount: number; hasMore: boolean };
 
       expect(callChannel).toHaveBeenCalledWith(
         "test-session",
@@ -345,8 +352,10 @@ describe("change-review handler", () => {
         "review.approvals",
         { status: "approved" },
       );
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject({
+      expect(result.items).toHaveLength(1);
+        expect(result.totalCount).toBe(1);
+        expect(result.hasMore).toBe(false);
+      expect(result.items[0]).toMatchObject({
         path: "src/a.ts",
         status: "approved",
         snapshotEntryId: "snap-1",
@@ -380,10 +389,12 @@ describe("change-review handler", () => {
       const result = (await handler({
         sessionId: "test-session",
         sessionPath: jsonlPath,
-      })) as Array<{ path: string; status: string; snapshotEntryId?: string; snapshotTreeHash?: string }>;
+      })) as { items: Array<{ path: string; status: string; snapshotEntryId?: string; snapshotTreeHash?: string }>; totalCount: number; hasMore: boolean };
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject({
+      expect(result.items).toHaveLength(1);
+        expect(result.totalCount).toBe(1);
+        expect(result.hasMore).toBe(false);
+      expect(result.items[0]).toMatchObject({
         path: "src/a.ts",
         status: "approved",
         snapshotEntryId: "snap-2",
@@ -408,10 +419,12 @@ describe("change-review handler", () => {
         sessionId: "test-session",
         sessionPath: jsonlPath,
         status: "approved",
-      })) as Array<{ path: string; status: string }>;
+      })) as { items: Array<{ path: string; status: string }>; totalCount: number; hasMore: boolean };
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject({ path: "src/a.ts", status: "approved" });
+      expect(result.items).toHaveLength(1);
+        expect(result.totalCount).toBe(1);
+        expect(result.hasMore).toBe(false);
+      expect(result.items[0]).toMatchObject({ path: "src/a.ts", status: "approved" });
     });
   });
 });
