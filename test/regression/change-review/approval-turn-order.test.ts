@@ -103,7 +103,7 @@ describe("change-review approval-turn ordering regression (#162)", () => {
 
     const handler = server.handlers.get("change-review.pending")!;
     const result = await handler({ sessionId: "s", sessionPath: jsonlPath });
-    expect(result).toEqual([]);
+    expect(result.items).toEqual([]);
   });
 
   /**
@@ -131,7 +131,7 @@ describe("change-review approval-turn ordering regression (#162)", () => {
 
     const handler = server.handlers.get("change-review.pending")!;
     const result = await handler({ sessionId: "s", sessionPath: jsonlPath });
-    expect(result).toEqual([]);
+    expect(result.items).toEqual([]);
   });
 
   /**
@@ -170,11 +170,11 @@ describe("change-review approval-turn ordering regression (#162)", () => {
     const result = (await handler({
       sessionId: "s",
       sessionPath: jsonlPath,
-    })) as Array<{ path: string; turnIndex: number; status: string }>;
-    expect(result).toHaveLength(1);
-    expect(result[0].path).toBe("src/a.ts");
-    expect(result[0].turnIndex).toBe(5);
-    expect(result[0].status).toBe("pending");
+    })) as { items: Array<{ path: string; turnIndex: number; status: string }>; totalCount: number; hasMore: boolean };
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].path).toBe("src/a.ts");
+    expect(result.items[0].turnIndex).toBe(5);
+    expect(result.items[0].status).toBe("pending");
   });
 
   /**
@@ -196,7 +196,7 @@ describe("change-review approval-turn ordering regression (#162)", () => {
 
     const handler = server.handlers.get("change-review.pending")!;
     const result = await handler({ sessionId: "s", sessionPath: jsonlPath });
-    expect(result).toEqual([]);
+    expect(result.items).toEqual([]);
   });
 
   /**
@@ -232,9 +232,9 @@ describe("change-review approval-turn ordering regression (#162)", () => {
     const result = (await handler({
       sessionId: "s",
       sessionPath: jsonlPath,
-    })) as Array<{ path: string; turnIndex: number }>;
-    expect(result).toHaveLength(1);
-    expect(result[0].path).toBe("src/b.ts");
-    expect(result[0].turnIndex).toBe(2);
+    })) as { items: Array<{ path: string; turnIndex: number }>; totalCount: number; hasMore: boolean };
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].path).toBe("src/b.ts");
+    expect(result.items[0].turnIndex).toBe(2);
   });
 });
