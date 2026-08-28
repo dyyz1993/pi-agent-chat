@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turn 折叠原型 · pi-agent-chat</title>
+<style>
+  /* ===== pi-agent-chat 设计 token（复制自 src/mainview/index.css）===== */
+  :root {
+    --color-bg-primary: #edf1f6;
+    --color-bg-secondary: #f8fafc;
+    --color-bg-tertiary: #e7edf4;
+    --color-bg-elevated: #ffffff;
+    --color-bg-overlay: rgba(12, 18, 28, 0.48);
+    --color-text-primary: #17202e;
+    --color-text-secondary: #4f5f72;
+    --color-text-tertiary: #7d8a9c;
+    --color-border-primary: #dce4ee;
+    --color-border-secondary: #c7d2df;
+    --color-border-focus: #746cff;
+    --color-accent: #746cff;
+    --color-accent-hover: #6358e0;
+    --color-accent-muted: rgba(116, 108, 255, 0.12);
+    --color-accent-text: #5b47d4;
+    --color-success: #16845f;
+    --color-warning: #b36b00;
+    --color-error: #cf3654;
+    --color-info: #246df3;
+    --color-status-success: 22 132 95;
+    --color-status-error: 207 54 84;
+    --color-status-info: 36 109 243;
+    --color-semantic-agent: 127 85 204;
+    --color-semantic-tool: 0 128 149;
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.625rem;
+    --radius-full: 9999px;
+    --shadow-sm: 0 1px 2px rgba(12, 18, 28, 0.08);
+    --shadow-md: 0 4px 6px -1px rgba(12, 18, 28, 0.1), 0 2px 4px -2px rgba(12, 18, 28, 0.06);
+    --diff-bg: #f7fafc;
+    --diff-color: #17202e;
+    --diff-added-bg: #e5f6ec;
+    --diff-removed-bg: #fde8ec;
+    --diff-gutter-bg: #eef2f8;
+    --diff-gutter-color: #7d8a9c;
+    --surface-code: #f1f5fa;
+  }
+  html[data-theme="dark"] {
+    --color-bg-primary: #0b111a;
+    --color-bg-secondary: #111827;
+    --color-bg-tertiary: #142033;
+    --color-bg-elevated: #121b28;
+    --color-bg-overlay: rgba(0, 0, 0, 0.6);
+    --color-text-primary: #f2f6fb;
+    --color-text-secondary: #c1cad6;
+    --color-text-tertiary: #8a96a8;
+    --color-border-primary: #334155;
+    --color-border-secondary: #475569;
+    --color-accent: #746cff;
+    --color-accent-hover: #8d88ff;
+    --color-accent-muted: rgba(116, 108, 255, 0.18);
+    --color-accent-text: #a8b0ff;
+    --color-success: #46dd89;
+    --color-warning: #eab308;
+    --color-error: #f87171;
+    --color-info: #2db6e8;
+    --color-status-success: 70 221 137;
+    --color-status-error: 248 113 113;
+    --color-status-info: 45 182 232;
+    --color-semantic-agent: 174 122 255;
+    --color-semantic-tool: 45 212 232;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --diff-bg: #111b2a;
+    --diff-color: #d6deea;
+    --diff-added-bg: #102719;
+    --diff-removed-bg: #2f151e;
+    --diff-gutter-bg: #182538;
+    --diff-gutter-color: #94a3b8;
+    --surface-code: #0e1724;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 13.5px;
+    line-height: 1.6;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    transition: background 0.2s;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  /* ===== 顶部说明栏 ===== */
+  .proto-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    background: var(--color-bg-elevated);
+    border-bottom: 1px solid var(--color-border-primary);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .proto-header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  .proto-header .sub { color: var(--color-text-tertiary); font-size: 12px; }
+  .proto-header .spacer { flex: 1; }
+  .proto-btn {
+    border: 1px solid var(--color-border-secondary);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .proto-btn:hover { border-color: var(--color-border-focus); color: var(--color-accent-text); }
+  .proto-btn.active { background: var(--color-accent-muted); color: var(--color-accent-text); border-color: var(--color-accent); }
+
+  /* ===== 整体布局：消息列 + 轮次导航轨 ===== */
+  .app-body { display: flex; height: calc(100vh - 45px); }
+  .chat-scroll { flex: 1; overflow-y: auto; scrollbar-gutter: stable; }
+  .chat-column { max-width: 780px; margin: 0 auto; padding: 24px 20px 180px; }
+
+  .turn { margin-bottom: 28px; scroll-margin-top: 16px; }
+
+  /* ===== 用户消息（气泡）===== */
+  .user-msg {
+    display: flex; justify-content: flex-end; margin-bottom: 12px;
+  }
+  .user-bubble {
+    max-width: min(78%, 640px);
+    background: var(--color-accent-muted);
+    border: 1px solid rgba(116 108 255 / 0.35);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-xl);
+    padding: 8px 14px;
+    position: relative;
+  }
+  /* 长消息渐隐折叠（新模式 #5） */
+  .user-bubble.clamped .bubble-text {
+    max-height: 96px; overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  }
+  .bubble-toggle {
+    position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
+    font-size: 11px; color: var(--color-accent-text);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: var(--radius-full);
+    padding: 0 10px; cursor: pointer;
+  }
+
+  /* ===== 过程详情折叠组（核心新模式 #1）===== */
+  .process-group { margin: 4px 0 12px; }
+  .process-summary {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-full);
+    padding: 3px 12px 3px 8px;
+    color: var(--color-text-tertiary);
+    font-size: 12px; cursor: pointer; user-select: none;
+    transition: all 0.15s;
+  }
+  .process-summary:hover { border-color: var(--color-border-focus); color: var(--color-text-secondary); }
+  .process-summary .chev { transition: transform 0.15s; font-size: 10px; }
+  .process-group.open .process-summary .chev { transform: rotate(90deg); }
+  .process-summary .dot { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--color-semantic-tool)); }
+  .process-detail {
+    display: none;
+    border-left: 2px solid var(--color-border-primary);
+    margin: 8px 0 4px 10px; padding-left: 14px;
+  }
+  .process-group.open .process-detail { display: block; }
+
+  /* 思考块（可折叠 + 懒加载提示，新模式 #4）*/
+  .thinking-block { margin: 6px 0; }
+  .thinking-head {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: rgb(var(--color-semantic-agent));
+    cursor: pointer; user-select: none;
+  }
+  .thinking-body {
+    display: none; margin-top: 6px;
+    font-size: 12.5px; color: var(--color-text-secondary);
+    background: rgb(var(--color-semantic-agent) / 0.06);
+    border: 1px solid rgb(var(--color-semantic-agent) / 0.2);
+    border-radius: var(--radius-lg);
+    padding: 10px 12px;
+    max-height: 180px; overflow-y: auto;
+    font-style: italic;
+  }
+  .thinking-block.open .thinking-body { display: block; }
+  .thinking-head .chev { transition: transform 0.15s; font-size: 10px; }
+  .thinking-block.open .thinking-head .chev { transform: rotate(90deg); }
+
+  /* 工具调用卡 */
+  .tool-card {
+    margin: 6px 0;
+    border: 1px solid rgb(var(--color-semantic-tool) / 0.4);
+    background: var(--color-bg-elevated);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .tool-card.error { border-color: rgb(var(--color-status-error) / 0.5); }
+  .tool-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; cursor: pointer; user-select: none;
+    font-size: 12px;
+  }
+  .tool-head:hover { background: var(--color-bg-secondary); }
+  .tool-name {
+    color: rgb(var(--color-semantic-tool));
+    font-weight: 600;
+  }
+  .tool-card.error .tool-name { color: rgb(var(--color-status-error)); }
+  .tool-preview {
+    color: var(--color-text-tertiary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1;
+  }
+  .tool-dur { color: var(--color-text-tertiary); font-size: 11px; white-space: nowrap; }
+  .tool-head .chev { transition: transform 0.15s; font-size: 10px; color: var(--color-text-tertiary); }
+  .tool-card.open .tool-head .chev { transform: rotate(90deg); }
+  .tool-body { display: none; border-top: 1px solid var(--color-border-primary); }
+  .tool-card.open .tool-body { display: block; }
+  .tool-args {
+    margin: 0; padding: 8px 10px; font-size: 11.5px;
+    background: var(--surface-code); color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-border-primary);
+    white-space: pre; overflow-x: auto;
+  }
+  .tool-result {
+    padding: 8px 10px; font-size: 12px; color: var(--color-text-secondary);
+    max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+  }
+  .spinner {
+    display: inline-block; width: 10px; height: 10px;
+    border: 2px solid var(--color-border-secondary);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 工具卡内双栏 diff（新模式 #6）*/
+  .split-diff { display: grid; grid-template-columns: 1fr 1fr; font-size: 11.5px; }
+  .diff-col { overflow-x: auto; background: var(--diff-bg); color: var(--diff-color); }
+  .diff-col .col-title {
+    position: sticky; top: 0;
+    background: var(--diff-gutter-bg); color: var(--diff-gutter-color);
+    padding: 3px 10px; font-size: 10.5px; border-bottom: 1px solid var(--color-border-primary);
+  }
+  .diff-line { display: flex; white-space: pre; }
+  .diff-line .ln {
+    flex: none; width: 34px; text-align: right; padding-right: 8px;
+    color: var(--diff-gutter-color); background: var(--diff-gutter-bg); user-select: none;
+  }
+  .diff-line .code { padding: 0 10px; flex: 1; }
+  .diff-line.added { background: var(--diff-added-bg); }
+  .diff-line.removed { background: var(--diff-removed-bg); }
+
+  /* ===== Assistant 最终回答 ===== */
+  .assistant-msg { }
+  .assistant-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+    font-size: 11.5px; color: var(--color-text-tertiary);
+  }
+  .model-name { color: rgb(var(--color-semantic-agent)); font-weight: 600; }
+  /* 流式速度徽章（新模式 #3）*/
+  .speed-badge {
+    border-radius: var(--radius-full);
+    padding: 0 8px; font-size: 10.5px; font-weight: 600;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .speed-badge.s-fast { background: rgb(var(--color-status-info) / 0.14); color: rgb(var(--color-status-info)); }
+  .speed-badge.s-good { background: rgb(var(--color-status-success) / 0.14); color: rgb(var(--color-status-success)); }
+  .speed-badge.s-mid  { background: rgb(var(--color-status-warning) / 0.16); color: var(--color-warning); }
+  .speed-badge.s-slow { background: rgb(var(--color-status-error) / 0.14); color: rgb(var(--color-status-error)); }
+  .assistant-body { color: var(--color-text-primary); }
+  .assistant-body p { margin: 0 0 8px; }
+  .assistant-body code {
+    background: var(--surface-code); border-radius: 4px; padding: 1px 5px;
+    font-size: 12px; font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .assistant-foot {
+    display: flex; align-items: center; gap: 10px; margin-top: 6px;
+    font-size: 11px; color: var(--color-text-tertiary);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .assistant-foot .act { cursor: pointer; }
+  .assistant-foot .act:hover { color: var(--color-accent-text); }
+
+  /* 流式光标 */
+  .caret {
+    display: inline-block; width: 7px; height: 15px; vertical-align: -2px;
+    background: var(--color-accent); border-radius: 1px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ===== 轮次导航轨（新模式 #2）===== */
+  .turn-nav {
+    flex: none; width: 190px;
+    border-left: 1px solid var(--color-border-primary);
+    background: var(--color-bg-secondary);
+    padding: 14px 10px;
+    display: flex; flex-direction: column; gap: 4px;
+    overflow-y: auto;
+  }
+  .turn-nav .nav-title {
+    font-size: 11px; color: var(--color-text-tertiary); font-weight: 600;
+    letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: var(--radius-md);
+    cursor: pointer; color: var(--color-text-secondary);
+    border: 1px solid transparent;
+    font-size: 12px;
+    transition: all 0.12s;
+  }
+  .nav-item:hover { background: var(--color-bg-tertiary); }
+  .nav-item.active {
+    background: var(--color-accent-muted);
+    border-color: rgba(116 108 255 / 0.35);
+    color: var(--color-accent-text);
+  }
+  .nav-item .t-idx {
+    flex: none; width: 20px; height: 20px; border-radius: var(--radius-sm);
+    background: var(--color-bg-tertiary); color: var(--color-text-tertiary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 600;
+  }
+  .nav-item.active .t-idx { background: var(--color-accent); color: #fff; }
+  .nav-item .t-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-item .live-dot {
+    flex: none; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-accent); animation: blink 1s step-end infinite;
+  }
+
+  /* ===== 底部 composer（mock，保持可见）===== */
+  .composer {
+    position: fixed; bottom: 0; left: 0; right: 190px;
+    background: linear-gradient(180deg, transparent, var(--color-bg-primary) 30%);
+    padding: 12px 20px 16px;
+  }
+  .composer-box {
+    max-width: 780px; margin: 0 auto;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    padding: 10px 14px;
+  }
+  .composer-input { color: var(--color-text-tertiary); font-size: 13px; }
+  .composer-actions {
+    display: flex; align-items: center; gap: 12px; margin-top: 6px;
+    font-size: 11.5px; color: var(--color-text-tertiary);
+  }
+  .composer-actions .spacer { flex: 1; }
+  .composer-actions .send {
+    background: var(--color-accent); color: #fff; border-radius: var(--radius-md);
+    padding: 3px 12px; cursor: pointer;
+  }
+
+  /* ===== 标注模式 ===== */
+  body.show-anno [data-anno] {
+    outline: 1.5px dashed rgba(116 108 255 / 0.55);
+    outline-offset: 3px; border-radius: var(--radius-md);
+    position: relative;
+  }
+  body.show-anno [data-anno]::before {
+    content: attr(data-anno);
+    position: absolute; top: -10px; left: 8px; z-index: 2;
+    background: var(--color-accent); color: #fff;
+    font-size: 10px; padding: 0 6px; border-radius: var(--radius-full);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 900px) {
+    .turn-nav { display: none; }
+    .composer { right: 0; }
+  }
+</style>
+</head>
+<body class="show-anno">
+
+<div class="proto-header">
+  <h1>Turn 折叠原型</h1>
+  <span class="sub">移植自 pi-web ChatWindow / MessageView 的交互模式 · 对应 ChatPanel.tsx 消息流</span>
+  <span class="spacer"></span>
+  <button class="proto-btn active" id="annoBtn">标注: 开</button>
+  <button class="proto-btn" id="themeBtn">🌙 深色</button>
+</div>
+
+<div class="app-body">
+  <div class="chat-scroll" id="chatScroll">
+    <div class="chat-column">
+
+      <!-- ═══════ Turn 1：折叠状态（默认形态）═══════ -->
+      <div class="turn" id="turn-1" data-turn-label="修复登录页安全区">
+        <div class="user-msg">
+          <div class="user-bubble">帮我修复登录页在移动端底部被 home indicator 遮挡的问题</div>
+        </div>
+
+        <!-- 过程详情折叠组：核心模式 -->
+        <div class="process-group" id="pg1" data-anno="① 过程详情折叠">
+          <div class="process-summary" onclick="toggleGroup('pg1')">
+            <span class="chev">▶</span>
+            <span class="dot"></span>
+            <span>过程详情 · 8 条消息 · 4 个工具调用 · 38s</span>
+          </div>
+          <div class="process-detail">
+            <!-- 思考块：懒加载 -->
+            <div class="thinking-block" id="th1" data-anno="④ 思考块折叠/懒加载">
+              <div class="thinking-head" onclick="toggleGroup('th1')">
+                <span class="chev">▶</span><span>思考 · 6s · 1.2k tokens（展开时按需加载）</span>
+              </div>
+              <div class="thinking-body">用户说的是移动端 safe-area 遮挡。登录页应该在容器上加 env(safe-area-inset-bottom) padding，而不是让按钮贴底。先看 LoginPage 的实现，确认当前 padding 来源，再查项目里其他页面怎么处理 safe-area 的，保持一致……</div>
+            </div>
+
+            <!-- read 工具 -->
+            <div class="tool-card" id="tc1">
+              <div class="tool-head" onclick="toggleGroup('tc1')">
+                <span class="chev">▶</span><span class="tool-name mono">read</span>
+                <span class="tool-preview mono">src/mainview/components/auth/LoginPage.tsx</span>
+                <span class="tool-dur">0.4s</span>
+              </div>
+              <div class="tool-body">
+                <pre class="tool-args mono">{"path": "src/mainview/components/auth/LoginPage.tsx"}</pre>
+                <div class="tool-result mono">读取 214 行 ✓</div>
+              </div>
+            </div>
+
+            <!-- edit 工具 + 内联双栏 diff -->
+            <div class="tool-card" id="tc2" data-anno="⑥ 工具卡内双栏 diff">
+              <div class="tool-head" onclick="toggleGroup('tc2')">
+                <span class="chev">▶</span><span class="tool-name mono">edit</span>
+                <span class="tool-preview mono">LoginPage.tsx +2</span>
+                <span class="tool-dur">0.6s</span>
+              </div>
+              <div class="tool-body">
+                <div class="split-diff">
+                  <div class="diff-col">
+                    <div class="col-title">LoginPage.tsx</div>
+                    <div class="diff-line"><span class="ln">86</span><span class="code">  &lt;div className="pb-6 flex flex-col"&gt;</span></div>
+                    <div class="diff-line removed"><span class="ln">87</span><span class="code">    &lt;Button&gt;登录&lt;/Button&gt;</span></div>
+                    <div class="diff-line"><span class="ln">88</span><span class="code">  &lt;/div&gt;</span></div>
+                  </div>
+                  <div class="diff-col">
+                    <div class="col-title">LoginPage.tsx</div>
+                    <div class="diff-line"><span class="ln">86</span><span class="code">  &lt;div className="pb-6 flex flex-col"&gt;</span></div>
+                    <div class="diff-line added"><span class="ln">87</span><span class="code">    &lt;Button className="mb-safe-bottom"&gt;登录&lt;/Button&gt;</span></div>
+                    <div class="diff-line"><span class="ln">88</span><span class="code">  &lt;/div&gt;</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- bash 工具 -->
+            <div class="tool-card" id="tc3">
+              <div class="tool-head" onclick="toggleGroup('tc3')">
+                <span class="chev">▶</span><span class="tool-name mono">bash</span>
+                <span class="tool-preview mono">bun run test:unit -- LoginPage</span>
+                <span class="tool-dur">4.2s</span>
+              </div>
+              <div class="tool-body">
+                <pre class="tool-args mono">{"command": "bun run test:unit -- LoginPage"}</pre>
+                <div class="tool-result mono">✓ test/unit/components/LoginPage.test.tsx (12 tests) 12 passed</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 最终回答 -->
+        <div class="assistant-msg">
+          <div class="assistant-head" data-anno="③ 速度徽章">
+            <span class="model-name">GLM-4.7</span>
+            <span class="speed-badge s-fast" title="流式速度">62 t/s</span>
+          </div>
+          <div class="assistant-body">
+            <p>修好了。登录按钮没有预留底部安全区，改成了 <code>mb-safe-bottom</code>（走项目里已有的 Tailwind safe-area 扩展，和 ChatPanel 的处理方式一致）。单测 12 个全部通过，没有影响其他页面。</p>
+          </div>
+          <div class="assistant-foot">
+            <span>in 4.2k · out 380 · cache R 1.8k</span>
+            <span>$0.012</span>
+            <span class="act">⧉ 复制</span>
+            <span class="act">⑂ 从这里分叉</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ Turn 2：展开状态 + 失败重试 + 长消息折叠 ═══════ -->
+      <div class="turn" id="turn-2" data-turn-label="为什么 compaction 慢">
+        <div class="user-msg" data-anno="⑤ 长消息渐隐折叠">
+          <div class="user-bubble clamped" id="ub1">
+            <div class="bubble-text">我 paste 一段日志你看看，为什么这个会话压缩的时候这么慢：<br><br>2026-08-14 21:03:44 [session-manager] compaction start entries=2142<br>2026-08-14 21:03:45 [session-manager] effective history materialize entries=2142<br>2026-08-14 21:04:12 [llm] request timeout retry=1<br>2026-08-14 21:04:41 [llm] request timeout retry=2<br>2026-08-14 21:05:10 [llm] request timeout retry=3<br>2026-08-14 21:05:11 [session-manager] compaction failed: provider timeout<br>……（省略 60 行）……</div>
+            <div class="bubble-toggle" onclick="this.parentElement.classList.toggle('clamped')">展开全部</div>
+          </div>
+        </div>
+
+        <!-- 展开状态的过程组（演示失败工具） -->
+        <div class="process-group open" id="pg2" data-anno="① 过程详情（展开态 · 含失败）">
+          <div class="process-summary" onclick="toggleGroup('pg2')">
+            <span class="chev">▶</span>
+            <span class="dot"></span>
+            <span>过程详情 · 10 条消息 · 5 个工具调用 · 52s</span>
+          </div>
+          <div class="process-detail">
+            <div class="tool-card error" id="tc4">
+              <div class="tool-head" onclick="toggleGroup('tc4')">
+                <span class="chev">▶</span><span class="tool-name mono">bash</span>
+                <span class="tool-preview mono">rg "compaction" src/core/…</span>
+                <span class="tool-dur">✕ 失败</span>
+              </div>
+              <div class="tool-body">
+                <pre class="tool-args mono">{"command": "rg \"compaction timeout\" src/core/session-manager.ts"}</pre>
+                <div class="tool-result" style="color: rgb(var(--color-status-error))">exit 1 — no matches found</div>
+              </div>
+            </div>
+            <div class="tool-card" id="tc5">
+              <div class="tool-head" onclick="toggleGroup('tc5')">
+                <span class="chev">▶</span><span class="tool-name mono">read</span>
+                <span class="tool-preview mono">docs/architecture/session-context-and-compaction-flow.md</span>
+                <span class="tool-dur">0.5s</span>
+              </div>
+              <div class="tool-body">
+                <pre class="tool-args mono">{"path": "docs/architecture/session-context-and-compaction-flow.md"}</pre>
+                <div class="tool-result mono">读取 386 行 ✓</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="assistant-msg">
+          <div class="assistant-head">
+            <span class="model-name">GLM-4.7</span>
+            <span class="speed-badge s-good">34 t/s</span>
+          </div>
+          <div class="assistant-body">
+            <p>不是压缩本身慢，是压缩走的 LLM 请求超时重试了 3 次。从日志看 2142 条 entry 一次性 materialize 没问题（1 秒内完成），卡在 <code>request timeout</code>。这个会话的 effective history 太长，超过了 provider 的超时预算——建议手动分两次 <code>/compact</code>，或者我把压缩请求的超时调大。</p>
+          </div>
+          <div class="assistant-foot">
+            <span>in 5.1k · out 610 · cache R 2.2k</span>
+            <span>$0.019</span>
+            <span class="act">⧉ 复制</span>
+            <span class="act">⑂ 从这里分叉</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ Turn 3：流式进行中（过程组不折叠，尾随块保持展开）═══════ -->
+      <div class="turn" id="turn-3" data-turn-label="改超时配置（进行中）">
+        <div class="user-msg">
+          <div class="user-bubble">那帮我把压缩请求的超时调大到 120s</div>
+        </div>
+
+        <div class="process-group open" data-anno="① 流式期间不折叠">
+          <div class="process-summary" style="cursor: default;">
+            <span class="spinner"></span>
+            <span>运行中 · 已 2 个工具调用…</span>
+          </div>
+          <div class="process-detail">
+            <div class="tool-card open">
+              <div class="tool-head">
+                <span class="tool-name mono">edit</span>
+                <span class="tool-preview mono">server-config.ts</span>
+                <span class="spinner" style="border-top-color: rgb(var(--color-semantic-tool));"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="assistant-msg">
+          <div class="assistant-head" data-anno="③ 实时速度徽章">
+            <span class="model-name">GLM-4.7</span>
+            <span class="speed-badge s-mid" id="liveBadge">~210 tokens · 21 t/s</span>
+          </div>
+          <div class="assistant-body" id="streamText">
+            <p>正在修改 <code>server-config.ts</code> 里的压缩超时配置，把默认 60s 提到 120s，同时保留环境变量覆盖入口<span class="caret"></span></p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 轮次导航轨 -->
+  <div class="turn-nav" id="turnNav" data-anno="② 轮次导航轨">
+    <div class="nav-title">本轮会话 · 3 轮</div>
+    <div class="nav-item active" data-target="turn-1"><span class="t-idx">1</span><span class="t-label">修复登录页安全区</span></div>
+    <div class="nav-item" data-target="turn-2"><span class="t-idx">2</span><span class="t-label">为什么 compaction 慢</span></div>
+    <div class="nav-item" data-target="turn-3"><span class="t-idx">3</span><span class="t-label">改超时配置</span><span class="live-dot"></span></div>
+  </div>
+</div>
+
+<!-- composer mock（按 AGENTS.md 聊天场景保持可见）-->
+<div class="composer">
+  <div class="composer-box">
+    <div class="composer-input">输入消息…（拖拽文件 / @引用 / /斜杠命令）</div>
+    <div class="composer-actions">
+      <span>📎</span><span>🖼</span><span>🎯</span>
+      <span class="spacer"></span>
+      <span>GLM-4.7 · Pro</span>
+      <span class="send">发送</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleGroup(id) {
+    document.getElementById(id).classList.toggle('open');
+  }
+
+  // 主题切换（与 use-theme-store 的 data-theme 机制一致）
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const html = document.documentElement;
+    const dark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? '🌙 深色' : '☀️ 浅色';
+  });
+
+  // 标注开关
+  const annoBtn = document.getElementById('annoBtn');
+  annoBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('show-anno');
+    annoBtn.textContent = on ? '标注: 开' : '标注: 关';
+    annoBtn.classList.toggle('active', on);
+  });
+
+  // 轮次导航：点击跳转 + 滚动高亮
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      navItems.forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById(item.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // 模拟流式速度徽章（真实实现：MessageView 流式期间的 chars/4 估算）
+  const badge = document.getElementById('liveBadge');
+  let tokens = 210;
+  setInterval(() => {
+    const tps = 12 + Math.random() * 55;
+    tokens += Math.round(tps / 4);
+    const cls = tps >= 50 ? 's-fast' : tps >= 30 ? 's-good' : tps >= 15 ? 's-mid' : 's-slow';
+    badge.className = 'speed-badge ' + cls;
+    badge.textContent = `~${tokens} tokens · ${tps.toFixed(0)} t/s`;
+  }, 1200);
+</script>
+</body>
+</html>

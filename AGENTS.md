@@ -56,6 +56,14 @@ pi-momo-fork/packages/coding-agent/
 - `session_before_compact` 扩展要优先使用 `preparation` 里的有效历史；`branchEntries` 只作为审计/诊断/raw 数据使用，除非扩展明确重新应用同样的 materialization 规则。
 - 改到 `SessionManager.buildSessionContext()`、`materializeSessionContextEntries()`、`AgentSession.prompt()`、`AgentSession.compact()`、auto-compaction、`input` / `before_agent_start` / `context` / `before_provider_request` / `session_before_compact` / `session_compact` hooks、provider payload 转换或 context diagnostics 时，必须同步更新该文档和对应测试。
 
+### 性能观测与快速排查
+
+- 聊天消息、流式输出、session restore、Fork、Gateway/RPC、JSONL 读取或 `pi-momo-fork` runtime 性能工作，先读 `docs/performance-observability.md`；已有的优化清单见 `docs/performance-optimization-plan.md`。
+- 性能排查固定按“前端 renderer → Gateway/RPC → Agent runtime → JSONL/Fork I/O”分层，先直接测 RPC/runtime，再使用 Chrome Performance 和 React Profiler 判断 UI 成本。
+- 关键操作应记录 `traceId`、`sessionId`、operation、duration、status、数据规模和 cache hit；不得记录完整 prompt、消息正文、token、auth 或未经脱敏的绝对路径。
+- `get_full_messages`、Fork 创建和 session restore 必须区分 branch traversal、context materialization、message projection、tree projection、JSONL I/O 和 RPC serialization 的耗时，不能只记录总耗时。
+- 性能优化验收必须覆盖长会话、重型 tool output、refresh/reconnect、并行 tool event，并保留 p50/p95、内存和 payload 证据；不得通过隐藏移动端 SideNav、削弱恢复状态或复用错误的 RPC client 换取性能指标。
+
 ### Model Tier Scope
 
 - Fast / Pro / Max 模型档位配置先读 `docs/architecture/model-tier-scope-contract.md`。
