@@ -476,7 +476,10 @@ describe("SideNav — pagination edges", () => {
       />,
     );
     const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
-    Object.defineProperty(scrollContainer, "scrollHeight", { value: 500, configurable: true });
+    // scrollHeight 必须远大于预取阈值（SideNav 顶部 500px 内会主动触发
+    // onLoadMore 预取），否则"滚到底部"时仍在预取窗口内，onLoadMore 会被
+    // 二次触发。5000px 让底部（4900）超出预取窗口。
+    Object.defineProperty(scrollContainer, "scrollHeight", { value: 5000, configurable: true });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 100, configurable: true });
 
     Object.defineProperty(scrollContainer, "scrollTop", {
@@ -492,7 +495,7 @@ describe("SideNav — pagination edges", () => {
 
     onLoadMore.mockClear();
     Object.defineProperty(scrollContainer, "scrollTop", {
-      value: 400,
+      value: 4900,
       writable: true,
       configurable: true,
     });
