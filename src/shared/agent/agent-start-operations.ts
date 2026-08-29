@@ -22,6 +22,8 @@ export interface StartManagedClient {
   _activeSessionId: string;
   lastActiveAt: number;
   activeBackgroundTools: Set<string>;
+  /** OS pid of the spawned CLI child — recorded at spawn for stop-time reaping. */
+  _childPid?: number;
   /** Non-empty for delegated child sessions; LRU eviction skips these. */
   delegateParentSessionId?: string;
 }
@@ -73,7 +75,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
     projectPath: string,
     sessionPath: string,
     userId?: string,
-  ) => Promise<{ client: TManaged["client"]; timings: CreateRpcClientTimings }>;
+  ) => Promise<{ client: TManaged["client"]; timings: CreateRpcClientTimings; pid?: number }>;
   registerAgentChannels: (args: {
     client: ChannelRegistrableClient;
     getSessionId: () => string;
@@ -175,7 +177,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
 
     options.evictLRU(poolKey);
 
-    const { client, timings: createTimings } = await options.createRpcClient(
+    const { client, timings: createTimings, pid: childPid } = await options.createRpcClient(
       config.piCliPath,
       options.projectPath,
       options.sessionPath,
@@ -198,6 +200,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
       },
       unsubscribe: () => undefined,
       _activeSessionId: options.sessionId,
+      _childPid: childPid,
       lastActiveAt: now(),
       activeBackgroundTools: new Set<string>(),
       ...(options.startOptions?.delegateParentSessionId

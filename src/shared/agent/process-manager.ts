@@ -89,6 +89,7 @@ import {
 import { getCommandsOperation } from "./agent-client-state-operations";
 import { startAgentClientOperation, takeWarmProcess, type WarmPoolEntry } from "./agent-start-operations";
 import { stopAgentClientOperation } from "./agent-stop-operations";
+import { readClientPid, reapChildProcess } from "./child-process-reaper";
 import { buildRemoteAgentChildRuntimeEnv, buildSshCommandRuntimeEnv } from "./runtime-resource-env";
 import {
   type ActiveRuntimeSelection,
@@ -458,7 +459,7 @@ async function createRpcClient(
   userId?: string,
   excludeLsp = false,
   extraEnv?: Record<string, string>,
-): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
+): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number }; pid?: number }> {
   const t0 = performance.now();
   const runtime = await resolveActiveRuntimeSelection(cwd);
   const useRemoteChild = runtime.kind === "remote-agent-child";
@@ -682,7 +683,7 @@ async function createRpcClient(
   };
   perfLog.info("[createRpcClient] done", timings);
 
-  return { client, timings };
+  return { client, timings, pid: readClientPid(client) };
 }
 
 function attachModelProxyCleanup(
@@ -787,9 +788,27 @@ export class AgentProcessManager {
     });
     oldest.unsubscribe();
     oldest.client.stop().catch(() => {});
+    void this.reapManagedChild(oldest);
     this.clients.delete(sid);
     this.lastLspState.delete(sid);
     removeFromProcessPool(this.processByCwd, poolKey, oldest);
+  }
+
+  /**
+   * Stop-time safety net: client.stop() has been observed to resolve ok while
+   * the spawned `pi` child keeps living (long-running servers), leaving
+   * scheduler-lock-holding orphans. Verify death by the pid recorded at spawn
+   * and escalate SIGTERM -> SIGKILL when needed. No-op when already dead.
+   */
+  private async reapManagedChild(managed: {
+    _childPid?: number;
+    client: unknown;
+  }): Promise<void> {
+    const pid = managed._childPid ?? readClientPid(managed.client);
+    const reaped = await reapChildProcess(pid);
+    if (reaped) {
+      log.warn("reaped CLI child that survived client.stop()", { pid });
+    }
   }
 
   private getPoolKey(projectPath: string, userId?: string): string {
@@ -816,7 +835,7 @@ export class AgentProcessManager {
     this.warmPending.add(poolKey);
     void (async () => {
       try {
-        const { client } = await createRpcClient(config.piCliPath, projectPath, "", undefined, false, {
+        const { client, pid } = await createRpcClient(config.piCliPath, projectPath, "", undefined, false, {
           PI_WARM_STANDBY: "1",
         });
         const managed = {
@@ -829,6 +848,7 @@ export class AgentProcessManager {
           },
           unsubscribe: () => undefined,
           _activeSessionId: "",
+          _childPid: pid,
           lastActiveAt: Date.now(),
           activeBackgroundTools: new Set<string>(),
         } as unknown as ManagedClient;
@@ -1418,6 +1438,7 @@ export class AgentProcessManager {
       emitAgentEvent: (sid, event) => this.emitAgentEvent(sid, event),
       deleteLspState: (sid) => this.lastLspState.delete(sid),
       clearSessionCache: (sid) => this.clearSessionCache(sid),
+      reapChild: (managed) => this.reapManagedChild(managed),
     });
 
     if (stopped && projectPath) {

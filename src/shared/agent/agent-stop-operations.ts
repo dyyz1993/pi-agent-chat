@@ -20,6 +20,8 @@ interface StopManagedClient {
   };
   unsubscribe: () => void;
   _activeSessionId: string;
+  /** OS pid recorded at spawn — used to reap the child if client.stop() misses. */
+  _childPid?: number;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -51,6 +53,8 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>;
   deleteLspState: (sessionId: string) => void;
   clearSessionCache: (sessionId: string) => void;
+  /** Verify the CLI child really died after client.stop(); escalate by pid if not. */
+  reapChild?: (managed: TManaged) => Promise<void>;
   emitAgentEndTimeoutMs?: number;
 }): Promise<boolean> {
   const managed = options.getActiveManaged(options.sessionId);
@@ -108,6 +112,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
       err: err instanceof Error ? err.message : String(err),
     });
   });
+  void options.reapChild?.(managed);
   options.clients.delete(options.sessionId);
 
   const poolKey = options.getPoolKey(managed.info.projectPath);
