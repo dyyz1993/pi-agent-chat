@@ -289,7 +289,7 @@ export async function getExtensionsOperation<TManaged extends ManagedClientLike>
     // RpcExtension[] (missing the per-extension name fields the local fork
     // returns). Cast per the CI-vs-local guidance in AGENTS.md; drop the cast
     // once 0.78.11 with the full shape is published.
-    const items = (Array.isArray(result) ? result : []) as Array<{
+    const items = (Array.isArray(result) ? result : []) as unknown as Array<{
       path: string;
       resolvedPath: string;
       toolNames: string[];

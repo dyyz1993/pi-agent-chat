@@ -7,11 +7,16 @@ const authToken = process.env.E2E_AUTH_TOKEN ?? "test-ci-token";
 const appBaseUrl = `http://${e2eHost}:${appPort}`;
 const apiBaseUrl = `http://${e2eHost}:${apiPort}`;
 
-const launchOptions = {
-  executablePath:
-    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-};
+// Local mac dev uses the system Chromium (playwright browser downloads are
+// blocked on this network); PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH overrides, and
+// CI/linux falls through to the playwright-managed chromium installed by the
+// workflow's `playwright install --with-deps chromium` step.
+const launchOptions: { executablePath?: string } = {};
+if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+  launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+} else if (process.platform === "darwin") {
+  launchOptions.executablePath = "/Applications/Chromium.app/Contents/MacOS/Chromium";
+}
 
 const webServer = [
   {
