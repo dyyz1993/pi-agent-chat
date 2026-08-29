@@ -285,7 +285,20 @@ export async function getExtensionsOperation<TManaged extends ManagedClientLike>
   if (!managed) return { extensions: [] };
   try {
     const result = await withTimeout(managed.client.getExtensions(), 10_000, "getExtensions");
-    return { extensions: Array.isArray(result) ? result : [] };
+    // CI installs pi-coding-agent 0.78.10 from npm, whose getExtensions type is
+    // RpcExtension[] (missing the per-extension name fields the local fork
+    // returns). Cast per the CI-vs-local guidance in AGENTS.md; drop the cast
+    // once 0.78.11 with the full shape is published.
+    const items = (Array.isArray(result) ? result : []) as Array<{
+      path: string;
+      resolvedPath: string;
+      toolNames: string[];
+      commandNames: string[];
+      channelNames: string[];
+      eventNames: string[];
+      permissionProviderNames: string[];
+    }>;
+    return { extensions: items };
   } catch (err: unknown) {
     log.warn("getExtensions error", {
       sessionId: options.sessionId,
