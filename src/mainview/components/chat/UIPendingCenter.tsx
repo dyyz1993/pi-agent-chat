@@ -119,7 +119,7 @@ function buildApprovalSummaryRows(
     push({ label: "Operation", value: meta.subject, mono: true });
     push({ label: "Target", value: command ?? meta.subject, mono: true });
   } else if (meta?.type === "goal_approval") {
-    push({ label: "Approval", value: meta.kind.replaceAll("_", " ") });
+    push({ label: "Approval", value: String(meta.kind).replace(/_/g, " ") });
     push({ label: "Goal", value: meta.goalId, mono: true });
     push({ label: "Generation", value: String(meta.generation) });
     push({ label: "Objective", value: meta.objective ?? "" });
