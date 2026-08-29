@@ -27,6 +27,9 @@ const webServer = [
     env: {
       PORT: apiPort,
       AUTH_TOKEN: authToken,
+      // Isolate the agent dir per CI run so specs see a deterministic,
+      // empty session store instead of the host machine's real sessions.
+      ...(process.env.E2E_AGENT_DIR ? { PI_CODING_AGENT_DIR: process.env.E2E_AGENT_DIR } : {}),
     },
   },
   {

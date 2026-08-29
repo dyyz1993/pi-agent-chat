@@ -8,11 +8,12 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("L1 smoke · login gate", () => {
-  test("LoginPage renders when no token in URL or storage", async ({ page }) => {
-    // page context starts with empty localStorage by default
+  test("app auto-authenticates with the e2e env token and lands in the main shell", async ({ page }) => {
+    // The e2e webServer injects VITE_AUTH_TOKEN, so resolveAuthToken() returns
+    // it in dev mode and the app skips the login gate, landing in the main
+    // shell directly. Assert that shell (tab bar) instead of the login page.
     await page.goto("/");
-    // PI Agent Chat h1 should be visible whether on login or main view
-    await expect(page.locator("h1")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="tab-bar"]')).toBeVisible({ timeout: 20000 });
   });
 
   test("login page token input accepts text", async ({ page }) => {
