@@ -26,11 +26,12 @@ jobs:
 
       - run: bunx playwright install --with-deps chromium
 
-      # L1 smoke + legacy core specs (fast, every PR)
+      # L1 smoke (fast, every PR). The legacy project's compact/message specs
+      # need real model round-trips, which CI cannot provide — run those
+      # locally where a model + real sessions exist.
       - run: >
           bunx playwright test
           --project=smoke
-          --project=legacy
           --reporter=list
           --max-failures=5
         env:
