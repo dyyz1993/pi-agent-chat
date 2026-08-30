@@ -546,26 +546,59 @@ else
 fi
 
 # ═══════════════════════════════════════════════
-# Step 7: 健康检查
+# Step 7: 健康检查（bun 起不来时自动回退 node 重启一次）
 # ═══════════════════════════════════════════════
-info "Step 7/7: 健康检查..."
-HEALTH_OK=false
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  sleep 2
-  if curl -sf -m 3 "http://localhost:${PORT}/health" >/dev/null 2>&1; then
-    HEALTH_OK=true
-    break
-  fi
-  echo -n "."
-done
-echo ""
+health_check() {
+  local tries="$1"
+  for i in $(seq 1 "$tries"); do
+    sleep 2
+    if curl -sf -m 3 "http://localhost:${PORT}/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    echo -n "."
+  done
+  return 1
+}
 
-if [ "$HEALTH_OK" = true ]; then
+info "Step 7/7: 健康检查..."
+echo -n ""
+if health_check 10; then
   ok "健康检查通过 ✅ (HTTP 200)"
 else
-  warn "健康检查失败(服务可能还在启动中)"
-  info "查看日志: tail -50 $INSTALL_DIR/logs/out.log"
-  info "手动检查: curl http://localhost:${PORT}/health"
+  echo ""
+  if [ "$SERVER_RUNTIME" = "bun" ] && [ "$(get_node_major_version)" -ge "$NODE_MIN_MAJOR" ]; then
+    warn "bun 启动失败(老系统静默崩溃?) — 自动切换 node 重启..."
+    patch_node_bundle() {
+      if grep -q "var __require = import.meta.require;" "$INSTALL_DIR/server.js"; then
+        sed -i.bak \
+          's|var __require = import.meta.require;|import { createRequire as __cr } from "module"; var __require = __cr(import.meta.url);|' \
+          "$INSTALL_DIR/server.js"
+        rm -f "$INSTALL_DIR/server.js.bak"
+        ok "已为 node 运行时应用 __require 补丁"
+      fi
+    }
+    patch_node_bundle
+    pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
+    sleep 1
+    SERVER_BIN="$NODE_BIN"
+    SERVER_RUNTIME="node"
+    cd "$INSTALL_DIR"
+    PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
+      nohup "$SERVER_BIN" server.js >> "$INSTALL_DIR/logs/out.log" 2>&1 &
+    ok "已用 node 重新启动 (PID: $!)"
+    if health_check 15; then
+      ok "node 运行时健康检查通过 ✅"
+      warn "本机 bun 无法运行服务,建议在 .env/守护配置中固定 node(daemon 已按探测结果生成)"
+    else
+      warn "健康检查仍失败(服务可能还在启动中)"
+      info "查看日志: tail -50 $INSTALL_DIR/logs/out.log"
+      info "手动检查: curl http://localhost:${PORT}/health"
+    fi
+  else
+    warn "健康检查失败(服务可能还在启动中)"
+    info "查看日志: tail -50 $INSTALL_DIR/logs/out.log"
+    info "手动检查: curl http://localhost:${PORT}/health"
+  fi
 fi
 
 # ═══════════════════════════════════════════════
