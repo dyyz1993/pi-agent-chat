@@ -17,7 +17,9 @@ const packages = [
   // relies on. As of 755f97db the app uses getFileDiff({ fromHash, toHash }),
   // which only exists in fork >= 0.78.11. Without this bump CI installs the
   // old tarball and tsc fails on fromHash not being a known property.
-  { name: "@dyyz1993/pi-coding-agent", version: "0.78.11" },
+  // 0.78.12 adds loop-scheduler becomeScheduler settings-sync and
+  // browser_check expectVisual (additive; bumped for parity).
+  { name: "@dyyz1993/pi-coding-agent", version: "0.78.12" },
   { name: "@dyyz1993/pi-tui", version: "0.74.56" },
 ];
 
