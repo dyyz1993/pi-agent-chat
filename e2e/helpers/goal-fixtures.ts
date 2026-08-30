@@ -24,7 +24,10 @@ export function buildSampleContract(projectPath: string): {
   nonGoals: string[];
 } {
   return {
-    outcome: `开发"打飞机"网页小游戏`,
+    // Must faithfully restate SAMPLE_OBJECTIVE: goal-vendor's contract-hijack
+    // guard rejects submissions whose outcome covers <20% of the objective's
+    // token/bigram set, and the old terse one-liner scored 7/45 (0.155).
+    outcome: `开发一个可运行的"打飞机"网页小游戏：玩家方向键移动飞机，自动发射子弹，敌机下落击落得分，碰撞失败；用 vanilla HTML/CSS/JS 实现，浏览器打开即玩`,
     workspaceRoots: [projectPath],
     criteria: ["完成可运行游戏", "happy path + 边界", "README 说明"],
     phases: [
