@@ -204,12 +204,18 @@ else
   TARBALL_URL="https://github.com/$REPO/releases/download/$VERSION/pi-chat-web.tar.gz"
 fi
 
-TARBALL="/tmp/pi-chat-web-$$.tar.gz"
-info "下载: $TARBALL_URL"
-curl -fsSL "$TARBALL_URL" -o "$TARBALL" || err "下载失败!请检查版本号或网络连接"
+# 离线/慢网络安装: LOCAL_TARBALL 指向已下载的 pi-chat-web.tar.gz
+if [ -n "$LOCAL_TARBALL" ] && [ -f "$LOCAL_TARBALL" ]; then
+  TARBALL="$LOCAL_TARBALL"
+  ok "使用本地包: $TARBALL ($(du -h "$TARBALL" | cut -f1))"
+else
+  TARBALL="/tmp/pi-chat-web-$$.tar.gz"
+  info "下载: $TARBALL_URL"
+  curl -fsSL "$TARBALL_URL" -o "$TARBALL" || err "下载失败!请检查版本号或网络连接(或设 LOCAL_TARBALL= 离线安装)"
 
-TARBALL_SIZE=$(du -h "$TARBALL" | cut -f1)
-ok "下载完成 ($TARBALL_SIZE)"
+  TARBALL_SIZE=$(du -h "$TARBALL" | cut -f1)
+  ok "下载完成 ($TARBALL_SIZE)"
+fi
 
 info "解压到 $INSTALL_DIR ..."
 mkdir -p "$INSTALL_DIR"
@@ -231,7 +237,10 @@ if [ -d "$(dirname "$INSTALL_DIR")/pi-chat-web" ] && [ "$(dirname "$INSTALL_DIR"
   cp -R "$(dirname "$INSTALL_DIR")/pi-chat-web/"* "$INSTALL_DIR/" 2>/dev/null || true
   rm -rf "$(dirname "$INSTALL_DIR")/pi-chat-web"
 fi
-rm -f "$TARBALL"
+# 只清理自行下载的临时包,LOCAL_TARBALL 提供的离线包保留
+if [ -z "$LOCAL_TARBALL" ] || [ "$TARBALL" != "$LOCAL_TARBALL" ]; then
+  rm -f "$TARBALL"
+fi
 
 # node 运行时: bun-target 产物含 `import.meta.require`(node 不支持),
 # 替换为 createRequire(与 replay 手动部署的补丁一致)。
