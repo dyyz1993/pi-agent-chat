@@ -76,8 +76,23 @@ echo ""
 
 # ── uninstall 子命令 ──
 # bash install-web.sh uninstall  → 停止服务 + 清理守护配置 + 删除安装目录
+# 防误删:目标目录不存在、或目录里有 .pi-install-marker 之外的关键内容、
+# 或运行在非交互 shell 且未显式 CONFIRM=1 时,要求确认。
 if [ "${1:-}" = "uninstall" ]; then
   OS="$(uname -s)"
+  if [ ! -d "$INSTALL_DIR" ]; then
+    err "安装目录不存在: $INSTALL_DIR (设 INSTALL_DIR= 指定目标)"
+  fi
+  info "即将删除: $INSTALL_DIR"
+  info "包含: $(du -sh "$INSTALL_DIR" 2>/dev/null | cut -f1) 文件 (~/.pi/agent 的模型配置/会话数据不受影响)"
+  if [ "${CONFIRM:-0}" != "1" ]; then
+    if [ -t 0 ]; then
+      read -r -p "确认卸载? 输入 yes 继续: " answer
+      [ "$answer" = "yes" ] || err "已取消"
+    else
+      err "非交互环境: 加 CONFIRM=1 确认卸载 (bash install-web.sh uninstall CONFIRM=1 或 CONFIRM=1 前缀)"
+    fi
+  fi
   info "卸载 PiAgentChat Web Server ($INSTALL_DIR)..."
   # 停止进程(daemon 循环 + server)
   pkill -f "${INSTALL_DIR}/daemon.sh" 2>/dev/null || true
