@@ -168,6 +168,25 @@ NODE_BIN="$(command -v node 2>/dev/null || echo "/usr/local/bin/node")"
 info "node 路径: $NODE_BIN"
 
 # ═══════════════════════════════════════════════
+# Step 2.5: 服务器运行时选择（bun 优先, 不可用回退 node）
+# bun 在老 glibc 系统（如 CentOS 7, glibc 2.17）会静默崩溃零输出,
+# 探测失败则用 node 跑并在解压后给 server.js 打 __require 补丁。
+# ═══════════════════════════════════════════════
+SERVER_BIN="$BUN_BIN"
+SERVER_RUNTIME="bun"
+if ! "$BUN_BIN" -e 'process.stdout.write("bun-ok")' 2>/dev/null | grep -q "bun-ok"; then
+  warn "bun 无法在本机运行(老 glibc?) — 回退到 node 运行时"
+  if [ "$(get_node_major_version)" -lt "$NODE_MIN_MAJOR" ]; then
+    err "bun 不可用且 node >= v${NODE_MIN_MAJOR} 未安装,无法继续"
+  fi
+  SERVER_BIN="$NODE_BIN"
+  SERVER_RUNTIME="node"
+  ok "服务器运行时: node ($(node --version))"
+else
+  ok "服务器运行时: bun ($("$BUN_BIN" --version 2>/dev/null))"
+fi
+
+# ═══════════════════════════════════════════════
 # Step 3: 下载并解压 Web 服务器包
 # ═══════════════════════════════════════════════
 info "Step 3/7: 下载 Web 服务器包..."
@@ -213,6 +232,16 @@ if [ -d "$(dirname "$INSTALL_DIR")/pi-chat-web" ] && [ "$(dirname "$INSTALL_DIR"
   rm -rf "$(dirname "$INSTALL_DIR")/pi-chat-web"
 fi
 rm -f "$TARBALL"
+
+# node 运行时: bun-target 产物含 `import.meta.require`(node 不支持),
+# 替换为 createRequire(与 replay 手动部署的补丁一致)。
+if [ "$SERVER_RUNTIME" = "node" ] && grep -q "var __require = import.meta.require;" "$INSTALL_DIR/server.js"; then
+  sed -i.bak \
+    's|var __require = import.meta.require;|import { createRequire as __cr } from "module"; var __require = __cr(import.meta.url);|' \
+    "$INSTALL_DIR/server.js"
+  rm -f "$INSTALL_DIR/server.js.bak"
+  ok "已为 node 运行时应用 __require 补丁"
+fi
 
 ok "解压完成"
 info "安装目录内容:"
@@ -304,7 +333,7 @@ setup_launchd() {
     <string>${PLIST_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${BUN_BIN}</string>
+        <string>${SERVER_BIN}</string>
         <string>${INSTALL_DIR}/server.js</string>
     </array>
     <key>WorkingDirectory</key>
@@ -372,7 +401,7 @@ Environment="AUTH_TOKEN=${AUTH_TOKEN}"
 Environment="PI_CLI_PATH=${CLI_PATH}"
 Environment="LOG_DIR=${INSTALL_DIR}/logs"
 Environment="NODE_ENV=production"
-ExecStart=${BUN_BIN} ${INSTALL_DIR}/server.js
+ExecStart=${SERVER_BIN} ${INSTALL_DIR}/server.js
 Restart=always
 RestartSec=10
 StandardOutput=append:${INSTALL_DIR}/logs/out.log
@@ -402,6 +431,7 @@ AUTH_TOKEN="AUTH_TOKEN_PLACEHOLDER"
 PORT="PORT_PLACEHOLDER"
 CLI_PATH="CLI_PATH_PLACEHOLDER"
 HOME_DIR="HOME_PLACEHOLDER"
+RUNTIME_BIN="RUNTIME_BIN_PLACEHOLDER"
 
 export PATH="$HOME_DIR/.bun/bin:/usr/local/bin:/usr/bin:/bin:$HOME_DIR/.n/bin"
 export HOME="$HOME_DIR"
@@ -414,7 +444,7 @@ while true; do
   echo "$(date '+%Y-%m-%dT%H:%M:%S') [daemon] 启动 server..." >> "$LOG"
   PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" \
     LOG_DIR="$INSTALL_DIR/logs" NODE_ENV=production \
-    bun "$INSTALL_DIR/server.js" >> "$INSTALL_DIR/logs/out.log" 2>&1
+    "$RUNTIME_BIN" "$INSTALL_DIR/server.js" >> "$INSTALL_DIR/logs/out.log" 2>&1
   EXIT_CODE=$?
   echo "$(date '+%Y-%m-%dT%H:%M:%S') [daemon] server 退出 code=$EXIT_CODE,3秒后重启" >> "$LOG"
   sleep 3
@@ -428,6 +458,7 @@ DAEMONEOF
     -e "s|PORT_PLACEHOLDER|$PORT|g" \
     -e "s|CLI_PATH_PLACEHOLDER|$CLI_PATH|g" \
     -e "s|HOME_PLACEHOLDER|$HOME|g" \
+    -e "s|RUNTIME_BIN_PLACEHOLDER|$SERVER_BIN|g" \
     "$DAEMON_SCRIPT"
   rm -f "$DAEMON_SCRIPT.bak"
   chmod +x "$DAEMON_SCRIPT"
@@ -483,7 +514,7 @@ fi
 if [ "${SKIP_DAEMON:-0}" = "1" ]; then
   cd "$INSTALL_DIR"
   PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
-    nohup "$BUN_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
+    nohup "$SERVER_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
   ok "服务已启动 nohup (PID: $!)"
 elif [ "$OS" = "Darwin" ] && [ -f "$PLIST_PATH" ]; then
   launchctl unload "$PLIST_PATH" 2>/dev/null || true
@@ -501,7 +532,7 @@ elif [ -f "$DAEMON_SCRIPT" ]; then
 else
   cd "$INSTALL_DIR"
   PORT="$PORT" AUTH_TOKEN="$AUTH_TOKEN" PI_CLI_PATH="$CLI_PATH" LOG_DIR="$INSTALL_DIR/logs" \
-    nohup "$BUN_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
+    nohup "$SERVER_BIN" server.js > "$INSTALL_DIR/logs/out.log" 2>&1 &
   ok "服务已启动 nohup (PID: $!)"
 fi
 
