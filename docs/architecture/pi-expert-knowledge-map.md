@@ -122,6 +122,7 @@ Current state:
 - Native model vision works only when the active model and provider adapter support image input.
 - There is not yet one authoritative `vision.mode` setting in the implementation.
 - xBrowser/Doubao, MCP vision, OCR, and bash-based media inspection should be modeled as providers or skills, not branches inside `read` or CLI `@file`.
+- **callLLM image blocks (fork 0.78.11+)**: extension `pi.callLLM`/`pi.callLLMSafe` messages now accept content blocks (`{type:"image",data,mimeType}`); the provider layer forwards them as native image input. First consumer: goal-vendor `browser_check.expectVisual` — after the mechanical text/console probe, the captured screenshot is judged by the session's current model against the expectation (strict JSON verdict). This is a temporary native-vision path; when the unified router lands it should route through it (no separate config yet).
 
 Target routing order:
 
