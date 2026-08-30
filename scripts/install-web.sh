@@ -48,6 +48,23 @@ ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 err()   { echo -e "${RED}[ERR]${NC} $1"; exit 1; }
 
+# 停止本安装目录的 server 进程。
+# nohup 启动的进程命令行是相对路径 "node server.js"(cwd=安装目录),
+# pkill -f 绝对路径匹配不到 — 追加按 /proc cwd 逐个核验(Linux)。
+stop_server() {
+  pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
+  if [ -d /proc ]; then
+    local want
+    want="$(readlink -f "$INSTALL_DIR" 2>/dev/null)"
+    for pid in $(pgrep -f "serve[r].js" 2>/dev/null); do
+      if [ "$(readlink -f "/proc/$pid/cwd" 2>/dev/null)" = "$want" ]; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    done
+  fi
+}
+
+
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  PiAgentChat Web Server Installer"
@@ -56,6 +73,44 @@ echo "  Port:     $PORT"
 echo "  Install:  $INSTALL_DIR"
 echo "═══════════════════════════════════════════"
 echo ""
+
+# ── uninstall 子命令 ──
+# bash install-web.sh uninstall  → 停止服务 + 清理守护配置 + 删除安装目录
+if [ "${1:-}" = "uninstall" ]; then
+  OS="$(uname -s)"
+  info "卸载 PiAgentChat Web Server ($INSTALL_DIR)..."
+  # 停止进程(daemon 循环 + server)
+  pkill -f "${INSTALL_DIR}/daemon.sh" 2>/dev/null || true
+  stop_server
+  # 守护配置
+  if [ "$OS" = "Darwin" ] && [ -f "$HOME/Library/LaunchAgents/com.pi-agent-chat.web.plist" ]; then
+    launchctl unload "$HOME/Library/LaunchAgents/com.pi-agent-chat.web.plist" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/com.pi-agent-chat.web.plist"
+    ok "已移除 launchd 配置"
+  fi
+  if [ "$OS" = "Linux" ] && [ -f /etc/systemd/system/pi-agent-chat.service ]; then
+    SUDO=""
+    [ "$(id -u)" != "0" ] && command -v sudo &>/dev/null && SUDO="sudo"
+    $SUDO systemctl stop pi-agent-chat 2>/dev/null || true
+    $SUDO systemctl disable pi-agent-chat 2>/dev/null || true
+    $SUDO rm -f /etc/systemd/system/pi-agent-chat.service
+    $SUDO systemctl daemon-reload 2>/dev/null || true
+    ok "已移除 systemd 配置"
+  fi
+  if command -v crontab &>/dev/null && crontab -l 2>/dev/null | grep -q "pi-agent-chat"; then
+    crontab -l 2>/dev/null | grep -v "pi-agent-chat" | crontab -
+    ok "已移除 cron @reboot"
+  fi
+  # 安装目录
+  if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+    ok "已删除安装目录: $INSTALL_DIR"
+  else
+    warn "安装目录不存在: $INSTALL_DIR"
+  fi
+  ok "卸载完成 ✅ (~/.pi/agent 的模型配置/会话数据未动)"
+  exit 0
+fi
 
 # ── 平台检查 ──
 OS="$(uname -s)"
@@ -226,7 +281,7 @@ if [ "$OS" = "Darwin" ] && [ -f "$PLIST_PATH" ]; then
 elif [ "$OS" = "Linux" ] && [ -f "$SYSTEMD_SERVICE" ]; then
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 fi
-pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
+stop_server
 
 # 清理旧文件(保留 .env 和 logs)
 rm -rf "$INSTALL_DIR/server.js" "$INSTALL_DIR/sandbox-agent.js" "$INSTALL_DIR/dist" "$INSTALL_DIR/node_modules"
@@ -511,7 +566,7 @@ info "Step 6/7: 启动服务..."
 
 # 先杀掉可能存在的旧进程/旧 daemon
 pkill -f "${INSTALL_DIR}/daemon.sh" 2>/dev/null || true
-pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
+stop_server
 sleep 1
 
 # 判断 sudo
@@ -578,7 +633,7 @@ else
       fi
     }
     patch_node_bundle
-    pkill -f "${INSTALL_DIR}/server.js" 2>/dev/null || true
+    stop_server
     sleep 1
     SERVER_BIN="$NODE_BIN"
     SERVER_RUNTIME="node"
