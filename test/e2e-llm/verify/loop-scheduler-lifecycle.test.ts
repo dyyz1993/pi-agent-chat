@@ -16,7 +16,7 @@ import { tmpdir } from "os";
 import { homedir } from "os";
 import { join } from "path";
 import { mkdir, rm } from "fs/promises";
-import { readFileSync, realpathSync } from "fs";
+import { readFileSync } from "fs";
 import {
   startTestServer,
   stopTestServer,
