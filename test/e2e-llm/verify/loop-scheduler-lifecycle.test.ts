@@ -13,8 +13,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import WebSocket from "ws";
 import { tmpdir } from "os";
+import { homedir } from "os";
 import { join } from "path";
 import { mkdir, rm } from "fs/promises";
+import { readFileSync, realpathSync } from "fs";
 import {
   startTestServer,
   stopTestServer,
@@ -48,8 +50,10 @@ let sessionPath = "";
 /** Pre-test snapshot of global settings — the test server symlinks the real
  *  ~/.pi/agent, so the persisted loopScheduler key MUST be restored or it
  *  leaks into every later session (a stray every-minute loop drowned the
- *  goal E2E session the first time this test ran). */
+ *  goal E2E session the first time this test ran). applyOverrides
+ *  deep-merges, so the restore payload carries an explicit loopScheduler. */
 let originalSettings: Record<string, unknown> | undefined;
+let restoreSettingsPayload: Record<string, unknown> | undefined;
 const shouldRun = process.env.PI_E2E_LLM === "1";
 
 function connectWs(): Promise<WebSocket> {
@@ -116,8 +120,8 @@ afterAll(async () => {
   try {
     if (sessionId) {
       // restore persisted settings FIRST (while the agent can still serve RPC)
-      if (originalSettings) {
-        await sendRPC("agent.setSettings", { sessionId, scope: "global", settings: originalSettings }, 30_000).catch(() => undefined);
+      if (restoreSettingsPayload) {
+        await sendRPC("agent.setSettings", { sessionId, scope: "global", settings: restoreSettingsPayload }, 30_000).catch(() => undefined);
       }
       await sendRPC("loop-scheduler.callChannel", { sessionId, method: "list" }).then((r) => {
         const loops = (r.result as { loops?: Array<{ id: string }> })?.loops ?? [];
@@ -145,6 +149,12 @@ describe.skipIf(shouldRun === false)("Loop Scheduler lifecycle (real server, rea
     "create → persist → reload → becomeScheduler (syncs settings) → cron fires → prompt injected",
     async () => {
       const loopPrompt = `收到本条定时消息后，只回复 loop-ok 这一个词，不要做任何其他事情`;
+
+      // 0. clear any loop leaked by a previously-crashed run (defense in depth)
+      const preList = await sendRPC("loop-scheduler.callChannel", { sessionId, method: "list" });
+      for (const stray of (preList.result as { loops?: Array<{ id: string }> })?.loops ?? []) {
+        await sendRPC("loop-scheduler.callChannel", { sessionId, method: "remove", args: { id: stray.id } }, 15_000);
+      }
 
       // 1. invalid cron is rejected
       const bad = await sendRPC("loop-scheduler.callChannel", {
@@ -232,6 +242,20 @@ describe.skipIf(shouldRun === false)("Loop Scheduler lifecycle (real server, rea
       expect((removed.result as { ok?: boolean })?.ok).toBe(true);
       const finalList = await sendRPC("loop-scheduler.callChannel", { sessionId, method: "list" });
       expect(((finalList.result as { loops?: unknown[] })?.loops ?? []).some((l) => (l as { id: string }).id === loopId)).toBe(false);
+
+      // 9. restore persisted global settings (test server symlinks the real
+      //    ~/.pi/agent). applyOverrides deep-merges — OMITTING the
+      //    loopScheduler key would keep the loop on disk (that silent leak
+      //    once drowned another test's session), so restore must explicitly
+      //    write the original loops (empty array when there were none).
+      const originalLoopScheduler = (originalSettings as { loopScheduler?: { loops?: unknown[] } })?.loopScheduler ?? { loops: [] };
+      const restorePayload = { ...originalSettings, loopScheduler: originalLoopScheduler };
+      restoreSettingsPayload = restorePayload;
+      const restore = await sendRPC("agent.setSettings", { sessionId, scope: "global", settings: restorePayload }, 30_000);
+      expect(restore.error).toBeUndefined();
+      // Verify at the DISK level — getSettings may filter non-schema keys.
+      const onDisk = JSON.parse(readFileSync(join(homedir(), ".pi", "agent", "settings.json"), "utf-8")) as { loopScheduler?: { loops?: unknown[] } };
+      expect(onDisk.loopScheduler?.loops ?? []).toEqual(originalLoopScheduler.loops ?? []);
     },
     300_000,
   );
