@@ -339,6 +339,7 @@ jobs:
             "private": true,
             "dependencies": {
               "@dyyz1993/pi-coding-agent": "latest",
+              "@dyyz1993/rpc-core": "^2.2.0",
               "ws": "^8.18.0",
               "strip-ansi": "^7.0.0"
             }
