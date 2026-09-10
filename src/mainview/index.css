@@ -497,8 +497,9 @@ a:focus-visible,
 
   button,
   [role="button"] {
-    min-width: 44px;
-    min-height: 44px;
+    /* 36px：44px（HIG 标准）在窄屏显得过宽，28px 触控误触多——折中值 */
+    min-width: 36px;
+    min-height: 36px;
   }
 }
 
