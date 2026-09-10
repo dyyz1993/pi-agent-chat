@@ -1648,7 +1648,7 @@ export function ChatPanel() {
         )}
 
         <div
-          className={`px-2 sm:px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-accent/50 bg-accent/5" : ""} ${isMobileOrTablet ? "pb-[env(safe-area-inset-bottom)]" : ""}`}
+          className={`px-1 sm:px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-accent/50 bg-accent/5" : ""} ${isMobileOrTablet ? "pb-[env(safe-area-inset-bottom)]" : ""}`}
           style={
             isMobileOrTablet
               ? undefined
@@ -1671,7 +1671,7 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
-                <div className="flex items-end gap-1.5">
+                <div className="flex items-end gap-1.5 max-[768px]:gap-1">
                   <div className="relative flex-1 overflow-visible rounded-xl border border-border-primary bg-bg-elevated/95 transition-colors focus-within:border-border-focus focus-within:shadow-sm">
                     {isRefiningGoal && <RefineGoalOverlay step={refineStep} />}
                     {!goalMode && <AttachmentBar />}
@@ -1750,14 +1750,14 @@ export function ChatPanel() {
                     )}
                   </div>
 
-                  <div className="flex shrink-0 flex-col items-center justify-end gap-1.5 py-1 px-1.5 max-[768px]:gap-2 max-[768px]:py-1.5 max-[768px]:self-stretch">
+                  <div className="flex shrink-0 flex-col items-center justify-end gap-1.5 py-1 px-1.5 max-[768px]:px-1 max-[768px]:gap-2 max-[768px]:py-1.5">
                     {goalMode ? (
                       <button
                         onClick={() => void handleRefineGoal()}
                         disabled={
                           isCreatingGoal || isRefiningGoal || !(goalDraft || inputText).trim()
                         }
-                        className={`p-2.5 max-[768px]:p-2 max-[768px]:flex-1 max-[768px]:w-full rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-accent/20 text-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`p-2.5 max-[768px]:p-2 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-accent/20 text-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
                         title={t("goal.refine")}
                         aria-label={t("goal.refine")}
                       >
@@ -1771,7 +1771,7 @@ export function ChatPanel() {
                       <button
                         onClick={handleFollowUp}
                         disabled={isFollowUpRunning}
-                        className="p-2.5 max-[768px]:p-2 max-[768px]:flex-1 max-[768px]:w-full rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-2.5 max-[768px]:p-2 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         title={t("sendFollowUp")}
                         aria-label={t("sendFollowUp")}
                       >
@@ -1781,7 +1781,7 @@ export function ChatPanel() {
                       <button
                         onClick={handleAbort}
                         disabled={isAborting || isAbortRunning}
-                        className={`p-2.5 max-[768px]:p-2 max-[768px]:flex-1 max-[768px]:w-full rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                        className={`p-2.5 max-[768px]:p-2 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
                         title={isAborting ? t("stopping") : t("stop")}
                         aria-label={isAborting ? t("stopping") : t("stop")}
                       >
@@ -1806,7 +1806,7 @@ export function ChatPanel() {
                         goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
                       }
                       disabled={sendDisabled}
-                      className={`p-2.5 max-[768px]:p-2 max-[768px]:flex-1 max-[768px]:w-full rounded-lg transition-colors flex items-center justify-center ${!sendDisabled ? (goalMode ? "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                      className={`p-2.5 max-[768px]:p-2 rounded-lg transition-colors flex items-center justify-center ${!sendDisabled ? (goalMode ? "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                       title={
                         isPermissionPending
                           ? t("waitPermission")
