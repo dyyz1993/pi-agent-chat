@@ -3,6 +3,8 @@
   "backToDelegate": "返回委派方",
   "backToSource": "返回来源",
   "sessionStartFailed": "会话启动失败",
+  "modelSwitch.label": "切换模型",
+  "modelSwitch.customTier": "自定义",
   "quickCreate.started": "快速创建已启动：{{name}}",
   "quickCreate.completed": "快速创建完成：{{name}}",
   "quickCreate.cancelled": "快速创建已取消：{{name}}",

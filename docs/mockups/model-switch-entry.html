@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模型切换 Entry 消息 — UI 样式稿</title>
+<style>
+  /* ===== 取自 src/mainview/index.css 的真实 design tokens ===== */
+  :root {
+    --color-bg-primary: #edf1f6;
+    --color-bg-secondary: #f8fafc;
+    --color-bg-tertiary: #e7edf4;
+    --color-bg-elevated: #ffffff;
+    --color-text-primary: #17202e;
+    --color-text-secondary: #4f5f72;
+    --color-text-tertiary: #7d8a9c;
+    --color-border-primary: #dce4ee;
+    --color-border-secondary: #c7d2df;
+    --color-accent: #746cff;
+    --color-accent-muted: rgba(116, 108, 255, 0.12);
+    --color-accent-text: #5b47d4;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.625rem;
+    --radius-full: 9999px;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  :root[data-theme="dark"] {
+    --color-bg-primary: #0b111a;
+    --color-bg-secondary: #111827;
+    --color-bg-tertiary: #142033;
+    --color-bg-elevated: #121b28;
+    --color-text-primary: #f2f6fb;
+    --color-text-secondary: #c1cad6;
+    --color-text-tertiary: #8a96a8;
+    --color-border-primary: #334155;
+    --color-border-secondary: #475569;
+    --color-accent: #746cff;
+    --color-accent-muted: rgba(116, 108, 255, 0.18);
+    --color-accent-text: #a8b0ff;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .page { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .subtitle { color: var(--color-text-tertiary); font-size: 13px; margin: 0 0 28px; }
+  h2 { font-size: 14px; margin: 36px 0 4px; display: flex; align-items: center; gap: 8px; }
+  h2 .tag {
+    font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: var(--radius-full);
+    background: var(--color-accent-muted); color: var(--color-accent-text);
+  }
+  .desc { color: var(--color-text-tertiary); font-size: 12.5px; margin: 0 0 12px; }
+
+  /* ===== 聊天流模拟 ===== */
+  .chat {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .bubble {
+    max-width: 78%; padding: 8px 12px; border-radius: var(--radius-lg);
+    background: var(--color-bg-elevated); border: 1px solid var(--color-border-primary);
+    box-shadow: var(--shadow-sm); font-size: 13px; color: var(--color-text-primary);
+  }
+  .bubble.user { align-self: flex-end; background: var(--color-accent-muted); border-color: transparent; color: var(--color-text-primary); }
+  .bubble .who { font-size: 10px; color: var(--color-text-tertiary); margin-bottom: 2px; }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+  }
+  .chip {
+    display: inline-flex; align-items: center;
+    padding: 1px 7px; border-radius: var(--radius-md);
+    background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary);
+    color: var(--color-text-secondary); white-space: nowrap;
+  }
+  .chip.to {
+    background: var(--color-accent-muted); border-color: transparent;
+    color: var(--color-accent-text); font-weight: 500;
+  }
+  .arrow { color: var(--color-text-tertiary); margin: 0 2px; }
+  .time { font-size: 10px; color: var(--color-text-tertiary); }
+  .icon svg { display: block; }
+
+  /* ===== 方案 A：居中轻量通知（推荐） ===== */
+  .notice-a {
+    align-self: center;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-primary);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+  }
+  .notice-a .icon { color: var(--color-accent); }
+  .notice-a .label { font-weight: 500; color: var(--color-text-secondary); }
+
+  /* ===== 方案 B：左侧 accent 条通栏 ===== */
+  .notice-b {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 7px 12px;
+    border-radius: var(--radius-md);
+    background: var(--color-accent-muted);
+    border-left: 3px solid var(--color-accent);
+    font-size: 12px; color: var(--color-text-secondary);
+  }
+  .notice-b .icon { color: var(--color-accent); }
+  .notice-b .label { font-weight: 600; color: var(--color-accent-text); }
+  .notice-b .time { margin-left: auto; }
+
+  /* ===== 方案 C：现有 entry 卡片风格 ===== */
+  .notice-c {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden; font-size: 12px;
+  }
+  .notice-c .head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--color-border-primary);
+    border-left: 3px solid var(--color-accent);
+    color: var(--color-accent-text);
+    font-size: 11px; font-weight: 500;
+  }
+  .notice-c .head .time { margin-left: auto; }
+  .notice-c .body { padding: 8px 12px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--color-text-secondary); }
+
+  /* ===== 主题切换按钮 ===== */
+  .theme-toggle {
+    position: fixed; top: 16px; right: 16px; z-index: 10;
+    padding: 7px 14px; border-radius: var(--radius-full); cursor: pointer;
+    border: 1px solid var(--color-border-secondary);
+    background: var(--color-bg-elevated); color: var(--color-text-primary);
+    font-size: 12px; box-shadow: var(--shadow-sm);
+  }
+  .footnote { margin-top: 40px; padding: 12px 16px; border-radius: var(--radius-md); background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); color: var(--color-text-tertiary); font-size: 12px; }
+  .footnote code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--color-text-secondary); }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">切换明暗主题</button>
+
+<div class="page">
+  <h1>模型切换 Entry 消息 — UI 样式稿</h1>
+  <p class="subtitle">切换模型后在会话消息流中出现的一条系统通知 entry。以下三种方案均含明暗主题，点击右上角按钮对比。</p>
+
+  <!-- ========== 方案 A ========== -->
+  <h2>方案 A · 居中轻量通知 <span class="tag">推荐</span></h2>
+  <p class="desc">居中小胶囊，不与消息卡片抢视觉，类似 GitHub 的系统动态。信息密度刚好，移动端也不占宽。</p>
+  <div class="chat">
+    <div class="bubble user">帮我看看这个报错</div>
+    <div class="bubble"><div class="who">assistant</div>这个报错是 async 回调里没捕获 Promise reject 导致的……</div>
+    <div class="notice-a">
+      <span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M21 3l-7 7"/><path d="M3 3l7 7"/><path d="M16 21h5v-5"/><path d="M8 21H3v-5"/><path d="M21 21l-5-5"/><path d="M3 21l5-5"/></svg></span>
+      <span class="label">切换模型</span>
+      <span class="chip mono">google/gemini-2.5-pro</span>
+      <span class="arrow">→</span>
+      <span class="chip to mono">opencode-go/deepseek-v4-flash</span>
+      <span class="time">14:32</span>
+    </div>
+    <div class="bubble user">好，用新模型继续修</div>
+  </div>
+
+  <!-- ========== 方案 B ========== -->
+  <h2>方案 B · 左侧 accent 条通栏</h2>
+  <p class="desc">通栏横条 + 主题色左边线，存在感更强，远看也能注意到"这里发生过切换"。</p>
+  <div class="chat">
+    <div class="bubble user">帮我看看这个报错</div>
+    <div class="notice-b">
+      <span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M21 3l-7 7"/><path d="M3 3l7 7"/><path d="M16 21h5v-5"/><path d="M8 21H3v-5"/><path d="M21 21l-5-5"/><path d="M3 21l5-5"/></svg></span>
+      <span class="label">切换模型</span>
+      <span class="chip mono">google/gemini-2.5-pro</span>
+      <span class="arrow">→</span>
+      <span class="chip to mono">opencode-go/deepseek-v4-flash</span>
+      <span class="time">14:32</span>
+    </div>
+    <div class="bubble user">好，用新模型继续修</div>
+  </div>
+
+  <!-- ========== 方案 C ========== -->
+  <h2>方案 C · 复用现有 entry 卡片风格</h2>
+  <p class="desc">与 memory / step-snapshot 等 entry 卡片同一视觉语言（头部 + 左色条 + 内容区），最一致但也最重。</p>
+  <div class="chat">
+    <div class="bubble user">帮我看看这个报错</div>
+    <div class="notice-c">
+      <div class="head">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M21 3l-7 7"/><path d="M3 3l7 7"/><path d="M16 21h5v-5"/><path d="M8 21H3v-5"/><path d="M21 21l-5-5"/><path d="M3 21l5-5"/></svg>
+        <span>切换模型</span>
+        <span class="time">14:32</span>
+      </div>
+      <div class="body">
+        <span class="chip mono">google/gemini-2.5-pro</span>
+        <span class="arrow">→</span>
+        <span class="chip to mono">opencode-go/deepseek-v4-flash</span>
+      </div>
+    </div>
+    <div class="bubble user">好，用新模型继续修</div>
+  </div>
+
+  <div class="footnote">
+    <strong style="color: var(--color-text-secondary)">备注</strong><br>
+    · 文案走 i18n：中文「切换模型」/ 英文 "Model switched"；时间戳取 entry 的写入时间。<br>
+    · 旧会话里已存在的 <code>model_change</code> entry 只记录了新模型、没有"来源模型"，这类历史 entry 会显示为单向「切换至 <code>新模型</code>」。<br>
+    · 这条 entry 只进 UI 消息流，不进 LLM 上下文（不会让模型看见、不多耗 token）。<br>
+    · 选中消息、折叠预览等行为与其他系统 entry 保持一致；纯展示、不可交互。
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.dataset.theme = html.dataset.theme === "dark" ? "light" : "dark";
+  }
+</script>
+</body>
+</html>

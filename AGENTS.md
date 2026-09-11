@@ -496,14 +496,15 @@ App Server (handler)
 
 Session 文件（`<sessionPath>`）是 JSONL 格式，每行一个 JSON 条目。核心条目类型：
 
-| 条目类型     | `type` 字段                                   | 用途                      | 写入方                |
-| ------------ | --------------------------------------------- | ------------------------- | --------------------- |
-| 消息         | `"message"`                                   | 用户/助手消息             | CLI Agent             |
-| 叶子指针     | `"leaf_pointer"`                              | 当前对话分支末端          | CLI Agent             |
-| 步骤快照     | `"step-snapshot"`                             | 每轮操作的文件树快照 hash | CLI Agent             |
-| 文件变更记录 | `"custom"` + `customType: "file-review-turn"` | 一轮操作改了哪些文件      | file-review extension |
-| 审批记录     | `"custom"` + `customType: "file-approval"`    | 文件审批/驳回记录         | file-review extension |
-| 通道数据     | `"channel_data"`                              | App Server ↔ CLI 通信     | 双向                  |
+| 条目类型     | `type` 字段                                   | 用途                                                                                                                                              | 写入方                |
+| ------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| 消息         | `"message"`                                   | 用户/助手消息                                                                                                                                     | CLI Agent             |
+| 叶子指针     | `"leaf_pointer"`                              | 当前对话分支末端                                                                                                                                  | CLI Agent             |
+| 步骤快照     | `"step-snapshot"`                             | 每轮操作的文件树快照 hash                                                                                                                         | CLI Agent             |
+| 模型切换     | `"model_change"`                              | 模型切换记录（`previousProvider/previousModelId` 记来源模型；`source` 为 `set`/`cycle`/`init`，`init` 是新会话初始模型记录，UI 不渲染为切换通知） | CLI Agent             |
+| 文件变更记录 | `"custom"` + `customType: "file-review-turn"` | 一轮操作改了哪些文件                                                                                                                              | file-review extension |
+| 审批记录     | `"custom"` + `customType: "file-approval"`    | 文件审批/驳回记录                                                                                                                                 | file-review extension |
+| 通道数据     | `"channel_data"`                              | App Server ↔ CLI 通信                                                                                                                             | 双向                  |
 
 **JSONL 读取工具**：
 

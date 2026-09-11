@@ -285,7 +285,8 @@ export function buildProcessedMessages(
           !isLspCustomType(b.customType) &&
           !isBashBackgroundProcessType(b.customType) &&
           b.customType !== "step_snapshot" &&
-          b.customType !== "pi-goal-complete"
+          b.customType !== "pi-goal-complete" &&
+          b.customType !== "model_changed"
         )
           return true;
         return false;

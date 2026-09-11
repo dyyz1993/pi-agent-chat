@@ -1778,12 +1778,30 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const SNAPSHOT_TYPE = "step_snapshot";
     const isSnapshot = event.customType === SNAPSHOT_TYPE;
     const isBashBackgroundProcess = isBashBackgroundProcessType(event.customType);
-    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType) && !isSnapshot && !isBashBackgroundProcess) {
+    const isModelSwitch = event.customType === "model_changed";
+    if (
+      !ALL_MEMORY_TYPE_KEYS.has(event.customType) &&
+      !isSnapshot &&
+      !isBashBackgroundProcess &&
+      !isModelSwitch
+    ) {
       return;
     }
 
-    if (isSnapshot || isBashBackgroundProcess) {
+    if (isSnapshot || isBashBackgroundProcess || isModelSwitch) {
       if (event.display === false) return;
+      if (isModelSwitch) {
+        // Parser filters init/legacy entries on restore; mirror that here so a
+        // live switch event and the JSONL entry can't disagree.
+        const d = (event.data ?? {}) as Record<string, unknown>;
+        const hasPrevious =
+          typeof d.previousProvider === "string" && typeof d.previousModelId === "string";
+        const sameModel =
+          hasPrevious &&
+          d.previousProvider === d.provider &&
+          String(d.previousModelId).toLowerCase() === String(d.modelId).toLowerCase();
+        if (d.source === "init" || !hasPrevious || sameModel) return;
+      }
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
       const customMsg: ChatMessage = {

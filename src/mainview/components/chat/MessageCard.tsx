@@ -13,6 +13,7 @@ import {
 import type { ChatMessage } from "../../types";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { GoalCompleteCard } from "./GoalCompleteCard";
+import { extractModelSwitchData, ModelSwitchCard } from "./ModelSwitchCard";
 import {
   type MessageCardProps,
   ROLE_CONFIG,
@@ -196,12 +197,26 @@ export const MessageCard = memo(function MessageCard({
         !isLspCustomType(b.customType) &&
         !isBashBackgroundProcessType(b.customType) &&
         b.customType !== "step_snapshot" &&
-        b.customType !== "pi-goal-complete"
+        b.customType !== "pi-goal-complete" &&
+        b.customType !== "model_changed"
       )
         return true;
       return false;
     });
     if (allHidden) return null;
+  }
+
+  if (hasCustomContent && customBlock && customBlock.customType === "model_changed") {
+    const switchData = extractModelSwitchData((customBlock as { data?: unknown }).data);
+    if (!switchData) return null;
+    return (
+      <ModelSwitchCard
+        data={switchData}
+        messageId={message.id}
+        timestamp={message.timestamp}
+        sessionId={sessionId}
+      />
+    );
   }
 
   if (hasCustomContent && customBlock && customBlock.customType === "pi-goal-complete") {

@@ -341,24 +341,40 @@ export function SidebarBottomControls() {
       const modelId = rest.join("/");
       if (currentModel?.id === modelId && currentModel?.provider === provider) return;
       setSwitching(true);
+      const sid = activeSessionId;
       try {
-        await apiClient.call("agent.reload", { sessionId: activeSessionId });
+        // Switch immediately — setModel validates auth and persists on its own,
+        // so the notice pill and model state land without waiting for the
+        // runtime resource reload (which can take 10s+). The reload runs in
+        // the background afterwards.
         await apiClient.call("agent.setModel", {
-          sessionId: activeSessionId,
+          sessionId: sid,
           model: key,
         });
-        setModelForSession(activeSessionId, provider, modelId);
+        setModelForSession(sid, provider, modelId);
         if (projectPath) {
           const tierStore = useTierStore.getState();
-          const models = tierStore.getTierModelsForSession(activeSessionId, projectPath);
+          const models = tierStore.getTierModelsForSession(sid, projectPath);
           const matchedTier = TIER_KEYS.find(
             (tier) => models[tier]?.toLowerCase() === `${provider}/${modelId}`.toLowerCase(),
           );
           if (matchedTier) {
-            tierStore.setSessionCurrentTier(activeSessionId, projectPath, matchedTier);
+            tierStore.setSessionCurrentTier(sid, projectPath, matchedTier);
           }
         }
-        fetchModelState(activeSessionId);
+        fetchModelState(sid);
+        void apiClient
+          .call("agent.reload", { sessionId: sid })
+          .catch((reloadErr: unknown) => {
+            log.warn("post-switch reload failed", {
+              sessionId: sid,
+              error:
+                reloadErr instanceof Error ? reloadErr.message : String(reloadErr),
+            });
+          })
+          .finally(() => {
+            fetchModelState(sid);
+          });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log.warn("setModel failed", { error: message });

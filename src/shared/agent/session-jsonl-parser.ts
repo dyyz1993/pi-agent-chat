@@ -113,6 +113,23 @@ function createSystemEventMessage(parsed: Record<string, unknown>): Record<strin
   };
 }
 
+function createModelChangeMessage(parsed: Record<string, unknown>): Record<string, unknown> {
+  return {
+    role: "custom",
+    customType: "model_changed",
+    content: "",
+    display: true,
+    details: {
+      provider: parsed.provider,
+      modelId: parsed.modelId,
+      previousProvider: parsed.previousProvider,
+      previousModelId: parsed.previousModelId,
+      source: parsed.source,
+    },
+    timestamp: entryTimestamp(parsed.timestamp),
+  };
+}
+
 /**
  * Process a parsed JSONL entry and append to the appropriate arrays.
  * Handles message, custom, compaction, and leaf_pointer types.
@@ -134,6 +151,29 @@ function appendParsedEntry(
       leafState.activeJsonlLeafId = entryId;
     }
     return "message";
+  }
+
+  if (parsed.type === "model_change") {
+    // Surface actual model switches as chat notices. `init` entries record a
+    // new session's starting model, and legacy entries predate previous-model
+    // tracking — both would render as bogus switches, so skip them.
+    if (
+      parsed.source !== "init" &&
+      typeof parsed.previousProvider === "string" &&
+      typeof parsed.previousModelId === "string"
+    ) {
+      const sameModel =
+        (parsed.previousProvider as string) === (parsed.provider as string) &&
+        (parsed.previousModelId as string).toLowerCase() ===
+          (parsed.modelId as string).toLowerCase();
+      if (!sameModel) {
+        messages.push({ entryId, message: createModelChangeMessage(parsed) });
+      }
+    }
+    if (leafState) {
+      leafState.activeJsonlLeafId = entryId;
+    }
+    return "custom";
   }
 
   if (parsed.type === "custom") {

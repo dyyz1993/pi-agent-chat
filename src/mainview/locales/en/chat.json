@@ -3,6 +3,8 @@
   "backToDelegate": "Back to delegator",
   "backToSource": "Back to source",
   "sessionStartFailed": "Session start failed",
+  "modelSwitch.label": "Model switched",
+  "modelSwitch.customTier": "custom",
   "quickCreate.started": "Quick create started: {{name}}",
   "quickCreate.completed": "Quick create completed: {{name}}",
   "quickCreate.cancelled": "Quick create cancelled: {{name}}",
