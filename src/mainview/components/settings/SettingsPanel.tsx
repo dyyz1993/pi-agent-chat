@@ -164,12 +164,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [presenceSuppress, setPresenceSuppress] = useState<boolean>(true);
   useEffect(() => {
     let cancelled = false;
-    apiClient
-      .call<{
-        agentEndPushEnabled: boolean;
-        immersiveOpen: boolean;
-        presenceSuppress: boolean;
-      }>("app.getNotificationSettings", {})
+    apiClient.call("notification.getSettings", {})
       .then((settings) => {
         if (cancelled) return;
         setPushEnabled(Boolean(settings.agentEndPushEnabled));
@@ -190,9 +185,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const persistPushSetting = useCallback(
     (
       method:
-        | "app.setAgentEndPushEnabled"
-        | "app.setAgentEndPushImmersive"
-        | "app.setAgentEndPresenceSuppress",
+        | "notification.setAgentEndPushEnabled"
+        | "notification.setAgentEndPushImmersive"
+        | "notification.setAgentEndPresenceSuppress",
       value: boolean,
     ) => {
       apiClient.call(method, { enabled: value }).catch(() => {});
@@ -203,17 +198,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     const current = pushEnabled ?? true;
     const next = !current;
     setPushEnabled(next);
-    persistPushSetting("app.setAgentEndPushEnabled", next);
+    persistPushSetting("notification.setAgentEndPushEnabled", next);
   }, [pushEnabled, persistPushSetting]);
   const toggleImmersiveOpen = useCallback(() => {
     const next = !immersiveOpen;
     setImmersiveOpen(next);
-    persistPushSetting("app.setAgentEndPushImmersive", next);
+    persistPushSetting("notification.setAgentEndPushImmersive", next);
   }, [immersiveOpen, persistPushSetting]);
   const togglePresenceSuppress = useCallback(() => {
     const next = !presenceSuppress;
     setPresenceSuppress(next);
-    persistPushSetting("app.setAgentEndPresenceSuppress", next);
+    persistPushSetting("notification.setAgentEndPresenceSuppress", next);
   }, [presenceSuppress, persistPushSetting]);
 
   const sessionId = useSessionStore((s) => s.activeSessionId);

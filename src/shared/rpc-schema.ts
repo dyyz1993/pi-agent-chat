@@ -20,6 +20,7 @@ import type { CoordinatorEvents } from "./modules/coordinator";
 import type { LoopSchedulerMethods, LoopSchedulerEvents } from "./modules/loop-scheduler";
 import type { GoalMethods, GoalEvents } from "./modules/goal";
 import type { UpdaterMethods } from "./modules/updater";
+import type { NotificationMethods } from "./modules/notification";
 
 export interface RPCMethods
   extends
@@ -43,7 +44,8 @@ export interface RPCMethods
     ChangeReviewMethods,
     GoalMethods,
     UpdaterMethods,
-    LoopSchedulerMethods {}
+    LoopSchedulerMethods,
+    NotificationMethods {}
 
 export interface RPCEvents
   extends

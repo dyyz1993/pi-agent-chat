@@ -9,19 +9,19 @@ import {
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
-  r("app.getNotificationSettings", async () => {
+  r("notification.getSettings", async () => {
     return getNotificationSettings();
   });
 
-  r("app.setAgentEndPushEnabled", async (params: { enabled: boolean }) => {
-    return setNotificationSetting("agentEndPushEnabled", params.enabled === true);
+  r("notification.setAgentEndPushEnabled", async (params: { enabled: boolean }) => {
+    await setNotificationSetting("agentEndPushEnabled", params.enabled === true);
   });
 
-  r("app.setAgentEndPushImmersive", async (params: { enabled: boolean }) => {
-    return setNotificationSetting("immersiveOpen", params.enabled === true);
+  r("notification.setAgentEndPushImmersive", async (params: { enabled: boolean }) => {
+    await setNotificationSetting("immersiveOpen", params.enabled === true);
   });
 
-  r("app.setAgentEndPresenceSuppress", async (params: { enabled: boolean }) => {
-    return setNotificationSetting("presenceSuppress", params.enabled === true);
+  r("notification.setAgentEndPresenceSuppress", async (params: { enabled: boolean }) => {
+    await setNotificationSetting("presenceSuppress", params.enabled === true);
   });
 }

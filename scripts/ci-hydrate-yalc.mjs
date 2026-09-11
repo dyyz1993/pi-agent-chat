@@ -19,7 +19,9 @@ const packages = [
   // old tarball and tsc fails on fromHash not being a known property.
   // 0.78.12 adds loop-scheduler becomeScheduler settings-sync and
   // browser_check expectVisual (additive; bumped for parity).
-  { name: "@dyyz1993/pi-coding-agent", version: "0.78.12" },
+  // 0.78.13 inits theme in RPC mode (todo-ext/export_html extension errors) and
+  // records previous model + source on model_change entries (additive).
+  { name: "@dyyz1993/pi-coding-agent", version: "0.78.13" },
   { name: "@dyyz1993/pi-tui", version: "0.74.56" },
 ];
 

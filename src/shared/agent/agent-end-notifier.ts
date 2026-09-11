@@ -345,6 +345,7 @@ export async function notifyApprovalRequest(
     enabled,
     hasBaseUrl: input.deepLinkBaseUrl.length > 0,
     aliveClients: 0,
+    drelClients: 0,
     // 审批不受 presence 抑制：需要用户动作的事必须响铃
     presenceSuppress: false,
   });
