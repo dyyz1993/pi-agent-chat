@@ -340,7 +340,8 @@ export interface AgentMethods {
   };
   "agent.reload": {
     params: { sessionId: string };
-    result: void;
+    /** deferred=true: 会话正在流式，reload 已挂起到回合边界自动执行 */
+    result: { deferred?: boolean };
   };
   "agent.getContextUsage": {
     params: { sessionId: string };

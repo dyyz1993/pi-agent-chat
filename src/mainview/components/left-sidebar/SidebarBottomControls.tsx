@@ -304,18 +304,6 @@ export function SidebarBottomControls() {
 
   const refreshModelsForActiveSession = useCallback(() => {
     if (!activeSessionId || !agentReady) return;
-    // Never reload while the agent is streaming — reload aborts the in-flight
-    // turn and kills the assistant's answer mid-generation. The model-list
-    // refresh can wait until the turn finishes.
-    const status = useSessionStore.getState().sessionStatusMap[activeSessionId];
-    if (status === "streaming" || status === "compacting" || status === "retrying") {
-      log.warn("skip agent.reload: session is streaming", {
-        sessionId: activeSessionId,
-        status,
-      });
-      fetchModelState(activeSessionId);
-      return;
-    }
     void apiClient
       .call("agent.reload", { sessionId: activeSessionId })
       .catch((err) => {
@@ -388,18 +376,11 @@ export function SidebarBottomControls() {
           }
         }
         fetchModelState(sid);
-        void apiClient
-          .call("agent.reload", { sessionId: sid })
-          .catch((reloadErr: unknown) => {
-            log.warn("post-switch reload failed", {
-              sessionId: sid,
-              error:
-                reloadErr instanceof Error ? reloadErr.message : String(reloadErr),
-            });
-          })
-          .finally(() => {
-            fetchModelState(sid);
-          });
+        // No automatic agent.reload here: reload aborts an in-flight turn and,
+        // running in the background, it raced user messages sent right after a
+        // switch (send landed in a reloading process — streamed events were
+        // lost). setModel alone is enough for the switch to take effect; the
+        // resource refresh happens when the picker is opened next.
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log.warn("setModel failed", { error: message });

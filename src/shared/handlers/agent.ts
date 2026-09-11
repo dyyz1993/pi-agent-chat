@@ -226,6 +226,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.send", async (params) => {
     log.info("send called", { sessionId: params.sessionId, content: params.content });
+    // 若有流式期间挂起的 reload，先在回合开始前执行——下一轮 LLM 调用即用新运行时
+    await m.flushDeferredReload(params.sessionId).catch(() => undefined);
     const ok = await m.send(params.sessionId, params.content, params.images);
     if (!ok) {
       throw new Error(`Agent not started for session ${params.sessionId}`);

@@ -725,6 +725,8 @@ export class AgentProcessManager {
    * Refilled lazily after consumption so the next session start finds one.
    */
   private warmPool = new Map<string, WarmPoolEntry<ManagedClient>[]>();
+  /** 流式中收到的 reload 请求 —— 挂起到回合边界（agent_end 或下一轮发送前）执行 */
+  private pendingReloadSessions = new Set<string>();
   /** Prevents duplicate concurrent prefork spawns for the same poolKey. */
   private warmPending = new Set<string>();
   private servers = new Set<RPCServer>();
@@ -1050,6 +1052,14 @@ export class AgentProcessManager {
       leafIds: this.leafIds,
     });
     this.eventHandler = new AgentEventHandler({
+      onTurnEndIdle: (sid) => {
+        // 回合边界：执行流式期间挂起的 reload（稍延迟，给紧跟的快速追问留窗口）
+        if (!this.pendingReloadSessions.has(sid)) return;
+        setTimeout(
+          () => void this.flushDeferredReload(sid).catch(() => undefined),
+          2_000,
+        );
+      },
       broadcastEvent: (method, params, meta) => this.broadcastEvent(method, params, meta),
       broadcastSessionStatus: (sessionId, status) => this.broadcastSessionStatus(sessionId, status),
       emitAgentEvent: (sessionId, event) => this.emitAgentEvent(sessionId, event as SanitizedEvent),
@@ -1191,6 +1201,29 @@ export class AgentProcessManager {
       return inFlightStart;
     }
 
+    // The in-flight promise MUST be registered synchronously, before
+    // _runStart's first await. Registering it after an await (the old code
+    // registered only after `await resolveRemoteSshStatus`) let two same-tick
+    // agent.start calls both pass the in-flight check and double-spawn CLI
+    // children for one session; the overwritten child became an orphan and
+    // its event stream no longer matched the page's subscription.
+    const startPromise = this._runStart(sessionId, projectPath, sessionPath, options);
+    this._startPromises.set(sessionId, startPromise);
+    try {
+      return await startPromise;
+    } finally {
+      if (this._startPromises.get(sessionId) === startPromise) {
+        this._startPromises.delete(sessionId);
+      }
+    }
+  }
+
+  private async _runStart(
+    sessionId: string,
+    projectPath: string,
+    sessionPath: string,
+    options?: { forceNewProcess?: boolean; userId?: string; delegateParentSessionId?: string },
+  ): Promise<AgentStartResult> {
     const existing = this.clients.get(sessionId);
     const connectingStatus =
       existing?._activeSessionId === sessionId
@@ -1204,7 +1237,7 @@ export class AgentProcessManager {
           });
     this.broadcastRemoteSshConnection(sessionId, projectPath, connectingStatus);
 
-    const startPromise = startAgentClientOperation({
+    const result = await startAgentClientOperation({
       sessionId,
       projectPath,
       sessionPath,
@@ -1217,6 +1250,11 @@ export class AgentProcessManager {
       evictLRU: (k) => this.evictLRU(k),
       addToPool: (k, m) => this.addToPool(k, m),
       takeWarmProcess: (k, p) => takeWarmProcess(this.warmPool, k, p),
+      // NOTE: createRpcClient's 5th parameter is excludeLsp, NOT a
+      // restart-process flag. forceNewProcess callers (fork dialog,
+      // coordinator delegates, subagent focus) therefore spawn WITHOUT LSP —
+      // long-standing behavior, kept intentionally. It does not kill an
+      // existing process; same-session dedup is handled by _startPromises.
       createRpcClient: (cliPath, cwd, sp, userId) =>
         createRpcClient(cliPath, cwd, sp, userId, options?.forceNewProcess === true),
       registerAgentChannels: (args) => registerAgentChannels(args),
@@ -1227,33 +1265,7 @@ export class AgentProcessManager {
       drainPendingDelegates: () => {
         this._drainPendingDelegates();
       },
-    });
-    this._startPromises.set(sessionId, startPromise);
-    try {
-      const result = await startPromise;
-      // A start consumed (or lacked) a warm process — refill the pool in the
-      // background so the next session start finds one ready.
-      if (result.status === "started" && !options?.forceNewProcess) {
-        this.preforkForProject(projectPath, options?.userId);
-      }
-      const persistedAgent = options?.delegateParentSessionId
-        ? null
-        : readPersistedSessionAgent(sessionPath);
-      if (result.status === "started" && persistedAgent) {
-        await this.switchAgent(sessionId, persistedAgent).catch((err: unknown) => {
-          log.warn("[start] failed to restore persisted session agent", {
-            sessionId,
-            agent: persistedAgent,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        });
-      }
-      const connectedStatus = connectingStatus
-        ? { ...connectingStatus, status: "connected" as const, error: undefined }
-        : null;
-      this.broadcastRemoteSshConnection(sessionId, projectPath, connectedStatus);
-      return result;
-    } catch (err) {
+    }).catch(async (err: unknown) => {
       const errorStatus = connectingStatus
         ? {
             ...connectingStatus,
@@ -1263,11 +1275,29 @@ export class AgentProcessManager {
         : null;
       this.broadcastRemoteSshConnection(sessionId, projectPath, errorStatus);
       throw err;
-    } finally {
-      if (this._startPromises.get(sessionId) === startPromise) {
-        this._startPromises.delete(sessionId);
-      }
+    });
+    // A start consumed (or lacked) a warm process — refill the pool in the
+    // background so the next session start finds one ready.
+    if (result.status === "started" && !options?.forceNewProcess) {
+      this.preforkForProject(projectPath, options?.userId);
     }
+    const persistedAgent = options?.delegateParentSessionId
+      ? null
+      : readPersistedSessionAgent(sessionPath);
+    if (result.status === "started" && persistedAgent) {
+      await this.switchAgent(sessionId, persistedAgent).catch((err: unknown) => {
+        log.warn("[start] failed to restore persisted session agent", {
+          sessionId,
+          agent: persistedAgent,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+    const connectedStatus = connectingStatus
+      ? { ...connectingStatus, status: "connected" as const, error: undefined }
+      : null;
+    this.broadcastRemoteSshConnection(sessionId, projectPath, connectedStatus);
+    return result;
   }
 
   async send(sessionId: string, content: string, images?: ImageContent[]): Promise<boolean> {
@@ -2053,25 +2083,40 @@ export class AgentProcessManager {
     });
   }
 
-  async reload(sessionId: string): Promise<void> {
+  async reload(sessionId: string): Promise<{ deferred: boolean }> {
     const managed = this.getActiveManaged(sessionId);
-    const status = managed?.info?.status;
-    if (managed && status && status !== "idle") {
-      log.info("reload: aborting active agent before reload", { sessionId, status });
-      try {
-        await this.abort(sessionId);
-      } catch (err: unknown) {
-        log.warn("reload: pre-reload abort failed; continuing with reload", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
+    // 运行时状态可能包含 broadcast 层的扩展值（compacting/retrying 等），用 string 视图比较
+    const status = managed?.info?.status as string | undefined;
+    // 流式中：不打断正在生成的回答，把 reload 挂起到回合边界
+    // （本轮 agent_end 或下一轮发送前）自动执行——下一轮 LLM 调用即用新运行时。
+    if (managed && status && (status === "streaming" || status === "compacting" || status === "retrying")) {
+      this.pendingReloadSessions.add(sessionId);
+      log.info("reload: deferred until turn boundary", { sessionId, status });
+      return { deferred: true };
     }
 
-    return reloadOperation({
+    await reloadOperation({
       sessionId,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
+    return { deferred: false };
+  }
+
+  /** 在回合边界（agent_end 后短暂延迟，或下一轮发送前）执行挂起的 reload */
+  async flushDeferredReload(sessionId: string): Promise<void> {
+    if (!this.pendingReloadSessions.delete(sessionId)) return;
+    log.info("executing deferred agent reload at turn boundary", { sessionId });
+    try {
+      await reloadOperation({
+        sessionId,
+        getActiveManaged: (sid) => this.getActiveManaged(sid),
+      });
+    } catch (err: unknown) {
+      log.warn("deferred agent reload failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   async getTools(

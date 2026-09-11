@@ -7,6 +7,7 @@ import type { RulesChannelEvent } from "../modules/rules";
 import type { LearningCandidate, LearningRun, LearningSnapshot } from "../modules/learning";
 import { createLogger } from "../lib/logger";
 import { classifyAgentEndOutcome } from "./agent-end-outcome";
+import { notifyAgentEnd, notifyApprovalRequest } from "./agent-end-notifier";
 import { config } from "../../server-config";
 import { classifyExtensionUiRequest } from "./agent-event-lifecycle";
 import { createMemoryBroadcast } from "./agent-channel-state";
@@ -53,6 +54,8 @@ export interface ManagedClient {
 export interface AgentEventHandlerDeps {
   broadcastEvent: (method: string, params: unknown, meta?: unknown) => Promise<void>;
   broadcastSessionStatus: (sessionId: string, status: string) => void;
+  /** 回合结束（agent_end → idle）时回调 —— 用于执行流式期间挂起的 reload */
+  onTurnEndIdle?: (sessionId: string) => void;
   emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>;
   getActiveManaged: (sessionId: string) => ManagedClient | undefined;
   findParentSession: (sessionId: string) => string | undefined;
@@ -156,6 +159,20 @@ export class AgentEventHandler {
     if (event.type === "extension_ui_request") {
       const ui = event as ExtensionUIRequestEvent;
       const action = classifyExtensionUiRequest(ui);
+      if (action.type === "interactive") {
+        // 需要用户动作的请求（工具权限/路径边界/Goal 审批/Agent 提问）→ Drel 推送。
+        // 不 return：事件继续走原有客户端广播链路，页面内弹审批卡片。
+        void notifyApprovalRequest({
+          sessionId,
+          projectPath: managed.info.projectPath,
+          requestId: ui.id,
+          method: ui.method,
+          title: ui.title,
+          message: ui.message,
+          metaType: ui.permissionMeta?.type,
+          deepLinkBaseUrl: process.env.PUBLIC_PI_CHAT_URL ?? "",
+        });
+      }
       if (action.type === "notify") {
         this.deps
           .broadcastEvent(
@@ -208,6 +225,14 @@ export class AgentEventHandler {
       managed.info.status = "idle";
       managed.lastActiveAt = Date.now();
       this.deps.broadcastSessionStatus(sessionId, "idle");
+      this.deps.onTurnEndIdle?.(sessionId);
+
+      // Fire-and-forget Drel push (gating inside: env → user toggle → presence).
+      void notifyAgentEnd({
+        sessionId,
+        projectPath: managed.info.projectPath,
+        outcomeStatus: classifyAgentEndOutcome((event as { reason?: unknown }).reason).status,
+      });
 
       // Sync leafId from CLI SDK after agent completes, so that subsequent
       // getFullMessages calls (including page refreshes) see the latest leaf.
