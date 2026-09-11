@@ -350,7 +350,7 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(managed.client.prompt).toHaveBeenCalledWith("normal message", undefined);
   });
 
-  it("aborts an active agent before reload so the session returns to idle", async () => {
+  it("defers reload while streaming — no abort, applied at the turn boundary", async () => {
     const sessionId = "sess-streaming-reload";
     const projectPath = "/fake/project";
     const sessionPath = "/fake/sessions/sess-streaming-reload.jsonl";
@@ -359,14 +359,21 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     managed.info.status = "streaming";
     m.clients.set(sessionId, managed);
 
-    await manager.reload(sessionId);
+    const result = await manager.reload(sessionId);
 
-    expect(managed.client.abort).toHaveBeenCalledTimes(1);
+    // 流式中不打断：不 abort、不立刻 reload，仅挂起
+    expect(managed.client.abort).not.toHaveBeenCalled();
+    expect(managed.client.reload).not.toHaveBeenCalled();
+    expect(managed.info.status).toBe("streaming");
+    expect(result).toEqual({ deferred: true });
+
+    // 回合结束（agent_end → idle）后自动执行挂起的 reload
+    managed.info.status = "idle";
+    await manager.flushDeferredReload(sessionId);
+
+    expect(managed.client.abort).not.toHaveBeenCalled();
     expect(managed.client.reload).toHaveBeenCalledTimes(1);
     expect(managed.info.status).toBe("idle");
-    expect(
-      vi.mocked(managed.client.abort).mock.invocationCallOrder[0],
-    ).toBeLessThan(vi.mocked(managed.client.reload).mock.invocationCallOrder[0]);
   });
 
   it("clears cached LSP state when an idle process is evicted", () => {
