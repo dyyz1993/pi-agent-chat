@@ -55,17 +55,36 @@ export function ModelPickerButton({
   const toggleFavorite = useSessionStore((s) => s.toggleModelFavorite);
   const triggerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Mirrors `open` so the toggle can compute the next value without reading
+  // stale state and without putting side effects inside a state updater.
+  const openRef = useRef(false);
+  // Replayed activation events (automation input pipelines re-dispatching a
+  // single click/key several times within milliseconds, double-firing) would
+  // toggle the dropdown open→closed again and land on an even count — looking
+  // exactly like "the click did nothing". Collapse rapid toggles into one.
+  const lastToggleAtRef = useRef(0);
 
   const setOpen = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) => {
-      _setOpen((prev) => {
-        const next = typeof v === "function" ? v(prev) : v;
-        if (next && !prev) {
-          setSearchQuery("");
-        }
-        if (next !== prev) onOpenChange?.(next);
-        return next;
-      });
+      const prev = openRef.current;
+      const next = typeof v === "function" ? v(prev) : v;
+      if (next === prev) return;
+      const now = Date.now();
+      if (now - lastToggleAtRef.current < 200) {
+        lastToggleAtRef.current = now;
+        return;
+      }
+      lastToggleAtRef.current = now;
+      openRef.current = next;
+      // State updaters must stay pure: StrictMode double-invokes them, and
+      // side effects (onOpenChange → agent.reload, other setStates) inside the
+      // updater fire duplicated/replayed, which desyncs `open` and makes the
+      // dropdown toggle itself shut. Run them here, exactly once per change.
+      _setOpen(next);
+      if (next) {
+        setSearchQuery("");
+      }
+      onOpenChange?.(next);
     },
     [onOpenChange],
   );
