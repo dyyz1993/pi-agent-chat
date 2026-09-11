@@ -1,4 +1,5 @@
 import { createLogger } from "../shared/lib/logger";
+import https from "node:https";
 import { randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { createConnection } from "node:net";
@@ -87,24 +88,55 @@ export function createProxyRegistrar(
     }
 
     try {
-      const res = await fetch(routesApiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      // shanbox manage-route API uses {address: "host:port", policy} instead of
+      // {subdomain, port, host}; detect by the /__api__/ path style.
+      const shanboxStyle = routesApiUrl.includes("/__api__/");
+      const payload = shanboxStyle
+        ? { address: `${targetHost}:${targetPort}`, policy: "public" }
+        : body;
 
-      if (!res.ok) {
-        log.warn("Register failed", {
-          status: res.status,
-          targetHost,
-          targetPort,
-        });
-        return null;
+      // Self-signed endpoints (e.g. LAN IP serving the wildcard cert) need a
+      // per-request agent; NODE_TLS_REJECT_UNAUTHORIZED=0 is too broad.
+      const insecure = process.env.PROXY_API_INSECURE_TLS === "1";
+      const insecureAgent =
+        insecure && routesApiUrl.startsWith("https://")
+          ? new https.Agent({ rejectUnauthorized: false, servername: new URL(routesApiUrl).hostname })
+          : undefined;
+
+      // Intermittent middlebox RSTs were observed on LAN Wi-Fi; retry twice.
+      let lastErr: unknown = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(routesApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            ...(insecureAgent ? { agent: insecureAgent } : {}),
+          });
+
+          if (!res.ok) {
+            log.warn("Register failed", {
+              status: res.status,
+              targetHost,
+              targetPort,
+            });
+            return null;
+          }
+
+          const publicUrl = `https://${subdomain}.${proxyPublicDomain}`;
+          log.info("Registered proxy", { targetHost, targetPort, publicUrl });
+          return publicUrl;
+        } catch (err) {
+          lastErr = err;
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        }
       }
-
-      const publicUrl = `https://${subdomain}.${proxyPublicDomain}`;
-      log.info("Registered proxy", { targetHost, targetPort, publicUrl });
-      return publicUrl;
+      log.warn("Register error after retries", {
+        targetHost,
+        targetPort,
+        error: lastErr instanceof Error ? lastErr.message : String(lastErr),
+      });
+      return null;
     } catch (err) {
       log.warn("Register error", {
         targetHost,
