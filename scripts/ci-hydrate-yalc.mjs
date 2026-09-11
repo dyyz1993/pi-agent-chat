@@ -20,8 +20,9 @@ const packages = [
   // 0.78.12 adds loop-scheduler becomeScheduler settings-sync and
   // browser_check expectVisual (additive; bumped for parity).
   // 0.78.13 inits theme in RPC mode (todo-ext/export_html extension errors) and
-  // records previous model + source on model_change entries (additive).
-  { name: "@dyyz1993/pi-coding-agent", version: "0.78.13" },
+  // records previous model + source on model_change entries; 0.78.14 ships
+  // the refreshed pi-ai catalog (curated glm-4.5-air, glm-5.3 family).
+  { name: "@dyyz1993/pi-coding-agent", version: "0.78.14" },
   { name: "@dyyz1993/pi-tui", version: "0.74.56" },
 ];
 
