@@ -54,7 +54,10 @@ export function createProxyRegistrar(
   proxyApiUrl: string,
   proxyPublicDomain: string,
 ): ProxyRegistrar {
-  const routesApiUrl = proxyApiUrl.replace(/\/__api__\/register$/, "/__api__/routes");
+  // shanbox manage-route style (/__api__/register) registers in place;
+  // other registrars expose a batch /routes endpoint for writes.
+  const isShanboxRegister = proxyApiUrl.includes("/__api__/register");
+  const routesApiUrl = isShanboxRegister ? proxyApiUrl : proxyApiUrl.replace(/\/__api__\/register$/, "/__api__/routes");
   const lanIp = getLanIp();
   const cache = new Map<string, string>();
   const pending = new Map<string, Promise<string | null>>();
@@ -90,7 +93,7 @@ export function createProxyRegistrar(
     try {
       // shanbox manage-route API uses {address: "host:port", policy} instead of
       // {subdomain, port, host}; detect by the /__api__/ path style.
-      const shanboxStyle = routesApiUrl.includes("/__api__/");
+      const shanboxStyle = isShanboxRegister;
       const payload = shanboxStyle
         ? { address: `${targetHost}:${targetPort}`, policy: "public" }
         : body;
