@@ -168,6 +168,39 @@ export const WriteFileCard = memo(function WriteFileCard({
     return fileContent;
   }, [isEdit, editDetails?.diff, fileContent]);
 
+  // +/- 行数徽标：Write 显示内容行数（流式时随增量实时增长），
+  // Edit 汇总 edits 的新旧行数（+new -old）。无数据时返回 null。
+  const lineCounts = useMemo(() => {
+    if (isEdit) {
+      if (!editArgs.edits.length) return null;
+      let added = 0;
+      let removed = 0;
+      for (const edit of editArgs.edits) {
+        added += Math.max(1, edit.newText.split("\n").length);
+        removed += Math.max(1, edit.oldText.split("\n").length);
+      }
+      return { added, removed };
+    }
+    if (writeArgs.content) {
+      return { added: writeArgs.content.split("\n").length, removed: 0 };
+    }
+    return null;
+  }, [isEdit, editArgs, writeArgs.content]);
+
+  const countBadge =
+    lineCounts === null ? null : (
+      <span className="shrink-0 font-mono text-[11px] tabular-nums">
+        {lineCounts.added > 0 && (
+          <span className="text-status-success">+{lineCounts.added}</span>
+        )}
+        {lineCounts.removed > 0 && (
+          <span className="text-status-error">
+            {" "}−{lineCounts.removed}
+          </span>
+        )}
+      </span>
+    );
+
   return (
     <div
       data-block-id={blockId}
@@ -191,14 +224,22 @@ export const WriteFileCard = memo(function WriteFileCard({
         endedAt={block.endedAt}
         badge={
           isRunning ? (
-            <span className="text-[10px] text-status-success animate-pulse shrink-0">
-              {t("writeFile.writing")}
-            </span>
-          ) : copyContent ? (
-            <div onClick={(e) => e.stopPropagation()}>
-              <CopyButton text={copyContent} />
-            </div>
-          ) : undefined
+            <>
+              {countBadge}
+              <span className="text-[10px] text-status-success animate-pulse shrink-0">
+                {t("writeFile.writing")}
+              </span>
+            </>
+          ) : (
+            <>
+              {countBadge}
+              {copyContent ? (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <CopyButton text={copyContent} />
+                </div>
+              ) : null}
+            </>
+          )
         }
       />
 
