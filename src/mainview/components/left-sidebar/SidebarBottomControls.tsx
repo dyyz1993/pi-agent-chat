@@ -108,6 +108,10 @@ export function SidebarBottomControls() {
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const thinkingRef = useRef<HTMLDivElement>(null);
   const [switching, setSwitching] = useState(false);
+  // Ref mirror of `switching`: the guard must see updates synchronously —
+  // replayed onClick events fire within the same tick, before the next render
+  // commits, so the state value (stale closure) lets duplicates through.
+  const switchingRef = useRef(false);
 
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const projectTabs = useSessionStore((s) => s.projectTabs);
@@ -300,6 +304,18 @@ export function SidebarBottomControls() {
 
   const refreshModelsForActiveSession = useCallback(() => {
     if (!activeSessionId || !agentReady) return;
+    // Never reload while the agent is streaming — reload aborts the in-flight
+    // turn and kills the assistant's answer mid-generation. The model-list
+    // refresh can wait until the turn finishes.
+    const status = useSessionStore.getState().sessionStatusMap[activeSessionId];
+    if (status === "streaming" || status === "compacting" || status === "retrying") {
+      log.warn("skip agent.reload: session is streaming", {
+        sessionId: activeSessionId,
+        status,
+      });
+      fetchModelState(activeSessionId);
+      return;
+    }
     void apiClient
       .call("agent.reload", { sessionId: activeSessionId })
       .catch((err) => {
@@ -336,10 +352,11 @@ export function SidebarBottomControls() {
 
   const handleSelectModel = useCallback(
     async (key: string) => {
-      if (!activeSessionId || switching) return;
+      if (!activeSessionId || switchingRef.current) return;
       const [provider, ...rest] = key.split("/");
       const modelId = rest.join("/");
       if (currentModel?.id === modelId && currentModel?.provider === provider) return;
+      switchingRef.current = true;
       setSwitching(true);
       const sid = activeSessionId;
       try {
@@ -347,10 +364,18 @@ export function SidebarBottomControls() {
         // so the notice pill and model state land without waiting for the
         // runtime resource reload (which can take 10s+). The reload runs in
         // the background afterwards.
-        await apiClient.call("agent.setModel", {
-          sessionId: sid,
-          model: key,
-        });
+        // The race guards against a hung RPC (e.g. a reconnecting WebSocket)
+        // leaving `switching` stuck true and silently disabling all further
+        // switches; the server side enforces its own 15s timeout.
+        await Promise.race([
+          apiClient.call("agent.setModel", {
+            sessionId: sid,
+            model: key,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("setModel timed out")), 20_000),
+          ),
+        ]);
         setModelForSession(sid, provider, modelId);
         if (projectPath) {
           const tierStore = useTierStore.getState();
@@ -387,9 +412,10 @@ export function SidebarBottomControls() {
           sessionId: activeSessionId,
         });
       }
+      switchingRef.current = false;
       setSwitching(false);
     },
-    [activeSessionId, switching, currentModel, setModelForSession, projectPath, fetchModelState, t],
+    [activeSessionId, currentModel, setModelForSession, projectPath, fetchModelState, t],
   );
 
   const handleSelectThinking = useCallback(
