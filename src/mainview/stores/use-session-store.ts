@@ -235,6 +235,14 @@ interface SessionState {
   loopSchedulerSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
   agentReady: Record<string, boolean>;
+  /**
+   * True while createNewSession is between entry and the setActiveSession
+   * commit. During this window activeSessionId still points at the previous
+   * session, so an Enter-send would deliver the prompt to the OLD session and
+   * the subsequent switch would unsubscribe its events (user sees nothing).
+   * The composer must stay locked until the switch commits.
+   */
+  isSwitchingSession: boolean;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatsMap: Record<string, SessionUsageStats>;
   sessionStatusMap: Record<string, SessionStatus>;
@@ -330,6 +338,7 @@ export const useSessionStore = create<SessionState>()(
       loopSchedulerSubscriptions: {},
       sessionReady: {},
       agentReady: {},
+      isSwitchingSession: false,
       sessionContextMap: {},
       sessionStatsMap: {},
       sessionStatusMap: {},

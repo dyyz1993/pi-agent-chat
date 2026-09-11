@@ -23,6 +23,14 @@ export interface InputBarHandle {
 interface InputBarProps {
   onSend?: () => void;
   disabled?: boolean;
+  /**
+   * Gate applied to the send action (Enter key). Mirrors the send button's
+   * sendDisabled in ChatPanel (agentReady, aborting, permission pending...).
+   * `disabled` only blocks typing/composer interaction — before this prop,
+   * Enter bypassed the agentReady gate and sent while agent.start was still
+   * in flight (duplicate-spawn race on new sessions).
+   */
+  sendDisabled?: boolean;
   sessionId?: string;
   placeholder?: string;
   historyEnabled?: boolean;
@@ -48,6 +56,7 @@ export const InputBar = memo(
     {
       onSend,
       disabled = false,
+      sendDisabled = false,
       sessionId = "",
       placeholder,
       historyEnabled = true,
@@ -101,6 +110,8 @@ export const InputBar = memo(
 
     const disabledRef = useRef(disabled);
     disabledRef.current = disabled;
+    const sendDisabledRef = useRef(sendDisabled);
+    sendDisabledRef.current = sendDisabled;
     const onSendRef = useRef(onSend);
     onSendRef.current = onSend;
     const onPasteTextAsPlaceholderRef = useRef(onPasteTextAsPlaceholder);
@@ -154,7 +165,11 @@ export const InputBar = memo(
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           const val = valueRef.current;
-          if (!disabledRef.current && (val.trim() || hasExternalContent)) {
+          if (
+            !disabledRef.current &&
+            !sendDisabledRef.current &&
+            (val.trim() || hasExternalContent)
+          ) {
             if (historyEnabled && val.trim()) saveToHistory(val.trim());
             onSendRef.current?.();
           }

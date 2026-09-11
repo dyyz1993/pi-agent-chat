@@ -957,6 +957,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Session switch pending (createNewSession in flight): activeSessionId
+    // still points at the PREVIOUS session. Sending now would deliver the
+    // prompt to the old session and the switch would unsubscribe its events.
+    // Keep the draft; the user can send once the switch commits.
+    if (useSessionStore.getState().isSwitchingSession) {
+      useAppStore.getState().addLog("Session switch pending; send ignored");
+      return;
+    }
+
     const activeSubId = (await import("./use-subagent-store")).useSubagentStore.getState()
       .activeSubsessionId;
     if (activeSubId) {

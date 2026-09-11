@@ -12,6 +12,7 @@ interface ProjectSessionState {
   activeProjectId: string | null;
   activeSessionId: string | null;
   loading: boolean;
+  isSwitchingSession: boolean;
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
   sessionStatusMap: Record<string, SessionStatus>;
@@ -146,6 +147,20 @@ export function createCreateNewSessionAction({
   insertAfterPinned: (sessions: SessionMeta[], newSession: SessionMeta) => SessionMeta[];
 }): (projectPath?: string) => Promise<CreateNewSessionResult> {
   return async (_projectPath?: string) => {
+    // Lock the composer for the whole action. Until setActiveSession commits,
+    // activeSessionId still points at the PREVIOUS session — an Enter-send in
+    // that window delivers the prompt to the old session, and the subsequent
+    // switch unsubscribes the old session's events, so the user watches an
+    // empty new session while the turn runs invisibly elsewhere (reproduced
+    // on the deployed host 2026-09-11: agent.send carried the old sessionId).
+    set({ isSwitchingSession: true });
+    try {
+      return await runCreateNewSession(_projectPath);
+    } finally {
+      set({ isSwitchingSession: false });
+    }
+
+    async function runCreateNewSession(_projectPath?: string): Promise<CreateNewSessionResult> {
     const { projectTabs, activeProjectId } = get();
     const sourceSessionId = get().activeSessionId;
     const tab = projectTabs.find((t) => t.id === activeProjectId);
@@ -295,5 +310,6 @@ export function createCreateNewSessionAction({
       sessionPath: result.sessionPath,
       projectPath: targetPath,
     };
+    }
   };
 }

@@ -774,6 +774,7 @@ export function ChatPanel() {
   const goalApprovalPending =
     goalStatus?.rawStatus === "awaiting_approval" ||
     !!goalStatus?.interrupt?.pendingAuthorityAmendment;
+  const isSwitchingSession = useSessionStore((s) => s.isSwitchingSession);
   const composerInputDisabled =
     !activeSessionId ||
     isCreatingGoal ||
@@ -782,6 +783,10 @@ export function ChatPanel() {
     goalApprovalPending;
   const sendDisabled =
     !agentReady ||
+    // A session switch (createNewSession) is pending: activeSessionId still
+    // points at the previous session, so sending now would deliver the
+    // prompt there. Keep the textarea editable — only the send is gated.
+    isSwitchingSession ||
     isAborting ||
     isCreatingGoal ||
     isPermissionPending ||
@@ -1696,6 +1701,7 @@ export function ChatPanel() {
                       onSend={goalMode ? handleCreateGoal : handleSend}
                       sessionId={activeSessionId ?? ""}
                       disabled={composerInputDisabled}
+                      sendDisabled={sendDisabled}
                       placeholder={
                         activeRemoteDisconnected
                           ? t("remoteDisconnectedPlaceholder")
