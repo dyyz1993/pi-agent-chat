@@ -103,13 +103,24 @@ export function createProxyRegistrar(
           ? new https.Agent({ rejectUnauthorized: false, servername: new URL(routesApiUrl).hostname })
           : undefined;
 
+      // The LAN endpoint (IP-based) resets requests whose Host header doesn't
+      // match a known vhost — set Host to the public domain explicitly.
+      let hostHeader: string | undefined;
+      if (shanboxStyle) {
+        const u = new URL(routesApiUrl);
+        hostHeader = proxyPublicDomain;
+        if (u.port) hostHeader = `${proxyPublicDomain}:${u.port}`;
+      }
       // Intermittent middlebox RSTs were observed on LAN Wi-Fi; retry twice.
       let lastErr: unknown = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const res = await fetch(routesApiUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(hostHeader ? { Host: hostHeader } : {}),
+            },
             body: JSON.stringify(payload),
             ...(insecureAgent ? { agent: insecureAgent } : {}),
           });
