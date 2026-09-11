@@ -76,6 +76,8 @@ interface ProjectConfig {
   remoteProjects: RemoteProjectRecord[];
   /** 默认项目目录（快速创建项目时使用） */
   defaultProjectDir?: string;
+  /** 推送通知偏好（缺省视为开启） */
+  notificationSettings?: { agentEndPushEnabled?: boolean; immersiveOpen?: boolean; presenceSuppress?: boolean };
 }
 
 function emptyConfig(): ProjectConfig {
@@ -888,5 +890,45 @@ export async function toggleModelFavorite(
     }
     list.push(modelKey);
     return { added: true, favorites: list };
+  });
+}
+
+export interface NotificationSettings {
+  agentEndPushEnabled: boolean;
+  /** 推送打开时是否用 Drel immersive（全屏）容器模式，缺省开 */
+  immersiveOpen: boolean;
+  /** 在 Drel 内打开页面时静默（不推）；缺省开——用户在 APP 里直接看得见；桌面浏览器不受影响 */
+  presenceSuppress: boolean;
+}
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  agentEndPushEnabled: true,
+  immersiveOpen: true,
+  presenceSuppress: true,
+};
+
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  const config = await load();
+  return {
+    agentEndPushEnabled: config.notificationSettings?.agentEndPushEnabled !== false,
+    immersiveOpen: config.notificationSettings?.immersiveOpen !== false,
+    presenceSuppress: config.notificationSettings?.presenceSuppress !== false,
+  };
+}
+
+export async function setNotificationSetting<K extends keyof NotificationSettings>(
+  key: K,
+  value: NotificationSettings[K],
+): Promise<NotificationSettings> {
+  return loadAndSave((config) => {
+    const merged: NotificationSettings = {
+      ...DEFAULT_NOTIFICATION_SETTINGS,
+      agentEndPushEnabled: config.notificationSettings?.agentEndPushEnabled !== false,
+      immersiveOpen: config.notificationSettings?.immersiveOpen !== false,
+      presenceSuppress: config.notificationSettings?.presenceSuppress !== false,
+      [key]: value,
+    };
+    config.notificationSettings = merged;
+    return merged;
   });
 }

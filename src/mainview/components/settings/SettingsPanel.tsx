@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
+  Bell,
   Brain,
   CheckCircle2,
   FolderOpen,
@@ -95,7 +96,14 @@ const MAX_DELAY_OPTIONS = [
   { value: 3600000, label: "60min" },
 ];
 
-type SettingsTabId = "display" | "retry" | "models" | "network" | "usage" | "project";
+type SettingsTabId =
+  | "display"
+  | "retry"
+  | "notifications"
+  | "models"
+  | "network"
+  | "usage"
+  | "project";
 type SettingsGroupId = "conversation" | "agent" | "connection" | "workspace";
 
 const SETTINGS_TABS: Array<{
@@ -105,6 +113,7 @@ const SETTINGS_TABS: Array<{
 }> = [
   { id: "display", icon: SlidersHorizontal, label: "显示" },
   { id: "retry", icon: Activity, label: "重试" },
+  { id: "notifications", icon: Bell, label: "通知" },
   { id: "models", icon: Brain, label: "模型" },
   { id: "usage", icon: Trophy, label: "战绩" },
   { id: "project", icon: FolderOpen, label: "项目" },
@@ -118,7 +127,7 @@ const SETTINGS_GROUPS: Array<{
   items: SettingsTabId[];
 }> = [
   { id: "conversation", icon: SlidersHorizontal, label: "对话", items: ["display", "retry"] },
-  { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage"] },
+  { id: "agent", icon: Brain, label: "Agent", items: ["models", "usage", "notifications"] },
   { id: "workspace", icon: FolderOpen, label: "工作区", items: ["project"] },
   { id: "connection", icon: Network, label: "连接", items: ["network"] },
 ];
@@ -148,6 +157,64 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const retryConfig = useRetryConfigStore();
   const setRetryConfig = useRetryConfigStore((s) => s.setRetryConfig);
   const resetRetryConfig = useRetryConfigStore((s) => s.resetRetryConfig);
+
+  // Push notification toggles (server reads these at agent_end push time)
+  const [pushEnabled, setPushEnabled] = useState<boolean | null>(null);
+  const [immersiveOpen, setImmersiveOpen] = useState<boolean>(true);
+  const [presenceSuppress, setPresenceSuppress] = useState<boolean>(true);
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .call<{
+        agentEndPushEnabled: boolean;
+        immersiveOpen: boolean;
+        presenceSuppress: boolean;
+      }>("app.getNotificationSettings", {})
+      .then((settings) => {
+        if (cancelled) return;
+        setPushEnabled(Boolean(settings.agentEndPushEnabled));
+        setImmersiveOpen(Boolean(settings.immersiveOpen));
+        setPresenceSuppress(Boolean(settings.presenceSuppress));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPushEnabled(true);
+          setImmersiveOpen(true);
+          setPresenceSuppress(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const persistPushSetting = useCallback(
+    (
+      method:
+        | "app.setAgentEndPushEnabled"
+        | "app.setAgentEndPushImmersive"
+        | "app.setAgentEndPresenceSuppress",
+      value: boolean,
+    ) => {
+      apiClient.call(method, { enabled: value }).catch(() => {});
+    },
+    [],
+  );
+  const togglePushEnabled = useCallback(() => {
+    const current = pushEnabled ?? true;
+    const next = !current;
+    setPushEnabled(next);
+    persistPushSetting("app.setAgentEndPushEnabled", next);
+  }, [pushEnabled, persistPushSetting]);
+  const toggleImmersiveOpen = useCallback(() => {
+    const next = !immersiveOpen;
+    setImmersiveOpen(next);
+    persistPushSetting("app.setAgentEndPushImmersive", next);
+  }, [immersiveOpen, persistPushSetting]);
+  const togglePresenceSuppress = useCallback(() => {
+    const next = !presenceSuppress;
+    setPresenceSuppress(next);
+    persistPushSetting("app.setAgentEndPresenceSuppress", next);
+  }, [presenceSuppress, persistPushSetting]);
 
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const availableModels = useSessionStore((s) => s.availableModels);
@@ -401,6 +468,53 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     </SettingsSection>
   );
 
+  const pushNotificationContent = (
+    <SettingsSection title={t("pushNotificationTitle", "推送通知")}>
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5 transition-colors hover:bg-surface-hover/40">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-text-primary">
+            {t("pushNotificationToggle", "任务完成时推送到手机")}
+          </div>
+          <div className="mt-0.5 text-[11px] leading-4 text-text-tertiary">
+            {t(
+              "pushNotificationDesc",
+              "开启后，任务结束会推送通知到手机（点开直接进入会话）；页面正在使用时自动静黟。关闭后不再推送。",
+            )}
+          </div>
+        </div>
+        <ToggleSwitch checked={pushEnabled ?? true} onChange={togglePushEnabled} />
+      </label>
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5 transition-colors hover:bg-surface-hover/40">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-text-primary">
+            {t("pushImmersiveToggle", "Drel 内全屏打开")}
+          </div>
+          <div className="mt-0.5 text-[11px] leading-4 text-text-tertiary">
+            {t(
+              "pushImmersiveDesc",
+              "开启后，推送在 Drel 里以全屏（immersive）容器打开会话页，保留可展开的返回控件。",
+            )}
+          </div>
+        </div>
+        <ToggleSwitch checked={immersiveOpen} onChange={toggleImmersiveOpen} />
+      </label>
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5 transition-colors hover:bg-surface-hover/40">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-text-primary">
+            {t("pushPresenceSuppressToggle", "Drel 内打开时静默")}
+          </div>
+          <div className="mt-0.5 text-[11px] leading-4 text-text-tertiary">
+            {t(
+              "pushPresenceSuppressDesc",
+              "默认开启：在 Drel 内打开页面时不推送（你直接看得见），退出 Drel 后恢复推送；桌面浏览器打开不受影响。",
+            )}
+          </div>
+        </div>
+        <ToggleSwitch checked={presenceSuppress} onChange={togglePresenceSuppress} />
+      </label>
+    </SettingsSection>
+  );
+
   const modelsContent = (
     <SettingsSection title={t("tierConfigTitle", "Tier 模型配置")}>
       <div className="rounded-lg border border-border-secondary bg-bg-primary/45 p-2">
@@ -589,6 +703,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const contentByTab: Record<SettingsTabId, ReactNode> = {
     display: displayContent,
     retry: retryContent,
+    notifications: pushNotificationContent,
     models: modelsContent,
     network: networkContent,
     usage: usageContent,

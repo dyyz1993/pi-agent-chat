@@ -8,6 +8,10 @@ import { dirname, extname, join, resolve } from "path";
 import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
+import {
+  isDrelUserAgent,
+  setAgentEndPushPresenceSource,
+} from "./shared/agent/agent-end-notifier";
 import { getMimeType } from "./gateway/mime";
 import { safeWsSend } from "./gateway/ws-broadcast";
 import { type WebSocket } from "ws";
@@ -20,7 +24,13 @@ setLogSink(writeLogLine);
 const log = createLogger("server");
 
 // ── Crash protection: catch unhandled errors at process level ──
+// EPIPE on a dead stdout (e.g. the launching ssh/terminal went away) must be
+// swallowed SILENTLY: logging it writes back into the same broken pipe and
+// the uncaughtException handler re-enters itself — a sync livelock that
+// produced a 240MB log and starved the RPC loop on a Windows deployment.
 process.on("uncaughtException", (err) => {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code === "EPIPE" || (err instanceof Error && err.message.includes("EPIPE"))) return;
   log.error("UNCAUGHT EXCEPTION — server staying alive", {
     error: err instanceof Error ? err.message : String(err),
     stack: err instanceof Error ? err.stack : undefined,
@@ -67,6 +77,21 @@ if (existsSync(gitPath) && statSync(gitPath).isFile()) {
 
 const httpServer = createServer();
 const wss = createWsHandler(httpServer, { config });
+
+// Presence for the agent_end Drel push, classified by UA: clients inside the
+// Drel container suppress pushes (user is looking in-app); desktop browsers
+// do not affect delivery.
+setAgentEndPushPresenceSource(() => {
+  let total = 0;
+  let drel = 0;
+  for (const ws of wss.clients as Set<WebSocket>) {
+    const meta = ws as WebSocket & { isAlive?: boolean; ua?: string };
+    if (meta.isAlive === false) continue;
+    total++;
+    if (isDrelUserAgent(meta.ua)) drel++;
+  }
+  return { total, drel };
+});
 
 const distPath = resolve(process.cwd(), "dist");
 

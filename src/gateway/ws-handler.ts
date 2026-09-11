@@ -60,9 +60,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     });
   });
 
-  wss.on("connection", (ws: WebSocket, _req) => {
+  wss.on("connection", (ws: WebSocket, req) => {
     log.info("Client connected", { total: clients.size + 1 });
     clients.add(ws);
+
+    // Capture UA at handshake for presence classification (e.g. Drel container
+    // vs desktop browser); layout/auth decisions must not rely on it.
+    (ws as WebSocket & { ua?: string }).ua = req.headers["user-agent"] ?? "";
 
     // Track alive state for dead-connection detection.
     // Server pings every 30s; if no pong by next cycle, terminate.
