@@ -139,6 +139,12 @@ async function restoreSubagentRuntimeState(
   }
 }
 
+export type SubagentRevealTarget = {
+  parentSessionPath: string;
+  subsessionId: string;
+  nonce: number;
+};
+
 interface SubagentState {
   subsessionsByParent: Record<string, SubagentSessionInfo[]>;
   activeSubsessionId: string | null;
@@ -146,6 +152,7 @@ interface SubagentState {
   loadingByParent: Record<string, boolean>;
   subagentStatusMap: Record<string, SessionStatus>;
   subagentContextMap: Record<string, ContextUsage>;
+  revealTarget: SubagentRevealTarget | null;
 
   loadSubsessions: (parentSessionPath: string, force?: boolean) => Promise<SubagentSessionInfo[]>;
   setActiveSubsession: (parentSessionId: string, subId: string | null) => void;
@@ -160,7 +167,11 @@ interface SubagentState {
   updateSubagentContext: (subId: string, update: Partial<ContextUsage>) => void;
   renameSubagent: (parentSessionPath: string, subSessionId: string, newDescription: string) => void;
   deleteSubagent: (parentSessionPath: string, subSessionId: string) => void;
+  revealSubagent: (parentSessionPath: string, subsessionId: string) => void;
+  clearRevealTarget: () => void;
 }
+
+let revealNonce = 0;
 
 export const useSubagentStore = create<SubagentState>()((set, get) => ({
   subsessionsByParent: {},
@@ -169,6 +180,15 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
   loadingByParent: {},
   subagentStatusMap: {},
   subagentContextMap: {},
+  revealTarget: null,
+
+  revealSubagent: (parentSessionPath, subsessionId) => {
+    set({ revealTarget: { parentSessionPath, subsessionId, nonce: ++revealNonce } });
+  },
+
+  clearRevealTarget: () => {
+    set({ revealTarget: null });
+  },
 
   updateSubagentStatus: (subId, status) => {
     set((s) => ({

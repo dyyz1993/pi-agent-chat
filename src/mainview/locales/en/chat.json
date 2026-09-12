@@ -272,7 +272,6 @@
   "fileNotFound": "File not found",
   "fileServerError": "Server error while loading file",
   "fileNetworkError": "Network error while loading file",
-  "retry": "Retry",
   "textFilePreview": "Text file preview requires content loading. File: {{source}}",
   "markdownPreview": "Markdown preview requires content loading. File: {{source}}",
   "typeLabel": "Type: {{type}}",
@@ -283,7 +282,6 @@
   "sessionList": "Sessions",
   "newSession": "New session",
   "enterChat": "Open chat",
-
   "uiCard.waitingResponse": "Waiting for response",
   "uiCard.confirmed": "Confirmed",
   "uiCard.rejected": "Rejected",
@@ -304,13 +302,11 @@
   "uiCard.allowOnce": "Allow Once",
   "uiCard.autoDeny": "Auto-deny in {{seconds}}s",
   "uiCard.skipThisHook": "Skip this Hook",
-
   "bash.backgroundRunning": "Running in background",
   "bash.moveToBackground": "Move to background",
   "bash.background": "Background",
   "bash.cancelExecution": "Cancel execution",
   "bash.viewOutput": "View output",
-
   "subagent.subagent": "SubAgent",
   "subagent.subagentTask": "Sub-agent task",
   "subagent.view": "View",
@@ -322,7 +318,6 @@
   "subagent.input": "Input",
   "subagent.output": "Output",
   "subagent.noOutput": "No output yet",
-
   "coordinator.delegate": "Delegate",
   "coordinator.fork": "Fork",
   "coordinator.delegateTask": "Delegate task",
@@ -364,11 +359,9 @@
   "coordinator.clearStopped": "Clear Stopped Tasks",
   "coordinator.clearing": "Clearing...",
   "coordinator.cleared": "cleared",
-
   "writeFile.previewMarkdown": "Preview Markdown fullscreen",
   "writeFile.writing": "writing",
   "writeFile.writingProgress": "Writing...",
-
   "readFile.reading": "reading",
   "readFile.readingProgress": "Reading...",
   "readFile.rulesLoaded": "Rules Loaded",
@@ -376,14 +369,12 @@
   "readFile.rulesReloaded": "Rules Reloaded",
   "readFile.alreadyLoaded": "loaded",
   "readFile.reloaded": "reloaded",
-
   "notification.title": "Notifications",
   "notification.unread": "{{count}} unread",
   "notification.list": "Notification list",
   "notification.noNotifications": "No notifications",
   "notification.closeNotification": "Close notification",
   "notification.enableSystemNotifications": "Enable system notifications",
-
   "quickAction.attachment": "Attachment",
   "quickAction.image": "Image",
   "quickAction.atMention": "@Mention",
@@ -399,7 +390,6 @@
   "quickAction.rootDir": "Root",
   "quickAction.noMatchResults": "No matching results",
   "quickAction.searchPlaceholder": "Search commands & skills...",
-
   "tokenStatus.working": "Working",
   "tokenStatus.needHelp": "Need help",
   "tokenStatus.retrying": "Retrying",
@@ -456,7 +446,6 @@
   "tokenStatus.providerToolIO": "Tool input/output top 6",
   "tokenStatus.providerToolInputAvg": "Average input {{avg}}",
   "tokenStatus.providerToolOutputAvg": "Average output {{avg}}",
-
   "uiPending.pendingRequestsCount": "{{count}} pending requests",
   "uiPending.pendingRequestsTitle": "Pending Requests",
   "uiPending.gotoSession": "Go to session",
@@ -473,21 +462,17 @@
   "uiPending.batchApprovalsHint": "{{count}} approval request(s) can be handled in batch",
   "uiPending.batchAllowOnce": "Allow all once ({{count}})",
   "uiPending.batchDenyOnce": "Deny all once ({{count}})",
-
   "hookPermission.allow": "Allow",
   "hookPermission.deny": "Deny",
   "hookPermission.multiplePending": "{{count}} permission requests pending",
   "hookPermission.viewAll": "View all",
-
   "scroll.stopAutoScroll": "Stop auto-scroll",
   "scroll.startAutoScroll": "Start auto-scroll",
   "scroll.scrollToTop": "Scroll to top",
   "scroll.scrollToBottom": "Scroll to bottom",
-
   "sideNav.text": "Text",
   "sideNav.backgroundProcess": "Background process",
   "sideNav.selected": "Selected {{count}}",
-
   "messageCard.you": "You",
   "messageCard.assistant": "Assistant",
   "messageCard.empty": "(empty)",
@@ -506,7 +491,6 @@
   "messageCard.rollbackMessageAndCode": "Rollback message & code",
   "messageCard.previewFailed": "Preview failed: {{error}}",
   "messageCard.rollbackFirstMessage": "This is the first message, cannot roll back further",
-
   "fileAttachment.addAttachment": "Add attachment",
   "fileAttachment.addImage": "Add image",
   "fileAttachment.addImageMcp": "Add image (MCP fallback)",
@@ -525,8 +509,8 @@
   "composerState.plan": "Plan mode",
   "composerState.planShort": "Plan",
   "composerState.planTitle": "Plan mode is enabled",
+  "delegation.badgeTitle": "{{total}} delegated subtasks, {{running}} running. Click to locate in the session list.",
   "composerActionsHint": "Add context",
-
   "event.sessionComplete": "Session complete",
   "event.sessionCompleteBody": "Session {{id}}... finished",
   "event.autoRetry": "Auto retry",
@@ -537,7 +521,6 @@
   "event.retryFailedBody": "Max retries reached",
   "event.permissionRequest": "Permission request",
   "event.permissionRequestBody": "Agent needs your confirmation",
-
   "startConversation": "Start a conversation",
   "scrollUpToLoadMore": "↑ Scroll up to load more",
   "sideNav.memory": "Memory",
@@ -546,7 +529,6 @@
   "tierFast": "Fast",
   "tierPro": "Pro",
   "tierMax": "Think",
-
   "rollbackOverlay.title": "Rollback Confirmation",
   "rollbackOverlay.titleWithFiles": "Rollback Message & Code",
   "rollbackOverlay.messageModeDesc": "This will remove the current turn's messages. Are you sure you want to continue?",
@@ -556,7 +538,6 @@
   "rollbackOverlay.noFiles": "No file changes in this turn",
   "sendDisabledNoModel": "Please select a model first",
   "waitPermission": "Waiting for permission",
-
   "forkDialog.title": "Fork Session",
   "forkDialog.agent": "Agent",
   "forkDialog.model": "Model",

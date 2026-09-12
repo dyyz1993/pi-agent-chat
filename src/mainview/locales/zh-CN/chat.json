@@ -272,7 +272,6 @@
   "fileNotFound": "文件未找到",
   "fileServerError": "加载文件时服务器出错",
   "fileNetworkError": "加载文件时网络出错",
-  "retry": "重试",
   "textFilePreview": "文本文件预览需要内容加载。文件: {{source}}",
   "markdownPreview": "Markdown 预览需要内容加载。文件: {{source}}",
   "typeLabel": "类型: {{type}}",
@@ -283,7 +282,6 @@
   "sessionList": "会话列表",
   "newSession": "新会话",
   "enterChat": "进入聊天",
-
   "uiCard.waitingResponse": "等待响应",
   "uiCard.confirmed": "已确认",
   "uiCard.rejected": "已拒绝",
@@ -304,13 +302,11 @@
   "uiCard.allowOnce": "允许一次",
   "uiCard.autoDeny": "{{seconds}}s 后自动拒绝",
   "uiCard.skipThisHook": "跳过此 Hook",
-
   "bash.backgroundRunning": "已后台运行",
   "bash.moveToBackground": "转为后台运行",
   "bash.background": "后台运行",
   "bash.cancelExecution": "取消执行",
   "bash.viewOutput": "查看输出",
-
   "subagent.subagent": "子代理",
   "subagent.subagentTask": "子代理任务",
   "subagent.view": "查看",
@@ -322,7 +318,6 @@
   "subagent.input": "输入",
   "subagent.output": "输出",
   "subagent.noOutput": "暂无输出",
-
   "coordinator.delegate": "指派",
   "coordinator.fork": "分支",
   "coordinator.delegateTask": "指派任务",
@@ -364,11 +359,9 @@
   "coordinator.clearStopped": "清理已完成任务",
   "coordinator.clearing": "清理中...",
   "coordinator.cleared": "项已清理",
-
   "writeFile.previewMarkdown": "全屏预览 Markdown",
   "writeFile.writing": "writing",
   "writeFile.writingProgress": "写入中...",
-
   "readFile.reading": "reading",
   "readFile.readingProgress": "读取中...",
   "readFile.rulesLoaded": "Rules Loaded",
@@ -376,14 +369,12 @@
   "readFile.rulesReloaded": "规则已重载",
   "readFile.alreadyLoaded": "已加载",
   "readFile.reloaded": "已重载",
-
   "notification.title": "通知",
   "notification.unread": "{{count}} 条未读",
   "notification.list": "通知列表",
   "notification.noNotifications": "暂无通知",
   "notification.closeNotification": "关闭通知",
   "notification.enableSystemNotifications": "开启系统通知",
-
   "quickAction.attachment": "附件",
   "quickAction.image": "图片",
   "quickAction.atMention": "@提及",
@@ -399,7 +390,6 @@
   "quickAction.rootDir": "根目录",
   "quickAction.noMatchResults": "没有匹配结果",
   "quickAction.searchPlaceholder": "搜索命令和技能...",
-
   "tokenStatus.working": "工作中",
   "tokenStatus.needHelp": "需要协助",
   "tokenStatus.retrying": "重试中",
@@ -456,7 +446,6 @@
   "tokenStatus.providerToolIO": "工具输入/输出 Top 6",
   "tokenStatus.providerToolInputAvg": "平均输入 {{avg}}",
   "tokenStatus.providerToolOutputAvg": "平均输出 {{avg}}",
-
   "uiPending.pendingRequestsCount": "{{count}} 个待处理请求",
   "uiPending.pendingRequestsTitle": "待处理请求",
   "uiPending.gotoSession": "前往会话",
@@ -473,21 +462,17 @@
   "uiPending.batchApprovalsHint": "当前有 {{count}} 个审批可批量处理",
   "uiPending.batchAllowOnce": "全部允许一次（{{count}}）",
   "uiPending.batchDenyOnce": "全部拒绝一次（{{count}}）",
-
   "hookPermission.allow": "允许",
   "hookPermission.deny": "拒绝",
   "hookPermission.multiplePending": "{{count}} 个权限请求等待处理",
   "hookPermission.viewAll": "查看全部",
-
   "scroll.stopAutoScroll": "停止自动滚动",
   "scroll.startAutoScroll": "开启自动滚动",
   "scroll.scrollToTop": "回到顶部",
   "scroll.scrollToBottom": "回到底部",
-
   "sideNav.text": "文本",
   "sideNav.backgroundProcess": "后台进程",
   "sideNav.selected": "已选 {{count}}",
-
   "messageCard.you": "你",
   "messageCard.assistant": "助手",
   "messageCard.empty": "(空)",
@@ -506,7 +491,6 @@
   "messageCard.rollbackMessageAndCode": "回滚消息+代码",
   "messageCard.previewFailed": "预览失败：{{error}}",
   "messageCard.rollbackFirstMessage": "已是第一条消息，无法继续回滚",
-
   "fileAttachment.addAttachment": "添加附件",
   "fileAttachment.addImage": "添加图片",
   "fileAttachment.addImageMcp": "添加图片(MCP 分析)",
@@ -525,8 +509,8 @@
   "composerState.plan": "计划模式",
   "composerState.planShort": "计划",
   "composerState.planTitle": "计划模式已启用",
+  "delegation.badgeTitle": "委派 {{total}} 个子任务，运行中 {{running}} 个。点击在会话列表中定位。",
   "composerActionsHint": "添加上下文",
-
   "event.sessionComplete": "会话完成",
   "event.sessionCompleteBody": "会话 {{id}}... 执行完毕",
   "event.autoRetry": "自动重试",
@@ -537,7 +521,6 @@
   "event.retryFailedBody": "已达最大重试次数",
   "event.permissionRequest": "权限请求",
   "event.permissionRequestBody": "Agent 需要你的确认",
-
   "startConversation": "开始对话吧",
   "scrollUpToLoadMore": "↑ 向上滚动加载更多",
   "sideNav.memory": "Memory",
@@ -546,7 +529,6 @@
   "tierFast": "快",
   "tierPro": "中",
   "tierMax": "思考",
-
   "rollbackOverlay.title": "回滚确认",
   "rollbackOverlay.titleWithFiles": "回滚消息 + 代码",
   "rollbackOverlay.messageModeDesc": "回滚将移除当前轮次的消息，确定继续吗？",
@@ -556,7 +538,6 @@
   "rollbackOverlay.noFiles": "本轮无文件变更",
   "sendDisabledNoModel": "请先选择模型",
   "waitPermission": "等待权限确认",
-
   "forkDialog.title": "Fork 会话",
   "forkDialog.agent": "智能体",
   "forkDialog.model": "模型",

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   ChevronRight,
@@ -430,6 +430,46 @@ export function SessionSidebar(_props: SessionSidebarProps) {
     }
   }, [newSessionCreatedAt]);
 
+  // Delegation-badge reveal: expand the parent row, then scroll the target
+  // subsession item into view once mounted and flash-highlight it. The rAF
+  // poll covers the render gap between expanding the parent and the child
+  // item existing in the DOM. Highlighting is state-driven (rendered as a
+  // controlled class on the item) — imperative classList writes get wiped
+  // by the next React re-render within milliseconds on desktop.
+  const revealTarget = useSubagentStore((s) => s.revealTarget);
+  const [flashSubsessionId, setFlashSubsessionId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!revealTarget) return;
+    const { parentSessionPath, subsessionId } = revealTarget;
+    const parent = activeProjectSessions.find((s) => s.sessionPath === parentSessionPath);
+    if (parent) {
+      setExpandedIds((prev) => {
+        if (prev.has(parent.sessionId)) return prev;
+        const next = new Set(prev);
+        next.add(parent.sessionId);
+        return next;
+      });
+    }
+    let raf = 0;
+    let attempts = 0;
+    let flashTimer = 0;
+    const locate = () => {
+      const el = document.querySelector<HTMLElement>(`[data-testid="subagent-item-${subsessionId}"]`);
+      if (!el) {
+        if (attempts++ < 60) raf = requestAnimationFrame(locate);
+        return;
+      }
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFlashSubsessionId(subsessionId);
+      flashTimer = window.setTimeout(() => setFlashSubsessionId(null), 2000);
+    };
+    raf = requestAnimationFrame(locate);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (flashTimer) window.clearTimeout(flashTimer);
+    };
+  }, [revealTarget, activeProjectSessions]);
+
   useEffect(() => {
     const focus = getSidebarFocusForActiveSelection({
       activeSessionId,
@@ -475,6 +515,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   }, []);
 
   return (
+    <RevealFlashContext.Provider value={flashSubsessionId}>
     <div className="flex flex-col h-full">
       <div className="px-2 py-1.5">
         <div className="flex items-center gap-1.5 px-2 py-1.5 bg-bg-elevated/70 border border-border-primary/70 rounded-md text-[11px] text-text-tertiary">
@@ -521,6 +562,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
         onToggleExpand={toggleExpand}
       />
     </div>
+    </RevealFlashContext.Provider>
   );
 }
 
@@ -1322,6 +1364,8 @@ export function isSubagentSidebarItemActive(options: {
   );
 }
 
+const RevealFlashContext = createContext<string | null>(null);
+
 function SubagentItem({
   sub,
   parentSessionId,
@@ -1332,6 +1376,8 @@ function SubagentItem({
   const { t } = useTranslation(["sidebar", "common"]);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const flashSubsessionId = useContext(RevealFlashContext);
+  const isFlashed = flashSubsessionId === sub.sessionId;
   const isActive = isSubagentSidebarItemActive({
     activeSessionId,
     activeSubsessionId: activeSubId,
@@ -1422,7 +1468,11 @@ function SubagentItem({
     <div className="py-1 first:pt-0.5 last:pb-0.5">
       <div
         data-testid={`subagent-item-${sub.sessionId}`}
-        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
+        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-500 ${
+          isFlashed
+            ? "ring-1 ring-status-info bg-status-info/10"
+            : ""
+        } ${
           isActive
             ? "border-l-2 border-l-accent/40 bg-accent/10 text-accent-text"
             : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary border border-transparent hover:border-border-primary/80"

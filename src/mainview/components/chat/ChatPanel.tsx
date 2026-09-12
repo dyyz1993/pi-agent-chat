@@ -31,6 +31,7 @@ import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { useShallow } from "zustand/react/shallow";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
@@ -67,7 +68,7 @@ import {
   useComposerPlaceholderStore,
 } from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
-import type { ChatMessage } from "../../types";
+import type { ChatMessage, SubagentSessionInfo } from "../../types";
 import type { AgentMessageForUI } from "../../../shared/modules/agent";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
@@ -235,6 +236,71 @@ export function shouldHideMessageSurfaceUntilInitialBottom({
     messageCount > 0 &&
     initialScrollCompleteSessionId !== effectiveSessionId &&
     revealFallbackSessionId !== effectiveSessionId
+  );
+}
+
+/**
+ * Delegation badge stats for the active parent session: total subsessions
+ * and how many are still running (no completedAt). Null when the parent has
+ * no delegations — the badge stays hidden.
+ */
+export function computeDelegationBadge(
+  subsessions: readonly SubagentSessionInfo[] | undefined,
+): { total: number; running: number } | null {
+  if (!subsessions || subsessions.length === 0) return null;
+  return {
+    total: subsessions.length,
+    running: subsessions.filter((sub) => sub.completedAt == null).length,
+  };
+}
+
+/**
+ * Which subsession a badge click should reveal in the session sidebar:
+ * the earliest-started still-running one; if everything finished, the most
+ * recently started one.
+ */
+export function pickRevealSubagent(
+  subsessions: readonly SubagentSessionInfo[] | undefined,
+): SubagentSessionInfo | null {
+  if (!subsessions || subsessions.length === 0) return null;
+  const running = subsessions.filter((sub) => sub.completedAt == null);
+  const pool = running.length > 0 ? running : subsessions;
+  const preferRunning = running.length > 0;
+  return (
+    [...pool].sort((a, b) => (preferRunning ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))[0] ??
+    null
+  );
+}
+
+export function DelegationBadge({
+  stats,
+  onClick,
+}: {
+  stats: { total: number; running: number } | null;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation("chat");
+  if (!stats) return null;
+  return (
+    <button
+      type="button"
+      data-testid="delegation-badge"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={t("delegation.badgeTitle", { total: stats.total, running: stats.running })}
+      className="inline-flex items-center gap-1 rounded border border-border-primary/70 bg-surface-hover/40 px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary hover:bg-surface-hover hover:text-text-secondary transition-colors"
+    >
+      <Bot className="h-3 w-3 shrink-0" />
+      <span>{stats.total}</span>
+      {stats.running > 0 && (
+        <span data-testid="delegation-badge-running" className="inline-flex items-center gap-0.5 text-status-success">
+          <span className="h-1.5 w-1.5 rounded-full bg-status-success animate-pulse" />
+          <span>{stats.running}</span>
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -773,6 +839,24 @@ export function ChatPanel() {
   useEffect(() => {
     if (!activeSessionPath) return;
     void useSubagentStore.getState().loadSubsessions(activeSessionPath);
+  }, [activeSessionPath]);
+
+  const delegationStats = useSubagentStore(
+    useShallow((s) => computeDelegationBadge(s.subsessionsByParent[activeSessionPath ?? ""])),
+  );
+  const handleDelegationBadgeClick = useCallback(() => {
+    const subs = useSubagentStore.getState().subsessionsByParent[activeSessionPath ?? ""];
+    const target = pickRevealSubagent(subs);
+    if (!target || !activeSessionPath) return;
+    // Open the session panel (desktop collapsed → un-collapse; otherwise show
+    // the drawer/panel), then ask the sidebar to reveal the subsession row.
+    const layout = useLayoutStore.getState();
+    if (layout.sessionCollapsed && layout.breakpoint !== "mobile") {
+      layout.toggleSessionCollapse();
+    } else if (layout.sessionPanel !== "pinned") {
+      layout.showSession();
+    }
+    useSubagentStore.getState().revealSubagent(activeSessionPath, target.sessionId);
   }, [activeSessionPath]);
 
   useEffect(() => {
@@ -1448,6 +1532,9 @@ export function ChatPanel() {
       <>
         <div className="flex items-center gap-2 px-2 py-1.5 bg-bg-secondary/90 border-b border-border-primary text-[11px] text-text-tertiary flex-shrink-0 sm:gap-4 sm:px-4">
           <SessionToggleIcon />
+          {!isViewingSubagent && (
+            <DelegationBadge stats={delegationStats} onClick={handleDelegationBadgeClick} />
+          )}
           {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
           {chatIdentity && (
             <span
