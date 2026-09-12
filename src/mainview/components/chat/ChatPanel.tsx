@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import type { Message } from "@dyyz1993/pi-ai";
 import { createLogger } from "../../../shared/lib/logger";
 import { normalizeToolBlocks, useChatStore } from "../../stores/use-chat-store";
+import type { MessageViewMode } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
@@ -35,6 +36,7 @@ import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useStatusStore } from "../../stores/use-status-store";
 import { apiClient } from "../../lib/api-client";
+import { withTimeout } from "../../../shared/lib/with-timeout";
 import { messageToChatMessage } from "../../lib/message-mapper";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
 import { useAsyncGuard } from "../../hooks/use-async-guard";
@@ -98,6 +100,7 @@ const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
 // triggers, same UX as the chat message list.
 const SIDE_NAV_PAGE_SIZE = 50;
 const SIDE_NAV_WINDOW_SIZE = 300;
+const SIDE_NAV_SEEK_TIMEOUT_MS = 15_000;
 const TOP_LOAD_RESTORE_MAX_ATTEMPTS = 6;
 
 const MAX_MSG_IDS_CACHE = 10;
@@ -162,6 +165,67 @@ export function shouldStartTopLoad({
     !isViewingSubagent &&
     initialScrollComplete &&
     lockedSessionId !== activeSessionId
+  );
+}
+
+/**
+ * Whether the one-shot top-load lock for the active session can be released.
+ *
+ * The lock prevents duplicate concurrent page-ups while a load is in flight.
+ * It used to clear only when prepended content pushed the viewport away from
+ * the top — a duplicate/no-shift page left the viewport pinned at the top and
+ * the lock stuck forever, dead-locking upward paging. Releasing on load
+ * completion re-arms the trigger; the guards in shouldStartTopLoad still
+ * decide whether another load actually fires.
+ */
+export function shouldClearTopLoadLock({
+  activeSessionId,
+  lockedSessionId,
+  isAtTop,
+  hasMoreMessages,
+  isLoadingMore,
+  isViewingSubagent,
+  messageViewMode,
+}: {
+  activeSessionId: string | null | undefined;
+  lockedSessionId: string | null;
+  isAtTop: boolean;
+  hasMoreMessages: boolean;
+  isLoadingMore: boolean;
+  isViewingSubagent: boolean;
+  messageViewMode: MessageViewMode;
+}): boolean {
+  if (lockedSessionId == null) return false;
+  if (lockedSessionId !== activeSessionId) return true;
+  const triggerDisabled =
+    !isAtTop || !hasMoreMessages || isViewingSubagent || messageViewMode === "focus";
+  if (triggerDisabled) return true;
+  // Trigger still armed: release only once the in-flight load completes so a
+  // no-shift page can't pin the lock forever, while a duplicate page-up can't
+  // fire mid-flight.
+  return !isLoadingMore;
+}
+
+/**
+ * Whether a focused window (side-nav jump) should load the next older page
+ * when the viewport reaches the top. Mirrors shouldStartTopLoad for the
+ * focus window's hasMoreBefore cursor.
+ */
+export function shouldStartFocusedTopLoad({
+  messageViewMode,
+  isAtTop,
+  isViewingSubagent,
+  hasMoreBefore,
+  isLoadingMore,
+}: {
+  messageViewMode: MessageViewMode;
+  isAtTop: boolean;
+  isViewingSubagent: boolean;
+  hasMoreBefore: boolean;
+  isLoadingMore: boolean;
+}): boolean {
+  return (
+    messageViewMode === "focus" && isAtTop && hasMoreBefore && !isLoadingMore && !isViewingSubagent
   );
 }
 
@@ -573,7 +637,11 @@ export function ChatPanel() {
   const clearTopWindowMessages = useChatStore((s) => s.clearTopWindowMessages);
   const loadSessionMessages = useChatStore((s) => s.loadSessionMessages);
   const loadFocusedMessagesAround = useChatStore((s) => s.loadFocusedMessagesAround);
+  const loadMoreFocusedBefore = useChatStore((s) => s.loadMoreFocusedBefore);
   const clearFocusedMessages = useChatStore((s) => s.clearFocusedMessages);
+  const focusWindowMeta = useChatStore((s) =>
+    effectiveScrollSessionId ? s.focusWindowMetaBySession[effectiveScrollSessionId] : undefined,
+  );
   const deleteMessagesForSession = useChatStore((s) => s.deleteMessagesForSession);
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
@@ -1110,12 +1178,19 @@ export function ChatPanel() {
     const sessionId = effectiveScrollSessionId;
     setIsSideNavLoadingMore(true);
     try {
-      const result = await apiClient.call("agent.getMessageNavPage", {
-        sessionId,
-        sessionPath: activeSideNavSessionPath ?? undefined,
-        fromStart: true,
-        limit: SIDE_NAV_WINDOW_SIZE,
-      });
+      // Timeout guard: seekToAbsoluteTop awaits this alongside loadTopMessages
+      // and holds topSeekSessionRef/topLoadLockedSessionRef until both settle.
+      // Without a timeout a hung RPC would lock upward paging for the session.
+      const result = await withTimeout(
+        apiClient.call("agent.getMessageNavPage", {
+          sessionId,
+          sessionPath: activeSideNavSessionPath ?? undefined,
+          fromStart: true,
+          limit: SIDE_NAV_WINDOW_SIZE,
+        }),
+        SIDE_NAV_SEEK_TIMEOUT_MS,
+        "seekSideNavToOldest",
+      );
       const oldestMessages = mapNavMessages(result.messages);
       if (oldestMessages.length === 0) return;
       setSideNavExtraMessages(oldestMessages);
@@ -1460,10 +1535,20 @@ export function ChatPanel() {
 
 
   useEffect(() => {
-    if (!isAtTop || !hasMoreMessages || isViewingSubagent || messageViewMode === "focus") {
+    if (
+      shouldClearTopLoadLock({
+        activeSessionId,
+        lockedSessionId: topLoadLockedSessionRef.current,
+        isAtTop,
+        hasMoreMessages,
+        isLoadingMore,
+        isViewingSubagent,
+        messageViewMode,
+      })
+    ) {
       topLoadLockedSessionRef.current = null;
     }
-  }, [activeSessionId, hasMoreMessages, isAtTop, isViewingSubagent, messageViewMode]);
+  }, [activeSessionId, hasMoreMessages, isAtTop, isLoadingMore, isViewingSubagent, messageViewMode]);
 
   useEffect(() => {
     if (
@@ -1494,6 +1579,38 @@ export function ChatPanel() {
     isLoadingMore,
     isViewingSubagent,
     loadMoreMessages,
+    messageViewMode,
+  ]);
+
+  // Focused window (side-nav jump): continue loading older pages when the
+  // viewport reaches the top, mirroring tail mode's top-load trigger.
+  useEffect(() => {
+    if (!effectiveScrollSessionId) return;
+    const meta = focusWindowMeta;
+    if (
+      !shouldStartFocusedTopLoad({
+        messageViewMode,
+        isAtTop,
+        isViewingSubagent,
+        hasMoreBefore: meta?.hasMoreBefore ?? false,
+        isLoadingMore,
+      })
+    ) {
+      return;
+    }
+    captureTopLoadScrollAnchor();
+    void loadMoreFocusedBefore(effectiveScrollSessionId, {
+      sessionPath: activeSideNavSessionPath ?? undefined,
+    });
+  }, [
+    activeSideNavSessionPath,
+    captureTopLoadScrollAnchor,
+    effectiveScrollSessionId,
+    focusWindowMeta,
+    isAtTop,
+    isLoadingMore,
+    isViewingSubagent,
+    loadMoreFocusedBefore,
     messageViewMode,
   ]);
 

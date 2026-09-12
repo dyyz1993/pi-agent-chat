@@ -979,4 +979,219 @@ describe("chat pagination", () => {
 
     expect(useChatStore.getState().isLoadingMoreBySession!["test-session"]).toBe(false);
   });
+
+  // Regression: after the user paged upward (older window loaded, deeper cursor),
+  // a background refresh (reconnect / session re-entry) used to replace the
+  // message list with only the newest page and overwrite the pagination cursor
+  // with the newest-page cursor. That dropped the loaded history and fed the
+  // top-load trigger duplicate pages, dead-locking upward loading.
+  it("background refresh should keep the loaded older window and cursor after upward paging", async () => {
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [
+          makeRawMessage(0, "user"),
+          makeRawMessage(1, "assistant"),
+          makeRawMessage(50, "user"),
+          makeRawMessage(51, "assistant"),
+        ],
+      },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-0" },
+    });
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawMessage(50, "user"), makeRawMessage(51, "assistant")],
+      customEntries: [],
+      hasMore: true,
+      nextCursor: "entry-50",
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+    await flushBackgroundRefresh();
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const ids = msgs.map((message) => message.id);
+    expect(ids).toContain("msg-0");
+    expect(ids).toContain("msg-1");
+    expect(useChatStore.getState().nextCursorBySession!["test-session"]).toBe("entry-0");
+    expect(useChatStore.getState().hasMoreMessagesBySession!["test-session"]).toBe(true);
+  });
+
+  // Regression: when the store already holds the full history (user paged to
+  // the absolute top), a background refresh must not reopen pagination with
+  // the newest-page cursor — that would cycle already-loaded duplicates.
+  it("background refresh should keep a fully-loaded window closed", async () => {
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [
+          makeRawMessage(0, "user"),
+          makeRawMessage(1, "assistant"),
+          makeRawMessage(2, "user"),
+        ],
+      },
+      hasMoreMessagesBySession: { "test-session": false },
+      nextCursorBySession: { "test-session": null },
+    });
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawMessage(1, "assistant"), makeRawMessage(2, "user")],
+      customEntries: [],
+      hasMore: true,
+      nextCursor: "entry-1",
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+    await flushBackgroundRefresh();
+
+    expect(useChatStore.getState().nextCursorBySession!["test-session"]).toBeNull();
+    expect(useChatStore.getState().hasMoreMessagesBySession!["test-session"]).toBe(false);
+  });
+
+  describe("focus window continuation (loadMoreFocusedBefore)", () => {
+    function seedFocusWindow() {
+      useChatStore.setState({
+        focusMessagesBySession: {
+          "test-session": [makeRawMessage(50, "user"), makeRawMessage(51, "assistant")],
+        },
+        messageViewBySession: { "test-session": "focus" },
+        focusWindowMetaBySession: {
+          "test-session": {
+            targetEntryId: "entry-50",
+            beforeCursor: "entry-50",
+            afterCursor: null,
+            hasMoreBefore: true,
+            hasMoreAfter: false,
+          },
+        },
+        isLoadingMoreBySession: {},
+      });
+    }
+
+    it("should prepend the older page and update the focus window meta", async () => {
+      seedFocusWindow();
+      (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+        messages: [makeRawMessage(48, "user"), makeRawMessage(49, "assistant")],
+        customEntries: [],
+        targetFound: true,
+        hasMoreBefore: false,
+        hasMoreAfter: true,
+        beforeCursor: null,
+        afterCursor: "entry-48",
+        totalCount: 52,
+      });
+
+      const loaded = await useChatStore.getState().loadMoreFocusedBefore!("test-session");
+
+      expect(loaded).toBe(true);
+      expect(apiClient.call).toHaveBeenCalledWith(
+        "agent.getFullMessagesAround",
+        expect.objectContaining({
+          sessionId: "test-session",
+          targetEntryId: "entry-50",
+          before: PAGE_SIZE,
+          after: 0,
+        }),
+      );
+      const focusMsgs = useChatStore.getState().focusMessagesBySession["test-session"]!;
+      expect(focusMsgs.map((message) => message.id)).toEqual([
+        "msg-48",
+        "msg-49",
+        "msg-50",
+        "msg-51",
+      ]);
+      const meta = useChatStore.getState().focusWindowMetaBySession["test-session"]!;
+      expect(meta.hasMoreBefore).toBe(false);
+      expect(meta.beforeCursor).toBeNull();
+      expect(meta.hasMoreAfter).toBe(false);
+    });
+
+    // Invariant: upward scrolling must stay memory-bounded on weaker
+    // machines — same as tail mode, the focus window is capped at the
+    // history window limit and the newest side is trimmed.
+    it("should cap the focus window at the history window limit when prepending", async () => {
+      const HISTORY_WINDOW = 300;
+      const currentFocus = Array.from({ length: HISTORY_WINDOW - 10 }, (_, i) =>
+        makeRawMessage(100 + i, i % 2 === 0 ? "user" : "assistant"),
+      );
+      useChatStore.setState({
+        focusMessagesBySession: { "test-session": currentFocus },
+        messageViewBySession: { "test-session": "focus" },
+        focusWindowMetaBySession: {
+          "test-session": {
+            targetEntryId: "entry-100",
+            beforeCursor: "entry-100",
+            afterCursor: null,
+            hasMoreBefore: true,
+            hasMoreAfter: false,
+          },
+        },
+        isLoadingMoreBySession: {},
+      });
+      const olderPage = Array.from({ length: PAGE_SIZE }, (_, i) =>
+        makeRawMessage(50 + i, i % 2 === 0 ? "user" : "assistant"),
+      );
+      (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+        messages: olderPage,
+        customEntries: [],
+        targetFound: true,
+        hasMoreBefore: true,
+        hasMoreAfter: false,
+        beforeCursor: "entry-50",
+        afterCursor: null,
+        totalCount: 1000,
+      });
+
+      const loaded = await useChatStore.getState().loadMoreFocusedBefore!("test-session");
+
+      expect(loaded).toBe(true);
+      const focusMsgs = useChatStore.getState().focusMessagesBySession["test-session"]!;
+      expect(focusMsgs.length).toBe(HISTORY_WINDOW);
+      // Oldest prepended page is kept...
+      expect(focusMsgs[0].id).toBe("msg-50");
+      // ...and the newest tail beyond the cap is trimmed.
+      expect(focusMsgs[focusMsgs.length - 1].id).toBe(`msg-${50 + HISTORY_WINDOW - 1}`);
+    });
+
+    it("should close the continuation when the page returns nothing new", async () => {
+      seedFocusWindow();
+      (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+        messages: [makeRawMessage(50, "user"), makeRawMessage(51, "assistant")],
+        customEntries: [],
+        targetFound: true,
+        hasMoreBefore: true,
+        hasMoreAfter: false,
+        beforeCursor: "entry-48",
+        afterCursor: null,
+        totalCount: 52,
+      });
+
+      const loaded = await useChatStore.getState().loadMoreFocusedBefore!("test-session");
+
+      expect(loaded).toBe(false);
+      const focusMsgs = useChatStore.getState().focusMessagesBySession["test-session"]!;
+      expect(focusMsgs.map((message) => message.id)).toEqual(["msg-50", "msg-51"]);
+      const meta = useChatStore.getState().focusWindowMetaBySession["test-session"]!;
+      expect(meta.hasMoreBefore).toBe(false);
+    });
+
+    it("should be a no-op when the window has nothing older", async () => {
+      useChatStore.setState({
+        focusWindowMetaBySession: {
+          "test-session": {
+            targetEntryId: "entry-0",
+            beforeCursor: null,
+            afterCursor: null,
+            hasMoreBefore: false,
+            hasMoreAfter: true,
+          },
+        },
+        isLoadingMoreBySession: {},
+      });
+
+      const loaded = await useChatStore.getState().loadMoreFocusedBefore!("test-session");
+
+      expect(loaded).toBe(false);
+      expect(apiClient.call).not.toHaveBeenCalled();
+    });
+  });
 });

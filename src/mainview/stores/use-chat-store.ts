@@ -182,6 +182,36 @@ export function limitLoadedHistoryWindow(
   };
 }
 
+/**
+ * Decide bottom-pagination state after a background refresh.
+ *
+ * BG refresh only fetches the newest page, so blindly adopting the server's
+ * cursor/hasMore would regress a deeper upward-paged cursor and dead-lock
+ * further page-ups (the next fetch would return already-loaded duplicates).
+ *
+ * Rules:
+ * - Live deeper cursor (its entry is still in the loaded window): keep it.
+ * - Fully-loaded store (no cursor, hasMore=false): stay closed — the newest
+ *   page is already in the store, reopening pagination would just cycle
+ *   duplicates.
+ * - Stale cursor or nothing loaded: adopt the server's fresh state.
+ */
+export function resolveBgRefreshPagination(
+  current: ChatMessage[],
+  prevCursor: string | null | undefined,
+  prevHasMore: boolean | undefined,
+  resultHasMore: boolean,
+  resultCursor: string | null,
+): { hasMore: boolean; nextCursor: string | null } {
+  if (prevCursor != null && current.some((m) => (m.entryId ?? m.id) === prevCursor)) {
+    return { hasMore: prevHasMore ?? resultHasMore, nextCursor: prevCursor };
+  }
+  if (prevCursor == null && prevHasMore === false) {
+    return { hasMore: false, nextCursor: null };
+  }
+  return { hasMore: resultHasMore, nextCursor: resultCursor };
+}
+
 function getMemoryMessageDedupeKey(message: ChatMessage): string | undefined {
   if (message.role !== "custom") return undefined;
   const block = message.content[0];
@@ -895,6 +925,7 @@ interface ChatState {
     targetEntryId: string,
     options?: { sessionPath?: string; before?: number; after?: number },
   ) => Promise<boolean>;
+  loadMoreFocusedBefore: (sessionId: string, options?: { sessionPath?: string }) => Promise<boolean>;
   clearFocusedMessages: (sessionId: string) => void;
   /** Background refresh: fetch latest messages and silently update store if different */
   _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => Promise<void>;
@@ -1810,6 +1841,112 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  /**
+   * Continue a focused window upward: fetch the page before the current
+   * window's oldest entry (beforeCursor) and prepend it. Mirrors the tail
+   * mode's loadMoreMessages so scrolling up in focus mode keeps loading
+   * history until hasMoreBefore turns false.
+   */
+  loadMoreFocusedBefore: async (sessionId: string, options?: { sessionPath?: string }) => {
+    const sid = sessionId;
+    if (!sid) return false;
+    const meta = get().focusWindowMetaBySession[sid];
+    if (!meta?.hasMoreBefore || !meta.beforeCursor) return false;
+    if (get().isLoadingMoreBySession[sid]) return false;
+
+    set((s) => ({
+      isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: true },
+    }));
+
+    try {
+      const ss = useSessionStore.getState();
+      const sessionMeta = Object.values(ss.sessionsByProject)
+        .flat()
+        .find((s) => s.sessionId === sid);
+      const result = await apiClient.call("agent.getFullMessagesAround", {
+        sessionId: sid,
+        sessionPath: options?.sessionPath ?? sessionMeta?.sessionPath,
+        targetEntryId: meta.beforeCursor,
+        before: PAGE_SIZE,
+        after: 0,
+      });
+
+      const closeWindow = () => {
+        set((s) => ({
+          focusWindowMetaBySession: {
+            ...s.focusWindowMetaBySession,
+            [sid]: {
+              ...meta,
+              hasMoreBefore: false,
+              beforeCursor: null,
+            },
+          },
+        }));
+      };
+
+      if (!result.targetFound || !Array.isArray(result.messages)) {
+        // The continuation anchor is gone (branch restructured) — stop
+        // retrying instead of looping on a dead cursor.
+        closeWindow();
+        return false;
+      }
+
+      const rawCustomEntries = Array.isArray(result.customEntries) ? result.customEntries : [];
+      const olderMsgs = mapRpcMessagesToStoreMessages(sid, result.messages, rawCustomEntries, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
+
+      const currentFocus = get().focusMessagesBySession[sid] ?? [];
+      const existingIds = new Set(currentFocus.map((m) => m.id));
+      const fresh = olderMsgs.filter((m) => !existingIds.has(m.id));
+      if (fresh.length === 0) {
+        // Nothing new — close the window so the scroll trigger can't loop.
+        closeWindow();
+        return false;
+      }
+
+      const merged = [...fresh, ...currentFocus].sort((a, b) => {
+        if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+        return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+      });
+      // Memory-bounded window, same invariant as tail mode: cap the loaded
+      // history and trim the newest side so weaker machines stay smooth when
+      // the user keeps scrolling up. Trimmed tail is recoverable by exiting
+      // focus mode (arrow down reloads the tail window).
+      const windowedFocus = limitLoadedHistoryWindow(merged);
+      const finalFocus = windowedFocus.messages;
+
+      set((s) => ({
+        focusMessagesBySession: {
+          ...s.focusMessagesBySession,
+          [sid]: finalFocus,
+        },
+        focusWindowMetaBySession: {
+          ...s.focusWindowMetaBySession,
+          [sid]: {
+            targetEntryId: meta.targetEntryId,
+            beforeCursor: result.beforeCursor ?? null,
+            afterCursor: meta.afterCursor,
+            hasMoreBefore: result.hasMoreBefore === true,
+            hasMoreAfter: meta.hasMoreAfter,
+          },
+        },
+        ...bumpHistoryLoadVersion(s, sid, false),
+      }));
+      return true;
+    } catch (err) {
+      log.error("Failed to load more focused messages", {
+        sessionId: sid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    } finally {
+      set((s) => ({
+        isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },
+      }));
+    }
+  },
+
   /** Background refresh: fetch latest messages from server and silently update store if different.
    *  Used after optimistic render from cache to guarantee data completeness. */
   _backgroundRefreshMessages: async (sessionId: string, sessionPath?: string) => {
@@ -1895,10 +2032,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const serverIds = new Set(msgs.map((m) => m.id));
       const localOnly = current.filter((m) => m._local && !serverIds.has(m.id));
-      const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+      // BG refresh fetches only the newest page. Keep already-loaded messages
+      // older than that page — but only when the store actually holds a
+      // deeper window (live upward-paged cursor, or a fully-loaded history).
+      // Otherwise keep the old replace semantics so stale tail duplicates
+      // (e.g. running cards superseded by server history) still get cleaned.
+      const prevCursor = get().nextCursorBySession[sid] ?? null;
+      const prevHasMore = get().hasMoreMessagesBySession[sid];
+      const cursorLive =
+        prevCursor != null && current.some((m) => (m.entryId ?? m.id) === prevCursor);
+      const preserveOlderWindow =
+        cursorLive || (prevCursor == null && prevHasMore === false);
+      const pageOldestTs =
+        msgs.length > 0 ? Math.min(...msgs.map((m) => m.timestamp ?? 0)) : Infinity;
+      const preservedOlder = preserveOlderWindow
+        ? current.filter(
+            (m) => !m._local && !serverIds.has(m.id) && (m.timestamp ?? 0) < pageOldestTs,
+          )
+        : [];
+      const resultHasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+      const pagination = resolveBgRefreshPagination(
+        current,
+        prevCursor,
+        prevHasMore,
+        resultHasMore,
+        result.nextCursor ?? null,
+      );
       let finalMsgs =
-        localOnly.length > 0
-          ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
+        localOnly.length > 0 || preservedOlder.length > 0
+          ? [...msgs, ...localOnly, ...preservedOlder].sort((a, b) => a.timestamp - b.timestamp)
           : msgs;
       finalMsgs = mergeRenderableCustomMessages(finalMsgs, customEntries);
 
@@ -1918,14 +2080,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           count: finalMsgs.length,
         });
         set((s) => ({
-          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          hasMoreMessagesBySession: {
+            ...s.hasMoreMessagesBySession,
+            [sid]: pagination.hasMore,
+          },
           hasTrimmedTailMessagesBySession: {
             ...s.hasTrimmedTailMessagesBySession,
             [sid]: false,
           },
           nextCursorBySession: {
             ...s.nextCursorBySession,
-            [sid]: result.nextCursor ?? null,
+            [sid]: pagination.nextCursor,
           },
           messageHydrationBySession: {
             ...s.messageHydrationBySession,
@@ -1941,14 +2106,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((s) => ({
           messagesBySession: setSessionMessagesWithCacheLimit(s.messagesBySession, sid, finalMsgs),
           ...bumpHistoryLoadVersion(s, sid),
-          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          hasMoreMessagesBySession: {
+            ...s.hasMoreMessagesBySession,
+            [sid]: pagination.hasMore,
+          },
           hasTrimmedTailMessagesBySession: {
             ...s.hasTrimmedTailMessagesBySession,
             [sid]: false,
           },
           nextCursorBySession: {
             ...s.nextCursorBySession,
-            [sid]: result.nextCursor ?? null,
+            [sid]: pagination.nextCursor,
           },
           messageHydrationBySession: {
             ...s.messageHydrationBySession,

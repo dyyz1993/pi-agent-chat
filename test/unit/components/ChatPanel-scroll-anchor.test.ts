@@ -6,7 +6,9 @@ import {
   computeTopLoadRestoredVirtualOffset,
   hasTopLoadAnchorContentShifted,
   shouldBlockComposerForRemoteDisconnect,
+  shouldClearTopLoadLock,
   shouldHideMessageSurfaceUntilInitialBottom,
+  shouldStartFocusedTopLoad,
   shouldStartTopLoad,
 } from "../../../src/mainview/components/chat/ChatPanel";
 
@@ -181,6 +183,135 @@ describe("ChatPanel top-load trigger guard", () => {
         isViewingSubagent: true,
         initialScrollComplete: true,
         lockedSessionId: null,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("ChatPanel top-load lock release", () => {
+  // Regression: the lock used to clear only when content shifted the viewport
+  // away from the top. A duplicate/no-shift page left the viewport at the top
+  // forever, permanently blocking the next page-up.
+  it("releases the lock once the load finishes, even if still at the top", () => {
+    expect(
+      shouldClearTopLoadLock({
+        activeSessionId: "sess-1",
+        lockedSessionId: "sess-1",
+        isAtTop: true,
+        hasMoreMessages: true,
+        isLoadingMore: false,
+        isViewingSubagent: false,
+        messageViewMode: "tail",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps the lock while the load is in flight", () => {
+    expect(
+      shouldClearTopLoadLock({
+        activeSessionId: "sess-1",
+        lockedSessionId: "sess-1",
+        isAtTop: true,
+        hasMoreMessages: true,
+        isLoadingMore: true,
+        isViewingSubagent: false,
+        messageViewMode: "tail",
+      }),
+    ).toBe(false);
+  });
+
+  it("releases the lock when the viewport leaves the top", () => {
+    expect(
+      shouldClearTopLoadLock({
+        activeSessionId: "sess-1",
+        lockedSessionId: "sess-1",
+        isAtTop: false,
+        hasMoreMessages: true,
+        isLoadingMore: true,
+        isViewingSubagent: false,
+        messageViewMode: "tail",
+      }),
+    ).toBe(true);
+  });
+
+  it("releases a stale lock from another session", () => {
+    expect(
+      shouldClearTopLoadLock({
+        activeSessionId: "sess-2",
+        lockedSessionId: "sess-1",
+        isAtTop: true,
+        hasMoreMessages: true,
+        isLoadingMore: true,
+        isViewingSubagent: false,
+        messageViewMode: "tail",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("ChatPanel focused-window top load", () => {
+  it("continues loading older pages in focus mode when scrolled to the top", () => {
+    expect(
+      shouldStartFocusedTopLoad({
+        messageViewMode: "focus",
+        isAtTop: true,
+        isViewingSubagent: false,
+        hasMoreBefore: true,
+        isLoadingMore: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not continue while loading or without an older page", () => {
+    expect(
+      shouldStartFocusedTopLoad({
+        messageViewMode: "focus",
+        isAtTop: true,
+        isViewingSubagent: false,
+        hasMoreBefore: true,
+        isLoadingMore: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldStartFocusedTopLoad({
+        messageViewMode: "focus",
+        isAtTop: true,
+        isViewingSubagent: false,
+        hasMoreBefore: false,
+        isLoadingMore: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not trigger outside the top edge, in tail mode, or in subagent view", () => {
+    expect(
+      shouldStartFocusedTopLoad({
+        messageViewMode: "focus",
+        isAtTop: false,
+        isViewingSubagent: false,
+        hasMoreBefore: true,
+        isLoadingMore: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldStartFocusedTopLoad({
+        messageViewMode: "tail",
+        isAtTop: true,
+        isViewingSubagent: false,
+        hasMoreBefore: true,
+        isLoadingMore: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldStartFocusedTopLoad({
+        messageViewMode: "focus",
+        isAtTop: true,
+        isViewingSubagent: true,
+        hasMoreBefore: true,
+        isLoadingMore: false,
       }),
     ).toBe(false);
   });

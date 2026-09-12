@@ -227,6 +227,12 @@ export interface PaginationResult {
  * Without a cursor (afterEntryId=null), returns the newest page.
  * With afterEntryId, returns the page immediately before that entry
  * (for prepending older history).
+ *
+ * A stale cursor (afterEntryId not found on the branch, e.g. after
+ * compaction/rollback/fork restructured it) falls back to the newest page
+ * instead of returning an empty page: that lets the client re-anchor
+ * nextCursor and recover upward paging on the next trigger, instead of
+ * permanently disabling it with hasMore=false.
  */
 export function applyPagination(
   filteredMessages: ParsedMessageEntry[],
@@ -246,10 +252,7 @@ export function applyPagination(
       ? filteredMessages.findIndex((entry) => entry.entryId === afterEntryId)
       : -1;
 
-  if (afterEntryId != null && cursorIndex < 0) {
-    // afterEntryId not found — return empty page
-    slicedMessages = [];
-  } else if (limit !== undefined && fromStart) {
+  if (limit !== undefined && fromStart) {
     const startIndex = 0;
     const endIndex = Math.min(totalCount, limit);
     slicedMessages = expandToolPairWindow(filteredMessages, startIndex, endIndex).map(
