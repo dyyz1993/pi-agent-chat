@@ -1,10 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  computeTopLoadRestoredScrollTop,
-  computeTopLoadRestoredVirtualOffset,
-  hasTopLoadAnchorContentShifted,
   shouldBlockComposerForRemoteDisconnect,
   shouldClearTopLoadLock,
   shouldHideMessageSurfaceUntilInitialBottom,
@@ -12,62 +7,19 @@ import {
   shouldStartTopLoad,
 } from "../../../src/mainview/components/chat/ChatPanel";
 
-const root = process.cwd();
-
-function readSource(path: string) {
-  return readFileSync(join(root, path), "utf-8");
-}
-
-describe("ChatPanel top-load scroll anchor", () => {
-  it("keeps the viewport anchored after older messages are prepended", () => {
-    expect(
-      computeTopLoadRestoredScrollTop(
-        { sessionId: "sess-1", scrollHeight: 1_000, scrollTop: 40 },
-        1_650,
-      ),
-    ).toBe(690);
-  });
-
-  it("does not move upward when the measured height shrinks", () => {
-    expect(
-      computeTopLoadRestoredScrollTop(
-        { sessionId: "sess-1", scrollHeight: 1_000, scrollTop: 40 },
-        980,
-      ),
-    ).toBe(40);
-  });
-
-  it("can restore by message item offset instead of total scroll height", () => {
-    expect(computeTopLoadRestoredVirtualOffset({ messageTop: 24 }, 650)).toBe(626);
-  });
-
-  it("waits for prepended content instead of clearing the anchor on loading state alone", () => {
-    const anchor = {
-      sessionId: "sess-1",
-      scrollHeight: 1_000,
-      scrollTop: 0,
-      messageId: "m10",
-      messageIndex: 0,
-      messageTop: 0,
-    };
-
-    expect(hasTopLoadAnchorContentShifted(anchor, ["m10", "m11"], 1_020)).toBe(false);
-    expect(hasTopLoadAnchorContentShifted(anchor, ["m8", "m9", "m10", "m11"], 1_500)).toBe(true);
-  });
-
-  it("restores top-load scroll position from a message anchor and settles after render", () => {
-    const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
-    const restoreEffectSection = source.slice(
-      source.indexOf("const captureTopLoadScrollAnchor"),
-      source.indexOf("const seekToAbsoluteTop"),
+describe("ChatPanel top-load scroll anchoring", () => {
+  // Prepend anchoring moved into the virtualizer (virtua `shift` prop,
+  // derived in MessageListView): the manual capture/restore chain was
+  // removed because its multi-frame corrections caused visible jumps.
+  // Structural guard: none of the removed machinery may creep back in
+  // alongside the shift-based anchoring.
+  it("no longer contains the manual capture/restore scroll chain", async () => {
+    const source = await import("node:fs").then((fs) =>
+      fs.readFileSync("src/mainview/components/chat/ChatPanel.tsx", "utf-8"),
     );
-
-    expect(restoreEffectSection).toContain("getTopVisibleMessageAnchor");
-    expect(restoreEffectSection).toContain("hasTopLoadAnchorContentShifted");
-    expect(restoreEffectSection).toContain("computeTopLoadRestoredVirtualOffset");
-    expect(restoreEffectSection).toContain("computeTopLoadRestoredScrollTop");
-    expect(restoreEffectSection).toContain("correctTopLoadAnchorAfterRender");
-    expect(restoreEffectSection).toContain("requestAnimationFrame");
+    expect(source).not.toContain("captureTopLoadScrollAnchor");
+    expect(source).not.toContain("restoreTopLoadScrollAnchor");
+    expect(source).not.toContain("correctTopLoadAnchorAfterRender");
   });
 });
 

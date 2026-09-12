@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   PanelLeft,
@@ -101,22 +101,12 @@ const INITIAL_SCROLL_REVEAL_GRACE_MS = 450;
 const SIDE_NAV_PAGE_SIZE = 50;
 const SIDE_NAV_WINDOW_SIZE = 300;
 const SIDE_NAV_SEEK_TIMEOUT_MS = 15_000;
-const TOP_LOAD_RESTORE_MAX_ATTEMPTS = 6;
 
 const MAX_MSG_IDS_CACHE = 10;
 
 const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
 
 export { ChatReloadButton, shouldShowChatReloadButton };
-
-interface TopLoadScrollAnchor {
-  sessionId: string;
-  scrollHeight: number;
-  scrollTop: number;
-  messageId?: string;
-  messageTop?: number;
-  messageIndex?: number;
-}
 
 function findSessionMeta(
   sessionsByProject: Record<string, SessionMeta[]>,
@@ -269,88 +259,6 @@ export function shouldBlockComposerForRemoteDisconnect({
     remoteConnectionStatus === "disconnected" ||
     remoteConnectionStatus === "error"
   );
-}
-
-export function computeTopLoadRestoredScrollTop(
-  anchor: TopLoadScrollAnchor,
-  nextScrollHeight: number,
-): number {
-  const addedHeight = Math.max(0, nextScrollHeight - anchor.scrollHeight);
-  return anchor.scrollTop + addedHeight;
-}
-
-export function computeTopLoadRestoredVirtualOffset(
-  anchor: Pick<TopLoadScrollAnchor, "messageTop">,
-  nextItemOffset: number,
-): number {
-  return Math.max(0, nextItemOffset - (anchor.messageTop ?? 0));
-}
-
-export function hasTopLoadAnchorContentShifted(
-  anchor: TopLoadScrollAnchor,
-  messageIds: string[],
-  nextScrollHeight: number,
-): boolean {
-  if (anchor.messageId && anchor.messageIndex != null) {
-    const nextIndex = messageIds.indexOf(anchor.messageId);
-    if (nextIndex >= 0) return nextIndex > anchor.messageIndex;
-  }
-  return nextScrollHeight > anchor.scrollHeight;
-}
-
-function getTopVisibleMessageAnchor(
-  container: HTMLElement,
-  messageIds: string[],
-  handle: VirtualizerHandle | null,
-): Pick<TopLoadScrollAnchor, "messageId" | "messageTop" | "messageIndex"> {
-  const containerRect = container.getBoundingClientRect();
-  const visibleMessages = Array.from(container.querySelectorAll<HTMLElement>("[data-msg-id]"))
-    .map((element) => {
-      const messageId = element.dataset.msgId;
-      if (!messageId) return null;
-      const rect = element.getBoundingClientRect();
-      if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) return null;
-      return {
-        messageId,
-        messageTop: rect.top - containerRect.top,
-        distance: Math.abs(rect.top - containerRect.top),
-      };
-    })
-    .filter((item): item is { messageId: string; messageTop: number; distance: number } => !!item)
-    .sort((a, b) => a.distance - b.distance);
-
-  const messageId = visibleMessages[0]?.messageId ?? messageIds[0];
-  if (!messageId) return {};
-  const messageIndex = messageIds.indexOf(messageId);
-  let messageTop = visibleMessages[0]?.messageTop;
-  if (messageTop == null && messageIndex >= 0 && handle) {
-    try {
-      messageTop = handle.getItemOffset(messageIndex) - handle.scrollOffset;
-    } catch {
-      messageTop = 0;
-    }
-  }
-  return {
-    messageId,
-    messageTop: messageTop ?? 0,
-    messageIndex: messageIndex >= 0 ? messageIndex : undefined,
-  };
-}
-
-function correctTopLoadDomAnchor(container: HTMLElement, anchor: TopLoadScrollAnchor): boolean {
-  if (!anchor.messageId || anchor.messageTop == null) return false;
-  const element =
-    Array.from(container.querySelectorAll<HTMLElement>("[data-msg-id]")).find(
-      (candidate) => candidate.dataset.msgId === anchor.messageId,
-    ) ?? null;
-  if (!element) return false;
-  const containerRect = container.getBoundingClientRect();
-  const rect = element.getBoundingClientRect();
-  const delta = rect.top - containerRect.top - anchor.messageTop;
-  if (Math.abs(delta) > 0.5) {
-    container.scrollTop += delta;
-  }
-  return true;
 }
 
 function evictMsgIdsIfNeeded(): void {
@@ -653,9 +561,7 @@ export function ChatPanel() {
   const selectionRootRef = useRef<HTMLDivElement>(null);
   const vlistRef = useRef<VirtualizerHandle>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
-  const topLoadScrollAnchorRef = useRef<TopLoadScrollAnchor | null>(null);
   const topLoadLockedSessionRef = useRef<string | null>(null);
-  const topLoadRestoreRafRef = useRef<number | null>(null);
   const topSeekSessionRef = useRef<string | null>(null);
   const topSeekRunIdRef = useRef(0);
   const [isSeekingTop, setIsSeekingTop] = useState(false);
@@ -871,14 +777,9 @@ export function ChatPanel() {
 
   useEffect(() => {
     setInitialScrollCompleteSessionId(null);
-    topLoadScrollAnchorRef.current = null;
     topSeekRunIdRef.current++;
     topSeekSessionRef.current = null;
     setIsSeekingTop(false);
-    if (topLoadRestoreRafRef.current != null) {
-      cancelAnimationFrame(topLoadRestoreRafRef.current);
-      topLoadRestoreRafRef.current = null;
-    }
   }, [effectiveScrollSessionId]);
 
   useEffect(() => {
@@ -1083,92 +984,11 @@ export function ChatPanel() {
     inputBarRef,
   });
 
-  const captureTopLoadScrollAnchor = useCallback(() => {
-    if (!activeSessionId) return;
-    const el = messagesScrollRef.current;
-    if (!el) return;
-    const handle = vlistRef.current;
-    topLoadScrollAnchorRef.current = {
-      sessionId: activeSessionId,
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      ...getTopVisibleMessageAnchor(el, messageIds, handle),
-    };
-  }, [activeSessionId, messageIds]);
-
-  const correctTopLoadAnchorAfterRender = useCallback(
-    (anchor: TopLoadScrollAnchor, attempt = 0) => {
-      if (anchor.sessionId !== activeSessionId) return;
-      const el = messagesScrollRef.current;
-      if (!el) return;
-
-      const corrected = correctTopLoadDomAnchor(el, anchor);
-      if (corrected && attempt >= 1) return;
-      if (attempt >= TOP_LOAD_RESTORE_MAX_ATTEMPTS) return;
-
-      topLoadRestoreRafRef.current = requestAnimationFrame(() => {
-        topLoadRestoreRafRef.current = null;
-        correctTopLoadAnchorAfterRender(anchor, attempt + 1);
-      });
-    },
-    [activeSessionId],
-  );
-
-  const restoreTopLoadScrollAnchor = useCallback(
-    (anchor: TopLoadScrollAnchor) => {
-      const el = messagesScrollRef.current;
-      if (!el) return;
-      if (topLoadRestoreRafRef.current != null) {
-        cancelAnimationFrame(topLoadRestoreRafRef.current);
-        topLoadRestoreRafRef.current = null;
-      }
-
-      const handle = vlistRef.current;
-      let restoredByMessageAnchor = false;
-      if (anchor.messageId && handle) {
-        const nextIndex = messageIds.indexOf(anchor.messageId);
-        if (nextIndex >= 0) {
-          try {
-            const nextItemOffset = handle.getItemOffset(nextIndex);
-            handle.scrollTo(computeTopLoadRestoredVirtualOffset(anchor, nextItemOffset));
-            restoredByMessageAnchor = true;
-          } catch {
-            restoredByMessageAnchor = false;
-          }
-        }
-      }
-
-      if (!restoredByMessageAnchor) {
-        el.scrollTop = computeTopLoadRestoredScrollTop(anchor, el.scrollHeight);
-      }
-
-      correctTopLoadAnchorAfterRender(anchor);
-    },
-    [correctTopLoadAnchorAfterRender, messageIds],
-  );
-
-  useLayoutEffect(() => {
-    if (isViewingSubagent) return;
-    const anchor = topLoadScrollAnchorRef.current;
-    if (!anchor || anchor.sessionId !== activeSessionId) return;
-    const el = messagesScrollRef.current;
-    if (!el) return;
-    if (!hasTopLoadAnchorContentShifted(anchor, messageIds, el.scrollHeight)) {
-      if (!isLoadingMore) {
-        topLoadScrollAnchorRef.current = null;
-      }
-      return;
-    }
-    restoreTopLoadScrollAnchor(anchor);
-    topLoadScrollAnchorRef.current = null;
-  }, [
-    activeSessionId,
-    historyLoadVersion,
-    isLoadingMore,
-    isViewingSubagent,
-    messageIds,
-    restoreTopLoadScrollAnchor,
-  ]);
+  // Prepend anchoring is handled inside the virtualizer: MessageListView
+  // derives virtua's `shift` prop on the exact commit where older messages
+  // are prepended, so the scroll offset is adjusted synchronously with the
+  // DOM update — no post-hoc capture/restore chain (which measured unmounted
+  // items and corrected across multiple frames, causing visible jumps).
 
   // (scroll reset is handled directly in loadMoreSideNav via rAF)
 
@@ -1227,7 +1047,6 @@ export function ChatPanel() {
     topSeekRunIdRef.current = runId;
     topSeekSessionRef.current = sessionId;
     topLoadLockedSessionRef.current = sessionId;
-    topLoadScrollAnchorRef.current = null;
     setIsSeekingTop(true);
     try {
       if (useIndependentSideNavHistory) {
@@ -1568,11 +1387,9 @@ export function ChatPanel() {
     const sessionId = activeSessionId;
     if (!sessionId) return;
     topLoadLockedSessionRef.current = sessionId;
-    captureTopLoadScrollAnchor();
     loadMoreMessages?.(sessionId);
   }, [
     activeSessionId,
-    captureTopLoadScrollAnchor,
     isAtTop,
     hasMoreMessages,
     initialScrollCompleteSessionId,
@@ -1598,13 +1415,11 @@ export function ChatPanel() {
     ) {
       return;
     }
-    captureTopLoadScrollAnchor();
     void loadMoreFocusedBefore(effectiveScrollSessionId, {
       sessionPath: activeSideNavSessionPath ?? undefined,
     });
   }, [
     activeSideNavSessionPath,
-    captureTopLoadScrollAnchor,
     effectiveScrollSessionId,
     focusWindowMeta,
     isAtTop,

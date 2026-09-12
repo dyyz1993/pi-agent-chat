@@ -1,4 +1,4 @@
-import { useMemo, memo, useCallback, useEffect } from "react";
+import { useMemo, memo, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
@@ -403,6 +403,25 @@ interface MessageListViewProps {
   bufferSize?: number;
 }
 
+/**
+ * Whether the virtualizer should anchor from the end (`shift`) for this
+ * render. True only on the exact commit where older items are prepended
+ * (upward page-up): virtua then adjusts scrollOffset synchronously in the
+ * same commit, so the viewport stays visually pinned instead of jumping.
+ * Appends and replacements keep start anchoring; the previous-first-id
+ * baseline is captured in a layout effect after each commit.
+ */
+export function shouldShiftAnchor(input: {
+  prevFirstId: string | null;
+  nextFirstId: string | null;
+  prevCount: number;
+  nextCount: number;
+}): boolean {
+  if (input.prevFirstId == null || input.nextFirstId == null) return false;
+  if (input.prevFirstId === input.nextFirstId) return false;
+  return input.nextCount > input.prevCount;
+}
+
 export const MessageListView = memo(function MessageListView({
   source,
   scrollRef,
@@ -514,6 +533,33 @@ export const MessageListView = memo(function MessageListView({
     visibleMessages,
   ]);
 
+  // Prepend detection for virtua's `shift` anchoring: on the exact commit
+  // where older items are prepended, virtua adjusts scrollOffset itself so
+  // the viewport stays visually pinned (no post-hoc scroll restore needed).
+  // The baseline is updated after commit so only that one commit shifts.
+  const anchorBaselineRef = useRef<{ firstId: string | null; count: number } | null>(null);
+  const firstItemId = processedMessages[0]?.msg.id ?? null;
+  const shift = shouldShiftAnchor({
+    prevFirstId: anchorBaselineRef.current?.firstId ?? null,
+    nextFirstId: firstItemId,
+    prevCount: anchorBaselineRef.current?.count ?? 0,
+    nextCount: processedMessages.length,
+  });
+  const baselineForEffect = { firstId: firstItemId, count: processedMessages.length };
+  useLayoutEffect(() => {
+    anchorBaselineRef.current = baselineForEffect;
+  });
+
+  // The load-more header sits above the virtualizer inside the scroll
+  // container; any height change there shifts the whole list. Reserve its
+  // height permanently once shown (h-7) so prepends never collide with a
+  // header resize — including the last page where hasMore flips to false.
+  const headerReservedRef = useRef(false);
+  const shouldReserveHeader = isLoadingMore || hasMoreMessages;
+  useLayoutEffect(() => {
+    if (shouldReserveHeader) headerReservedRef.current = true;
+  }, [shouldReserveHeader]);
+
   if (visibleMessages.length === 0 && scrollRef) {
     return (
       <div
@@ -546,8 +592,8 @@ export const MessageListView = memo(function MessageListView({
         (e.currentTarget as HTMLElement).style.scrollbarColor = "transparent transparent";
       }}
     >
-      {(isLoadingMore ?? hasMoreMessages) && (
-        <div className="flex items-center justify-center py-2">
+      {headerReservedRef.current && (
+        <div className="flex items-center justify-center h-7 shrink-0">
           {isLoadingMore ? (
             <Loader2 className="w-4 h-4 text-text-tertiary animate-spin" />
           ) : hasMoreMessages ? (
@@ -557,6 +603,7 @@ export const MessageListView = memo(function MessageListView({
       )}
       <Virtualizer
         ref={vlistRef}
+        shift={shift}
         scrollRef={scrollRef as React.RefObject<HTMLDivElement | null>}
         bufferSize={bufferSize}
         data={processedMessages}
