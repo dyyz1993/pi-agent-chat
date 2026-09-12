@@ -130,6 +130,7 @@ vi.mock("../../utils/clipboard", () => ({
 }));
 
 import { StatusPanel } from "../../../src/mainview/components/status-panel/StatusPanel";
+import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
 
 function makeProcess(overrides: Partial<BashProcess> & { toolCallId: string }): BashProcess {
   return {
@@ -609,5 +610,63 @@ describe("StatusPanel permission section", () => {
     expect(container.textContent).toContain("permissionAccessAxis");
     expect(container.textContent).toContain("permissionApprovalAxis");
     expect(container.textContent).toContain("permissionScopeAxis");
+  });
+});
+
+describe("StatusPanel plan section todo folding", () => {
+  beforeEach(() => {
+    mockCollapsedSections = new Set();
+    mockActiveSubsessionId = null;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  function seedTodos() {
+    useSessionTodoStore.setState({
+      todosBySession: {
+        "test-session": [
+          { id: 1, text: "active-task-alpha", done: false },
+          { id: 2, text: "active-task-beta", done: false, priority: "high" as const },
+          { id: 3, text: "finished-task-old", done: true },
+          { id: 4, text: "removed-task-gone", done: false, deleted: true },
+          { id: 5, text: "finished-task-older", done: true },
+        ],
+      },
+    });
+  }
+
+  it("shows only active todos and folds finished ones into a summary row", () => {
+    seedTodos();
+    const { container, getByTestId } = render(<StatusPanel />);
+    expect(container.textContent).toContain("active-task-alpha");
+    expect(container.textContent).toContain("active-task-beta");
+    expect(container.textContent).not.toContain("finished-task-old");
+    expect(container.textContent).not.toContain("removed-task-gone");
+    const summary = getByTestId("plan-finished-summary");
+    expect(summary.getAttribute("data-count")).toBe("3");
+  });
+
+  it("reveals finished todos when the summary row is clicked", () => {
+    seedTodos();
+    const { container, getByTestId } = render(<StatusPanel />);
+    expect(container.textContent).not.toContain("finished-task-old");
+    fireEvent.click(getByTestId("plan-finished-summary"));
+    expect(container.textContent).toContain("finished-task-old");
+    expect(container.textContent).toContain("removed-task-gone");
+    expect(container.textContent).toContain("finished-task-older");
+  });
+
+  it("renders a plain list when nothing is finished", () => {
+    useSessionTodoStore.setState({
+      todosBySession: {
+        "test-session": [{ id: 1, text: "only-active", done: false }],
+      },
+    });
+    const { container, queryByTestId } = render(<StatusPanel />);
+    expect(container.textContent).toContain("only-active");
+    expect(queryByTestId("plan-finished-summary")).toBeNull();
   });
 });

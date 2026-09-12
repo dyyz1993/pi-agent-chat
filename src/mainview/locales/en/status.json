@@ -97,6 +97,7 @@
   "remoteConfigureFromProject": "Configure remote projects when adding a project; this panel only shows the current runtime.",
   "errorLabel": "Error",
   "planMode": "Plan Mode",
+  "planFinishedSummary": "Completed/removed ({{count}})",
   "shell": "SHELL",
   "mcpTools": "MCP Tools",
   "lsp": "LSP",

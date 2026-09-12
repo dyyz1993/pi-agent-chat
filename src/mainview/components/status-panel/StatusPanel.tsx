@@ -122,6 +122,7 @@ export function StatusPanel() {
   const backgroundedIds = useBashStore((s) => s.backgroundedIds);
   const [logViewer, setLogViewer] = useState<{ logPath: string; toolCallId: string } | null>(null);
   const todos = activeSessionId ? todosBySession[activeSessionId] : undefined;
+  const [showFinishedTodos, setShowFinishedTodos] = useState(false);
   const lspStore = useLspStore((s) => s.statusBySession);
   const lspData = activeSessionId ? lspStore[activeSessionId] : undefined;
   const collapsedSections = useStatusStore((s) => s.collapsedSections);
@@ -608,32 +609,72 @@ export function StatusPanel() {
                     <div className="space-y-1">
                       {todos && todos.length > 0 && (
                         <div className="space-y-0.5 pt-0.5">
-                          {todos.map((todo) => (
-                            <div
-                              key={todo.id}
-                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors${todo.deleted ? " opacity-40" : ""}`}
-                            >
-                              {todo.deleted ? (
-                                <Trash2 className="w-3 h-3 shrink-0 text-status-error" />
-                              ) : todo.done ? (
-                                <CheckCircle2 className="w-3 h-3 shrink-0 text-status-success" />
-                              ) : (
-                                <Circle className="w-3 h-3 shrink-0 text-text-tertiary" />
-                              )}
-                              {todo.priority && !todo.deleted && (
-                                <span
-                                  className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[todo.priority].dot}`}
-                                >
-                                  {PRIORITY_STYLES[todo.priority].label}
-                                </span>
-                              )}
-                              <span
-                                className={`${todo.deleted ? "text-status-error/60 line-through" : todo.done ? "text-text-tertiary line-through" : "text-text-secondary"} truncate`}
+                          {todos
+                            .filter((todo) => !todo.done && !todo.deleted)
+                            .map((todo) => (
+                              <div
+                                key={todo.id}
+                                className={`flex items-center gap-1.5 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors`}
                               >
-                                {todo.text}
-                              </span>
-                            </div>
-                          ))}
+                                <Circle className="w-3 h-3 shrink-0 text-text-tertiary" />
+                                {todo.priority && (
+                                  <span
+                                    className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[todo.priority].dot}`}
+                                  >
+                                    {PRIORITY_STYLES[todo.priority].label}
+                                  </span>
+                                )}
+                                <span className="text-text-secondary truncate">{todo.text}</span>
+                              </div>
+                            ))}
+                          {(() => {
+                            const finished = todos.filter((todo) => todo.done || todo.deleted);
+                            if (finished.length === 0) return null;
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  data-testid="plan-finished-summary"
+                                  data-count={finished.length}
+                                  onClick={() => setShowFinishedTodos((v) => !v)}
+                                  className="flex items-center gap-1.5 py-0.5 px-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover/60 transition-colors w-full text-left"
+                                >
+                                  <CheckCircle2 className="w-3 h-3 shrink-0 text-status-success" />
+                                  <span>
+                                    {t("planFinishedSummary", { count: finished.length })}
+                                  </span>
+                                  <span className="ml-auto">
+                                    {showFinishedTodos ? "▾" : "▸"}
+                                  </span>
+                                </button>
+                                {showFinishedTodos &&
+                                  finished.map((todo) => (
+                                    <div
+                                      key={todo.id}
+                                      className={`flex items-center gap-1.5 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors${todo.deleted ? " opacity-40" : ""}`}
+                                    >
+                                      {todo.deleted ? (
+                                        <Trash2 className="w-3 h-3 shrink-0 text-status-error" />
+                                      ) : (
+                                        <CheckCircle2 className="w-3 h-3 shrink-0 text-status-success" />
+                                      )}
+                                      {todo.priority && !todo.deleted && (
+                                        <span
+                                          className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[todo.priority].dot}`}
+                                        >
+                                          {PRIORITY_STYLES[todo.priority].label}
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`${todo.deleted ? "text-status-error/60 line-through" : "text-text-tertiary line-through"} truncate`}
+                                      >
+                                        {todo.text}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
