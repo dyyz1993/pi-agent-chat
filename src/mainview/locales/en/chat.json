@@ -509,7 +509,7 @@
   "composerState.plan": "Plan mode",
   "composerState.planShort": "Plan",
   "composerState.planTitle": "Plan mode is enabled",
-  "delegation.badgeTitle": "{{total}} delegated subtasks, {{running}} running. Click to locate in the session list.",
+  "delegation.badgeTitle": "{{delegates}} delegated ({{delegateRunning}} running), {{subs}} subtasks ({{subsRunning}} running). Click to locate in the session list.",
   "composerActionsHint": "Add context",
   "event.sessionComplete": "Session complete",
   "event.sessionCompleteBody": "Session {{id}}... finished",

@@ -509,7 +509,7 @@
   "composerState.plan": "计划模式",
   "composerState.planShort": "计划",
   "composerState.planTitle": "计划模式已启用",
-  "delegation.badgeTitle": "委派 {{total}} 个子任务，运行中 {{running}} 个。点击在会话列表中定位。",
+  "delegation.badgeTitle": "委派 {{delegates}} 个（运行中 {{delegateRunning}}），子任务 {{subs}} 个（运行中 {{subsRunning}}）。点击在会话列表中定位。",
   "composerActionsHint": "添加上下文",
   "event.sessionComplete": "会话完成",
   "event.sessionCompleteBody": "会话 {{id}}... 执行完毕",

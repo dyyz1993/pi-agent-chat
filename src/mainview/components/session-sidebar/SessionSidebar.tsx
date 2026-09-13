@@ -454,13 +454,20 @@ export function SessionSidebar(_props: SessionSidebarProps) {
     let attempts = 0;
     let flashTimer = 0;
     const locate = () => {
-      const el = document.querySelector<HTMLElement>(`[data-testid="subagent-item-${subsessionId}"]`);
-      if (!el) {
+      // Subagent records anchor on subagent-item-*; coordinator delegate
+      // children render as nested session items (session-item-*).
+      const el = document.querySelector<HTMLElement>(
+        `[data-testid="subagent-item-${subsessionId}"]`,
+      );
+      const delegateEl =
+        el ?? document.querySelector<HTMLElement>(`[data-testid="session-item-${subsessionId}"]`);
+      const target = el ?? delegateEl;
+      if (!target) {
         if (attempts++ < 60) raf = requestAnimationFrame(locate);
         return;
       }
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
-      setFlashSubsessionId(subsessionId);
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (el) setFlashSubsessionId(subsessionId);
       flashTimer = window.setTimeout(() => setFlashSubsessionId(null), 2000);
     };
     raf = requestAnimationFrame(locate);
