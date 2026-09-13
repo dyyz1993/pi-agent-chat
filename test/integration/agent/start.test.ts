@@ -186,4 +186,36 @@ describe("agent start operations", () => {
     expect(clients.get("old-session")).toBe(pooled);
     expect(options.createRpcClient).toHaveBeenCalled();
   });
+
+  // Regression (2026-09-14): warm-pool adoption never attached the CLI event
+  // bridge (client.onEvent), so every session adopted from the warm pool lost
+  // its agent.event stream — messages only appeared after a manual reload.
+  it("warm pool adoption attaches the event bridge like the cold path", async () => {
+    const previousUnsubscribe = vi.fn();
+    const warm = makeManaged("warm-old-session");
+    warm.client.switchSession = vi.fn().mockResolvedValue({ cancelled: false });
+    warm.client.getState = vi.fn().mockResolvedValue({ sessionId: "warm-new-session" });
+    warm.client.onEvent = vi.fn().mockReturnValue(vi.fn());
+    warm.unsubscribe = previousUnsubscribe;
+
+    const options = makeOptions({
+      sessionId: "sess-warm",
+      sessionPath: "/sessions/sess-warm.jsonl",
+      takeWarmProcess: vi.fn().mockReturnValue(warm),
+    });
+
+    const result = await startAgentClientOperation(options);
+
+    expect(result).toEqual({ agentId: "warm-new-session", status: "started" });
+    // Previous bridge (from the pool spawn) must be detached before re-binding.
+    expect(previousUnsubscribe).toHaveBeenCalledTimes(1);
+    // The core event bridge must be attached and route to the NEW session id.
+    expect(warm.client.onEvent).toHaveBeenCalledTimes(1);
+    const bridge = (warm.client.onEvent as ReturnType<typeof vi.fn>).mock.calls[0][0] as (
+      event: unknown,
+    ) => void;
+    options.handleEvent.mockClear();
+    bridge({ type: "message_start" });
+    expect(options.handleEvent).toHaveBeenCalledWith("warm-new-session", { type: "message_start" });
+  });
 });

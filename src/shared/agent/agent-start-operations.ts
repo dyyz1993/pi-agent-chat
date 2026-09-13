@@ -146,6 +146,24 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
             options.sessionProjectPaths.set(newSessionId, options.projectPath);
             options.clients.set(newSessionId, warm);
             options.addToPool(poolKey, warm);
+            // Attach the core event bridge exactly like the cold path: the
+            // pool spawn never registered one, so without this every warm-
+            // adopted session silently loses its agent.event stream (messages
+            // only appeared after a manual reload). Detach any stale bridge
+            // first, then re-bind with the adopted session id.
+            const warmBridge = (event: unknown): void => {
+              options.handleEvent(warm._activeSessionId, event as AgentEvent);
+            };
+            try {
+              warm.unsubscribe?.();
+            } catch {
+              // stale bridge already gone
+            }
+            try {
+              warm.unsubscribe = warm.client.onEvent(warmBridge);
+            } catch {
+              warm.unsubscribe = () => undefined;
+            }
             options.registerAgentChannels({
               client: warm.client,
               getSessionId: () => warm._activeSessionId,
