@@ -3,7 +3,8 @@ import { WebSocketServer, WebSocket } from "ws";
 import { RPCServer, type Transport } from "@dyyz1993/rpc-core";
 import { registerAllHandlers, unregisterAllHandlers } from "../shared/register-all-handlers";
 import { createLogger } from "../shared/lib/logger";
-import { isValidToken } from "./auth";
+import { isValidToken, resolveTokenUser } from "./auth";
+import { isRequestAllowed } from "../shared/agent/session-ownership";
 import { handleDirectProxyUpgrade, parseProxyTarget } from "./proxy-direct";
 
 const log = createLogger("gateway");
@@ -63,6 +64,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
   wss.on("connection", (ws: WebSocket, req) => {
     log.info("Client connected", { total: clients.size + 1 });
     clients.add(ws);
+
+    // Resolve the connection's uid once: token-users get their uid, the
+    // primary admin token (and single-token deployments) get undefined.
+    // Sessions/paths/events are scoped to it in multi-token deployments.
+    const connToken = new URL(req.url ?? "/ws", "http://localhost").searchParams.get("token");
+    const connUid = resolveTokenUser(connToken);
+    (ws as WebSocket & { uid?: string }).uid = connUid;
 
     // Capture UA at handshake for presence classification (e.g. Drel container
     // vs desktop browser); layout/auth decisions must not rely on it.
@@ -178,6 +186,26 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
                 startTime: Date.now(),
               });
             }
+            // Multi-token deployments: requests carrying a foreign sessionId
+            // are rejected before reaching any handler (fail-closed).
+            if (
+              msg.type === "request" &&
+              typeof msg.id === "string" &&
+              !isRequestAllowed(msg.method as string, msg.params, connUid)
+            ) {
+              rpcTimings.delete(msg.id as string);
+              ws.send(
+                JSON.stringify({
+                  id: msg.id,
+                  type: "response",
+                  error: {
+                    code: 403,
+                    message: "Forbidden: session belongs to another user",
+                  },
+                }),
+              );
+              return;
+            }
             log.info("[ws-in]", {
               type: msg.type ?? "unknown",
               method: msg.method,
@@ -211,7 +239,7 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
         log.error("[rpc] server error", { error: String(err) });
       },
     });
-    registerAllHandlers(rpcServer, { platform: "web" });
+    registerAllHandlers(rpcServer, { platform: "web", userId: connUid });
 
     ws.on("close", (code: number, reason: Buffer) => {
       clients.delete(ws);

@@ -180,7 +180,7 @@ export function createHttpHandler(
 
     // 文件元数据: GET /info/{path}
     if (url.pathname.startsWith("/info/")) {
-      await handleFileInfo(url.pathname.slice(6), res);
+      await handleFileInfo(url.pathname.slice(6), req, res);
       return;
     }
 
@@ -191,7 +191,7 @@ export function createHttpHandler(
         return;
       }
       if (url.pathname === "/file/delete" && req.method === "POST") {
-        await handleFileDelete(url.searchParams.get("path"), res);
+        await handleFileDelete(req, url.searchParams.get("path"), res);
         return;
       }
       if (sandboxEnabled && getSandboxPreviewEndpoint) {

@@ -11,7 +11,13 @@ import { existsSync } from "fs";
 import { spawnSync } from "node:child_process";
 import { extname, basename, dirname, resolve, posix } from "path";
 import { createLogger } from "../shared/lib/logger";
-import { isValidToken } from "./auth";
+import {
+  isValidToken,
+  parseFsCookie,
+  resolveTokenUser,
+  extractRequestUserId,
+  FS_COOKIE_NAME,
+} from "./auth";
 import { getMimeType } from "./mime";
 import { isPathAllowed, isPathReadable } from "./path-guard";
 import { listRemoteProjects } from "../shared/lib/project-config";
@@ -19,7 +25,6 @@ import type { RemoteProjectRecord } from "../shared/modules/project";
 
 const log = createLogger("gateway");
 
-export const FS_COOKIE_NAME = "fs_token";
 export const FS_COOKIE_MAX_AGE = 3600;
 
 type HttpFileTarget =
@@ -126,14 +131,8 @@ function readRemoteFileRange(
   return runSshFileCommand(target.remote, command).stdout;
 }
 
-export function parseFsCookie(req: IncomingMessage): string | null {
-  const cookieHeader = req.headers["cookie"] ?? "";
-  for (const part of cookieHeader.split(";")) {
-    const [k, v] = part.trim().split("=");
-    if (k === FS_COOKIE_NAME && v) return v;
-  }
-  return null;
-}
+// Re-exported for existing importers (http-routes).
+export { parseFsCookie };
 
 export async function handleFsRoute(
   url: URL,
@@ -144,6 +143,7 @@ export async function handleFsRoute(
   const queryToken = url.searchParams.get("token");
   const cookieToken = parseFsCookie(req);
   const token = queryToken ?? cookieToken;
+  const uid = resolveTokenUser(token);
 
   if (!isValidToken(token, authToken)) {
     res.writeHead(401, { "Content-Type": "text/plain" }).end("Unauthorized");
@@ -166,7 +166,7 @@ export async function handleFsRoute(
   }
 
   const target = await resolveHttpFileTarget(filePath);
-  if (target.kind === "local" && !(await isPathReadable(target.path))) {
+  if (target.kind === "local" && !(await isPathReadable(target.path, uid))) {
     res.writeHead(403, { "Content-Type": "text/plain" }).end("Path not allowed");
     return;
   }
@@ -230,10 +230,14 @@ export async function handleFsRoute(
   }
 }
 
-export async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise<void> {
+export async function handleFileInfo(
+  encodedPath: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
   const target = await resolveHttpFileTarget(filePath);
-  if (target.kind === "local" && !(await isPathReadable(target.path))) {
+  if (target.kind === "local" && !(await isPathReadable(target.path, extractRequestUserId(req)))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
@@ -273,7 +277,7 @@ export async function handleFileContent(
 ): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
   const target = await resolveHttpFileTarget(filePath);
-  if (target.kind === "local" && !(await isPathReadable(target.path))) {
+  if (target.kind === "local" && !(await isPathReadable(target.path, extractRequestUserId(req)))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
@@ -356,7 +360,7 @@ export async function handleFileUpload(
     res.end(JSON.stringify({ error: "Missing path parameter" }));
     return;
   }
-  if (!(await isPathAllowed(destPath))) {
+  if (!(await isPathAllowed(destPath, extractRequestUserId(req)))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
@@ -385,6 +389,7 @@ export async function handleFileUpload(
 }
 
 export async function handleFileDelete(
+  req: IncomingMessage,
   filePath: string | null,
   res: ServerResponse,
 ): Promise<void> {
@@ -394,7 +399,7 @@ export async function handleFileDelete(
     return;
   }
   const decodedPath = decodeURIComponent(filePath);
-  if (!(await isPathAllowed(decodedPath))) {
+  if (!(await isPathAllowed(decodedPath, extractRequestUserId(req)))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;

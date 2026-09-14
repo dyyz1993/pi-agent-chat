@@ -10,10 +10,11 @@ import { randomUUID } from "crypto";
 import { pinSession, unpinSession, listPinnedSessionIds } from "../lib/project-config";
 import { createLogger } from "../lib/logger";
 import { getProjectSessionDir, getSessionsRoot } from "../lib/pi-agent-paths";
+import { setSessionOwner, addUserProjectRoot } from "../agent/session-ownership";
 
 const log = createLogger("session");
 
-export function register(server: RPCServer, _options: HandlerOptions): void {
+export function register(server: RPCServer, options: HandlerOptions): void {
   const r = createRegister(server);
 
   r("session.getEntries", async (params) => {
@@ -89,6 +90,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const sessionPath = join(sessionDir, `${sessionId}.jsonl`);
 
     await mkdir(sessionDir, { recursive: true });
+
+    // Multi-token deployments: bind the session (and its project root) to the
+    // creating user so RPC/event/file access can be scoped to them.
+    setSessionOwner(sessionId, options.userId);
+    if (options.userId && projectPath) {
+      addUserProjectRoot(options.userId, projectPath);
+    }
 
     const header = {
       type: "session",

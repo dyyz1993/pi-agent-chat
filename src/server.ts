@@ -18,6 +18,7 @@ import { type WebSocket } from "ws";
 import { createLogger, setLogSink } from "./shared/lib/logger";
 import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
 import { initSandboxManager, getSandboxManager } from "./shared/agent/process-manager";
+import { isEventVisible } from "./shared/agent/session-ownership";
 
 configureLogDir(config.logDir);
 setLogSink(writeLogLine);
@@ -51,6 +52,17 @@ log.info("LOG_DIR:", { value: process.env.LOG_DIR });
 log.info("PI_CLI_PATH:", { value: process.env.PI_CLI_PATH });
 log.info("PI_APP_CONFIG_DIR:", { value: process.env.PI_APP_CONFIG_DIR });
 log.info("==============================");
+// Multi-token deployments run untrusted users' agents on this host. Without a
+// sandbox, a session process can read anything this OS user can — including
+// other users' session files. Warn loudly; operators must either enable
+// SANDBOX_ENABLED=true or only share the server with fully trusted users.
+if (String(process.env.TOKEN_USERS ?? "").trim() && !config.sandboxEnabled) {
+  log.warn("═══════════════════════════════════════════════════════════");
+  log.warn("⚠  SECURITY: TOKEN_USERS is set but SANDBOX_ENABLED is off.");
+  log.warn("⚠  Token-user agents execute on this host WITHOUT isolation.");
+  log.warn("⚠  Set SANDBOX_ENABLED=true before sharing with untrusted users.");
+  log.warn("═══════════════════════════════════════════════════════════");
+}
 // ── Worktree detection ──
 const gitPath = join(process.cwd(), ".git");
 if (existsSync(gitPath) && statSync(gitPath).isFile()) {
@@ -101,6 +113,12 @@ const apiHandler = createHttpHandler({
   broadcastEvent: (event: Record<string, unknown>) => {
     const msg = JSON.stringify(event);
     for (const ws of wss.clients as Set<WebSocket>) {
+      // Multi-token deployments: session-scoped events only reach the
+      // connection that owns the session (admin/undefined uid sees all).
+      const uid = (ws as WebSocket & { uid?: string }).uid;
+      if (!isEventVisible(String(event.eventType ?? ""), event.payload, event.metadata, uid)) {
+        continue;
+      }
       safeWsSend(ws, msg);
     }
   },
