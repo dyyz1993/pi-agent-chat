@@ -53,7 +53,7 @@ export function isPrivateOrLoopbackHost(hostname: string): boolean {
   const lower = hostname.toLowerCase();
   if (isLoopbackHost(lower)) return true;
   if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
-  if (/^10\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
   if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
   return false;
 }
