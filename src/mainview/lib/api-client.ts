@@ -53,9 +53,39 @@ export function isPrivateOrLoopbackHost(hostname: string): boolean {
   const lower = hostname.toLowerCase();
   if (isLoopbackHost(lower)) return true;
   if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
   if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
   return false;
+}
+
+/**
+ * Desktop shell pointed at a remote gateway (`rpc-websocket-url` in
+ * localStorage). When set, the renderer skips the embedded IPC engine and
+ * connects over WebSocket exactly like the web client, so the desktop app and
+ * a phone browser are two views of the same server.
+ */
+export function isDesktopRemoteMode(): boolean {
+  if (typeof window === "undefined") return false;
+  if (!window.__electrobunBunBridge) return false;
+  try {
+    return !!localStorage.getItem("rpc-websocket-url");
+  } catch {
+    return false;
+  }
+}
+
+/** Normalize a user-entered remote server URL; returns null when invalid. */
+export function normalizeRemoteWsUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") return null;
+    if (url.pathname === "" || url.pathname === "/") url.pathname = "/ws";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function appendToken(url: string, token: string): string {
@@ -221,7 +251,7 @@ class APIClientImpl {
       try {
         const env = this.detectEnvironment();
 
-        if (env === "electrobun") {
+        if (env === "electrobun" && !isDesktopRemoteMode()) {
           this.initSyncForDesktop();
         } else {
           this._transport = "websocket";

@@ -59,5 +59,15 @@
   "proxyApiUrl": "代理服务地址",
   "proxyApiUrlDesc": "代理注册 API 地址（由 .env 的 PROXY_API_URL 提供，可临时覆盖）",
   "proxyApiUrlPlaceholder": "http://host:port/__api__/register",
-  "proxyApiUrlReset": "恢复为服务端配置"
+  "proxyApiUrlReset": "恢复为服务端配置",
+  "remoteServerTitle": "远程服务器",
+  "remoteServerDesc": "连接到局域网或公网上已部署的 PiAgentChat 服务器（与 Web 端同一地址）。保存后立即重载，会话、项目和模型密钥均来自该服务器。",
+  "remoteServerUrl": "服务器地址",
+  "remoteServerUrlDesc": "WebSocket 地址，缺少路径时自动补 /ws",
+  "remoteServerUrlPlaceholder": "ws://192.168.1.10:3100/ws",
+  "remoteServerToken": "访问 Token",
+  "remoteServerSave": "连接",
+  "remoteServerActive": "当前已连接远程服务器",
+  "remoteServerDisconnect": "断开，回到本机模式",
+  "remoteServerInvalid": "地址无效：需要 ws:// 或 wss:// 开头"
 }

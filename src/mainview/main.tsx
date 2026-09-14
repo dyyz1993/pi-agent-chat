@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { apiClient } from "./lib/api-client";
+import { apiClient, isDesktopRemoteMode } from "./lib/api-client";
 import "./lib/i18n";
 import "./index.css";
 import App from "./App";
@@ -55,7 +55,11 @@ if (isElectrobun) {
   document.documentElement.classList.add("electrobun-desktop");
   installViewportCssVarSync();
   installDesktopEditCommandBridge();
-  apiClient.initSyncForDesktop();
+  if (isDesktopRemoteMode()) {
+    void apiClient.initialize();
+  } else {
+    apiClient.initSyncForDesktop();
+  }
 }
 
 const root = document.getElementById("root");

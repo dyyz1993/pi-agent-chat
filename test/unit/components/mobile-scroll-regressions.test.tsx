@@ -71,11 +71,18 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("../../../src/mainview/lib/api-client", () => ({
-  apiClient: {
-    call: (...args: unknown[]) => mockApiCall(...args),
-  },
-}));
+vi.mock("../../../src/mainview/lib/api-client", async (importOriginal) => {
+  // Real exports underneath: SettingsPanel renders isDesktopRemoteMode().
+  const actual = await importOriginal<
+    typeof import("../../../src/mainview/lib/api-client")
+  >();
+  return {
+    ...actual,
+    apiClient: {
+      call: (...args: unknown[]) => mockApiCall(...args),
+    },
+  };
+});
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   useSessionStore: (selector: (state: typeof sessionStoreState) => unknown) =>

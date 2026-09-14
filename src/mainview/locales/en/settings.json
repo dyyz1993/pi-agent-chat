@@ -59,5 +59,15 @@
   "proxyApiUrl": "Proxy API URL",
   "proxyApiUrlDesc": "Proxy registration API address (from .env PROXY_API_URL, can be overridden temporarily)",
   "proxyApiUrlPlaceholder": "http://host:port/__api__/register",
-  "proxyApiUrlReset": "Reset to server config"
+  "proxyApiUrlReset": "Reset to server config",
+  "remoteServerTitle": "Remote Server",
+  "remoteServerDesc": "Connect to a PiAgentChat server deployed on your LAN or the internet (same address as the web UI). Saving reloads the app; sessions, projects and model keys all come from that server.",
+  "remoteServerUrl": "Server URL",
+  "remoteServerUrlDesc": "WebSocket URL; the /ws path is appended automatically if missing",
+  "remoteServerUrlPlaceholder": "ws://192.168.1.10:3100/ws",
+  "remoteServerToken": "Access Token",
+  "remoteServerSave": "Connect",
+  "remoteServerActive": "Currently connected to a remote server",
+  "remoteServerDisconnect": "Disconnect and use the local engine",
+  "remoteServerInvalid": "Invalid URL: must start with ws:// or wss://"
 }

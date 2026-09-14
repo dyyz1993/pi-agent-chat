@@ -31,7 +31,11 @@ import {
   useRetryConfigStore,
   RETRY_DEFAULTS,
 } from "../../stores/use-settings-store";
-import { apiClient } from "../../lib/api-client";
+import {
+  apiClient,
+  isDesktopRemoteMode,
+  normalizeRemoteWsUrl,
+} from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
@@ -162,6 +166,54 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [pushEnabled, setPushEnabled] = useState<boolean | null>(null);
   const [immersiveOpen, setImmersiveOpen] = useState<boolean>(true);
   const [presenceSuppress, setPresenceSuppress] = useState<boolean>(true);
+
+  // Desktop remote-server connection (desktop shell only)
+  const desktopRemote = isDesktopRemoteMode();
+  const [remoteUrlDraft, setRemoteUrlDraft] = useState<string>(() => {
+    try {
+      return localStorage.getItem("rpc-websocket-url") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [remoteTokenDraft, setRemoteTokenDraft] = useState<string>(() => {
+    try {
+      return localStorage.getItem("rpc-auth-token") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [remoteUrlError, setRemoteUrlError] = useState<string | null>(null);
+
+  const saveRemoteServer = () => {
+    const normalized = normalizeRemoteWsUrl(remoteUrlDraft);
+    if (!normalized) {
+      setRemoteUrlError(t("remoteServerInvalid"));
+      return;
+    }
+    try {
+      localStorage.setItem("rpc-websocket-url", normalized);
+      if (remoteTokenDraft.trim()) {
+        localStorage.setItem("rpc-auth-token", remoteTokenDraft.trim());
+      } else {
+        localStorage.removeItem("rpc-auth-token");
+      }
+    } catch {
+      return;
+    }
+    window.location.reload();
+  };
+
+  const disconnectRemoteServer = () => {
+    try {
+      localStorage.removeItem("rpc-websocket-url");
+      localStorage.removeItem("rpc-auth-token");
+    } catch {
+      return;
+    }
+    window.location.reload();
+  };
+
   useEffect(() => {
     let cancelled = false;
     apiClient.call("notification.getSettings", {})
@@ -687,7 +739,59 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         />
       </label>
     </SettingsSection>
+
   );
+
+  const remoteServerContent = desktopRemote ? (
+    <SettingsSection title={t("remoteServerTitle")}>
+      <div className="rounded-lg border border-border-secondary bg-bg-primary/45 px-3 py-2.5">
+        <div className="text-[13px] font-medium text-text-primary">
+          {desktopRemote ? t("remoteServerActive") : t("remoteServerTitle")}
+        </div>
+        <div className="mt-0.5 text-[11px] leading-4 text-text-tertiary">
+          {t("remoteServerDesc")}
+        </div>
+        <label className="mt-3 block">
+          <span className="text-[11px] text-text-secondary">{t("remoteServerUrl")}</span>
+          <input
+            type="text"
+            value={remoteUrlDraft}
+            onChange={(e) => {
+              setRemoteUrlDraft(e.target.value);
+              setRemoteUrlError(null);
+            }}
+            placeholder={t("remoteServerUrlPlaceholder")}
+            spellCheck={false}
+            className="mt-1 w-full rounded-md border border-border-secondary bg-bg-elevated px-2.5 py-1.5 text-[12px] text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
+          />
+          <span className="mt-0.5 block text-[10px] text-text-tertiary">
+            {t("remoteServerUrlDesc")}
+          </span>
+        </label>
+        {remoteUrlError ? (
+          <div className="mt-1 text-[11px] text-status-error">{remoteUrlError}</div>
+        ) : null}
+        <label className="mt-2 block">
+          <span className="text-[11px] text-text-secondary">{t("remoteServerToken")}</span>
+          <input
+            type="password"
+            value={remoteTokenDraft}
+            onChange={(e) => setRemoteTokenDraft(e.target.value)}
+            spellCheck={false}
+            className="mt-1 w-full rounded-md border border-border-secondary bg-bg-elevated px-2.5 py-1.5 text-[12px] text-text-primary focus:border-border-focus focus:outline-none"
+          />
+        </label>
+        <div className="mt-3 flex items-center gap-2">
+          <Button onClick={saveRemoteServer}>{t("remoteServerSave")}</Button>
+          {desktopRemote ? (
+            <Button onClick={disconnectRemoteServer} variant="ghost">
+              {t("remoteServerDisconnect")}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </SettingsSection>
+  ) : null;
 
   const usageContent = (
     <SettingsSection title="Agent 战绩" flush>
@@ -700,7 +804,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     retry: retryContent,
     notifications: pushNotificationContent,
     models: modelsContent,
-    network: networkContent,
+    network: (
+      <>
+        {networkContent}
+        {remoteServerContent}
+      </>
+    ),
     usage: usageContent,
     project: projectContent,
   };
