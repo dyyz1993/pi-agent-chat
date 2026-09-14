@@ -19,28 +19,38 @@ function HighlightedCode({
   code,
   prismTheme,
   language,
+  inheritFontSize = false,
 }: {
   code: string;
   prismTheme: typeof themes.nightOwl;
   language: string;
+  /** Expand overlays drive font size via a parent style; a fixed text-[11px] here would override it. */
+  inheritFontSize?: boolean;
 }) {
   if (!language) {
     return (
-      <pre className="text-[11px] leading-relaxed font-mono text-text-primary whitespace-pre p-2">
+      <pre
+        className={`leading-relaxed font-mono text-text-primary whitespace-pre p-2 ${
+          inheritFontSize ? "" : "text-[11px]"
+        }`}
+      >
         {code}
       </pre>
     );
   }
 
+  const preClass = `leading-relaxed font-mono p-2 m-0 ${inheritFontSize ? "" : "text-[11px]"}`;
+  const lineNumberClass = inheritFontSize
+    ? "table-cell text-right pr-3 select-none text-text-tertiary w-8 text-[0.91em]"
+    : "table-cell text-right pr-3 select-none text-text-tertiary w-8 text-[10px]";
+
   return (
     <Highlight theme={prismTheme} code={code} language={language}>
       {({ tokens, getLineProps, getTokenProps }) => (
-        <pre className="text-[11px] leading-relaxed font-mono p-2 m-0">
+        <pre className={preClass}>
           {tokens.map((line, i) => (
             <div key={i} {...getLineProps({ line })} className="table-row">
-              <span className="table-cell text-right pr-3 select-none text-text-tertiary w-8 text-[10px]">
-                {i + 1}
-              </span>
+              <span className={lineNumberClass}>{i + 1}</span>
               <span className="table-cell whitespace-pre">
                 {line.map((token, key) => (
                   <span key={key} {...getTokenProps({ token })} />
@@ -68,7 +78,12 @@ export const InlineCodeViewer = memo(function InlineCodeViewer({
   const handleExpand = useCallback(() => {
     openNodeExpand(
       filename,
-      <HighlightedCode code={code} prismTheme={prismTheme} language={language} />,
+      <HighlightedCode
+        code={code}
+        prismTheme={prismTheme}
+        language={language}
+        inheritFontSize
+      />,
     );
   }, [openNodeExpand, filename, code, prismTheme, language]);
 
