@@ -33,7 +33,10 @@ const RPC_TIMEOUT = 60_000;
 /** Objective is fully specified so a reasonable model drafts without
  *  questions; verification is mechanical (file_exists/file_contains) so the
  *  run passes without browser tooling. */
-const OBJECTIVE = `在当前工作区创建一个 index.html 和 README.md，实现一个极简静态倒计时页面，要求一次说明清楚、无需再向我提问：
+// PI_E2E_LLM_OBJECTIVE lets CI (e2e-nightly goal-weak-model) replay a
+// production-shaped failure: a very large objective drafted by a weak model
+// (glm-5.3-flash) that used to drop the authorities field entirely.
+const OBJECTIVE = process.env.PI_E2E_LLM_OBJECTIVE ?? `在当前工作区创建一个 index.html 和 README.md，实现一个极简静态倒计时页面，要求一次说明清楚、无需再向我提问：
 - index.html：标题为"Focus Timer"，页面正中央显示大号数字 25:00，下方一行小字"专注 25 分钟"；纯 vanilla HTML/CSS，无需任何 JavaScript 逻辑，无外部资源引用
 - README.md：中文说明这是什么页面、如何打开
 请直接起草并提交完整契约，然后执行到全部机械校验通过。`;
