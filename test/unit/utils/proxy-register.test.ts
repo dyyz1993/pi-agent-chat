@@ -31,23 +31,24 @@ describe("createProxyRegistrar", () => {
     const result = await registrar.register(TEST_HOST, TEST_PORT);
 
     expect(result).toMatch(/^https:\/\/[a-f0-9]{6}\.shanbox\.19930810\.xyz:8443$/);
+    // shanbox manage-route style: registers in place at /__api__/register with
+    // an {address, policy} payload, and pins the Host header to the public
+    // domain (with the API port) because the LAN endpoint drops unknown vhosts.
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://192.168.0.29:9080/__api__/routes",
+      "http://192.168.0.29:9080/__api__/register",
       expect.objectContaining({
         method: "POST",
+        headers: expect.objectContaining({ Host: "shanbox.19930810.xyz:8443" }),
         body: expect.any(String),
       }),
     );
 
     const callArgs = mockFetch.mock.calls[0]!;
     const callBody = JSON.parse((callArgs[1] as RequestInit).body as string);
-    expect(callBody).toEqual(
-      expect.objectContaining({
-        port: TEST_PORT,
-        policy: "public",
-      }),
-    );
-    expect(callBody.subdomain).toMatch(/^[a-f0-9]{6}$/);
+    expect(callBody).toEqual({
+      address: `${TEST_HOST}:${TEST_PORT}`,
+      policy: "public",
+    });
   });
 
   it("caches registration result", async () => {
@@ -97,17 +98,45 @@ describe("createProxyRegistrar", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("replaces localhost with LAN IP", async () => {
+  it("rewrites localhost to LAN IP for reachability, keeps target host in payload", async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
     const registrar = createProxyRegistrar(apiUrl, publicDomain);
-    await registrar.register("localhost", TEST_PORT);
+    const result = await registrar.register("localhost", TEST_PORT);
 
+    // The test server binds all interfaces, so the LAN IP path is reachable and
+    // registration proceeds. The shanbox payload passes the target host through
+    // unchanged; the LAN IP only substitutes into the reachability probe.
+    expect(result).toMatch(/^https:\/\/[a-f0-9]{6}\.shanbox\.19930810\.xyz:8443$/);
     const callBody = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
-    // If LAN IP exists, it should NOT be localhost
-    // The actual LAN IP depends on the machine, just verify it's not "localhost"
-    // On CI or machines without LAN IP, it may still be localhost
-    expect(callBody.port).toBe(TEST_PORT);
-    expect(callBody.policy).toBe("public");
+    expect(callBody).toEqual({
+      address: `localhost:${TEST_PORT}`,
+      policy: "public",
+    });
+  });
+
+  it("replaces localhost with LAN IP for non-shanbox registrars", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const registrar = createProxyRegistrar(
+      "http://proxy.internal:9080/register",
+      "tunnel.example.com",
+    );
+    const result = await registrar.register(TEST_HOST, TEST_PORT);
+
+    expect(result).toMatch(/^https:\/\/[a-f0-9]{6}\.tunnel\.example\.com$/);
+    const callArgs = mockFetch.mock.calls[0]!;
+    expect(callArgs[0]).toBe("http://proxy.internal:9080/register");
+    expect((callArgs[1] as RequestInit).headers).toEqual({ "Content-Type": "application/json" });
+    const callBody = JSON.parse((callArgs[1] as RequestInit).body as string);
+    expect(callBody).toEqual({
+      subdomain: expect.stringMatching(/^[a-f0-9]{6}$/),
+      port: TEST_PORT,
+      // localhost targets are rewritten to this machine's LAN IP so the
+      // (remote) proxy can reach back; CI runners have a private eth0 IP too.
+      host: expect.stringMatching(/^\d+\.\d+\.\d+\.\d+$/),
+      policy: "public",
+    });
+    expect(String(callBody.host)).not.toMatch(/^(localhost|127\.0\.0\.1)$/);
   });
 });

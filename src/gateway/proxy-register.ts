@@ -107,12 +107,16 @@ export function createProxyRegistrar(
           : undefined;
 
       // The LAN endpoint (IP-based) resets requests whose Host header doesn't
-      // match a known vhost — set Host to the public domain explicitly.
+      // match a known vhost — set Host to the public domain explicitly. Only
+      // append the API port when the public domain doesn't already carry one
+      // (e.g. "shanbox.host:8443" must not become "shanbox.host:8443:9080").
       let hostHeader: string | undefined;
       if (shanboxStyle) {
         const u = new URL(routesApiUrl);
         hostHeader = proxyPublicDomain;
-        if (u.port) hostHeader = `${proxyPublicDomain}:${u.port}`;
+        if (u.port && !proxyPublicDomain.includes(":")) {
+          hostHeader = `${proxyPublicDomain}:${u.port}`;
+        }
       }
       // Intermittent middlebox RSTs were observed on LAN Wi-Fi; retry twice.
       let lastErr: unknown = null;
