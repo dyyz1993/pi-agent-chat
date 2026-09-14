@@ -1,0 +1,25 @@
+# Keep the build context small and avoid leaking local state into image layers.
+.git
+.github
+.yalc
+yalc.lock
+node_modules
+dist
+dist-server
+dist-mobile
+build
+.vite
+logs
+*.log
+test
+e2e
+docs
+docs-plans
+screenshots
+scripts/*.cjs
+scripts/*.plist
+.env
+.env.*
+!.env.example
+.DS_Store
+electrobun.config.ts

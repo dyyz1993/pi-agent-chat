@@ -11,7 +11,7 @@
 #
 # 环境变量:
 #   PORT              Web 服务器端口（默认: 3100）
-#   AUTH_TOKEN        API 认证令牌（必填,用于 WebSocket 鉴权）
+#   AUTH_TOKEN        API 认证令牌（可选,未提供时自动生成并打印）
 #   INSTALL_DIR       安装目录（默认: ~/.pi-agent-chat-web）
 #   SKIP_DAEMON       设为 1 跳过守护进程配置(用 nohup)
 #
@@ -137,8 +137,15 @@ case "$OS" in
 esac
 
 # ── AUTH_TOKEN 检查 ──
+TOKEN_GENERATED=false
 if [ -z "${AUTH_TOKEN:-}" ]; then
-  err "AUTH_TOKEN 未设置!\n  请通过环境变量提供:\n    AUTH_TOKEN=your-token bash install-web.sh\n  或:\n    curl ... | AUTH_TOKEN=your-token bash"
+  if command -v openssl >/dev/null 2>&1; then
+    AUTH_TOKEN="$(openssl rand -hex 16)"
+  else
+    AUTH_TOKEN="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  fi
+  TOKEN_GENERATED=true
+  info "AUTH_TOKEN 未提供,已自动生成(已写入配置,下方访问地址可直接点开)"
 fi
 info "AUTH_TOKEN: ${AUTH_TOKEN:0:4}****"
 
@@ -686,10 +693,14 @@ echo "════════════════════════�
 echo -e "  ${GREEN}✅ PiAgentChat Web Server 安装完成!${NC}"
 echo "═══════════════════════════════════════════"
 echo ""
-echo "  📡 访问地址:"
-echo "     本机:   http://localhost:${PORT}"
+echo "  📡 访问地址 (已带登录 token,手机浏览器直接打开):"
+echo "     本机:   http://localhost:${PORT}/?token=${AUTH_TOKEN}"
 if [ -n "$LOCAL_IP" ]; then
-  echo "     网络:   http://${LOCAL_IP}:${PORT}"
+  echo "     网络:   http://${LOCAL_IP}:${PORT}/?token=${AUTH_TOKEN}"
+fi
+if [ "$TOKEN_GENERATED" = true ]; then
+  echo ""
+  echo -e "  ${YELLOW}💡 访问 token 为自动生成,也可在 ${INSTALL_DIR}/.env 中修改后重启服务${NC}"
 fi
 echo ""
 echo "  🔧 管理命令:"

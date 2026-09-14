@@ -1,0 +1,25 @@
+# PiAgentChat — Docker Compose deployment
+#
+# Usage:
+#   echo "AUTH_TOKEN=$(openssl rand -hex 16)" > .env
+#   docker compose up -d
+#   open http://localhost:3100/?token=<AUTH_TOKEN>
+#
+# Model API keys live in ./data/agent/auth.json (copy from an existing
+# machine's ~/.pi/agent/auth.json, or configure via the UI after first login).
+
+services:
+  pi-agent-chat:
+    build: .
+    image: ghcr.io/dyyz1993/pi-agent-chat:latest
+    container_name: pi-agent-chat
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3100}:3100"
+    environment:
+      AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required — create .env with AUTH_TOKEN=$(openssl rand -hex 16)}
+    volumes:
+      # Persistent state: agent dir (auth/models/settings/memory/sessions), app config, logs
+      - ./data:/data
+      # Projects the agent works on
+      - ./workspace:/workspace

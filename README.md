@@ -18,11 +18,50 @@ A full-stack AI coding assistant with desktop (Electrobun) and web support, buil
   <img src="screenshots/mobile-view.png" width="300" />
 </p>
 
-## Download
+## Install
+
+Pick one of three ways to run Pi Agent Chat. The web server gives you a browser UI (works great from your phone); the desktop app is a native macOS client.
+
+### Option 1 — Docker (recommended for servers)
+
+```bash
+mkdir pi-agent-chat && cd pi-agent-chat
+curl -fsSL https://raw.githubusercontent.com/dyyz1993/pi-agent-chat/master/docker-compose.yml -o docker-compose.yml
+echo "AUTH_TOKEN=$(openssl rand -hex 16)" > .env
+docker compose up -d
+```
+
+Open `http://<server-ip>:3100/?token=<AUTH_TOKEN>` — the same URL works from your phone on the same network.
+
+Then add a model API key once (persists in `./data/agent/`):
+
+```bash
+cat > data/agent/auth.json << 'EOF'
+{
+  "anthropic": { "type": "api", "key": "sk-ant-..." }
+}
+EOF
+```
+
+(Any provider id from your model catalog works, e.g. `"openai"`. Restart with `docker compose restart` after editing.)
+
+### Option 2 — One-line install script
+
+Web server (Linux/macOS, sets up launchd/systemd daemon automatically):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dyyz1993/pi-agent-chat/master/scripts/install-web.sh | bash
+```
+
+macOS desktop app:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dyyz1993/pi-agent-chat/master/scripts/install.sh | bash
+```
+
+### Option 3 — Download the desktop app
 
 Pre-built binaries are available on the [Releases page](https://github.com/dyyz1993/pi-agent-chat/releases).
-
-### macOS Installation
 
 Since the app is not code-signed with an Apple Developer certificate, macOS will show a "damaged" warning. Fix it with:
 
@@ -34,6 +73,8 @@ xattr -cr ~/Downloads/PiAgentChat-*.dmg
 ```
 
 Or right-click the DMG → "Open" → "Open" in the dialog.
+
+> Full deployment guide (reverse proxy, HTTPS, SSH remote projects): see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Features
 
