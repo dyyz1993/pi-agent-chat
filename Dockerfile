@@ -34,15 +34,25 @@ COPY . .
 RUN bun run build && bash scripts/build-server.sh
 
 # ── Stage 2: CLI runtime deps (platform-independent pure JS) ────────────────
-FROM node:22-bookworm-slim AS runtime-deps
+# Must use bun, not npm: pi-coding-agent's declared @dyyz1993/pi-tui range can
+# resolve to an npm version that was never published; bun falls back to the
+# latest published one (same workaround as .github/workflows/release.yml).
+FROM oven/bun:1 AS runtime-deps
 ARG PI_CODE_AGENT_VERSION
 WORKDIR /deps
-RUN npm init -y >/dev/null \
-  && npm install --omit=dev --no-audit --no-fund \
-    "@dyyz1993/pi-coding-agent@${PI_CODE_AGENT_VERSION}" \
-    "@dyyz1993/rpc-core@^2.2.0" \
-    "ws@^8.18.0" \
-    "strip-ansi@^7.0.0"
+RUN cat > package.json <<EOF
+{
+  "name": "pi-chat-web-deps",
+  "private": true,
+  "dependencies": {
+    "@dyyz1993/pi-coding-agent": "${PI_CODE_AGENT_VERSION}",
+    "@dyyz1993/rpc-core": "^2.2.0",
+    "ws": "^8.18.0",
+    "strip-ansi": "^7.0.0"
+  }
+}
+EOF
+RUN bun install
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim
