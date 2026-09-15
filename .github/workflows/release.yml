@@ -97,8 +97,9 @@ jobs:
           # at <cliDir>/pi-<platform>-<arch>).
           BUN_ENTRY="$RUNNER_TEMP/pi-src-entry"
           cp -R node_modules/@dyyz1993/pi-coding-agent/dist "$BUN_ENTRY"
+          # The worker entry is the compiled dist JS: npm tarballs ship no src/.
           bun build --compile "$BUN_ENTRY/bun/cli.js" \
-            node_modules/@dyyz1993/pi-coding-agent/src/utils/image-resize-worker.ts \
+            "$BUN_ENTRY/utils/image-resize-worker.js" \
             --target=bun-linux-x64 --outfile "$STAGE/node_modules/@dyyz1993/pi-coding-agent/dist/pi-linux-x64"
           rm -rf "$BUN_ENTRY"
 
