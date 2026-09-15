@@ -162,18 +162,32 @@ export const useGoalStore = create<GoalStoreState>()((set) => ({
     }
     const signal = options?.signal;
     const promise = (async () => {
-      try {
-        const status = (await apiClient.call(
-          "goal.getStatus",
-          { sessionId },
-          signal ? { signal } : undefined,
-        )) as GoalVendorStatus;
-        set((state) => ({
-          bySession: updateSession(state.bySession, sessionId, (s) => ({ ...s, status })),
-        }));
-        loadedStatusSessions.add(sessionId);
-      } catch (error) {
-        log.warn("Failed to fetch goal status", { sessionId, error });
+      // Bounded retry with backoff: goal.getStatus races the page's own
+      // agent.start during load — a swallowed transient failure used to leave
+      // the goal card / approval entry missing for the whole page lifetime
+      // (mobile "no way to approve" regression 2026-09-15).
+      const MAX_ATTEMPTS = 4;
+      const BACKOFF_MS = [600, 1_500, 4_000];
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+          const status = (await apiClient.call(
+            "goal.getStatus",
+            { sessionId },
+            signal ? { signal } : undefined,
+          )) as GoalVendorStatus;
+          set((state) => ({
+            bySession: updateSession(state.bySession, sessionId, (s) => ({ ...s, status })),
+          }));
+          loadedStatusSessions.add(sessionId);
+          return;
+        } catch (error) {
+          const aborted = error instanceof Error && error.name === "AbortError";
+          if (aborted || attempt === MAX_ATTEMPTS - 1) {
+            log.warn("Failed to fetch goal status", { sessionId, error });
+            return;
+          }
+          await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt] ?? 4_000));
+        }
       }
     })();
     statusPromises.set(sessionId, promise);
