@@ -95,8 +95,12 @@ jobs:
           # remote-child binaries for Standard SSH targets (cross-compiled
           # from the same fork source as the CLI deps; candidates are probed
           # at <cliDir>/pi-<platform>-<arch>).
-          BUN_ENTRY="$RUNNER_TEMP/pi-src-entry"
-          cp -R node_modules/@dyyz1993/pi-coding-agent/dist "$BUN_ENTRY"
+          # Compile inside the web-deps tree so bun resolves the CLI's
+          # transitive deps (pi-ai, chalk, cross-spawn...) from
+          # /tmp/web-deps/node_modules; the app repo's node_modules does not
+          # contain them under the npm-fallback install.
+          BUN_ENTRY="/tmp/web-deps/pi-src-entry"
+          cp -R /tmp/web-deps/node_modules/@dyyz1993/pi-coding-agent/dist "$BUN_ENTRY"
           # The worker entry is the compiled dist JS: npm tarballs ship no src/.
           bun build --compile "$BUN_ENTRY/bun/cli.js" \
             "$BUN_ENTRY/utils/image-resize-worker.js" \
