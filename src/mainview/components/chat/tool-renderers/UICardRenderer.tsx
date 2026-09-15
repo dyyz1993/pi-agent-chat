@@ -582,7 +582,11 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
       >
         {currentQuestion ? (
           <>
-            <div className="shrink-0 px-3.5 pb-3 pt-3.5 sm:px-4 sm:pt-4">
+            {/* max-h keeps oversized content (e.g. a full goal contract in
+                question text) from squeezing the options strip and footer out
+                of the card on short/mobile viewports; the block scrolls
+                internally instead (mobile approval regression 2026-09-15). */}
+            <div className="shrink-0 max-h-[45%] overflow-y-auto px-3.5 pb-3 pt-3.5 sm:px-4 sm:pt-4">
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text-primary">
                   {mainTitle}
