@@ -331,7 +331,8 @@ function createFallbackQuickCreatePlan(requirement: string): QuickCreatePlan {
       "Implement the primary UI and state flow.",
       "Add focused tests for the main behavior.",
     ],
-    testing: "Run unit tests and a production build, then manually verify the main happy path and error states.",
+    testing:
+      "Run unit tests and a production build, then manually verify the main happy path and error states.",
   };
 }
 
@@ -343,8 +344,9 @@ function createFallbackQuickCreateResult(requirement: string): {
   const cjk = hasCjkText(requirement);
   return {
     name: deriveFallbackFolderName(requirement),
-    description: (
-      cjk ? `根据需求创建的项目：${requirement}` : `A project generated from: ${requirement}`
+    description: (cjk
+      ? `根据需求创建的项目：${requirement}`
+      : `A project generated from: ${requirement}`
     ).slice(0, 200),
     plan: createFallbackQuickCreatePlan(requirement),
   };
@@ -777,8 +779,22 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       // ion 后端：运行态真相在 ion host（另一客户端在跑的会话也可见）；
       // 进程池状态（本实例的流式会话）优先，其余按 list_sessions 补齐。
       if (config.agentBackend === "ion") {
-        const { fetchIonSessionStatuses } = await import("../agent/ion-backend/ion-session-status");
-        const ionStatuses = await fetchIonSessionStatuses();
+        const { fetchIonSessionStatuses, fetchIonSessionInfos } =
+          await import("../agent/ion-backend/ion-session-status");
+        // 内容真相富化：ion 会话的 app 侧登记文件不含消息（messageCount=0），
+        // 不富化会被前端当"空白会话"→ 新建复用旧会话 + 空白 GC 误删登记。
+        const [ionStatuses, ionInfos] = await Promise.all([
+          fetchIonSessionStatuses(),
+          fetchIonSessionInfos(sessions.map((s) => s.sessionId)),
+        ]);
+        if (ionInfos.size > 0) {
+          for (const session of sessions) {
+            const info = ionInfos.get(session.sessionId);
+            if (info && info.messageCount > 0) {
+              session.messageCount = info.messageCount;
+            }
+          }
+        }
         if (ionStatuses.size > 0) {
           const merged = new Map(statuses.map((s) => [s.sessionId, s.status]));
           for (const session of sessions) {
@@ -1236,7 +1252,9 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       log.warn("project.generateName: using fallback after pi CLI failure", {
         tier,
         failureMessage: failureMessage.slice(0, 300),
-        structuredOutputFailure: isStructuredOutputFailure(`${failureMessage}\n${stderr}\n${e.message ?? ""}`),
+        structuredOutputFailure: isStructuredOutputFailure(
+          `${failureMessage}\n${stderr}\n${e.message ?? ""}`,
+        ),
       });
       return createFallbackQuickCreateResult(requirement);
     } finally {
@@ -1339,6 +1357,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
       });
       warnings.push(msg);
     }
-    return warnings.length > 0 ? { ok: true, path: projectPath, warnings } : { ok: true, path: projectPath };
+    return warnings.length > 0
+      ? { ok: true, path: projectPath, warnings }
+      : { ok: true, path: projectPath };
   });
 }
