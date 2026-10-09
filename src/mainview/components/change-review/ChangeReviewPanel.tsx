@@ -278,9 +278,10 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   const rejectChange = useChangeReviewStore((s) => s.rejectChange);
   const isProcessing = useChangeReviewStore((s) => s.processingPaths.has(change.path));
 
-  const statusCfg = STATUS_CONFIG[change.status];
+  // 兜底：越界 status（后端契约漂移）回落 pending，避免 undefined.Icon 整树崩溃
+  const statusCfg = STATUS_CONFIG[change.status] ?? STATUS_CONFIG.pending;
   const StatusIcon = statusCfg.Icon;
-  const fileCfg = FILE_STATUS_CONFIG[change.fileStatus];
+  const fileCfg = FILE_STATUS_CONFIG[change.fileStatus] ?? FILE_STATUS_CONFIG.modified;
   const FileStatusIcon = fileCfg.Icon;
   const hasDiffData =
     change.oldContent !== null || change.newContent !== null || !!change.unifiedDiff?.trim();

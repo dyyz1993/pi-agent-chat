@@ -34,15 +34,55 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 export const ION_CHANNEL_MAP: Readonly<Record<string, Readonly<Record<string, IonChannelTarget>>>> =
   {
     "file-review": {
+      // ion 条目 {diffStat, path, status:"added"}（status 是文件状态）→ pi
+      // PendingChangeResult（fileStatus 与审核 status 分离）。原样透传曾导致
+      // 审核 tab 整树崩溃（ChangeItem2 读越界枚举 → undefined.Icon）。
       "review.pending": {
         kind: "rpc",
         method: "review_pending",
-        adaptResult: (result) => ({ result: asRecord(result).pending ?? [] }),
+        adaptResult: (result) => ({
+          result: (Array.isArray(asRecord(result).pending)
+            ? (asRecord(result).pending as unknown[])
+            : []
+          ).map((item) => {
+            const i = asRecord(item);
+            const fileStatus =
+              i.fileStatus ??
+              (i.status === "added" || i.status === "deleted" ? i.status : "modified");
+            const diffStat = typeof i.diffStat === "string" ? i.diffStat : "";
+            const addedMatch = /(\d+)\+/.exec(diffStat);
+            const deletedMatch = /(\d+)-/.exec(diffStat);
+            return {
+              turnIndex: typeof i.turnIndex === "number" ? i.turnIndex : 0,
+              path: typeof i.path === "string" ? i.path : "",
+              fileStatus,
+              status: (i.reviewStatus as string) ?? "pending",
+              timestamp: typeof i.timestamp === "number" ? i.timestamp : 0,
+              oldContent: null,
+              newContent: null,
+              ...(addedMatch ? { addedLines: Number(addedMatch[1]) } : {}),
+              ...(deletedMatch ? { deletedLines: Number(deletedMatch[1]) } : {}),
+            };
+          }),
+        }),
       },
       "review.approvals": {
         kind: "rpc",
         method: "review_approvals",
-        adaptResult: (result) => ({ result: asRecord(result).approvals ?? [] }),
+        adaptResult: (result) => ({
+          result: (Array.isArray(asRecord(result).approvals)
+            ? (asRecord(result).approvals as unknown[])
+            : []
+          ).map((item) => {
+            const i = asRecord(item);
+            return {
+              turnIndex: typeof i.turnIndex === "number" ? i.turnIndex : 0,
+              path: typeof i.path === "string" ? i.path : "",
+              status: (i.status as string) ?? "approved",
+              timestamp: typeof i.timestamp === "number" ? i.timestamp : 0,
+            };
+          }),
+        }),
       },
       "review.approve": { kind: "rpc", method: "review_approve" },
       "review.reject": { kind: "rpc", method: "review_reject" },

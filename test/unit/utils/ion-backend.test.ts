@@ -227,9 +227,11 @@ describe("ION_CHANNEL_MAP（声明式映射表）", () => {
 
   it("adapts review.pending/result and review.approvals shapes", () => {
     const pending = ION_CHANNEL_MAP["file-review"]["review.pending"];
-    expect(pending.kind === "rpc" && pending.adaptResult?.({ pending: [{ path: "a" }] })).toEqual({
-      result: [{ path: "a" }],
-    });
+    if (pending.kind !== "rpc") throw new Error("expected rpc mapping");
+    const pendingOut = pending.adaptResult?.({ pending: [{ path: "a" }] }) as {
+      result: Array<Record<string, unknown>>;
+    };
+    expect(pendingOut.result[0]).toMatchObject({ path: "a", status: "pending" });
     const approvals = ION_CHANNEL_MAP["file-review"]["review.approvals"];
     expect(approvals.kind === "rpc" && approvals.adaptResult?.({ approvals: [] })).toEqual({
       result: [],
@@ -368,5 +370,41 @@ describe("真实形状回归（2026-10-09 真模型探针：Output 为空的根�
     const r = end.result as { content: Array<{ type: string; text: string }>; details: unknown };
     expect(r.content[0].type).toBe("text");
     expect(r.details).toEqual({ path: "a.txt", lines: 3 });
+  });
+});
+
+describe("review.pending 条目形状适配（审核面板整树崩溃回归）", () => {
+  it("maps ion {diffStat, path, status:'added'} to pi PendingChangeResult", () => {
+    const pending = ION_CHANNEL_MAP["file-review"]["review.pending"];
+    if (pending?.kind !== "rpc") throw new Error("expected rpc mapping");
+    const out = pending.adaptResult({
+      pending: [{ diffStat: "test/x.ts | 341+", path: "test/x.ts", status: "added" }],
+    }) as { result: Array<Record<string, unknown>> };
+    expect(out.result[0]).toMatchObject({
+      path: "test/x.ts",
+      fileStatus: "added",
+      status: "pending",
+      addedLines: 341,
+      oldContent: null,
+    });
+  });
+
+  it("unknown ion status coerces to modified fileStatus, never leaks raw enum", () => {
+    const pending = ION_CHANNEL_MAP["file-review"]["review.pending"];
+    if (pending?.kind !== "rpc") throw new Error("expected rpc mapping");
+    const out = pending.adaptResult({ pending: [{ path: "a", status: "weird-status" }] }) as {
+      result: Array<Record<string, unknown>>;
+    };
+    expect(out.result[0].fileStatus).toBe("modified");
+    expect(out.result[0].status).toBe("pending");
+  });
+
+  it("approvals items get required pi fields", () => {
+    const approvals = ION_CHANNEL_MAP["file-review"]["review.approvals"];
+    if (approvals?.kind !== "rpc") throw new Error("expected rpc mapping");
+    const out = approvals.adaptResult({ approvals: [{ path: "b" }] }) as {
+      result: Array<Record<string, unknown>>;
+    };
+    expect(out.result[0]).toMatchObject({ path: "b", status: "approved" });
   });
 });
