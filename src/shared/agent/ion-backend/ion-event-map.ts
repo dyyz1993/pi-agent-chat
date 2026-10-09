@@ -132,9 +132,29 @@ export function createEventMapper(
         // ion 特有：工具参数流式增量。Phase 1 忽略（前端工具卡用 tool_execution_* 渲染）。
         break;
 
-      case "tool_execution_start":
+      case "tool_execution_start": {
         // 工具调用开始意味着当前 assistant 文本的流式段落结束（若 ion 未发 message_end）
         if (current) finalizeAssistant(event, "toolUse");
+        // pi 在 assistant content 里流式 toolCall 块，前端的实时工具卡靠它在
+        // message_update 里创建 running block；ion 不发任何 assistant 内容，
+        // 没有这个锚点实时视图无工具卡（刷新后从历史渲染才出现 —— 并发
+        // 测试场景02 三轮复现）。这里合成带 toolCall 块的 message_update。
+        current = newAssistantMessage(event.model, event.provider);
+        const toolCallBlock: ToolCallLike = {
+          type: "toolCall",
+          id: event.toolCallId ?? "",
+          name: event.toolName ?? "",
+          arguments: (event.args as Record<string, unknown>) ?? {},
+        };
+        current.content.push(toolCallBlock);
+        emit(asAgentEvent({ type: "message_start", message: { ...current, content: [] } }));
+        emit(
+          asAgentEvent({
+            type: "message_update",
+            message: { ...current, content: current.content.map((c) => ({ ...c })) },
+            assistantMessageEvent: { type: "text_delta", delta: "" },
+          }),
+        );
         emit(
           asAgentEvent({
             type: "tool_execution_start",
@@ -145,6 +165,7 @@ export function createEventMapper(
           }),
         );
         break;
+      }
 
       case "tool_execution_update":
         emit(

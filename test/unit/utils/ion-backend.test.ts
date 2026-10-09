@@ -408,3 +408,48 @@ describe("review.pending 条目形状适配（审核面板整树崩溃回归）"
     expect(out.result[0]).toMatchObject({ path: "b", status: "approved" });
   });
 });
+
+describe("实时工具卡锚点（场景02：live 无工具卡回归）", () => {
+  it("tool_execution_start synthesizes message_update carrying the toolCall block", () => {
+    const events: AgentEvent[] = [];
+    const mapper = createEventMapper((e) => events.push(e));
+    mapper({
+      type: "tool_execution_start",
+      toolCallId: "call_live1",
+      toolName: "bash",
+      args: { command: "echo x" },
+      timestamp: 5,
+    });
+    const update = events.find((e) => e.type === "message_update") as Extract<
+      AgentEvent,
+      { type: "message_update" }
+    >;
+    expect(update).toBeTruthy();
+    const content = (update.message as { content: Array<{ type: string; id?: string }> }).content;
+    expect(content.some((b) => b.type === "toolCall" && b.id === "call_live1")).toBe(true);
+    const start = events.find((e) => e.type === "tool_execution_start") as Extract<
+      AgentEvent,
+      { type: "tool_execution_start" }
+    >;
+    expect(start.toolCallId).toBe("call_live1");
+    // 顺序：message_update（锚点）在前，tool_execution_start 在后
+    expect(events.findIndex((e) => e.type === "message_update")).toBeLessThan(
+      events.findIndex((e) => e.type === "tool_execution_start"),
+    );
+  });
+
+  it("text streaming after tool end starts a fresh assistant message", () => {
+    const events: AgentEvent[] = [];
+    const mapper = createEventMapper((e) => events.push(e));
+    mapper({ type: "tool_execution_start", toolCallId: "c", toolName: "bash", args: {} });
+    mapper({ type: "tool_execution_end", toolCallId: "c", toolName: "bash", result: "done" });
+    mapper({ type: "text_delta", delta: "总结" });
+    const updates = events.filter((e) => e.type === "message_update");
+    expect(updates.length).toBeGreaterThanOrEqual(2);
+    const last = updates[updates.length - 1] as Extract<AgentEvent, { type: "message_update" }>;
+    const textBlocks = (last.message as { content: Array<{ type: string; text?: string }> }).content.filter(
+      (b) => b.type === "text",
+    );
+    expect(textBlocks.map((b) => b.text).join("")).toContain("总结");
+  });
+});
