@@ -65,9 +65,7 @@ import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { TextSelectionToolbar } from "./TextSelectionToolbar";
 import { ComposerPlaceholderBar } from "./ComposerPlaceholderBar";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
-import {
-  useComposerPlaceholderStore,
-} from "../../stores/use-composer-placeholder-store";
+import { useComposerPlaceholderStore } from "../../stores/use-composer-placeholder-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import type { ChatMessage, SubagentSessionInfo } from "../../types";
 import type { AgentMessageForUI } from "../../../shared/modules/agent";
@@ -270,8 +268,7 @@ export function computeDelegationBadge(
   if (subs === 0 && delegates === 0) return null;
   return {
     delegates,
-    delegateRunning:
-      delegateSessions?.filter((s) => s.status === "streaming").length ?? 0,
+    delegateRunning: delegateSessions?.filter((s) => s.status === "streaming").length ?? 0,
     subs,
     subsRunning: subsessions?.filter((sub) => sub.completedAt == null).length ?? 0,
   };
@@ -290,8 +287,9 @@ export function pickRevealSubagent(
   const pool = running.length > 0 ? running : subsessions;
   const preferRunning = running.length > 0;
   return (
-    [...pool].sort((a, b) => (preferRunning ? a.startedAt - b.startedAt : b.startedAt - a.startedAt))[0] ??
-    null
+    [...pool].sort((a, b) =>
+      preferRunning ? a.startedAt - b.startedAt : b.startedAt - a.startedAt,
+    )[0] ?? null
   );
 }
 
@@ -322,7 +320,10 @@ function DelegationBadgeSegment({
       <Icon className="h-3 w-3 shrink-0" />
       <span>{count}</span>
       {running > 0 && (
-        <span data-testid={runningTestId} className="inline-flex items-center gap-0.5 text-status-success">
+        <span
+          data-testid={runningTestId}
+          className="inline-flex items-center gap-0.5 text-status-success"
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-status-success animate-pulse" />
           <span>{running}</span>
         </span>
@@ -497,7 +498,6 @@ function RefineGoalOverlay({ step }: { step: number }) {
     </div>
   );
 }
-
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
@@ -881,7 +881,10 @@ export function ChatPanel() {
   const projectPendingCount = useProjectPendingCount();
   const goalSessionId = isViewingSubagent ? activeSubId : activeSessionId;
   const goalStatus = useGoalStore(
-    useCallback((s) => (goalSessionId ? s.bySession[goalSessionId]?.status : null), [goalSessionId]),
+    useCallback(
+      (s) => (goalSessionId ? s.bySession[goalSessionId]?.status : null),
+      [goalSessionId],
+    ),
   );
   const goalApprovalPending =
     goalStatus?.rawStatus === "awaiting_approval" ||
@@ -945,7 +948,7 @@ export function ChatPanel() {
   const handleDelegationBadgeClick = useCallback(() => {
     const store = useSessionStore.getState();
     const tab = store.projectTabs.find((t) => t.id === store.activeProjectId);
-    const delegates = (tab ? (store.sessionsByProject[tab.path] || []) : [])
+    const delegates = (tab ? store.sessionsByProject[tab.path] || [] : [])
       .filter(
         (session) =>
           session.delegateParentSessionId === activeSessionId &&
@@ -994,6 +997,7 @@ export function ChatPanel() {
       setIsAborting(true);
       try {
         const result = await apiClient.call("agent.abort", { sessionId: activeSessionId });
+        useChatStore.getState().markUserAbort(activeSessionId);
         if (!result.ok) {
           useSessionStore.getState().updateSessionStatus(activeSessionId, "idle");
           pushNotif({ message: "Agent already stopped", level: "info" });
@@ -1532,20 +1536,13 @@ export function ChatPanel() {
     ],
   );
 
-
   const [handleFollowUp, isFollowUpRunning] = useAsyncGuard(async () => {
     if (!inputText.trim() || !isStreaming) return;
     await sendFollowUp();
   });
 
-  const {
-    isDragOver,
-    handlePaste,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
-  } = useAttachmentDrop();
-
+  const { isDragOver, handlePaste, handleDragOver, handleDragLeave, handleDrop } =
+    useAttachmentDrop();
 
   useEffect(() => {
     if (
@@ -1561,7 +1558,14 @@ export function ChatPanel() {
     ) {
       topLoadLockedSessionRef.current = null;
     }
-  }, [activeSessionId, hasMoreMessages, isAtTop, isLoadingMore, isViewingSubagent, messageViewMode]);
+  }, [
+    activeSessionId,
+    hasMoreMessages,
+    isAtTop,
+    isLoadingMore,
+    isViewingSubagent,
+    messageViewMode,
+  ]);
 
   useEffect(() => {
     if (

@@ -14,6 +14,7 @@ import zhRules from "../locales/zh-CN/rules.json";
 import zhDebug from "../locales/zh-CN/debug.json";
 import zhTheme from "../locales/zh-CN/theme.json";
 import zhSettings from "../locales/zh-CN/settings.json";
+import zhChangeReview from "../locales/zh-CN/changeReview.json";
 
 import enCommon from "../locales/en/common.json";
 import enChat from "../locales/en/chat.json";
@@ -26,6 +27,7 @@ import enSnapshot from "../locales/en/snapshot.json";
 import enRules from "../locales/en/rules.json";
 import enDebug from "../locales/en/debug.json";
 import enSettings from "../locales/en/settings.json";
+import enChangeReview from "../locales/en/changeReview.json";
 import enTheme from "../locales/en/theme.json";
 
 i18n
@@ -46,6 +48,7 @@ i18n
         debug: zhDebug,
         theme: zhTheme,
         settings: zhSettings,
+        changeReview: zhChangeReview,
       },
       en: {
         common: enCommon,
@@ -60,6 +63,7 @@ i18n
         debug: enDebug,
         theme: enTheme,
         settings: enSettings,
+        changeReview: enChangeReview,
       },
     },
     fallbackLng: "zh-CN",
@@ -77,6 +81,7 @@ i18n
       "debug",
       "theme",
       "settings",
+      "changeReview",
     ],
     interpolation: {
       escapeValue: false,

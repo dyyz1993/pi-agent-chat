@@ -174,5 +174,6 @@
   "agentSelect": "Select Agent",
   "agentBuild": "Build",
   "agentExplore": "Explore",
-  "agentPlan": "Plan"
+  "agentPlan": "Plan",
+  "agentListEmpty": "No agents available — try again shortly"
 }

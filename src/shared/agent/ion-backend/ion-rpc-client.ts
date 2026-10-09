@@ -698,8 +698,16 @@ export class IonRpcClient {
     await this.transport.sessionCall(this.sessionId, "set_auto_compaction", { enabled });
   }
 
-  async setPermissionMode(mode: string): Promise<void> {
-    await this.transport.sessionCall(this.sessionId, "set_permission_mode", { mode });
+  async setPermissionMode(mode: string): Promise<{ mode: string }> {
+    // ion 返回 {mode, success}（soft-error 时 {error}）；适配层原先丢返回值，
+    // 操作层读 result.mode 直接 TypeError → 权限切换 500 且 UI 静默无反馈
+    const result = await this.transport.sessionCall<{
+      mode?: string;
+      success?: boolean;
+      error?: string;
+    }>(this.sessionId, "set_permission_mode", { mode });
+    if (result?.error) throw new Error(String(result.error));
+    return { mode: result?.mode ?? mode };
   }
 
   async setSessionName(name: string): Promise<void> {
@@ -713,12 +721,15 @@ export class IonRpcClient {
   }
 
   async getContextUsage(): Promise<Record<string, unknown>> {
-    const usage = await this.cachedRead("context_usage", () =>
-      this.resilientCall<Record<string, unknown>>("get_context_usage", {}),
-    );
+    // 上下文用量每轮都变——不走 readCache（无 TTL，会一直命中首帧值）；
+    // 调用点是 agent_end 后的权威刷新，频率低，直连即可
+    const usage = await this.resilientCall<Record<string, unknown>>("get_context_usage", {});
+    const estimatedTokens = Number(usage?.estimatedTokens ?? 0);
     return {
-      inputTokens: usage?.estimatedTokens ?? 0,
-      contextWindow: usage?.contextWindow ?? 0,
+      // pi 消费方（TokenStatusBar/refreshAuthoritativeContextUsage）读 tokens
+      inputTokens: estimatedTokens,
+      tokens: estimatedTokens,
+      contextWindow: Number(usage?.contextWindow ?? 0),
       usagePercent: usage?.usagePercent ?? 0,
       autoCompaction: usage?.autoCompaction ?? false,
     };

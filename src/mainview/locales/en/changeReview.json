@@ -10,5 +10,6 @@
   "noChanges": "No pending changes",
   "turn": "Turn {{index}}",
   "fileCount": "{{count}} files",
-  "approveConfirm": "Approve all {{count}} pending changes?"
+  "approveConfirm": "Approve all {{count}} pending changes?",
+  "rejectAll": "Reject all"
 }

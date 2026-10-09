@@ -337,7 +337,9 @@ function isErrorStopReason(stopReason: string | null | undefined): boolean {
 }
 
 function hasRunningToolExecution(content: ContentBlock[]): boolean {
-  return content.some((block) => block.type === "toolExecution" && !isTerminalToolStatus(block.status));
+  return content.some(
+    (block) => block.type === "toolExecution" && !isTerminalToolStatus(block.status),
+  );
 }
 
 function canReleaseSessionOnAssistantBoundary(
@@ -370,7 +372,9 @@ function releaseStreamingSessionIfTerminal(
   }
 }
 
-function getLatestProviderRequestForSession(sessionId: string): ProviderRequestContextUsage | undefined {
+function getLatestProviderRequestForSession(
+  sessionId: string,
+): ProviderRequestContextUsage | undefined {
   const usage = useSessionStore.getState().sessionContextMap[sessionId];
   const providerRequest =
     usage && typeof usage === "object" && "providerRequest" in usage
@@ -503,9 +507,13 @@ function mergeDuplicateLlmErrorForTurn({
   };
 }
 
-function removeEmptyTurnFallbackErrors(messages: ChatMessage[], turnStartIndex: number): ChatMessage[] {
+function removeEmptyTurnFallbackErrors(
+  messages: ChatMessage[],
+  turnStartIndex: number,
+): ChatMessage[] {
   return messages.filter(
-    (msg, idx) => !(idx >= turnStartIndex && msg.role === "error" && msg.stopReason === "empty_response"),
+    (msg, idx) =>
+      !(idx >= turnStartIndex && msg.role === "error" && msg.stopReason === "empty_response"),
   );
 }
 
@@ -554,8 +562,8 @@ function appendVisibleLlmProviderErrorMessage(
   const errorMessage = buildAgentEndErrorMessage(`${sourceLine}${errorDetail}`, last);
   const errorText = errorMessage.content[0]?.type === "text" ? errorMessage.content[0].text : "";
   const lastText =
-    last?.content.find((block): block is Extract<ContentBlock, { type: "text" }> =>
-      block.type === "text",
+    last?.content.find(
+      (block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text",
     )?.text ?? "";
 
   if (last?.role === "error" && lastText === errorText) {
@@ -1002,6 +1010,14 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
 
       if (lastIsUser) {
+        // 用户刚点过停止：空 turn 是主动中断的结果，不是模型故障——
+        // 不渲染误导性错误卡/错误通知（"请检查模型配置"会把排障引向歧路）
+        const abortAt = useChatStore.getState().userAbortAtBySession[sessionId];
+        const userAborted = typeof abortAt === "number" && Date.now() - abortAt < 15_000;
+        if (userAborted) {
+          log.info("[agent-end] empty turn after user abort; skip error card", { sessionId });
+          return;
+        }
         chat.setMessagesForSession(sessionId, [
           ...currentMsgs,
           buildEmptyTurnErrorMessage(lastMsg),
@@ -1575,7 +1591,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         ...(providerRequest ? { providerRequest } : {}),
         isStreaming: false,
       };
-      const withoutEmptyAssistant = [...existing.slice(0, lastMsgIdx), ...existing.slice(lastMsgIdx + 1)];
+      const withoutEmptyAssistant = [
+        ...existing.slice(0, lastMsgIdx),
+        ...existing.slice(lastMsgIdx + 1),
+      ];
       const turnStartIndex = findCurrentTurnStart(existing, lastMsgIdx);
       const cleanedMessages = removeEmptyTurnFallbackErrors(withoutEmptyAssistant, turnStartIndex);
       const deduped = mergeDuplicateLlmErrorForTurn({
@@ -1588,7 +1607,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         sessionId,
         deduped.merged
           ? deduped.messages
-          : [...cleanedMessages.slice(0, insertIndex), errorCandidate, ...cleanedMessages.slice(insertIndex)],
+          : [
+              ...cleanedMessages.slice(0, insertIndex),
+              errorCandidate,
+              ...cleanedMessages.slice(insertIndex),
+            ],
       );
       releaseStreamingSessionIfTerminal(sessionId, stopReason, lastMsg.content);
       if (isErrorStopReason(stopReason)) {
@@ -1636,7 +1659,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const turnStartIndex = findCurrentTurnStart(nextMessages, lastMsgIdx);
       nextMessages = removeEmptyTurnFallbackErrors(nextMessages, turnStartIndex);
       const nextAssistantIdx = nextMessages.findIndex((msg) => msg.id === nextAssistant.id);
-      const errorInsertIdx = nextAssistantIdx >= 0 ? nextAssistantIdx + 1 : Math.min(lastMsgIdx + 1, nextMessages.length);
+      const errorInsertIdx =
+        nextAssistantIdx >= 0
+          ? nextAssistantIdx + 1
+          : Math.min(lastMsgIdx + 1, nextMessages.length);
       const deduped = mergeDuplicateLlmErrorForTurn({
         messages: nextMessages,
         candidate: errorMessage,
@@ -1645,17 +1671,17 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (deduped.merged) {
         nextMessages = deduped.messages;
       } else {
-      const existingErrorIdx = nextMessages.findIndex((msg) => msg.id === errorMessage.id);
-      if (existingErrorIdx >= 0) {
-        nextMessages = replaceMsgAt(nextMessages, existingErrorIdx, errorMessage);
-      } else {
-        nextMessages = [
-          ...nextMessages.slice(0, errorInsertIdx),
-          errorMessage,
-          ...nextMessages.slice(errorInsertIdx),
-        ];
-        emitLlmErrorNotification(sessionId, errorDetail);
-      }
+        const existingErrorIdx = nextMessages.findIndex((msg) => msg.id === errorMessage.id);
+        if (existingErrorIdx >= 0) {
+          nextMessages = replaceMsgAt(nextMessages, existingErrorIdx, errorMessage);
+        } else {
+          nextMessages = [
+            ...nextMessages.slice(0, errorInsertIdx),
+            errorMessage,
+            ...nextMessages.slice(errorInsertIdx),
+          ];
+          emitLlmErrorNotification(sessionId, errorDetail);
+        }
       }
     }
 
@@ -1961,10 +1987,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role: "custom",
         content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
-        timestamp: getMemorySemanticTimestamp(
-          resultData,
-          getMemoryFallbackTimestamp(existingMsgs),
-        ),
+        timestamp: getMemorySemanticTimestamp(resultData, getMemoryFallbackTimestamp(existingMsgs)),
       };
       chat.setMessagesForSession(sessionId, upsertMemoryCustomMessage(existingMsgs, customMsg));
       return;
@@ -2042,7 +2065,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         disabled: existing?.disabled,
       };
       const idx = current.findIndex((srv) => srv.name === name);
-      const next = idx >= 0 ? current.map((srv, i) => (i === idx ? updated : srv)) : [...current, updated];
+      const next =
+        idx >= 0 ? current.map((srv, i) => (i === idx ? updated : srv)) : [...current, updated];
       return { mcpServersBySession: { ...s.mcpServersBySession, [sessionId]: next } };
     });
     return;

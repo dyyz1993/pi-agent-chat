@@ -925,7 +925,10 @@ interface ChatState {
     targetEntryId: string,
     options?: { sessionPath?: string; before?: number; after?: number },
   ) => Promise<boolean>;
-  loadMoreFocusedBefore: (sessionId: string, options?: { sessionPath?: string }) => Promise<boolean>;
+  loadMoreFocusedBefore: (
+    sessionId: string,
+    options?: { sessionPath?: string },
+  ) => Promise<boolean>;
   clearFocusedMessages: (sessionId: string) => void;
   /** Background refresh: fetch latest messages and silently update store if different */
   _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => Promise<void>;
@@ -933,6 +936,9 @@ interface ChatState {
   loadTopMessages: (sessionId: string) => Promise<void>;
   clearTopWindowMessages: (sessionId: string) => void;
   setIsStreaming: (v: boolean) => void;
+  /** 用户主动停止的时间戳（按会话）——停止后短窗口内的空 turn 不应渲染为模型故障 */
+  userAbortAtBySession: Record<string, number>;
+  markUserAbort: (sessionId: string) => void;
   incrementStreamVersion: () => void;
   saveInputDraft: (sessionId: string) => void;
   restoreInputDraft: (sessionId: string) => void;
@@ -1093,6 +1099,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await sendAgentMessageWithTimeout(sessionId, text, sentImages);
       perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
       set({ isStreaming: false });
+
+      // ion 标题 turn 竞态窗口内发送的 prompt 会被 steer 队列静默吞掉
+      // （RPC 仍成功返回、输入框已清空、JSONL 无用户消息）。发送后后台校验
+      // 消息确实落盘，超时未见则自动补发一次（三个测试智能体独立复现的 P1）。
+      void (async () => {
+        const VERIFY_DELAY_MS = 7_000;
+        await new Promise((r) => setTimeout(r, VERIFY_DELAY_MS));
+        try {
+          // 只在会话仍空闲时校验——若正在流式，说明消息已被消费
+          if (useSessionStore.getState().sessionStatusMap?.[sessionId] === "streaming") return;
+          const ss = useSessionStore.getState();
+          const sessionMeta = Object.values(ss.sessionsByProject)
+            .flat()
+            .find((s) => s.sessionId === sessionId);
+          const probe = await Promise.race([
+            apiClient.call("agent.getFullMessages", {
+              sessionId,
+              sessionPath: sessionMeta?.sessionPath,
+            }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("verify timeout")), 10_000),
+            ),
+          ]);
+          const msgs =
+            (probe as { messages?: Array<{ role: string; content: unknown }> }).messages ?? [];
+          const needle = text.slice(0, 40);
+          const landed = msgs.some((m) => {
+            if (m.role !== "user") return false;
+            return JSON.stringify(m.content).includes(needle);
+          });
+          if (landed) return;
+          log.warn("[send] prompt lost in ion queue, re-sending once", { sessionId });
+          await apiClient.call("agent.send", { sessionId, content: text, images: sentImages });
+          useNotificationStore.getState().push({
+            message: "检测到消息未送达（ion 排队丢失），已自动重发",
+            level: "warning",
+            sessionId,
+          });
+        } catch (verifyErr) {
+          log.warn("[send] prompt-loss verify skipped", {
+            sessionId,
+            error: verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
+          });
+        }
+      })();
     } catch (err) {
       let finalErr = err;
       if (isAgentNotStartedError(finalErr, sessionId)) {
@@ -1420,6 +1471,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     }),
 
+  userAbortAtBySession: {},
+  markUserAbort: (sessionId) => {
+    set((st) => ({
+      userAbortAtBySession: { ...st.userAbortAtBySession, [sessionId]: Date.now() },
+    }));
+  },
   setIsStreaming: (v) => set({ isStreaming: v }),
 
   incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
@@ -2046,8 +2103,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const prevHasMore = get().hasMoreMessagesBySession[sid];
       const cursorLive =
         prevCursor != null && current.some((m) => (m.entryId ?? m.id) === prevCursor);
-      const preserveOlderWindow =
-        cursorLive || (prevCursor == null && prevHasMore === false);
+      const preserveOlderWindow = cursorLive || (prevCursor == null && prevHasMore === false);
       const pageOldestTs =
         msgs.length > 0 ? Math.min(...msgs.map((m) => m.timestamp ?? 0)) : Infinity;
       const preservedOlder = preserveOlderWindow

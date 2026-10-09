@@ -10,5 +10,6 @@
   "noChanges": "暂无待审核变更",
   "turn": "第 {{index}} 轮",
   "fileCount": "{{count}} 个文件",
-  "approveConfirm": "确认通过全部 {{count}} 个待审核变更？"
+  "approveConfirm": "确认通过全部 {{count}} 个待审核变更？",
+  "rejectAll": "全部拒绝"
 }

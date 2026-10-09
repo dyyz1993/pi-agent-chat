@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
 import { useSessionStore } from "./use-session-store";
+import { useNotificationStore } from "./use-notification-store";
 import { getEffectiveSessionId } from "../lib/effective-session";
 
 const log = createLogger("settings");
@@ -233,6 +234,12 @@ export const useStatusStore = create<StatusState>((set) => ({
       .catch((err) => {
         log.warn("setPermissionMode failed:", { error: String(err) });
         set({ permissionProfileLoading: false, yoloLoading: false });
+        // 切换失败必须可见——静默失败会让用户误以为已进入只读等受限模式
+        useNotificationStore.getState().push({
+          message: `权限模式切换失败：${err instanceof Error ? err.message : String(err)}`,
+          level: "error",
+          sessionId,
+        });
       });
   },
   applyPermissionProfileSnapshot: (profile, sessionId) => {

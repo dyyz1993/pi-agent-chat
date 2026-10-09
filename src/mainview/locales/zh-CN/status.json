@@ -174,5 +174,6 @@
   "agentSelect": "选择智能体",
   "agentBuild": "Build",
   "agentExplore": "Explore",
-  "agentPlan": "Plan"
+  "agentPlan": "Plan",
+  "agentListEmpty": "暂无可用 Agent，可稍后重开"
 }

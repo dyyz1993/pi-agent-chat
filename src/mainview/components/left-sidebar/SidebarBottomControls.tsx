@@ -371,9 +371,8 @@ export function SidebarBottomControls() {
           const matchedTier = TIER_KEYS.find(
             (tier) => models[tier]?.toLowerCase() === `${provider}/${modelId}`.toLowerCase(),
           );
-          if (matchedTier) {
-            tierStore.setSessionCurrentTier(sid, projectPath, matchedTier);
-          }
+          // 不匹配任何档位时清除选中态——残留高亮会误导当前档位
+          tierStore.setSessionCurrentTier(sid, projectPath, matchedTier ?? null);
         }
         fetchModelState(sid);
         // No automatic agent.reload here: reload aborts an in-flight turn and,
@@ -519,6 +518,11 @@ export function SidebarBottomControls() {
         >
           <div className="py-1">
             <div className="overflow-y-auto max-h-[15rem]">
+              {agents.length === 0 && (
+                <div className="px-3 py-3 text-xs text-text-tertiary">
+                  {t("agentListEmpty", "暂无可用 Agent，可稍后重开")}
+                </div>
+              )}
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
                 const isFavorite = agentFavorites.has(agent.name);
