@@ -235,6 +235,93 @@ export class IonRpcClient {
     return this.eventStreaming;
   }
 
+  /**
+   * worker 级 RPC 自愈包装：
+   *  - "worker dropped response channel"（worker 崩溃被重拉）→ 幂等复活会话再试；
+   *  - "agent is running" 但事件流说空闲（假 running / 崩溃残留）→ 先等后复活；
+   *  - 复活时若前端还卡 streaming，合成 agent_end 解锁（真实 agent_end 已随
+   *    worker 死亡永久丢失 —— 实测：真实编码任务中 worker stdout closed 崩溃）。
+   */
+  private async resilientCall<T>(
+    method: string,
+    params?: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await this.transport.sessionCall<T>(
+          this.sessionId,
+          method,
+          params ?? {},
+          timeoutMs ? { timeoutMs } : undefined,
+        );
+      } catch (err) {
+        lastErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("worker dropped")) {
+          await this.reviveAfterWorkerDeath();
+          continue;
+        }
+        if (msg.includes("agent is running") && !this.eventStreaming) {
+          if (attempt >= 1) {
+            await this.reviveAfterWorkerDeath();
+            continue;
+          }
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastErr;
+  }
+
+  private async reviveAfterWorkerDeath(): Promise<void> {
+    const wasStreaming = this.eventStreaming;
+    log.warn("[ion] worker dead/stuck, reviving session", {
+      sessionId: this.sessionId,
+      wasStreaming,
+    });
+    await this.transport.managerCall("create_session", {
+      agent: "developer",
+      session_id: this.sessionId,
+      cwd: this.cwd,
+    });
+    this.eventStreaming = false;
+    this.cachedExtensionNames = null;
+    this.readCache.clear();
+    if (wasStreaming) {
+      const synthetic = { type: "agent_end", messages: [] };
+      for (const listener of this.eventListeners) {
+        try {
+          listener(synthetic as unknown as AgentEvent);
+        } catch {
+          // 监听器异常不阻断
+        }
+      }
+    }
+  }
+
+  /** 慢变读：失败时出缓存（tier/models/stats 会话内几乎不变，缓存优于报错） */
+  private async cachedRead<T>(key: string, fetch: () => Promise<T>): Promise<T> {
+    try {
+      const value = await fetch();
+      this.readCache.set(key, { at: Date.now(), value });
+      return value;
+    } catch (err) {
+      const cached = this.readCache.get(key);
+      if (cached) {
+        log.warn("[ion] read failed, serving cached", {
+          key,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return cached.value as T;
+      }
+      throw err;
+    }
+  }
+
   async steer(message: string): Promise<void> {
     // ion 的 steer 只进 steering 队列、等下一轮 turn 开始才消费 —— 空闲时 steer
     // 会被静默丢弃（实测：steer 后 message_count 不变）。pi 语义里空闲 steer =
@@ -449,7 +536,7 @@ export class IonRpcClient {
   // ── 状态/模型/thinking/queue/compact/权限 ──
 
   async getState(): Promise<Record<string, unknown>> {
-    const state = await this.transport.sessionCall<IonStateResult>(this.sessionId, "get_state", {});
+    const state = await this.resilientCall<IonStateResult>("get_state", {});
     return {
       thinkingLevel: (state?.thinkingLevel ?? "off") as ThinkingLevel,
       isStreaming: this.eventStreaming || state?.is_running === true,
@@ -476,10 +563,8 @@ export class IonRpcClient {
   }
 
   async getAvailableModels(): Promise<Array<Record<string, unknown>>> {
-    const models = await this.transport.sessionCall<Array<Record<string, unknown>>>(
-      this.sessionId,
-      "get_available_models",
-      {},
+    const models = await this.cachedRead("available_models", () =>
+      this.resilientCall<Array<Record<string, unknown>>>("get_available_models", {}),
     );
     return (models ?? []).map((m) => ({
       id: m.id ?? "",
@@ -503,7 +588,9 @@ export class IonRpcClient {
   }
 
   async getTierModels(): Promise<Record<string, string>> {
-    return this.transport.sessionCall(this.sessionId, "get_tier_models", {});
+    return this.cachedRead("tier_models", () =>
+      this.resilientCall<Record<string, string>>("get_tier_models", {}),
+    );
   }
 
   async setTierModels(models: { fast?: string; pro?: string; max?: string }): Promise<void> {
@@ -563,14 +650,14 @@ export class IonRpcClient {
   }
 
   async getSessionStats(): Promise<Record<string, unknown>> {
-    return this.transport.sessionCall(this.sessionId, "get_session_stats", {});
+    return this.cachedRead("session_stats", () =>
+      this.resilientCall<Record<string, unknown>>("get_session_stats", {}),
+    );
   }
 
   async getContextUsage(): Promise<Record<string, unknown>> {
-    const usage = await this.transport.sessionCall<Record<string, unknown>>(
-      this.sessionId,
-      "get_context_usage",
-      {},
+    const usage = await this.cachedRead("context_usage", () =>
+      this.resilientCall<Record<string, unknown>>("get_context_usage", {}),
     );
     return {
       inputTokens: usage?.estimatedTokens ?? 0,
@@ -615,6 +702,8 @@ export class IonRpcClient {
    * 重试 + 会话内缓存（扩展集合会话内稳定；reload 时清缓存）。
    */
   private cachedExtensionNames: string[] | null = null;
+  /** 慢变读缓存（tier/models/stats 等）：ion running 窗口拒读时出缓存，不让面板死掉 */
+  private readCache = new Map<string, { at: number; value: unknown }>();
 
   async getChannelCapabilities(): Promise<Record<string, unknown>> {
     let names = this.cachedExtensionNames;

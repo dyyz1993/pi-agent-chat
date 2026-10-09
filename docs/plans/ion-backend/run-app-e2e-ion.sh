@@ -12,7 +12,7 @@ set -uo pipefail
 REAL_ION="${ION_BIN:-$HOME/Project/study-rust/ion/target/debug/ion}"
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 TEST_DIR="$(mktemp -d /tmp/ion-app-e2e-XXXXXX)"
-PORT="${E2E_PORT:-3199}"
+PORT="${E2E_PORT:-3197}"
 TOKEN="ion-e2e-token"
 
 export HOME_SAVED="$HOME"
