@@ -76,24 +76,24 @@ client 面命中率远超预期：**84 个方法中 ~70 个实测存在**（含 
 
 ### 1.5 模型/tier/thinking/queue/compaction/retry/权限
 
-| pi 方法                           | ion 方法               | 状态 | 形状差异 / 备注                                                                                        |
-| --------------------------------- | ---------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
-| setModel                          | set_model              | ✅   | 参数 `modelId,provider`（不是 model）；返回 get_state 形状                                             |
-| cycleModel                        | cycle_model            | ✅   | `{modelId,previousModel,provider}`                                                                     |
-| getAvailableModels                | get_available_models   | ✅   | `[{id,name,provider,contextWindow…}]`（内置模型仅 5 个，写死作者栈；兼容读 `~/.pi/agent/models.json`） |
-| getTierModels                     | get_tier_models        | ✅   | `{fast,pro,max}` 全键                                                                                  |
-| setTierModels                     | set_tier_models        | 🔶   | **ion 按单个 tier 设**（missing 'tier' or 'model'）；pi 一次传整个 map——adapter 拆分调用               |
-| setThinkingLevel                  | set_thinking_level     | ✅   |                                                                                                        |
-| cycleThinkingLevel                | cycle_thinking_level   | ✅   | `{previousLevel,thinkingLevel}`                                                                        |
-| setSteeringMode / setFollowUpMode | 同名 snake             | ✅   |                                                                                                        |
-| getQueue                          | get_queue              | ✅   | `{steering,steeringCount,followUp,followUpCount}`（扁平，pi 是嵌套队列对象）                           |
-| clearQueue                        | clear_queue            | ✅   | `{cleared,steeringCleared,followUpCleared}`                                                            |
-| promoteQueuedFollowUp             | promote_follow_up      | ➡️✅ |                                                                                                        |
-| compact                           | compact                | ✅   | 真跑（faux 下 beforeMessages/afterMessages 正常回包）                                                  |
-| setAutoCompaction                 | set_auto_compaction    | ✅   |                                                                                                        |
-| setAutoRetry / abortRetry         | set_auto_retry / abort | ✅   |                                                                                                        |
-| setPermissionMode                 | set_permission_mode    | ✅   | 取值 `open/blacklist/whitelist`                                                                        |
-| getSessionStats                   | get_session_stats      | ➡️✅ | `{assistantMessages,cost,lastEntryId…}`                                                                |
+| pi 方法                           | ion 方法               | 状态 | 形状差异 / 备注                                                                                                                                                                                    |
+| --------------------------------- | ---------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| setModel                          | set_model              | ✅   | 参数 `modelId,provider`（不是 model）；返回 get_state 形状                                                                                                                                         |
+| cycleModel                        | cycle_model            | ✅   | `{modelId,previousModel,provider}`                                                                                                                                                                 |
+| getAvailableModels                | get_available_models   | ✅   | `[{id,name,provider,contextWindow…}]`（内置 5 个 + config.json `providers` 合并补缺，(provider,id) 去重、内置优先；ion ffb6d5c 起。此前只列内置，用户默认模型如 zai/glm-5.3-flash 不可见但可调用） |
+| getTierModels                     | get_tier_models        | ✅   | `{fast,pro,max}` 全键                                                                                                                                                                              |
+| setTierModels                     | set_tier_models        | 🔶   | **ion 按单个 tier 设**（missing 'tier' or 'model'）；pi 一次传整个 map——adapter 拆分调用                                                                                                           |
+| setThinkingLevel                  | set_thinking_level     | ✅   |                                                                                                                                                                                                    |
+| cycleThinkingLevel                | cycle_thinking_level   | ✅   | `{previousLevel,thinkingLevel}`                                                                                                                                                                    |
+| setSteeringMode / setFollowUpMode | 同名 snake             | ✅   |                                                                                                                                                                                                    |
+| getQueue                          | get_queue              | ✅   | `{steering,steeringCount,followUp,followUpCount}`（扁平，pi 是嵌套队列对象）                                                                                                                       |
+| clearQueue                        | clear_queue            | ✅   | `{cleared,steeringCleared,followUpCleared}`                                                                                                                                                        |
+| promoteQueuedFollowUp             | promote_follow_up      | ➡️✅ |                                                                                                                                                                                                    |
+| compact                           | compact                | ✅   | 真跑（faux 下 beforeMessages/afterMessages 正常回包）                                                                                                                                              |
+| setAutoCompaction                 | set_auto_compaction    | ✅   |                                                                                                                                                                                                    |
+| setAutoRetry / abortRetry         | set_auto_retry / abort | ✅   |                                                                                                                                                                                                    |
+| setPermissionMode                 | set_permission_mode    | ✅   | 取值 `open/blacklist/whitelist`                                                                                                                                                                    |
+| getSessionStats                   | get_session_stats      | ➡️✅ | `{assistantMessages,cost,lastEntryId…}`                                                                                                                                                            |
 
 ### 1.6 资源/上下文/设置/flags/MCP/agent
 
