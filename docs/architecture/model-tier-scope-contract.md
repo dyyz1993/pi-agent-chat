@@ -34,6 +34,12 @@ The runtime agent process receives the effective session tier mapping:
 
 The global settings panel must read and write global defaults only. The sidebar model controls must read and write the active session override.
 
+## Unconfigured Tier Chip UX
+
+When the effective mapping has no model for a tier, clicking that tier chip in the sidebar must not fall through to a silent backend failure (`switchTier` errors only surface in the notification bell). The chip click opens the tier config popover directly and shows a "not configured" tooltip (`tierNotConfiguredHint`), giving the user a visible next step. Configured chips keep their normal label tooltip.
+
+Backend adapters must invalidate any cached tier-model reads after `setTierModels` succeeds, so a save → switch sequence immediately sees the new mapping (ion adapter busts its `tier_models` read cache; regression test in `test/unit/utils/ion-backend.test.ts`).
+
 ## Non-Goals
 
 Project-level tier mappings are intentionally unsupported. Do not add `projectPath -> tierModels` state to the frontend store, even as a cache. If a future product requirement needs project defaults, it should be introduced as a new explicit scope with migration, UI wording, and tests.
@@ -47,3 +53,5 @@ Changes touching tier selection should include tests for:
 - First session save seeding global defaults only when global defaults are empty.
 - New session / fork copying the source session override.
 - No project-scoped tier APIs or store state being exposed.
+- Unconfigured tier chips opening the config popover instead of silently failing.
+- Backend tier-model read caches being invalidated after `setTierModels`.

@@ -574,7 +574,9 @@ export function SidebarBottomControls() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className={`font-medium truncate ${isActive ? "text-accent" : ""}`}>{agent.name}</span>
+                        <span className={`font-medium truncate ${isActive ? "text-accent" : ""}`}>
+                          {agent.name}
+                        </span>
                         <span
                           className={`text-[9px] px-1 py-0.5 rounded shrink-0 font-mono ${
                             isGlobalAgent(agent.source)
@@ -700,7 +702,9 @@ export function SidebarBottomControls() {
                       <span className="w-3 shrink-0" />
                     )}
                     <div className="flex flex-col min-w-0 flex-1">
-                      <span className={`truncate ${isActive ? "text-accent font-medium" : ""}`}>{name}</span>
+                      <span className={`truncate ${isActive ? "text-accent font-medium" : ""}`}>
+                        {name}
+                      </span>
                       <span className="text-[10px] text-text-tertiary truncate">{wt.path}</span>
                     </div>
                     {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-text-tertiary" />}
@@ -838,13 +842,18 @@ export function SidebarBottomControls() {
             <button
               key={tier}
               onClick={() => {
-                if (!switchingTier && activeSessionId && agentReady) {
-                  handleSwitchTier(tier);
+                if (switchingTier || !activeSessionId || !agentReady) return;
+                if (!tierModels[tier]) {
+                  // 档位没配模型时 switchTier 只会进铃铛通知（用户不可见），
+                  // 直接打开配置面板给出可见反馈和下一步
+                  void handleOpenTierConfig();
+                  return;
                 }
+                handleSwitchTier(tier);
               }}
               disabled={switchingTier || !activeSessionId || !agentReady}
               className={`
-                flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 min-w-0 justify-center overflow-hidden whitespace-nowrap
+                flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] tracking-tight transition-all duration-150 flex-1 min-w-0 justify-center overflow-hidden whitespace-nowrap
                 ${
                   isActive
                     ? "bg-accent/10 text-accent font-medium ring-1 ring-accent/25"
@@ -852,9 +861,11 @@ export function SidebarBottomControls() {
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
-              title={labels[tier]}
+              title={
+                tierModels[tier] ? labels[tier] : t("tierNotConfiguredHint", "未配置模型，点击设置")
+              }
             >
-              <Icon className="w-2.5 h-2.5 shrink-0" />
+              <Icon className="w-2 h-2 shrink-0" />
               <span className="min-w-0 truncate">{labels[tier]}</span>
             </button>
           );
@@ -999,7 +1010,11 @@ export function SidebarBottomControls() {
                   ) : (
                     <span className="w-3 shrink-0" />
                   )}
-                  <span className={`whitespace-nowrap ${isActive ? "text-accent font-medium" : ""}`}>{t(THINKING_LEVEL_KEYS[idx])}</span>
+                  <span
+                    className={`whitespace-nowrap ${isActive ? "text-accent font-medium" : ""}`}
+                  >
+                    {t(THINKING_LEVEL_KEYS[idx])}
+                  </span>
                   <span className="text-text-tertiary ml-auto text-[10px] font-mono whitespace-nowrap">
                     {value}
                   </span>

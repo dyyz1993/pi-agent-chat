@@ -162,6 +162,7 @@
   "refreshResources": "刷新资源（技能、MCP、插件）",
   "tierFast": "快",
   "tierPro": "中",
+  "tierNotConfiguredHint": "未配置模型，点击设置",
   "tierMax": "思考",
   "tierConfigTitle": "配置 Tier 模型映射",
   "saving": "保存中...",

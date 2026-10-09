@@ -447,9 +447,97 @@ describe("实时工具卡锚点（场景02：live 无工具卡回归）", () => 
     const updates = events.filter((e) => e.type === "message_update");
     expect(updates.length).toBeGreaterThanOrEqual(2);
     const last = updates[updates.length - 1] as Extract<AgentEvent, { type: "message_update" }>;
-    const textBlocks = (last.message as { content: Array<{ type: string; text?: string }> }).content.filter(
-      (b) => b.type === "text",
-    );
+    const textBlocks = (
+      last.message as { content: Array<{ type: string; text?: string }> }
+    ).content.filter((b) => b.type === "text");
     expect(textBlocks.map((b) => b.text).join("")).toContain("总结");
+  });
+});
+
+describe("IonRpcClient tier_models 读缓存失效（2026-10-09 档位选不中回归）", () => {
+  it("setTierModels 后 getTierModels 返回新配置而不是旧缓存", async () => {
+    const { IonRpcClient } = await import("../../../src/shared/agent/ion-backend/ion-rpc-client");
+    const client = new IonRpcClient({
+      socketPath: "/tmp/ion-test.sock",
+      cwd: "/tmp",
+      sessionId: "s1",
+    });
+    let tierModels: Record<string, string> = {};
+    const setCalls: Array<{ tier: string; model: string }> = [];
+    (client as unknown as { transport: unknown }).transport = {
+      sessionCall: async (_session: string, method: string, params?: Record<string, unknown>) => {
+        if (method === "get_tier_models") return { ...tierModels };
+        if (method === "set_tier_models") {
+          setCalls.push({ tier: String(params?.tier), model: String(params?.model) });
+          return {};
+        }
+        return {};
+      },
+      managerCall: async () => ({}),
+    };
+
+    expect(await client.getTierModels()).toEqual({});
+    tierModels = { pro: "zhipuai/glm-4.7" };
+
+    await client.setTierModels({ pro: "zhipuai/glm-4.7" });
+    expect(setCalls).toEqual([{ tier: "pro", model: "zhipuai/glm-4.7" }]);
+
+    // 关键断言：保存后立刻读，不能命中 set 之前的空缓存
+    expect(await client.getTierModels()).toEqual({ pro: "zhipuai/glm-4.7" });
+  });
+});
+
+describe("getState 模型能力位归一（ion get_state 无 reasoning 导致 Thinking 永远禁用）", () => {
+  it("model 信息用 available_models 补全 reasoning/contextWindow", async () => {
+    const { IonRpcClient } = await import("../../../src/shared/agent/ion-backend/ion-rpc-client");
+    const client = new IonRpcClient({
+      socketPath: "/tmp/ion-test.sock",
+      cwd: "/tmp",
+      sessionId: "s1",
+    });
+    (client as unknown as { transport: unknown }).transport = {
+      sessionCall: async (_s: string, method: string) => {
+        if (method === "get_state") {
+          return { model: "glm-4.7", provider: "zhipuai", message_count: 3, thinkingLevel: "off" };
+        }
+        if (method === "get_available_models") {
+          return [
+            {
+              id: "glm-4.7",
+              name: "GLM-4.7",
+              provider: "zhipuai",
+              reasoning: true,
+              contextWindow: 200_000,
+              maxTokens: 32_000,
+              api: "anthropic",
+            },
+          ];
+        }
+        return {};
+      },
+      managerCall: async () => ({}),
+    };
+    const state = (await client.getState()) as { model?: Record<string, unknown> };
+    expect(state.model).toMatchObject({ id: "glm-4.7", reasoning: true, contextWindow: 200_000 });
+  });
+
+  it("available_models 不可达时 get_state 不抛错、保持零值", async () => {
+    const { IonRpcClient } = await import("../../../src/shared/agent/ion-backend/ion-rpc-client");
+    const client = new IonRpcClient({
+      socketPath: "/tmp/ion-test.sock",
+      cwd: "/tmp",
+      sessionId: "s1",
+    });
+    (client as unknown as { transport: unknown }).transport = {
+      sessionCall: async (_s: string, method: string) => {
+        if (method === "get_state") {
+          return { model: "glm-4.7", provider: "zhipuai", message_count: 0 };
+        }
+        throw new Error("boom");
+      },
+      managerCall: async () => ({}),
+    };
+    const state = (await client.getState()) as { model?: Record<string, unknown> };
+    expect(state.model).toMatchObject({ id: "glm-4.7", reasoning: false, contextWindow: 0 });
   });
 });

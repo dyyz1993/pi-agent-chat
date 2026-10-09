@@ -162,6 +162,7 @@
   "refreshResources": "Refresh resources (Skills, MCP, Plugins)",
   "tierFast": "Fast",
   "tierPro": "Pro",
+  "tierNotConfiguredHint": "Not configured — click to set up",
   "tierMax": "Think",
   "tierConfigTitle": "Configure tier models",
   "saving": "Saving...",

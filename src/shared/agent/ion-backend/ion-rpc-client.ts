@@ -568,6 +568,19 @@ export class IonRpcClient {
 
   async getState(): Promise<Record<string, unknown>> {
     const state = await this.resilientCall<IonStateResult>("get_state", {});
+    // get_state 的 model 只有 {model, provider}，没有 reasoning/contextWindow 等
+    // 能力位 —— 用同一后端的 available_models 补全（ Thinking 行依赖 reasoning）
+    let enriched: Record<string, unknown> | undefined;
+    if (state?.model) {
+      try {
+        const avail = await this.getAvailableModels();
+        enriched = avail.find(
+          (m) => m.id === state.model && (!m.provider || m.provider === state.provider),
+        ) as Record<string, unknown> | undefined;
+      } catch {
+        // available_models 不可达时保持 get_state 原样
+      }
+    }
     return {
       thinkingLevel: (state?.thinkingLevel ?? "off") as ThinkingLevel,
       isStreaming: this.eventStreaming || state?.is_running === true,
@@ -584,10 +597,11 @@ export class IonRpcClient {
             id: state.model ?? "",
             name: state.model ?? "",
             provider: state.provider ?? "",
-            api: "",
-            cost: { input: 0, output: 0 },
-            contextWindow: 0,
-            maxTokens: 0,
+            api: enriched?.api ?? "",
+            cost: enriched?.cost ?? { input: 0, output: 0 },
+            contextWindow: enriched?.contextWindow ?? 0,
+            maxTokens: enriched?.maxTokens ?? 0,
+            reasoning: enriched?.reasoning ?? false,
           }
         : undefined,
     };
@@ -639,6 +653,8 @@ export class IonRpcClient {
       if (value)
         await this.transport.sessionCall(this.sessionId, "set_tier_models", { tier, model: value });
     }
+    // tier_models 读缓存无 TTL；不在这里失效的话，保存后 switchTier 仍会读到旧表
+    this.readCache.delete("tier_models");
   }
 
   async setThinkingLevel(level: ThinkingLevel): Promise<void> {
