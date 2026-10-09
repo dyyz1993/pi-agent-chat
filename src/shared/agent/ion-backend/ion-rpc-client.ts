@@ -733,14 +733,27 @@ export class IonRpcClient {
   }
 
   async getExtensions(): Promise<Array<Record<string, unknown>>> {
-    const result = await this.transport.sessionCall<{ extensions?: unknown }>(
-      this.sessionId,
-      "get_extensions",
-      {},
+    // ion 条目只有 {name}；fork/前端消费者要 {path, resolvedPath, toolNames...}
+    // （缺失 path 曾致前端 extension.path.split 抛错 —— 两个并发智能体独立复现）
+    const result = await this.cachedRead("extensions", () =>
+      this.resilientCall<{ extensions?: unknown }>("get_extensions", {}),
     );
-    return Array.isArray(result?.extensions)
+    const raw = Array.isArray(result?.extensions)
       ? (result.extensions as Array<Record<string, unknown>>)
       : [];
+    return raw.map((e) => {
+      const name = typeof e.name === "string" ? e.name : "anonymous";
+      return {
+        path: name,
+        resolvedPath: name,
+        toolNames: Array.isArray(e.tools) ? (e.tools as string[]) : [],
+        commandNames: [],
+        channelNames: [],
+        eventNames: [],
+        permissionProviderNames: [],
+        ...e,
+      };
+    });
   }
 
   /**
