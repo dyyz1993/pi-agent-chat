@@ -541,3 +541,57 @@ describe("getState 模型能力位归一（ion get_state 无 reasoning 导致 Th
     expect(state.model).toMatchObject({ id: "glm-4.7", reasoning: false, contextWindow: 0 });
   });
 });
+
+describe("send() tier 命令形状归一（chip 点击无高亮的真根因：get 裸 map 被取空 / set 整包 ion 不收）", () => {
+  it("get_tier_models 把 ion 裸 map 包成 {models}", async () => {
+    const { IonRpcClient } = await import("../../../src/shared/agent/ion-backend/ion-rpc-client");
+    const client = new IonRpcClient({
+      socketPath: "/tmp/ion-test.sock",
+      cwd: "/tmp",
+      sessionId: "s1",
+    });
+    (client as unknown as { transport: unknown }).transport = {
+      sessionCall: async (_s: string, method: string) => {
+        if (method === "get_tier_models") return { fast: "zai/glm-5.2", pro: "zai/glm-4.6" };
+        return {};
+      },
+      managerCall: async () => ({}),
+    };
+    const r = await client.send({ type: "get_tier_models" });
+    expect(r.data).toEqual({ models: { fast: "zai/glm-5.2", pro: "zai/glm-4.6" } });
+  });
+
+  it("set_tier_models 整包拆成 ion 单 tier 调用并失效读缓存", async () => {
+    const { IonRpcClient } = await import("../../../src/shared/agent/ion-backend/ion-rpc-client");
+    const client = new IonRpcClient({
+      socketPath: "/tmp/ion-test.sock",
+      cwd: "/tmp",
+      sessionId: "s1",
+    });
+    const setCalls: Array<{ tier: string; model: string }> = [];
+    let tierModels: Record<string, string> = { fast: "old/model" };
+    (client as unknown as { transport: unknown }).transport = {
+      sessionCall: async (_s: string, method: string, params?: Record<string, unknown>) => {
+        if (method === "get_tier_models") return { ...tierModels };
+        if (method === "set_tier_models") {
+          setCalls.push({ tier: String(params?.tier), model: String(params?.model) });
+          return {};
+        }
+        return {};
+      },
+      managerCall: async () => ({}),
+    };
+
+    // 预热读缓存
+    await client.getTierModels();
+    tierModels = { fast: "zai/glm-5.2" };
+
+    await client.send({ type: "set_tier_models", models: { fast: "zai/glm-5.2" } });
+    expect(setCalls).toEqual([{ tier: "fast", model: "zai/glm-5.2" }]);
+    // set 后读缓存已失效：立刻 get 拿到新值（switchTier 依赖这条链）
+    const r = (await client.send({ type: "get_tier_models" })) as {
+      data: { models: Record<string, string> };
+    };
+    expect(r.data.models).toEqual({ fast: "zai/glm-5.2" });
+  });
+});

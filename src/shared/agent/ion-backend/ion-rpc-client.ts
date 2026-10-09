@@ -901,6 +901,22 @@ export class IonRpcClient {
           ? command.type
           : "prompt";
     const { method: _m, type: _t, ...params } = command;
+
+    // tier 命令形状互不匹配（contract-matrix §1.5），必须在适配层归一：
+    // - get：ion 返回裸 {fast,pro,max}，pi 操作层取 data.models —— 不包一层恒为
+    //   空 map，switchTier 永远 "not configured"（chip 点击无高亮的根因）。
+    // - set：pi 一次传 {models} 整包，ion 按单 tier 收 {tier,model} —— 不拆分
+    //   的话 app 侧档位配置从未真正写进 ion。
+    if (method === "get_tier_models") {
+      const models = await this.getTierModels();
+      return { data: { models } };
+    }
+    if (method === "set_tier_models") {
+      const models = (params.models ?? {}) as Record<string, string>;
+      await this.setTierModels(models);
+      return { data: { ok: true } };
+    }
+
     const data = await this.transport.sessionCall(this.sessionId, method, params);
     return { data };
   }
