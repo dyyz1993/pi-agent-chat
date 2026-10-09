@@ -595,3 +595,33 @@ describe("send() tier 命令形状归一（chip 点击无高亮的真根因：ge
     expect(r.data.models).toEqual({ fast: "zai/glm-5.2" });
   });
 });
+
+describe("get_agents 形状归一（侧栏 Agent 下拉空列表 / detail find 崩溃回归）", () => {
+  it("裸数组直通、{agents} 包装解包、forwarded 对象归空", async () => {
+    const { IonRpcClient } = await import("../../../src/shared/agent/ion-backend/ion-rpc-client");
+    const client = new IonRpcClient({
+      socketPath: "/tmp/ion-test.sock",
+      cwd: "/tmp",
+      sessionId: "s1",
+    });
+    let agentsResult: unknown = [{ name: "build" }];
+    (client as unknown as { transport: unknown }).transport = {
+      sessionCall: async () => agentsResult,
+      managerCall: async () => ({}),
+    };
+    expect(await client.getAgents()).toEqual([{ name: "build" }]);
+
+    agentsResult = { agents: [{ name: "plan" }] };
+    expect(await client.getAgents()).toEqual([{ name: "plan" }]);
+
+    // worker 未挂上时 host 回 forwarded 包装对象
+    agentsResult = { session: "s1", status: "forwarded" };
+    expect(await client.getAgents()).toEqual([]);
+    expect(await client.getAgentDetail("build")).toBeNull();
+
+    // send() 通道包成 pi 操作层的 {agents}
+    agentsResult = [{ name: "build" }, { name: "explore" }];
+    const r = (await client.send({ type: "get_agents" })) as { data: { agents: unknown[] } };
+    expect(r.data.agents).toHaveLength(2);
+  });
+});

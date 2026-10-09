@@ -813,13 +813,23 @@ export class IonRpcClient {
     return this.getTools();
   }
 
+  // ion get_agents 的返回形状随 worker 状态漂移：正常回裸数组；worker 未挂上时
+  // host 层回 {session,status:"forwarded"} 包装对象——不归一的话上层
+  // (agents ?? []).find 直接崩（"Failed to fetch agent detail"）。
+  private normalizeAgents(value: unknown): Array<Record<string, unknown>> {
+    if (Array.isArray(value)) return value as Array<Record<string, unknown>>;
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      if (Array.isArray(obj.agents)) return obj.agents as Array<Record<string, unknown>>;
+    }
+    return [];
+  }
+
   async getAgentDetail(agentName?: string): Promise<Record<string, unknown> | null> {
-    const agents = await this.transport.sessionCall<Array<Record<string, unknown>>>(
-      this.sessionId,
-      "get_agents",
-      {},
+    const agents = this.normalizeAgents(
+      await this.transport.sessionCall(this.sessionId, "get_agents", {}),
     );
-    const match = (agents ?? []).find((a) => a.name === agentName) ?? (agents ?? [])[0];
+    const match = agents.find((a) => a.name === agentName) ?? agents[0];
     return match ?? null;
   }
 
@@ -845,7 +855,7 @@ export class IonRpcClient {
   }
 
   async getAgents(): Promise<Array<Record<string, unknown>>> {
-    return this.transport.sessionCall(this.sessionId, "get_agents", {});
+    return this.normalizeAgents(await this.transport.sessionCall(this.sessionId, "get_agents", {}));
   }
 
   async getCurrentAgent(): Promise<Record<string, unknown>> {
@@ -915,6 +925,12 @@ export class IonRpcClient {
       const models = (params.models ?? {}) as Record<string, string>;
       await this.setTierModels(models);
       return { data: { ok: true } };
+    }
+    // get_agents：ion 回裸数组，pi 操作层取 data.agents —— 不包一层侧栏
+    // Agent 下拉恒为空列表
+    if (method === "get_agents") {
+      const agents = await this.getAgents();
+      return { data: { agents } };
     }
 
     const data = await this.transport.sessionCall(this.sessionId, method, params);

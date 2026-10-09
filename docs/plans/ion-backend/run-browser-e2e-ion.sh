@@ -18,7 +18,7 @@ TOKEN="ion-e2e-token"
 PROJ="$TEST_DIR/proj"
 mkdir -p "$TEST_DIR/home/.ion" "$PROJ" "$TEST_DIR/appconfig" "$TEST_DIR/agentdir" "$TEST_DIR/logs" "${BROWSER_E2E_SHOTS:-/tmp/ion-browser-e2e}"
 # 启用 file-snapshot（连带 file-approval）：壳模式能力发现才会把审核面板判为可用
-printf '{"extensions":{"file-snapshot":{"enabled":true}}}' > "$TEST_DIR/home/.ion/config.json"
+printf '{"default_model":"faux-test","default_provider":"faux","tier_models":{"fast":"faux/faux-test","pro":"faux/faux-test","max":"faux/faux-test"},"extensions":{"file-snapshot":{"enabled":true},"global-memory":{"enabled":false}}}' > "$TEST_DIR/home/.ion/config.json"
 printf '# browser e2e\n' > "$PROJ/README.md"
 
 # 预种子 app 配置：activeProject 指向临时项目，跳过项目选择器
@@ -60,6 +60,7 @@ trap cleanup EXIT
 ION_HOST_SOCKET="$TEST_DIR/host.sock" \
 ION_SESSION_DIR="$TEST_DIR/ion-sessions" \
 ION_FAUX_REPLY="ion browser faux reply for ui validation" \
+ION_FAUX_REPEAT=1 \
 HOME="$TEST_DIR/home" \
   "$REAL_ION" serve > "$TEST_DIR/ion-host.log" 2>&1 &
 HOST_PID=$!

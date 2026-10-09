@@ -18,13 +18,14 @@ TOKEN="ion-e2e-token"
 export HOME_SAVED="$HOME"
 mkdir -p "$TEST_DIR/home/.ion" "$TEST_DIR/proj" "$TEST_DIR/appconfig" "$TEST_DIR/agentdir" "$TEST_DIR/logs"
 # 启用 file-snapshot（连带 file-approval），channel 面（change-review.*）才能走通
-printf '{"extensions":{"file-snapshot":{"enabled":true}}}' > "$TEST_DIR/home/.ion/config.json"
+printf '{"default_model":"faux-test","default_provider":"faux","tier_models":{"fast":"faux/faux-test","pro":"faux/faux-test","max":"faux/faux-test"},"extensions":{"file-snapshot":{"enabled":true},"global-memory":{"enabled":false}}}' > "$TEST_DIR/home/.ion/config.json"
 printf '# e2e\n' > "$TEST_DIR/proj/README.md"
 
 # ── 1. 隔离 ion host（faux，零 token）──
 ION_HOST_SOCKET="$TEST_DIR/host.sock" \
 ION_SESSION_DIR="$TEST_DIR/ion-sessions" \
 ION_FAUX_REPLY="ion app e2e faux reply" \
+ION_FAUX_REPEAT=1 \
 HOME="$TEST_DIR/home" \
   "$REAL_ION" serve > "$TEST_DIR/ion-host.log" 2>&1 &
 HOST_PID=$!
