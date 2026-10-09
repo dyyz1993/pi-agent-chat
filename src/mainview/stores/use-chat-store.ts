@@ -994,6 +994,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Keep the draft; the user can send once the switch commits.
     if (useSessionStore.getState().isSwitchingSession) {
       useAppStore.getState().addLog("Session switch pending; send ignored");
+      // 会话切换窗口期：此前静默吞 Enter（两个并发测试智能体独立复现）——给可见反馈
+      useNotificationStore.getState().push({
+        message: "会话切换中，稍候再发送",
+        level: "info",
+      });
       return;
     }
 

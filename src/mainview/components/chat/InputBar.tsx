@@ -109,6 +109,8 @@ export const InputBar = memo(
     } = useInputHistory(sessionId);
 
     const disabledRef = useRef(disabled);
+  /** 发送被门控时的时间戳提示（输入框上方短暂显示，静默吞 Enter 的可见反馈） */
+  const [sendBlockedHint, setSendBlockedHint] = useState(0);
     disabledRef.current = disabled;
     const sendDisabledRef = useRef(sendDisabled);
     sendDisabledRef.current = sendDisabled;
@@ -172,6 +174,9 @@ export const InputBar = memo(
           ) {
             if (historyEnabled && val.trim()) saveToHistory(val.trim());
             onSendRef.current?.();
+          } else if (val.trim() && !disabledRef.current && sendDisabledRef.current) {
+            // 发送被门控（新会话早期窗口模型未就绪等）：此前静默吞 Enter —— 轻提示
+            setSendBlockedHint(Date.now());
           }
         }
       },
@@ -345,6 +350,14 @@ export const InputBar = memo(
         }}
       >
         <div className="relative h-full flex">
+          {sendBlockedHint > 0 && Date.now() - sendBlockedHint < 4000 && (
+            <div
+              data-testid="send-blocked-hint"
+              className="absolute -top-7 left-2 z-10 text-[11px] text-text-tertiary bg-bg-secondary border border-border-primary rounded px-2 py-0.5 pointer-events-none"
+            >
+              {t("chat:sendBlockedHint")}
+            </div>
+          )}
           <textarea
             data-testid="chat-input"
             ref={textareaRef}

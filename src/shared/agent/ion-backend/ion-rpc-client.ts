@@ -611,7 +611,16 @@ export class IonRpcClient {
   }
 
   async setModel(provider: string, modelId: string): Promise<Record<string, unknown>> {
-    return this.transport.sessionCall(this.sessionId, "set_model", { provider, modelId });
+    // ion 回 get_state 形状（{model, provider}）；pi 前端（tier 切换/模型标签）
+    // 要 {provider, id} —— 形状不符曾导致 tier 切换静默无反馈
+    const result = await this.resilientCall<{ model?: string; provider?: string }>("set_model", {
+      provider,
+      modelId,
+    });
+    return {
+      provider: typeof result?.provider === "string" ? result.provider : provider,
+      id: typeof result?.model === "string" ? result.model : modelId,
+    };
   }
 
   async cycleModel(): Promise<Record<string, unknown> | null> {

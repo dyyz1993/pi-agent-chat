@@ -120,6 +120,7 @@
   "toolCall": "Tool Call",
   "input": "Input",
   "output": "Output",
+  "sendBlockedHint": "Message not sent yet — session/model warming up, press Enter again shortly",
   "streaming": "streaming",
   "running": "running",
   "waiting": "waiting...",
