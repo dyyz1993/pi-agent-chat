@@ -96,6 +96,23 @@ export function ModelPickerButton({
     }
   }, [open]);
 
+  const selectedRowRef = useRef<HTMLDivElement | null>(null);
+  // 选中行常排在列表尾部（用户自定义模型在内置之后追加），不滚动定位的话
+  // 打开下拉只见得到头部若干行——看起来就像"没有选中项"。
+  useEffect(() => {
+    if (!open) return;
+    let raf = 0;
+    const timer = setTimeout(() => {
+      raf = requestAnimationFrame(() => {
+        selectedRowRef.current?.scrollIntoView({ block: "nearest" });
+      });
+    }, 60);
+    return () => {
+      clearTimeout(timer);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [open]);
+
   let displayModels = [...models];
   if (searchQuery.trim()) {
     const q = searchQuery.toLowerCase();
@@ -140,11 +157,7 @@ export function ModelPickerButton({
             disabled={disabled}
             className={`w-full flex items-center gap-1.5 h-7 px-2 rounded-md border text-[12px] transition-colors
               ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-accent"}
-              ${
-                open
-                  ? "border-accent ring-1 ring-accent/25"
-                  : "border-border-secondary"
-              }
+              ${open ? "border-accent ring-1 ring-accent/25" : "border-border-secondary"}
                bg-bg-elevated dark:bg-surface-dim text-text-secondary dark:text-text-secondary`}
           >
             <span className="truncate flex-1 text-left">{displayName || placeholder}</span>
@@ -188,9 +201,7 @@ export function ModelPickerButton({
             />
             <button
               type="button"
-              onClick={() =>
-                setFavoritesFilter((v) => (v === "sort" ? "only" : "sort"))
-              }
+              onClick={() => setFavoritesFilter((v) => (v === "sort" ? "only" : "sort"))}
               className={`p-0.5 rounded transition-colors shrink-0 ${
                 favoritesFilter === "only"
                   ? "text-accent"
@@ -229,6 +240,7 @@ export function ModelPickerButton({
               return (
                 <div
                   key={key}
+                  ref={isSelected ? selectedRowRef : undefined}
                   className={`flex items-center px-2 py-1.5 transition-colors ${
                     isSelected
                       ? "bg-accent/10"
@@ -249,7 +261,11 @@ export function ModelPickerButton({
                       <span className="w-3 shrink-0" />
                     )}
                     <div className="flex flex-col min-w-0">
-                      <span className={`truncate text-xs ${isSelected ? "text-accent font-medium" : ""}`}>{m.name ?? formatModelName(m.id)}</span>
+                      <span
+                        className={`truncate text-xs ${isSelected ? "text-accent font-medium" : ""}`}
+                      >
+                        {m.name ?? formatModelName(m.id)}
+                      </span>
                       <span className="text-[10px] text-text-tertiary font-mono truncate">
                         {m.provider} · {m.id}
                       </span>
