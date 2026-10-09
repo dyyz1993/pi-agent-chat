@@ -14,7 +14,9 @@ import { IonSocketTransport } from "./ion-socket-transport";
 export type IonSessionRuntimeStatus = "idle" | "running";
 
 /** 一次 list_sessions → sessionId → 运行态。host 不可达时返回空 Map（会话列表仍可用）。 */
-export async function fetchIonSessionStatuses(socketPath?: string): Promise<Map<string, IonSessionRuntimeStatus>> {
+export async function fetchIonSessionStatuses(
+  socketPath?: string,
+): Promise<Map<string, IonSessionRuntimeStatus>> {
   const map = new Map<string, IonSessionRuntimeStatus>();
   const transport = new IonSocketTransport(socketPath);
   try {

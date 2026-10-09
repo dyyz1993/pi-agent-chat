@@ -64,12 +64,19 @@ function asAgentEvent(event: unknown): AgentEvent {
  * 创建事件映射器。每次 agent 轮次内部维护累积状态；
  * 同一 mapper 实例按时间顺序喂入一个订阅流的全部事件。
  */
-export function createEventMapper(emit: (event: AgentEvent) => void): (event: IonInstanceEvent) => void {
+export function createEventMapper(
+  emit: (event: AgentEvent) => void,
+): (event: IonInstanceEvent) => void {
   let current: AssistantMessageLike | null = null;
 
   const startAssistant = (event: IonInstanceEvent): void => {
     current = newAssistantMessage(event.model, event.provider);
-    emit(asAgentEvent({ type: "message_start", message: { ...current, content: [...current.content] } }));
+    emit(
+      asAgentEvent({
+        type: "message_start",
+        message: { ...current, content: [...current.content] },
+      }),
+    );
     emit(asAgentEvent({ type: "turn_start" }));
   };
 
@@ -77,7 +84,9 @@ export function createEventMapper(emit: (event: AgentEvent) => void): (event: Io
     if (!current) return;
     current.stopReason = stopReason;
     current.timestamp = event.timestamp ?? Date.now();
-    const usage = event.usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } | undefined;
+    const usage = event.usage as
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
+      | undefined;
     if (usage) {
       current.usage = {
         input: usage.input ?? 0,
@@ -86,7 +95,9 @@ export function createEventMapper(emit: (event: AgentEvent) => void): (event: Io
         cacheWrite: usage.cacheWrite ?? 0,
       };
     }
-    emit(asAgentEvent({ type: "message_end", message: { ...current, content: [...current.content] } }));
+    emit(
+      asAgentEvent({ type: "message_end", message: { ...current, content: [...current.content] } }),
+    );
     current = null;
   };
 
@@ -147,19 +158,36 @@ export function createEventMapper(emit: (event: AgentEvent) => void): (event: Io
         );
         break;
 
-      case "tool_execution_end":
+      case "tool_execution_end": {
+        // ion 的 result 是纯字符串/任意值；pi 前端要 AgentToolResult 形状
+        // {content:[{type:"text"}], details}（否则 Output 走 JSON.stringify 甚至空）
+        const rawResult = event.result ?? null;
+        let result: unknown = rawResult;
+        if (typeof rawResult === "string") {
+          result = { content: [{ type: "text", text: rawResult }], details: undefined };
+        } else if (
+          rawResult &&
+          typeof rawResult === "object" &&
+          !Array.isArray((rawResult as { content?: unknown }).content)
+        ) {
+          result = {
+            content: [{ type: "text", text: JSON.stringify(rawResult, null, 2) }],
+            details: rawResult,
+          };
+        }
         emit(
           asAgentEvent({
             type: "tool_execution_end",
             toolCallId: event.toolCallId ?? "",
             toolName: event.toolName ?? "",
-            result: event.result ?? null,
+            result,
             isError: event.isError ?? false,
             timestamp: event.timestamp ?? Date.now(),
             durationMs: event.durationMs ?? 0,
           }),
         );
         break;
+      }
 
       case "message_start":
         // ion 的 message_start 覆盖 user/assistant/toolResult 多种消息；

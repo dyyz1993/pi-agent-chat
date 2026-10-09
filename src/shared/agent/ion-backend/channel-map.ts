@@ -31,38 +31,39 @@ export type IonChannelTarget = IonChannelMapping | IonExtensionMapping;
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
-export const ION_CHANNEL_MAP: Readonly<Record<string, Readonly<Record<string, IonChannelTarget>>>> = {
-  "file-review": {
-    "review.pending": {
-      kind: "rpc",
-      method: "review_pending",
-      adaptResult: (result) => ({ result: asRecord(result).pending ?? [] }),
+export const ION_CHANNEL_MAP: Readonly<Record<string, Readonly<Record<string, IonChannelTarget>>>> =
+  {
+    "file-review": {
+      "review.pending": {
+        kind: "rpc",
+        method: "review_pending",
+        adaptResult: (result) => ({ result: asRecord(result).pending ?? [] }),
+      },
+      "review.approvals": {
+        kind: "rpc",
+        method: "review_approvals",
+        adaptResult: (result) => ({ result: asRecord(result).approvals ?? [] }),
+      },
+      "review.approve": { kind: "rpc", method: "review_approve" },
+      "review.reject": { kind: "rpc", method: "review_reject" },
+      "review.approveAll": { kind: "rpc", method: "review_approve_all" },
+      "review.rejectAll": { kind: "rpc", method: "review_reject_all" },
     },
-    "review.approvals": {
-      kind: "rpc",
-      method: "review_approvals",
-      adaptResult: (result) => ({ result: asRecord(result).approvals ?? [] }),
+    "bash-ext": {
+      list: {
+        kind: "extension",
+        extension: "bash",
+        method: "list",
+        adaptResult: (output) => asRecord(output).processes ?? [],
+      },
+      kill: { kind: "extension", extension: "bash", method: "kill" },
+      write_stdin: { kind: "extension", extension: "bash", method: "send" },
+      remove: { kind: "extension", extension: "bash", method: "remove" },
     },
-    "review.approve": { kind: "rpc", method: "review_approve" },
-    "review.reject": { kind: "rpc", method: "review_reject" },
-    "review.approveAll": { kind: "rpc", method: "review_approve_all" },
-    "review.rejectAll": { kind: "rpc", method: "review_reject_all" },
-  },
-  "bash-ext": {
-    list: {
-      kind: "extension",
-      extension: "bash",
-      method: "list",
-      adaptResult: (output) => asRecord(output).processes ?? [],
+    "rules-engine": {
+      getSnapshot: { kind: "extension", extension: "rules-engine", method: "list" },
     },
-    kill: { kind: "extension", extension: "bash", method: "kill" },
-    write_stdin: { kind: "extension", extension: "bash", method: "send" },
-    remove: { kind: "extension", extension: "bash", method: "remove" },
-  },
-  "rules-engine": {
-    getSnapshot: { kind: "extension", extension: "rules-engine", method: "list" },
-  },
-};
+  };
 
 /** 查映射；未映射返回 undefined（调用方抛显式错误） */
 export function lookupIonChannel(

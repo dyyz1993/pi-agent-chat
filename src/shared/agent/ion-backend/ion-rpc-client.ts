@@ -29,7 +29,9 @@ import { createLogger } from "../../lib/logger";
 
 /** channel.invoke 的历史载荷形态：{__call: method, ...params}（fork channel-manager 约定） */
 function asCallPayload(data: unknown): Record<string, unknown> & { __call?: unknown } {
-  return data && typeof data === "object" ? (data as Record<string, unknown> & { __call?: unknown }) : {};
+  return data && typeof data === "object"
+    ? (data as Record<string, unknown> & { __call?: unknown })
+    : {};
 }
 
 const log = createLogger("ion-client");
@@ -61,13 +63,20 @@ interface IonStateResult {
 }
 
 function notImplemented(method: string): never {
-  throw new Error(`ion backend: ${method} not implemented (see docs/plans/ion-backend/contract-matrix.md)`);
+  throw new Error(
+    `ion backend: ${method} not implemented (see docs/plans/ion-backend/contract-matrix.md)`,
+  );
 }
 
-function toTreeEntries(tree: IonTreeResult | undefined): Array<{ id: string; parentId: string | null; type: string; label?: string }> {
+function toTreeEntries(
+  tree: IonTreeResult | undefined,
+): Array<{ id: string; parentId: string | null; type: string; label?: string }> {
   const nodes = tree?.tree?.nodes ?? tree?.nodes ?? [];
   return nodes
-    .filter((node): node is { id: string; parentId?: string; type?: string; brief?: string } => typeof node.id === "string")
+    .filter(
+      (node): node is { id: string; parentId?: string; type?: string; brief?: string } =>
+        typeof node.id === "string",
+    )
     .map((node) => ({
       id: node.id,
       parentId: typeof node.parentId === "string" ? node.parentId : null,
@@ -166,7 +175,9 @@ export class IonRpcClient {
           try {
             listener(event as AgentEvent);
           } catch (err) {
-            log.warn("event listener error", { err: err instanceof Error ? err.message : String(err) });
+            log.warn("event listener error", {
+              err: err instanceof Error ? err.message : String(err),
+            });
           }
         }
       },
@@ -219,7 +230,11 @@ export class IonRpcClient {
     const deadline = Date.now() + 3000;
     while (Date.now() < deadline) {
       try {
-        const st = await this.transport.sessionCall<{ is_running?: boolean }>(this.sessionId, "get_state", {});
+        const st = await this.transport.sessionCall<{ is_running?: boolean }>(
+          this.sessionId,
+          "get_state",
+          {},
+        );
         if (st?.is_running !== true) break;
       } catch {
         break; // get_state 被拒（罕见）—— 放行，由 ion 排队兜底
@@ -351,11 +366,11 @@ export class IonRpcClient {
   }
 
   async bash(command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    const result = await this.transport.sessionCall<{ stdout?: string; stderr?: string; exitCode?: number }>(
-      this.sessionId,
-      "bash",
-      { command },
-    );
+    const result = await this.transport.sessionCall<{
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+    }>(this.sessionId, "bash", { command });
     return {
       stdout: result?.stdout ?? "",
       stderr: result?.stderr ?? "",
@@ -470,7 +485,11 @@ export class IonRpcClient {
     // 软失败返回 undefined，绝不拖垮消息读取（get_session_messages 是 host
     // 直读，永不被拒）。
     try {
-      return await this.transport.sessionCall<IonTreeResult>(this.sessionId, "get_tree_with_leaf", {});
+      return await this.transport.sessionCall<IonTreeResult>(
+        this.sessionId,
+        "get_tree_with_leaf",
+        {},
+      );
     } catch {
       return undefined;
     }
@@ -490,7 +509,10 @@ export class IonRpcClient {
     };
   }
 
-  async getMessageNavPage(options?: { from?: string; limit?: number }): Promise<Record<string, unknown>> {
+  async getMessageNavPage(options?: {
+    from?: string;
+    limit?: number;
+  }): Promise<Record<string, unknown>> {
     const params: Record<string, unknown> = {};
     if (options?.limit) params.limit = options.limit;
     if (options?.from === "head" || options?.from === "start") params.from = "head";
@@ -503,7 +525,12 @@ export class IonRpcClient {
     };
   }
 
-  async getFullMessagesAround(options: { entryId?: string; targetEntryId?: string; before?: number; after?: number }): Promise<Record<string, unknown>> {
+  async getFullMessagesAround(options: {
+    entryId?: string;
+    targetEntryId?: string;
+    before?: number;
+    after?: number;
+  }): Promise<Record<string, unknown>> {
     // ion 游标是 head/tail 语义，无 entryId 定位；用 tail 近似（app 的 around 主要用于跳转最新上下文）
     void options;
     const { raw, hasMore } = await this.fetchMessages({});
@@ -529,7 +556,11 @@ export class IonRpcClient {
   }
 
   async getLastAssistantText(): Promise<string | null> {
-    const text = await this.transport.sessionCall<string>(this.sessionId, "get_last_assistant_text", {});
+    const text = await this.transport.sessionCall<string>(
+      this.sessionId,
+      "get_last_assistant_text",
+      {},
+    );
     return typeof text === "string" ? text : null;
   }
 
@@ -596,7 +627,8 @@ export class IonRpcClient {
   async setTierModels(models: { fast?: string; pro?: string; max?: string }): Promise<void> {
     // ion 按单 tier 设置（contract-matrix §1.5），pi 是整 map —— adapter 拆分
     for (const [tier, value] of Object.entries(models)) {
-      if (value) await this.transport.sessionCall(this.sessionId, "set_tier_models", { tier, model: value });
+      if (value)
+        await this.transport.sessionCall(this.sessionId, "set_tier_models", { tier, model: value });
     }
   }
 
@@ -683,7 +715,11 @@ export class IonRpcClient {
   }
 
   async getSkills(): Promise<Array<Record<string, unknown>>> {
-    const result = await this.transport.sessionCall<{ skills?: unknown }>(this.sessionId, "get_skills", {});
+    const result = await this.transport.sessionCall<{ skills?: unknown }>(
+      this.sessionId,
+      "get_skills",
+      {},
+    );
     return Array.isArray(result?.skills) ? (result.skills as Array<Record<string, unknown>>) : [];
   }
 
@@ -693,7 +729,9 @@ export class IonRpcClient {
       "get_extensions",
       {},
     );
-    return Array.isArray(result?.extensions) ? (result.extensions as Array<Record<string, unknown>>) : [];
+    return Array.isArray(result?.extensions)
+      ? (result.extensions as Array<Record<string, unknown>>)
+      : [];
   }
 
   /**
@@ -711,9 +749,7 @@ export class IonRpcClient {
       for (let attempt = 0; attempt < 6; attempt++) {
         try {
           const extensions = await this.getExtensions();
-          names = extensions
-            .map((e) => (typeof e.name === "string" ? e.name : ""))
-            .filter(Boolean);
+          names = extensions.map((e) => (typeof e.name === "string" ? e.name : "")).filter(Boolean);
           this.cachedExtensionNames = names;
           break;
         } catch {
@@ -726,7 +762,11 @@ export class IonRpcClient {
   }
 
   async getTools(): Promise<Array<Record<string, unknown>>> {
-    const result = await this.transport.sessionCall<{ tools?: unknown }>(this.sessionId, "get_tools", {});
+    const result = await this.transport.sessionCall<{ tools?: unknown }>(
+      this.sessionId,
+      "get_tools",
+      {},
+    );
     return Array.isArray(result?.tools) ? (result.tools as Array<Record<string, unknown>>) : [];
   }
 
@@ -746,7 +786,11 @@ export class IonRpcClient {
   }
 
   async getActiveTools(): Promise<Array<string>> {
-    const result = await this.transport.sessionCall<{ tools?: unknown }>(this.sessionId, "get_active_tools", {});
+    const result = await this.transport.sessionCall<{ tools?: unknown }>(
+      this.sessionId,
+      "get_active_tools",
+      {},
+    );
     return Array.isArray(result?.tools) ? (result.tools as string[]) : [];
   }
 
@@ -789,7 +833,11 @@ export class IonRpcClient {
   }
 
   async newSession(): Promise<Record<string, unknown>> {
-    const created = await this.transport.sessionCall<{ sessionId?: string }>(this.sessionId, "new_session", {});
+    const created = await this.transport.sessionCall<{ sessionId?: string }>(
+      this.sessionId,
+      "new_session",
+      {},
+    );
     if (created?.sessionId) this.sessionId = created.sessionId;
     return created ?? {};
   }
@@ -854,17 +902,24 @@ export class IonRpcClient {
     notImplemented("getForkMessages");
   }
   // 箭头函数属性：history-operations 会把此方法解构后裸调用（this 会丢）
-  getFileDiff = async (options: { filePath: string; fromHash?: string; toHash?: string }): Promise<Record<string, unknown> | null> => {
+  getFileDiff = async (options: {
+    filePath: string;
+    fromHash?: string;
+    toHash?: string;
+  }): Promise<Record<string, unknown> | null> => {
     // ion: get_file_diff {filePath} → {diff, hasContent, path}；diff 为 null 时 pi 语义返回 null
-    const result = await this.transport.sessionCall<{ diff?: Record<string, unknown> | null; hasContent?: boolean; path?: string }>(
-      this.sessionId,
-      "get_file_diff",
-      { filePath: options.filePath },
-    );
+    const result = await this.transport.sessionCall<{
+      diff?: Record<string, unknown> | null;
+      hasContent?: boolean;
+      path?: string;
+    }>(this.sessionId, "get_file_diff", { filePath: options.filePath });
     if (!result?.diff) return null;
     return { path: result.path ?? options.filePath, ...result.diff };
-  }
-  async getBatchDiffs(options?: { fromEntryId?: string; toEntryId?: string }): Promise<Record<string, unknown>> {
+  };
+  async getBatchDiffs(options?: {
+    fromEntryId?: string;
+    toEntryId?: string;
+  }): Promise<Record<string, unknown>> {
     // ion: get_batch_diffs（turn 聚合）；字段防御式映射到 pi 的 {files, summary}
     const result = await this.transport.sessionCall<Record<string, unknown>>(
       this.sessionId,
@@ -985,7 +1040,12 @@ async function callIonChannelTarget(
   const options = timeoutMs ? { timeoutMs } : undefined;
   if (target.kind === "rpc") {
     const ionParams = target.adaptParams ? target.adaptParams(params) : params;
-    const result = await transport.sessionCall<unknown>(sessionId, target.method, ionParams, options);
+    const result = await transport.sessionCall<unknown>(
+      sessionId,
+      target.method,
+      ionParams,
+      options,
+    );
     return target.adaptResult ? target.adaptResult(result) : result;
   }
   const result = await transport.sessionCall<{ output?: unknown }>(

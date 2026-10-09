@@ -122,7 +122,9 @@ export class IonSocketTransport {
   async ensureHost(autoSpawn = true): Promise<void> {
     if (await this.isHostReachable()) return;
     if (!autoSpawn) {
-      throw new Error(`ion host unreachable at ${this.socketPath} (set ION_HOST_SOCKET or start \`ion serve\`)`);
+      throw new Error(
+        `ion host unreachable at ${this.socketPath} (set ION_HOST_SOCKET or start \`ion serve\`)`,
+      );
     }
     const bin = resolveIonBinary();
     log.info("spawning ion host", { bin, socket: this.socketPath });
@@ -138,7 +140,9 @@ export class IonSocketTransport {
       if (await this.isHostReachable()) return;
       await new Promise((r) => setTimeout(r, 500));
     }
-    throw new Error(`ion host failed to become ready at ${this.socketPath} within ${HOST_READY_TIMEOUT_MS}ms`);
+    throw new Error(
+      `ion host failed to become ready at ${this.socketPath} within ${HOST_READY_TIMEOUT_MS}ms`,
+    );
   }
 
   stop(): void {
@@ -154,7 +158,11 @@ export class IonSocketTransport {
   }
 
   /** manager 级命令（无 session） */
-  async managerCall<T = unknown>(method: string, params?: unknown, options?: IonCallOptions): Promise<T> {
+  async managerCall<T = unknown>(
+    method: string,
+    params?: unknown,
+    options?: IonCallOptions,
+  ): Promise<T> {
     return (await this.call(method, params, options)) as T;
   }
 
@@ -181,7 +189,8 @@ export class IonSocketTransport {
     const response = await rpcOnce(this.socketPath, request, timeoutMs);
 
     if (response.success === false) {
-      const message = typeof response.error === "string" ? response.error : `ion RPC ${method} failed`;
+      const message =
+        typeof response.error === "string" ? response.error : `ion RPC ${method} failed`;
       throw new Error(message);
     }
     const data = response.data as Record<string, unknown> | undefined;
@@ -204,8 +213,13 @@ export async function ionQuickCall<T = unknown>(
   params?: unknown,
   socketPath = resolveIonSocketPath(),
 ): Promise<T> {
-  return (await rpcOnce(socketPath, { id: "pi-chat-probe", method, params: params ?? {} }, DEFAULT_CONNECT_TIMEOUT_MS).then((r) => {
-    if (r.success === false) throw new Error(typeof r.error === "string" ? r.error : `ion RPC ${method} failed`);
+  return (await rpcOnce(
+    socketPath,
+    { id: "pi-chat-probe", method, params: params ?? {} },
+    DEFAULT_CONNECT_TIMEOUT_MS,
+  ).then((r) => {
+    if (r.success === false)
+      throw new Error(typeof r.error === "string" ? r.error : `ion RPC ${method} failed`);
     return r.data;
   })) as T;
 }

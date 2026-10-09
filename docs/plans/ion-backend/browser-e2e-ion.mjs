@@ -46,16 +46,22 @@ async function main() {
     const bridge = document.createElement("div");
     bridge.id = "__e2e_console_bridge";
     bridge.style.display = "none";
-    document.addEventListener("DOMContentLoaded", () => document.documentElement.appendChild(bridge));
+    document.addEventListener("DOMContentLoaded", () =>
+      document.documentElement.appendChild(bridge),
+    );
     const write = (kind, args) => {
       try {
-        bridge.dataset.logs = (bridge.dataset.logs ?? "") + kind + "|" + args.join(" ").slice(0, 260) + "\n";
+        bridge.dataset.logs =
+          (bridge.dataset.logs ?? "") + kind + "|" + args.join(" ").slice(0, 260) + "\n";
       } catch {}
     };
     const origError = console.error.bind(console);
     const origLog = console.log.bind(console);
     console.error = (...args) => {
-      write("error", args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))));
+      write(
+        "error",
+        args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))),
+      );
       origError(...args);
     };
     console.log = (...args) => {
@@ -64,7 +70,9 @@ async function main() {
       origLog(...args);
     };
     window.addEventListener("error", (ev) => write("pageerror", [String(ev.message)]));
-    window.addEventListener("unhandledrejection", (ev) => write("pageerror", ["rejection:" + String(ev.reason)]));
+    window.addEventListener("unhandledrejection", (ev) =>
+      write("pageerror", ["rejection:" + String(ev.reason)]),
+    );
     write("boot", ["init-ran"]);
     const origSend = WebSocket.prototype.send;
     WebSocket.prototype.send = function (data) {
@@ -120,7 +128,9 @@ async function main() {
   await page.waitForTimeout(2500);
   const diag = await page.evaluate(() => {
     const inputEl = document.querySelector('[data-testid="chat-input"]');
-    const sendBtn = document.querySelector('button[aria-label*="Send" i], button[aria-label*="发送"]');
+    const sendBtn = document.querySelector(
+      'button[aria-label*="Send" i], button[aria-label*="发送"]',
+    );
     return {
       inputValue: inputEl instanceof HTMLTextAreaElement ? inputEl.value : null,
       sendBtnDisabled: sendBtn ? sendBtn.hasAttribute("disabled") : null,
@@ -128,13 +138,19 @@ async function main() {
       userBubbleInDom: document.body.innerText.includes("browser e2e round"),
     };
   });
-  console.log(`  ⚙ send diag: input="${diag.inputValue}" btnDisabled=${diag.sendBtnDisabled} btnExists=${diag.sendBtnExists} userBubble=${diag.userBubbleInDom}`);
+  console.log(
+    `  ⚙ send diag: input="${diag.inputValue}" btnDisabled=${diag.sendBtnDisabled} btnExists=${diag.sendBtnExists} userBubble=${diag.userBubbleInDom}`,
+  );
   const bridgeLogs = await readBridgeLogs();
   const bridgeLines = bridgeLogs.split("\n").filter(Boolean);
-  console.log(`  ⚙ bridge lines=${bridgeLines.length}; ws out=${bridgeLines.filter((l) => l.startsWith("ws|")).length} ws in(agent.event/status)=${bridgeLines.filter((l) => l.startsWith("wsin|")).length}`);
+  console.log(
+    `  ⚙ bridge lines=${bridgeLines.length}; ws out=${bridgeLines.filter((l) => l.startsWith("ws|")).length} ws in(agent.event/status)=${bridgeLines.filter((l) => l.startsWith("wsin|")).length}`,
+  );
   const wsin = bridgeLines.filter((l) => l.startsWith("wsin|"));
   console.log(`  ⚙ ws-in samples:\n    ${wsin.slice(0, 6).join("\n    ")}`);
-  const bodyText = await page.evaluate(() => document.body.innerText.replace(/\n{2,}/g, "\n").slice(0, 900));
+  const bodyText = await page.evaluate(() =>
+    document.body.innerText.replace(/\n{2,}/g, "\n").slice(0, 900),
+  );
   console.log(`  ⚙ body text:\n${bodyText}`);
   await page.screenshot({ path: `${SHOT_DIR}/2-sent.png` });
 
@@ -154,8 +170,12 @@ async function main() {
     const wsin = bridgeLogs.split("\n").filter((l) => l.startsWith("wsin|"));
     const updateCount = wsin.filter((l) => l.includes("message_update")).length;
     const startCount = wsin.filter((l) => l.includes("agent_start")).length;
-    console.log(`  ⚙ final: ws-in events=${wsin.length} agent_start=${startCount} message_update=${updateCount}`);
-    const bodyText = await page.evaluate(() => document.body.innerText.replace(/\n{2,}/g, "\n").slice(0, 500));
+    console.log(
+      `  ⚙ final: ws-in events=${wsin.length} agent_start=${startCount} message_update=${updateCount}`,
+    );
+    const bodyText = await page.evaluate(() =>
+      document.body.innerText.replace(/\n{2,}/g, "\n").slice(0, 500),
+    );
     console.log(`  ⚙ final body:\n${bodyText}`);
   }
 
@@ -184,8 +204,16 @@ async function main() {
       };
     });
     ok("shell gating: Learning hidden (unmapped plugin)", !rail.learningBtn, JSON.stringify(rail));
-    ok("shell gating: change-review visible (available plugin)", rail.changeReviewBtn, JSON.stringify(rail));
-    ok("shell gating: Goal hidden, Git (shell) visible", !rail.goalBtn && rail.gitBtn, JSON.stringify(rail));
+    ok(
+      "shell gating: change-review visible (available plugin)",
+      rail.changeReviewBtn,
+      JSON.stringify(rail),
+    );
+    ok(
+      "shell gating: Goal hidden, Git (shell) visible",
+      !rail.goalBtn && rail.gitBtn,
+      JSON.stringify(rail),
+    );
   }
 
   // 6. 会话列表可见性（侧栏有会话项）

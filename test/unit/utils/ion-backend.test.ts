@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { flattenIonMessage, flattenIonMessages } from "../../../src/shared/agent/ion-backend/ion-flatten";
+import {
+  flattenIonMessage,
+  flattenIonMessages,
+} from "../../../src/shared/agent/ion-backend/ion-flatten";
 import { createEventMapper } from "../../../src/shared/agent/ion-backend/ion-event-map";
 import type { AgentEvent } from "../../../node_modules//pi-agent-core/dist/index";
 
@@ -115,8 +118,8 @@ describe("createEventMapper", () => {
     const first = events[2] as Extract<AgentEvent, { type: "message_update" }>;
     const second = events[3] as Extract<AgentEvent, { type: "message_update" }>;
     const textOf = (e: typeof first): string =>
-      (e.message as { content: Array<{ type: string; text?: string }> })
-        .content.filter((c) => c.type === "text")
+      (e.message as { content: Array<{ type: string; text?: string }> }).content
+        .filter((c) => c.type === "text")
         .map((c) => c.text)
         .join("");
     expect(textOf(first)).toBe("Hel");
@@ -129,11 +132,20 @@ describe("createEventMapper", () => {
     const { events, emit } = collect();
     const mapper = createEventMapper(emit);
     mapper({ type: "text_delta", delta: "let me read" });
-    mapper({ type: "tool_execution_start", toolCallId: "c1", toolName: "read", args: { file_path: "a" }, timestamp: 5 });
+    mapper({
+      type: "tool_execution_start",
+      toolCallId: "c1",
+      toolName: "read",
+      args: { file_path: "a" },
+      timestamp: 5,
+    });
 
     const types = events.map((e) => e.type);
     expect(types).toContain("message_end");
-    const end = events.find((e) => e.type === "message_end") as Extract<AgentEvent, { type: "message_end" }>;
+    const end = events.find((e) => e.type === "message_end") as Extract<
+      AgentEvent,
+      { type: "message_end" }
+    >;
     expect((end.message as { stopReason: string | null }).stopReason).toBe("toolUse");
     expect(types).toContain("tool_execution_start");
   });
@@ -145,8 +157,14 @@ describe("createEventMapper", () => {
     mapper({ type: "message_end", usage: { input: 3, output: 7 } });
     mapper({ type: "agent_end" });
 
-    const end = events.find((e) => e.type === "message_end") as Extract<AgentEvent, { type: "message_end" }>;
-    expect((end.message as { usage: { input: number; output: number } }).usage).toMatchObject({ input: 3, output: 7 });
+    const end = events.find((e) => e.type === "message_end") as Extract<
+      AgentEvent,
+      { type: "message_end" }
+    >;
+    expect((end.message as { usage: { input: number; output: number } }).usage).toMatchObject({
+      input: 3,
+      output: 7,
+    });
     // message_end 只发一次（agent_end 不再重复 finalize）
     expect(events.filter((e) => e.type === "message_end")).toHaveLength(1);
     expect(events[events.length - 1]?.type).toBe("agent_end");
@@ -155,12 +173,23 @@ describe("createEventMapper", () => {
   it("passes through tool_execution_update/end with field defaults", () => {
     const { events, emit } = collect();
     const mapper = createEventMapper(emit);
-    mapper({ type: "tool_execution_update", toolCallId: "c1", toolName: "read", partialResult: "partial" });
+    mapper({
+      type: "tool_execution_update",
+      toolCallId: "c1",
+      toolName: "read",
+      partialResult: "partial",
+    });
     mapper({ type: "tool_execution_end", toolCallId: "c1", toolName: "read", result: "final" });
-    const update = events.find((e) => e.type === "tool_execution_update") as Extract<AgentEvent, { type: "tool_execution_update" }>;
+    const update = events.find((e) => e.type === "tool_execution_update") as Extract<
+      AgentEvent,
+      { type: "tool_execution_update" }
+    >;
     expect(update.partialResult).toBe("partial");
-    const end = events.find((e) => e.type === "tool_execution_end") as Extract<AgentEvent, { type: "tool_execution_end" }>;
-    expect(end.result).toBe("final");
+    const end = events.find((e) => e.type === "tool_execution_end") as Extract<
+      AgentEvent,
+      { type: "tool_execution_end" }
+    >;
+    expect(end.result).toEqual({ content: [{ type: "text", text: "final" }] });
     expect(end.isError).toBe(false);
     expect(end.durationMs).toBe(0);
   });
@@ -174,13 +203,23 @@ describe("createEventMapper", () => {
   });
 });
 
-import { ION_CHANNEL_MAP, lookupIonChannel } from "../../../src/shared/agent/ion-backend/channel-map";
+import {
+  ION_CHANNEL_MAP,
+  lookupIonChannel,
+} from "../../../src/shared/agent/ion-backend/channel-map";
 
 describe("ION_CHANNEL_MAP（声明式映射表）", () => {
   it("maps the six app change-review methods to ion file-approval RPCs", () => {
     const fr = ION_CHANNEL_MAP["file-review"];
     expect(Object.keys(fr).sort()).toEqual(
-      ["review.approve", "review.approveAll", "review.approvals", "review.pending", "review.reject", "review.rejectAll"].sort(),
+      [
+        "review.approve",
+        "review.approveAll",
+        "review.approvals",
+        "review.pending",
+        "review.reject",
+        "review.rejectAll",
+      ].sort(),
     );
     expect(fr["review.pending"]).toMatchObject({ kind: "rpc", method: "review_pending" });
     expect(fr["review.approve"]).toMatchObject({ kind: "rpc", method: "review_approve" });
@@ -192,7 +231,9 @@ describe("ION_CHANNEL_MAP（声明式映射表）", () => {
       result: [{ path: "a" }],
     });
     const approvals = ION_CHANNEL_MAP["file-review"]["review.approvals"];
-    expect(approvals.kind === "rpc" && approvals.adaptResult?.({ approvals: [] })).toEqual({ result: [] });
+    expect(approvals.kind === "rpc" && approvals.adaptResult?.({ approvals: [] })).toEqual({
+      result: [],
+    });
   });
 
   it("maps bash-ext list/write_stdin via extension_rpc", () => {
@@ -221,7 +262,11 @@ describe("ION_CHANNEL_MAP（声明式映射表）", () => {
   });
 });
 
-import { piCapabilities, ionCapabilities, PANEL_TAB_CHANNEL } from "../../../src/shared/agent/ion-backend/capability";
+import {
+  piCapabilities,
+  ionCapabilities,
+  PANEL_TAB_CHANNEL,
+} from "../../../src/shared/agent/ion-backend/capability";
 
 describe("capability 动态发现（壳模式）", () => {
   it("pi 后端恒全有（UI 行为不变）", () => {
@@ -255,5 +300,73 @@ describe("capability 动态发现（壳模式）", () => {
     expect(PANEL_TAB_CHANNEL.changeReview).toBe("file-review");
     expect(PANEL_TAB_CHANNEL.git).toBeUndefined();
     expect(PANEL_TAB_CHANNEL.status).toBeUndefined();
+  });
+});
+
+import { flattenIonMessage } from "../../../src/shared/agent/ion-backend/ion-flatten";
+import { createEventMapper } from "../../../src/shared/agent/ion-backend/ion-event-map";
+
+describe("真实形状回归（2026-10-09 真模型探针：Output 为空的根因）", () => {
+  it("flattens ion ToolResult variant (role:'tool' + snake_case fields)", () => {
+    // 实测 JSONL 原文：role:"tool"、tool_call_id/tool_name/is_error
+    const result = flattenIonMessage({
+      id: "26a53bd0",
+      message: {
+        ToolResult: {
+          role: "tool",
+          content: [{ Text: { text: "hello-ion-tool\n" } }],
+          is_error: false,
+          tool_call_id: "call_7994",
+          tool_name: "bash",
+          timestamp: 1791515105593,
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      role: "toolResult",
+      toolCallId: "call_7994",
+      toolName: "bash",
+      isError: false,
+      entryId: "26a53bd0",
+    });
+    expect(result?.content).toEqual([{ type: "text", text: "hello-ion-tool\n" }]);
+  });
+
+  it("wraps string tool result into pi AgentToolResult shape (Output 渲染修复)", () => {
+    const events: AgentEvent[] = [];
+    const mapper = createEventMapper((e) => events.push(e));
+    mapper({ type: "text_delta", delta: "using tool" });
+    mapper({
+      type: "tool_execution_end",
+      toolCallId: "c1",
+      toolName: "bash",
+      result: "hello-ion-tool\n",
+      isError: false,
+      timestamp: 1,
+      durationMs: 9,
+    });
+    const end = events.find((e) => e.type === "tool_execution_end") as Extract<
+      AgentEvent,
+      { type: "tool_execution_end" }
+    >;
+    expect(end.result).toEqual({ content: [{ type: "text", text: "hello-ion-tool\n" }] });
+  });
+
+  it("wraps object result without content array into text content + details", () => {
+    const events: AgentEvent[] = [];
+    const mapper = createEventMapper((e) => events.push(e));
+    mapper({
+      type: "tool_execution_end",
+      toolCallId: "c2",
+      toolName: "read",
+      result: { path: "a.txt", lines: 3 },
+    });
+    const end = events.find((e) => e.type === "tool_execution_end") as Extract<
+      AgentEvent,
+      { type: "tool_execution_end" }
+    >;
+    const r = end.result as { content: Array<{ type: string; text: string }>; details: unknown };
+    expect(r.content[0].type).toBe("text");
+    expect(r.details).toEqual({ path: "a.txt", lines: 3 });
   });
 });

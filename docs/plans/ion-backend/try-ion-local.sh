@@ -101,7 +101,8 @@ done
 is_alive "$TRIAL_DIR/pid-server" || { echo "✗ server 启动失败，看 $TRIAL_DIR/logs/server.log"; exit 1; }
 
 # ── 3. Vite ──
-(cd "$REPO" && VITE_PORT=$VITE_PORT VITE_API_TARGET="http://127.0.0.1:$APP_PORT" \
+# exec：让子壳直接成为 vite 进程，$! 即 vite 本体 pid（否则 stop 只能杀到包装壳）
+(cd "$REPO" && exec env VITE_PORT=$VITE_PORT VITE_API_TARGET="http://127.0.0.1:$APP_PORT" \
     bunx --bun vite > "$TRIAL_DIR/logs/vite.log" 2>&1) &
 echo $! > "$TRIAL_DIR/pid-vite"
 for _ in $(seq 1 60); do

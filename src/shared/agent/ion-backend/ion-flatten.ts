@@ -76,8 +76,15 @@ function flattenContent(content: unknown): ContentItem[] {
   return items;
 }
 
-function flattenUsage(usage: unknown): { input: number; output: number; cacheRead: number; cacheWrite: number } {
-  const u = usage as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown } | undefined;
+function flattenUsage(usage: unknown): {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+} {
+  const u = usage as
+    | { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown }
+    | undefined;
   return {
     input: typeof u?.input === "number" ? u.input : 0,
     output: typeof u?.output === "number" ? u.output : 0,
@@ -128,12 +135,17 @@ export function flattenIonMessage(envelope: IonEnumMessage): FlattenedMessage | 
       ...base,
     };
   }
-  if (body.role === "toolResult" || body.toolCallId !== undefined) {
+  // ion 的 ToolResult 变体（实测 JSONL）：role:"tool"、snake_case 字段
+  // （tool_call_id/tool_name/is_error）；pi 侧兼容 camelCase 一并识别。
+  const toolCallId = body.toolCallId ?? (body as Record<string, unknown>).tool_call_id;
+  const toolName = body.toolName ?? (body as Record<string, unknown>).tool_name;
+  const isError = body.isError ?? (body as Record<string, unknown>).is_error;
+  if (body.role === "toolResult" || body.role === "tool" || toolCallId !== undefined) {
     return {
       role: "toolResult",
-      toolCallId: body.toolCallId ?? "",
-      toolName: body.toolName ?? "",
-      isError: body.isError ?? false,
+      toolCallId: typeof toolCallId === "string" ? toolCallId : "",
+      toolName: typeof toolName === "string" ? toolName : "",
+      isError: isError === true,
       entryId: typeof envelope.id === "string" ? envelope.id : undefined,
       ...base,
     };
