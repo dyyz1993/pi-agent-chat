@@ -149,6 +149,7 @@ import {
 } from "./agent-process-pool";
 import { ensureManagedClientOperation } from "./agent-managed-client-operations";
 import { findSessionById } from "../lib/session-scanner";
+import { piCapabilities, ionCapabilities } from "./ion-backend/capability";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -461,6 +462,25 @@ async function createRpcClient(
   extraEnv?: Record<string, string>,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number }; pid?: number }> {
   const t0 = performance.now();
+
+  // ion 后端：IonRpcClient 直连 ion host（Unix socket），不走 CLI spawn。
+  // 见 docs/plans/2026-09-25-ion-backend-adoption-plan.md §2.1/§2.3。
+  if (config.agentBackend === "ion") {
+    const ionModule = await import("./ion-backend");
+    const ionClient = new ionModule.IonRpcClient({
+      cwd,
+      sessionPath,
+      autoSpawnHost: config.ionAutoSpawnHost,
+    });
+    await ionClient.start();
+    const tIon = performance.now();
+    perfLog.info("[createRpcClient] ion mode", { cwd, ionSessionId: ionClient.ionSessionId });
+    return {
+      client: ionModule.asRpcClientAPI(ionClient) as unknown as RpcClientInstance,
+      timings: { dynamicImport: Math.round(tIon - t0), construct: 0 },
+    };
+  }
+
   const runtime = await resolveActiveRuntimeSelection(cwd);
   const useRemoteChild = runtime.kind === "remote-agent-child";
   const remoteChildRuntime = runtime.kind === "remote-agent-child" ? runtime : undefined;
@@ -1096,11 +1116,18 @@ export class AgentProcessManager {
     return this.servers.size;
   }
 
+  /** 壳模式能力缓存（sessionId → 最后已知良好的能力表）——探测失败/启动窗口期兜底，
+   * 跨 client 重建存活（页面重载会重建 IonRpcClient，其实例级缓存会丢）。 */
+  private channelCapabilitiesCache = new Map<string, Record<string, unknown>>();
+
   private async broadcastEvent(
     eventType: string,
     payload: unknown,
     metadata?: unknown,
   ): Promise<void> {
+    if (process.env.PI_DEBUG_BROADCAST === "1") {
+      log.info("[broadcast debug]", { eventType, servers: this.servers.size });
+    }
     for (const server of this.servers) {
       try {
         await server.emitEvent(eventType, payload, metadata);
@@ -1749,6 +1776,49 @@ export class AgentProcessManager {
     return this.messageReader.getMessages(sessionId, sessionPath);
   }
 
+  /**
+   * ion 后端消息源：ion 是唯一内容真相（app 侧 JSONL 只有 session 头）。
+   * client 无实例（agent 未启动/host 不可达）或读取失败时返回 null，
+   * 调用方回落 JSONL 路径（ion 模式下通常为空 —— 会话内容只在 ion 侧）。
+   */
+  private async readIonMessages(
+    sessionId: string,
+    read: (client: RpcClientInstance) => Promise<unknown>,
+  ): Promise<{
+    messages: AgentMessageForUI[];
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMore: boolean;
+    totalCount: number;
+    nextCursor: string | null;
+  } | null> {
+    if (config.agentBackend !== "ion") return null;
+    const managed = this.getActiveManaged(sessionId);
+    if (!managed?.client) return null;
+    try {
+      const ionResult = (await read(managed.client)) as {
+        messages?: AgentMessageForUI[];
+        customEntries?: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+        hasMore?: boolean;
+        totalCount?: number;
+        nextCursor?: string | null;
+      };
+      if (!ionResult) return null;
+      return {
+        messages: ionResult.messages ?? [],
+        customEntries: ionResult.customEntries ?? [],
+        hasMore: ionResult.hasMore ?? false,
+        totalCount: ionResult.totalCount ?? (ionResult.messages ?? []).length,
+        nextCursor: ionResult.nextCursor ?? null,
+      };
+    } catch (err: unknown) {
+      log.warn("[ion messages] client read failed, falling back to JSONL", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async getFullMessages(
     sessionId: string,
     sessionPath?: string,
@@ -1760,6 +1830,8 @@ export class AgentProcessManager {
     totalCount: number;
     nextCursor: string | null;
   }> {
+    const ionResult = await this.readIonMessages(sessionId, (client) => client.getFullMessages());
+    if (ionResult) return ionResult;
     return this.messageReader.getFullMessages(sessionId, sessionPath, options);
   }
 
@@ -1773,6 +1845,20 @@ export class AgentProcessManager {
     totalCount: number;
     nextCursor: string | null;
   }> {
+    // ion 直读：游标分页（from:"head" 首 N 条 / limit 尾 N 条 + hasMore/nextCursor）
+    const ionResult = await this.readIonMessages(sessionId, (client) =>
+      (client as unknown as { getMessageNavPage: (o?: { from?: string; limit?: number }) => Promise<unknown> }).getMessageNavPage(
+        { limit: options?.limit, from: options?.fromStart ? "head" : undefined },
+      ),
+    );
+    if (ionResult) {
+      return {
+        messages: ionResult.messages,
+        hasMore: ionResult.hasMore,
+        totalCount: ionResult.totalCount,
+        nextCursor: ionResult.nextCursor,
+      };
+    }
     return getMessageNavPageOperation({
       sessionId,
       sessionPath,
@@ -1800,6 +1886,24 @@ export class AgentProcessManager {
     targetFound: boolean;
     totalCount: number;
   }> {
+    // ion 直读：无 entryId 定位游标，返回全量尾部窗口（targetFound 恒 true 由 client 保证）
+    const ionResult = await this.readIonMessages(sessionId, (client) =>
+      (client as unknown as { getFullMessagesAround: (o?: { targetEntryId?: string }) => Promise<unknown> }).getFullMessagesAround(
+        { targetEntryId: options.targetEntryId },
+      ),
+    );
+    if (ionResult) {
+      return {
+        messages: ionResult.messages,
+        customEntries: ionResult.customEntries,
+        hasMoreBefore: false,
+        hasMoreAfter: ionResult.hasMore,
+        beforeCursor: null,
+        afterCursor: null,
+        targetFound: true,
+        totalCount: ionResult.totalCount,
+      };
+    }
     return getFullMessagesAroundOperation({
       sessionId,
       sessionPath,
@@ -2066,6 +2170,46 @@ export class AgentProcessManager {
       sessionId,
       getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
+  }
+
+  /**
+   * 壳模式能力发现（见 ion-backend/capability.ts）：
+   * pi 后端恒全有；ion 后端 = channel-map × 实际加载扩展。
+   */
+  async getChannelCapabilities(sessionId: string): Promise<Record<string, unknown>> {
+    if (config.agentBackend !== "ion") {
+      return piCapabilities() as unknown as Record<string, unknown>;
+    }
+    // 等 managed client 就位（最长 3s）——避免启动窗口期的"全不可用"假阴性被 UI 缓存
+    let client = this.getActiveManaged(sessionId)?.client as
+      | { getChannelCapabilities?: () => Promise<unknown> }
+      | undefined;
+    for (let i = 0; !client?.getChannelCapabilities && i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      client = this.getActiveManaged(sessionId)?.client as
+        | { getChannelCapabilities?: () => Promise<unknown> }
+        | undefined;
+    }
+    if (client?.getChannelCapabilities) {
+      try {
+        const result = (await client.getChannelCapabilities()) as Record<string, unknown>;
+        const channels = result.channels as Record<string, { available?: boolean }> | undefined;
+        // 只有探测到"至少一个可用"才写缓存——避免把启动窗口期的全关假阴性固化为已知良好
+        if (channels && Object.values(channels).some((c) => c?.available)) {
+          this.channelCapabilitiesCache.set(sessionId, result);
+        }
+        return result;
+      } catch (err: unknown) {
+        log.warn("[getChannelCapabilities] ion probe failed, serving last-known-good if any", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    const cached = this.channelCapabilitiesCache.get(sessionId);
+    if (cached) return cached;
+    log.warn("[getChannelCapabilities] no client & no cache, returning all-off", { sessionId });
+    return ionCapabilities([]) as unknown as Record<string, unknown>;
   }
 
   async getSkills(sessionId: string): Promise<{

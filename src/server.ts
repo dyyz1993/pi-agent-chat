@@ -111,6 +111,9 @@ const apiHandler = createHttpHandler({
   config,
   getWebSocketClientCount: () => wss.clients.size,
   broadcastEvent: (event: Record<string, unknown>) => {
+    if (process.env.PI_DEBUG_BROADCAST === "1") {
+      log.info("[broadcast ws debug]", { eventType: String(event.eventType ?? ""), clients: wss.clients.size });
+    }
     const msg = JSON.stringify(event);
     for (const ws of wss.clients as Set<WebSocket>) {
       // Multi-token deployments: session-scoped events only reach the

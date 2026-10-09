@@ -42,6 +42,16 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { status: "idle" | "streaming" | "stopped"; pid?: number };
   };
+  "agent.getChannelCapabilities": {
+    params: { sessionId?: string };
+    result: {
+      backend: "pi" | "ion";
+      channels: Record<
+        string,
+        { available: boolean; mappedMethods: number; requiresExtension: string; extensionLoaded: boolean; reason: string | null }
+      >;
+    };
+  };
   "agent.batchGetSessionsStatus": {
     params: { sessionIds: string[] };
     result: Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }>;

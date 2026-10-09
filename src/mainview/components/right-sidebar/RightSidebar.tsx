@@ -35,6 +35,8 @@ import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useEffectiveSessionId } from "../../hooks/use-effective-session-id";
 import { useEffectiveSessionResourceSync } from "../../hooks/use-effective-session-resource-sync";
+import { useCapabilityStore } from "../../stores/use-capability-store";
+import { PANEL_TAB_CHANNEL } from "../../../shared/agent/ion-backend/capability";
 import { useEffect, useRef } from "react";
 
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
@@ -90,6 +92,16 @@ export function RightSidebar({ width, overlay, className }: RightSidebarProps) {
   const refreshAll = useGitStore((s) => s.refreshAll);
   const prevPanelVisible = useRef(statusPanel !== "hidden");
   const activeSessionId = useEffectiveSessionId();
+
+  // 壳模式：插件面板"有则显示、无则消失"（pi 后端恒全有，行为不变）
+  const fetchCapabilities = useCapabilityStore((s) => s.fetchCapabilities);
+  const isChannelAvailable = useCapabilityStore((s) => s.isChannelAvailable);
+  useEffect(() => {
+    void fetchCapabilities(activeSessionId);
+  }, [activeSessionId, fetchCapabilities]);
+  const visiblePanelTabs = PANEL_TABS.filter(
+    (tab) => !PANEL_TAB_CHANNEL[tab.id] || isChannelAvailable(PANEL_TAB_CHANNEL[tab.id]),
+  );
   const fetchPending = useChangeReviewStore((s) => s.fetchPending);
 
   useEffect(() => {
@@ -181,7 +193,7 @@ export function RightSidebar({ width, overlay, className }: RightSidebarProps) {
         style={{ width }}
         onClick={(e) => e.stopPropagation()}
       >
-        {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => {
+        {visiblePanelTabs.map((tab: { id: PanelTabId; label: string }) => {
           const Icon = TAB_ICONS[tab.id];
           return (
             <button
@@ -252,7 +264,7 @@ export function RightSidebar({ width, overlay, className }: RightSidebarProps) {
           <PanelPinButton isPinned={isPinned} onToggle={toggleStatus} />
         </div>
         <div className="flex items-center overflow-x-auto scrollbar-none flex-1">
-          {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
+          {visiblePanelTabs.map((tab: { id: PanelTabId; label: string }) => (
             <button
               key={tab.id}
               onClick={(e) => {

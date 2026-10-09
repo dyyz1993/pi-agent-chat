@@ -205,6 +205,13 @@ export const config = {
    * 通过快速 switchSession 秒绑（省掉 1-2s 冷启动）。默认开启。
    */
   warmProcessPoolEnabled: process.env.PI_WARM_POOL !== "off",
+  /**
+   * Agent runtime 后端选择：pi（默认，Node CLI stdin/stdout）| ion（Rust host，Unix socket）。
+   * 见 docs/plans/2026-09-25-ion-backend-adoption-plan.md。
+   */
+  agentBackend: (process.env.PI_BACKEND ?? "pi").toLowerCase() as "pi" | "ion",
+  /** ion 后端：socket 不在时自动 spawn `ion serve`（ION_BIN 可覆盖二进制） */
+  ionAutoSpawnHost: process.env.ION_AUTO_SPAWN !== "off",
   /** 沙盒/远程后端类型: local | sandbox-box | ssh | cloudflare */
   sandboxProvider: (process.env.SANDBOX_PROVIDER ?? "local") as
     | "local"

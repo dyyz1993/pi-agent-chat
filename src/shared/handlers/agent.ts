@@ -524,6 +524,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     };
   });
 
+  // 壳模式能力发现：UI 按"有则显示、无则消失"门控插件面板。
+  // pi 后端恒全有；ion 后端从 channel-map × 实际加载扩展推导（pm 内实现）。
+  r("agent.getChannelCapabilities", async (params) => {
+    return (await m.getChannelCapabilities(params.sessionId ?? "")) as unknown as R<"agent.getChannelCapabilities">;
+  });
+
   r("agent.getExecutionSandbox", async (params) => {
     return readProjectExecutionSandbox(params.projectPath);
   });

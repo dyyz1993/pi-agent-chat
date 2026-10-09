@@ -774,6 +774,24 @@ export function register(server: RPCServer, options: HandlerOptions): void {
             status: s.status === "stopped" ? "idle" : s.status,
           }))
         : [];
+      // ion 后端：运行态真相在 ion host（另一客户端在跑的会话也可见）；
+      // 进程池状态（本实例的流式会话）优先，其余按 list_sessions 补齐。
+      if (config.agentBackend === "ion") {
+        const { fetchIonSessionStatuses } = await import("../agent/ion-backend/ion-session-status");
+        const ionStatuses = await fetchIonSessionStatuses();
+        if (ionStatuses.size > 0) {
+          const merged = new Map(statuses.map((s) => [s.sessionId, s.status]));
+          for (const session of sessions) {
+            const ion = ionStatuses.get(session.sessionId);
+            if (ion === "running") merged.set(session.sessionId, "streaming");
+            else if (!merged.has(session.sessionId) && ion === "idle") {
+              merged.set(session.sessionId, "idle");
+            }
+          }
+          statuses.length = 0;
+          for (const [sessionId, status] of merged) statuses.push({ sessionId, status });
+        }
+      }
       log.info("[scanSessions] handler done", {
         count: sessions.length,
         statusCount: statuses.length,

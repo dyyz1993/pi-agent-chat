@@ -784,6 +784,15 @@ branch   = permission-runtime
 | **粒度**          | 按项目                                                           | 全局                           | 按会话                  |
 | **乐观更新+回滚** | 有                                                               | 无                             | 无                      |
 
+## Ion 后端（PI_BACKEND=ion，最小壳里程碑 2026-10-09）
+
+- `PI_BACKEND=ion` 启用 ion 后端（Rust host，Unix socket）；默认 pi 不变。`ION_HOST_SOCKET`/`ION_BIN`/`ION_AUTO_SPAWN` 可覆盖 socket/二进制/自动拉起。
+- 代码：`src/shared/agent/ion-backend/`（transport/subscribe 泵/事件映射/消息扁平化/channel-map 声明式映射/capability 动态能力发现）。
+- 架构定则：**直接适配 ion，不做 pi 格式兼容层**——app 拥有会话登记，ion 拥有内容与运行态真相；能力"有则显示、无则消失"（`agent.getChannelCapabilities`，pi 恒全有）。
+- 方案/台账：`docs/plans/2026-09-25-ion-backend-adoption-plan.md`（含待补总清单附录 C）；契约矩阵：`docs/plans/ion-backend/contract-matrix.md`。
+- E2E 一键复跑（全隔离，不碰正式 dev 栈与 ~/.ion）：`bash docs/plans/ion-backend/run-app-e2e-ion.sh`（WS 层 15 项）、`bash docs/plans/ion-backend/run-browser-e2e-ion.sh`（浏览器层 10 项）。
+- 已知 ion 侧 P0：间隔 <3s 的连续 turn 会永久锁死 worker（app 侧 prompt settle 已防护）；开发 ion 后端相关功能时先读方案文档的里程碑定调与待补清单。
+
 ## Testing
 
 - Unit/Integration/Regression/Smoke: `vitest` + `@testing-library/react` (happy-dom)
