@@ -1012,7 +1012,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (lastIsUser) {
         // 用户刚点过停止：空 turn 是主动中断的结果，不是模型故障——
         // 不渲染误导性错误卡/错误通知（"请检查模型配置"会把排障引向歧路）
-        const abortAt = useChatStore.getState().userAbortAtBySession[sessionId];
+        const abortAt = useChatStore.getState().userAbortAtBySession?.[sessionId];
         const userAborted = typeof abortAt === "number" && Date.now() - abortAt < 15_000;
         if (userAborted) {
           log.info("[agent-end] empty turn after user abort; skip error card", { sessionId });
