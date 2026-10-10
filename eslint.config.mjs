@@ -19,6 +19,8 @@ export default tseslint.config(
       'eslint-plugin-no-hardcoded-port/**',
       'postcss.config.js',
       'probe-compaction.mjs',
+      'docs/plans/ion-backend/*.mjs',
+      'probe-*.mjs',
       'tailwind.config.js',
       'scripts/**',
       'preview-test/**',
